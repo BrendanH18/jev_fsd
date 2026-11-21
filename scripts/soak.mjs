@@ -155,7 +155,13 @@ async function main() {
         const run = JSON.parse(await readFile(path, "utf8"));
         const categories = classifyResults(run.results);
         failed ||= soakFailed(categories);
-        const record = { ...task, config: run.config, ...categories, results: run.results };
+        const record = {
+          ...task,
+          suite_version: run.suite_version,
+          config: run.config,
+          ...categories,
+          results: run.results,
+        };
         runs.push(record);
         console.log(JSON.stringify({ configuration: task.id, ...categories }));
         for (const r of run.results.filter((r) => !r.pass || r.deadlocks))
@@ -170,6 +176,7 @@ async function main() {
     }
     const report = {
       schema: 1,
+      suite_version: "custom",
       weather: args.weather || "dry",
       shard: integer(args.shard, 0),
       shards: integer(args.shards, 1),

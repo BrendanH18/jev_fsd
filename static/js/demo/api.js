@@ -1,4 +1,5 @@
 import { MapData } from "../map/mapdata.js";
+import { CUSTOM_SUITE } from "../bench/suite-version.js";
 import { browserRoute, browserDrives } from "./routing.js";
 
 const root = new URL("../../demo-data/", import.meta.url),
@@ -70,9 +71,13 @@ export async function demoApi(path, body, { signal } = {}) {
     return name ? runs.find((r) => r.name === name) || {} : { runs };
   }
   if (url.pathname === "/api/bench/save") {
+    if (body.suite_version !== undefined && body.suite_version !== CUSTOM_SUITE)
+      throw new Error("browser benchmark runs must use the custom suite");
+    if (body.results.some((result) => result?.suite_version !== body.suite_version))
+      throw new Error("run and results must agree on suite_version");
     const name = `demo-${Date.now()}`,
       { runs } = await demoApi("/api/bench/runs");
-    localStorage.setItem("jev-demo-runs", JSON.stringify([{ name, ...body }, ...runs].slice(0, 10)));
+    localStorage.setItem("jev-demo-runs", JSON.stringify([{ ...body, name }, ...runs].slice(0, 10)));
     return { saved: name };
   }
   const { item, pack, map } = await selection(url.searchParams, body, signal);

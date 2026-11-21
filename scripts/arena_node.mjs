@@ -18,6 +18,8 @@
 // (`header.maps`), and each drive's recorded result leaves out the decision trace and timeline,
 // which are large, keeping `result_sha`, the hash of the whole comparable result, so a replay is
 // still compared field for field (timings aside).
+import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
+
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((out, a, i, all) => {
     if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
@@ -95,6 +97,7 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const { evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { agentDefinitions, registerAgent } = await import("../static/js/brain/registry.js");
 const rec = await import("../static/js/brain/recording.js");
+const { arenaSuiteVersion, authoredDrive } = await import("./canonical_suite.mjs");
 const { driverScores } = await import("../static/js/bench/scores.js");
 const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).captureBrowserReplay() : null;
 
@@ -149,6 +152,7 @@ for (const id of new Set(drives.map((c) => c.map)))
 const shas = Object.fromEntries(Object.entries(maps).map(([id, map]) => [id, rec.mapFingerprint(map)]));
 
 let recording = null;
+const suite = { kind: "arena", set, drives: Object.fromEntries(drives.map((c) => [c.id, authoredDrive(c)])) };
 const manifestModule =
   !replayJson && !args.agent && (args.json || args.record) ? await import("./run_manifest.mjs") : null;
 let manifest = null;
@@ -169,7 +173,7 @@ if (replayJson) {
     driver: brain,
     model,
     track,
-    suite: { kind: "arena", set, drives: Object.fromEntries(drives.map((c) => [c.id, { map: c.map, seed: c.seed }])) },
+    suite,
     maps,
     fingerprints: shas,
   });
@@ -182,6 +186,7 @@ if (replayJson) {
         arena: { set, ids: drives.map((c) => c.id), ...(track === "open" ? { track } : {}) },
         maps: shas,
         manifest,
+        suite_version: CUSTOM_SUITE,
       }),
     });
 }
@@ -199,6 +204,8 @@ const trimmed = (result) =>
 const resultSha = (result) => rec.hashText(rec.canonicalJson(rec.comparableResult(result)));
 const SUMMARY = [
   "challenge",
+  "suite_version",
+  "seed",
   "version",
   "map",
   "pack",
@@ -251,9 +258,11 @@ for (const challenge of drives) {
   const tape = recording ? recording.tape(challenge.id, args.record ? "record" : "replay") : null;
   const r = await evaluateChallenge(maps[challenge.map], challenge, { brain, tape, track, onStep: capture?.onStep });
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
+  results.push(r);
   if (args.record) {
     recording.results[challenge.id] = { ...trimmed(r), result_sha: resultSha(r) };
     manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
+    setRecordingSuiteVersion(recording, only ? CUSTOM_SUITE : arenaSuiteVersion({ ...suite, maps: shas }, results));
     save(recording);
   }
   if (replayJson) {
@@ -274,7 +283,6 @@ for (const challenge of drives) {
       }
     }
   }
-  results.push(r);
   const shares =
     r.model_share !== undefined ? ` model=${r.model_share} local=${r.local_share} fallback=${r.fallback_share}` : "";
   console.log(
@@ -301,18 +309,26 @@ const summary = {
 };
 if (manifest) manifest.cost_usd = summary.cost_usd;
 const replayManifest = replayJson && recording.header.manifest;
-if (
-  args.check === "replay" &&
-  replayManifest?.engine === summary.engine &&
+const exactReplay =
+  !only &&
+  !budgetStop &&
   drifted.length === 0 &&
-  results.length === Object.keys(recording.results).length
-)
-  manifest = replayManifest;
+  replayJson &&
+  results.length === Object.keys(recording.results).length;
+if (args.check === "replay" && replayManifest?.engine === summary.engine && exactReplay) manifest = replayManifest;
+const suite_version = replayJson
+  ? replaySuiteVersion(recording.header, exactReplay)
+  : args.agent || only || budgetStop
+    ? CUSTOM_SUITE
+    : arenaSuiteVersion({ ...suite, maps: shas }, results);
+if (manifest && !replayJson) manifest.suite_version = suite_version;
+for (const result of results) result.suite_version = suite_version;
 if (args.json)
   fs.writeFileSync(
     args.json,
     JSON.stringify(
       {
+        suite_version,
         ...(manifest ? { manifest } : {}),
         summary,
         results: results.map((r) =>
@@ -339,4 +355,6 @@ if (failed.length)
     `${failed.length} of ${results.length} drives failed${drifted.length ? " or did not replay as recorded" : ""}: ${failed.join(", ")}`,
   );
 const failedReplay = args.check === "replay" && drifted.length > 0;
-process.stdout.write(`${JSON.stringify(summary)}\n`, () => process.exit(failed.length || failedReplay ? 1 : 0));
+process.stdout.write(`${JSON.stringify({ ...summary, suite_version })}\n`, () =>
+  process.exit(failed.length || failedReplay ? 1 : 0),
+);

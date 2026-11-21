@@ -347,6 +347,11 @@ def api_bench_save(body, _query):
             raise BadRequest("%s is required" % key)
     if not isinstance(body["results"], list) or not isinstance(body["summary"], dict):
         raise BadRequest("results must be a list and summary an object")
+    declared = body.get("suite_version")
+    if "suite_version" in body and declared != "custom":
+        raise BadRequest("browser benchmark runs must use the custom suite")
+    if any(not isinstance(result, dict) or result.get("suite_version") != declared for result in body["results"]):
+        raise BadRequest("run and results must agree on suite_version")
     config = body["config"] if isinstance(body["config"], dict) else {}
     brain = "".join(ch for ch in str(config.get("brain") or "run") if ch.isalnum())[:20] or "run"
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -355,6 +360,7 @@ def api_bench_save(body, _query):
     if path.exists():
         path = RUNS_DIR / ("%s-%s-%s.json" % (stamp, brain, secrets.token_hex(2)))
     payload = {
+        **({"suite_version": declared} if declared is not None else {}),
         "name": path.stem,
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "config": config,
@@ -385,6 +391,7 @@ def api_bench_runs(_body, query):
             {
                 "name": path.stem,
                 "saved_at": data.get("saved_at"),
+                "suite_version": data.get("suite_version", "legacy"),
                 "config": data.get("config"),
                 "summary": data.get("summary"),
             }
@@ -394,6 +401,13 @@ def api_bench_runs(_body, query):
 
 # Model recordings (ROADMAP 2.6): every answer a model driver got, keyed by its request, so a run
 # replays with no key. Saved like runs, but under data/recordings/, which is committed.
+
+
+def valid_suite_version(version):
+    return isinstance(version, str) and (
+        version in ("legacy", "custom")
+        or (version.startswith("v") and version[1:2] in "123456789" and version[1:].isdigit())
+    )
 
 
 def api_recording_save(body, _query):
@@ -408,6 +422,21 @@ def api_recording_save(body, _query):
         isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()
     ):
         raise BadRequest("each drive maps request keys to lists of outcomes")
+    declared, manifest = header.get("suite_version"), header.get("manifest")
+    if (
+        ("suite_version" in header and not valid_suite_version(declared))
+        or any(not isinstance(result, dict) or result.get("suite_version") != declared for result in results.values())
+        or (
+            manifest is not None
+            and (
+                not isinstance(manifest, dict)
+                or manifest.get("suite_version") != declared
+                or (manifest.get("format") == "jev-run-manifest/1" and declared is not None)
+                or (manifest.get("format") == "jev-run-manifest/2" and declared is None)
+            )
+        )
+    ):
+        raise BadRequest("recording and results must agree on suite_version")
     driver = (
         "".join(ch if ch.isalnum() else "-" for ch in str(header.get("driver") or "model"))[:40].strip("-") or "model"
     )

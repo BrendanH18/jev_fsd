@@ -10,6 +10,7 @@ import { runScenario, yieldNow, suiteOptions, benchmarkConfig } from "./runner.j
 import { aggregate } from "./metrics.js";
 import { driveScores, driverScores } from "./scores.js";
 import { buildHeldoutSuite, heldoutPlan } from "./heldout.js";
+import { compatibleSuiteVersions, CUSTOM_SUITE, suiteVersion } from "./suite-version.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
@@ -178,7 +179,7 @@ async function loadRuns() {
       h(
         "option",
         { value: r.name },
-        `${r.name} · ${r.config?.brain} · ${r.config?.heldout ? `held-out ${r.config.count} routes` : `${r.config?.count} × seed ${r.config?.seed}`}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.track ? ` · ${r.config.track} track` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`,
+        `${r.name} · ${suiteVersion(r)} · ${r.config?.brain} · ${r.config?.heldout ? `held-out ${r.config.count} routes` : `${r.config?.count} × seed ${r.config?.seed}`}${r.config?.features ? ` · ${r.config.features}` : ""}${r.config?.park ? " · park" : ""}${r.config?.hour !== undefined ? ` · hour ${r.config.hour}` : ""}${r.config?.cover !== undefined ? ` · cover ${r.config.cover}` : ""}${r.config?.without?.length ? ` · without ${r.config.without.join(",")}` : ""}${r.config?.track ? ` · ${r.config.track} track` : ""}${r.config?.weather && r.config.weather !== "dry" ? ` · ${r.config.weather}` : ""} · ${Math.round((r.summary?.pass_rate || 0) * 100)}%`,
       ),
     ),
   );
@@ -284,6 +285,7 @@ export async function run({
             preset: features,
             weather,
             bench: config,
+            suite_version: CUSTOM_SUITE,
           }),
         })
       : null);
@@ -293,7 +295,13 @@ export async function run({
     (plan
       ? await buildHeldoutSuite(map, status.map.id, suiteOptions(features, options))
       : await buildSuite(map, { count, seed, ...suiteOptions(features, options) }));
-  const state = { config, suite, results: [], summary: null };
+  const state = {
+    suite_version: CUSTOM_SUITE,
+    config,
+    suite,
+    results: [],
+    summary: null,
+  };
   lastRun = state;
   render(state);
   for (let i = 0; i < suite.length && !stopRequested; i++) {
@@ -324,6 +332,10 @@ export async function run({
   }
   state.current = null;
   state.summary = aggregate(state.results);
+  const replayed = replaying
+    ? state.results.every((r) => r.model_recording.exact && r.model_recording.same_result === true)
+    : null;
+  for (const result of state.results) result.suite_version = state.suite_version;
   let saved = null,
     savedRecording = null,
     recordingError = null;
@@ -338,6 +350,7 @@ export async function run({
   if (save && state.results.length) {
     try {
       saved = await api("/api/bench/save", {
+        suite_version: state.suite_version,
         config: { ...config, completed: state.results.length },
         summary: state.summary,
         results: state.results,
@@ -354,6 +367,7 @@ export async function run({
   running = false;
   $("#run").textContent = "Run";
   return {
+    suite_version: state.suite_version,
     config,
     summary: state.summary,
     results: state.results,
@@ -361,18 +375,10 @@ export async function run({
     ...(recording
       ? {
           recording: savedRecording || (recordingError ? { error: recordingError, data: recording.toJSON() } : null),
-          replayed: replaying
-            ? state.results.every((r) => r.model_recording.exact && r.model_recording.same_result === true)
-            : null,
+          replayed,
         }
       : {}),
   };
-}
-
-function compareSummary() {
-  const name = $("#compare").value;
-  const runs = $("#compare")._runs || [];
-  return name ? { ...runs.find((r) => r.name === name)?.summary, ...compareScores.get(name) } : null;
 }
 
 // The run list carries summaries only, so a compared run's scores come from its results, once.
@@ -393,7 +399,15 @@ function delta(cur, prev, better, f) {
 }
 
 function render(state) {
-  const prev = compareSummary();
+  const compare = $("#compare");
+  const before = compare._runs?.find((run) => run.name === compare.value);
+  const note = $("#comparison-note");
+  const differentSuite = before && !compatibleSuiteVersions(state, before);
+  note.hidden = !differentSuite;
+  note.textContent = differentSuite
+    ? `The selected run uses suite ${suiteVersion(before)}. Deltas require compatible suite versions.`
+    : "";
+  const prev = before && !differentSuite ? { ...before.summary, ...compareScores.get(before.name) } : null;
   const s = state.summary && { ...state.summary, ...pickScores(state.results) };
   $("#summary").replaceChildren(
     ...(s

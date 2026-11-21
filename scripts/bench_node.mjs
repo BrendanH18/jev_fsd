@@ -20,6 +20,8 @@
 // result; --replay rec.json drives again from those answers with no model call and no key, taking the
 // driver, map and suite from the recording, and reports whether each drive played out as recorded
 // (--check 1 also checks verdicts; --check replay checks replay fidelity alone).
+import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
+
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((out, a, i, all) => {
     if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
@@ -136,7 +138,9 @@ const { driveScores, driverScores } = await import("../static/js/bench/scores.js
 const { heldoutPlan, buildHeldoutSuite } = await import("../static/js/bench/heldout.js");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { agentDefinitions } = await import("../static/js/brain/registry.js");
-const recordingModule = args.record || args.replay ? await import("../static/js/brain/recording.js") : null;
+const recordingModule = await import("../static/js/brain/recording.js");
+const { benchSuiteVersion } = await import("./canonical_suite.mjs");
+const manifestModule = await import("./run_manifest.mjs");
 let replaying = null;
 if (replayJson)
   try {
@@ -241,9 +245,17 @@ const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
 if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);
 const selected = only ? suite.filter((sc) => only.includes(sc.id)) : suite;
-const manifestModule = !replaying && (args.json || args.record) ? await import("./run_manifest.mjs") : null;
+const suiteMetadata = {
+  kind: "bench",
+  config,
+  ids: selected.map((sc) => sc.id),
+  generated_ids: suite.map((sc) => sc.id),
+  route_sha: manifestModule.benchRouteFingerprint(suite),
+  ...(only ? { only: true } : {}),
+};
+const mapSha = recordingModule.mapFingerprint(map);
 let manifest = null;
-if (manifestModule) {
+if (!replaying && (args.json || args.record)) {
   const definition = agentDefinitions().find((d) => d.id === driver);
   const endpoint = definition?.llm || definition?.decision;
   const model = driver === "jev" ? (status || (await api("/api/status"))).decision?.jev?.model : endpoint?.model;
@@ -251,15 +263,9 @@ if (manifestModule) {
     driver,
     model,
     track: config.track || "guarded",
-    suite: {
-      kind: "bench",
-      config,
-      ids: selected.map((sc) => sc.id),
-      generated_ids: suite.map((sc) => sc.id),
-      route_sha: manifestModule.benchRouteFingerprint(suite),
-      ...(only ? { only: true } : {}),
-    },
+    suite: suiteMetadata,
     maps: { [preset]: map },
+    fingerprints: { [preset]: mapSha },
   });
   if (args.record)
     recording = new recordingModule.ModelRecording({
@@ -274,6 +280,7 @@ if (manifestModule) {
         weather: config.weather,
         bench: config,
         manifest,
+        suite_version: CUSTOM_SUITE,
       }),
     });
 }
@@ -281,6 +288,8 @@ const results = [],
   drifted = [];
 const promptSizes = {};
 let budgetStop = null;
+const completedVersion = () =>
+  !only && !budgetStop ? benchSuiteVersion({ ...suiteMetadata, map_sha: mapSha }, results) : CUSTOM_SUITE;
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
 const saveRecording = async () => {
   const fs = await import("node:fs"),
@@ -325,9 +334,11 @@ for (const sc of selected) {
     tape,
   });
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
+  results.push(r);
   if (args.record) {
     recording.keepResult(sc.id, r, sc);
     manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
+    setRecordingSuiteVersion(recording, completedVersion());
     await saveRecording();
   }
   // (a replay matches when every call was answered from the recording and the drive's result is the
@@ -338,7 +349,6 @@ for (const sc of selected) {
     // (a drive the recording has no result for cannot be checked: drift too)
     if (r.model_recording.same_result !== true || !r.model_recording.exact) drifted.push(r.id);
   }
-  results.push(r);
   if (prompt) {
     audit.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
     promptSizes[sc.id] = prompt.result();
@@ -353,6 +363,25 @@ for (const sc of selected) {
   );
 }
 const summary = aggregate(results);
+const replayProvenance = replaying?.header.manifest;
+const replayDate = replaying?.header.recorded_at;
+const replayManifest =
+  replaying &&
+  !only &&
+  !drifted.length &&
+  results.length === Object.keys(replaying.results).length &&
+  replayProvenance?.source_dirty === false &&
+  replayProvenance.engine === config.engine &&
+  replayProvenance.engine_version === process.versions.v8 &&
+  replayProvenance.cost_usd === summary.cost_usd &&
+  replayProvenance.suite?.kind === "bench" &&
+  recordingModule.canonicalJson(replayProvenance.suite.config) === recordingModule.canonicalJson(config) &&
+  recordingModule.canonicalJson(replayProvenance.suite.ids) === recordingModule.canonicalJson(suiteMetadata.ids) &&
+  Number.isFinite(Date.parse(replayDate))
+    ? replayProvenance
+    : null;
+const suite_version = replaying ? replaySuiteVersion(replaying.header, replayManifest !== null) : completedVersion();
+for (const result of results) result.suite_version = suite_version;
 // (computed for display only: bench/scores.js)
 console.log(`${heldout ? "held-out " : ""}scores ${JSON.stringify(driverScores(results))}`);
 if (heldout)
@@ -361,12 +390,16 @@ if (heldout)
   );
 if (args.json) {
   audit?.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
-  const saved = { config, summary, results, ...(budgetStop ? { stopped: budgetStop } : {}) };
+  const saved = { suite_version, config, summary, results, ...(budgetStop ? { stopped: budgetStop } : {}) };
   if (manifest) {
+    manifest.suite_version = suite_version;
     manifest.cost_usd = summary.cost_usd;
-    const savedAt = new Date().toISOString();
+  }
+  const reportManifest = manifest || replayManifest;
+  if (reportManifest) {
+    const savedAt = replayManifest ? new Date(replayDate).toISOString() : new Date().toISOString();
     const name = manifestModule.benchRunName(savedAt, driver);
-    Object.assign(saved, { name, saved_at: savedAt, manifest });
+    Object.assign(saved, { name, saved_at: savedAt, manifest: reportManifest });
   }
   (await import("node:fs")).writeFileSync(args.json, JSON.stringify(saved, null, 1));
 }
@@ -387,6 +420,6 @@ if (failed.length)
     `${failed.length} of ${results.length} routes failed${drifted.length ? " or did not replay as recorded" : ""}: ${failed.join(", ")}`,
   );
 const failedReplay = args.check === "replay" && drifted.length > 0;
-process.stdout.write(`${JSON.stringify({ config, summary })}\n`, () =>
+process.stdout.write(`${JSON.stringify({ suite_version, config, summary })}\n`, () =>
   process.exit(failed.length || failedReplay || budgetStop ? 1 : 0),
 );

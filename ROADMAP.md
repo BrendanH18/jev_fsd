@@ -573,10 +573,10 @@ past an agreed amount.
   city routes (`bench/heldout.js`), reported apart and never debugged against.
 - [ ] **7.7 The eight drifted tapes.** (S) Record Jev's eight drifted 11 November drives again on main,
   and mark DeepSeek's (no longer run, AGENTS.md) in `results.json` as replaying on `dcfc663` only.
-- [ ] **7.8 Version the test.** (M) Name the set a 1.0 result is scored on (the 60 challenges, the
-  2 road tests, the Kitsilano city suite in four weathers and the held-out routes) as suite `v1`, and
-  write `suite_version` into every result and manifest. A change that alters any `v1` result bumps it,
-  and the leaderboard only ranks rows of one version together.
+- [x] **7.8 Version the test.** [Suite `v1`](data/suites/v1.json) pins the 60 challenges, two road
+  tests, and Kitsilano's tuned and held-out city routes across four weathers. New reports, manifests
+  and tapes declare their suite version. The leaderboard ranks each version separately. A change
+  that alters a canonical result needs a new suite definition.
 
 Exit: a clean checkout verifies every published row on its declared tree, failed drives included, and
 a repeated comparison reports its spread.

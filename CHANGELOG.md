@@ -21,6 +21,7 @@
   benchmark scores from the challenge leaderboard.
 - Measure open-track flagged choices in replay and keep driving scores based on outcomes.
 - Publish complete Jev and Claude Haiku results for the dry Kitsilano city suite beside the local drivers.
+- Version the benchmark suite and keep rankings within each suite version.
 
 ## 0.3.0 (20 November 2026)
 

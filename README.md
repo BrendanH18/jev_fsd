@@ -154,7 +154,9 @@ To compare it with other drivers, load the same path under **Add a trusted local
 ## Results
 
 <!-- results:start -->
-| Driver | Model | 60 challenges + 2 road tests | Open track | City suite, Kitsilano: dry · fog · rain · snow | City suite, 11 other maps (dry) | Own decisions | Cost of the challenges |
+### Legacy results
+
+| Driver | Model | Challenges and road tests | Open track | City suite, Kitsilano: dry · fog · rain · snow | City suite, 11 other maps (dry) | Own decisions | Cost of the challenges |
 |---|---|---|---|---|---|---|---|
 | Rules | none | 62/62 | 62/62, 0 flagged choices | 12/12 · 12/12 · 12/12 · 12/12 | 22/22 | n/a | $0 |
 | Cautious agent | none | 62/62 | 62/62, 0 flagged choices | 9/12 · 10/12 · 12/12 · 6/12 | 17/22 | 99.98% | $0 |
@@ -162,7 +164,7 @@ To compare it with other drivers, load the same path under **Add a trusted local
 | Claude Haiku 5.5 | `claude-haiku-5-5` | **61/62** (failed `on-your-bumper`) | **61/62** (failed `flagger`), 216 flagged choices | 3/12 · – · – · – | not run | 99.98% | $4.07 |
 | DeepSeek V4.1 Flash | `deepseek/deepseek-v4.1-flash-1017` | **61/62** (failed `double-parked`) | not run | not run | not run | 99.01% | $2.55 |
 
-Built from the committed records (2026-11-11 to 2026-11-21) by `scripts/build_results.py`, which also writes [`data/results.json`](data/results.json) with each row's source files. The [leaderboard](https://brendanh18.github.io/jev_fsd/results.html) shows published challenge results and the newest standard benchmark run for each driver, map, preset, weather, suite size and seed. City runs in this table use suite seed 1, lockstep clock, 40 traffic cars. A driver's runs may come from different dates. On the open track the safety filter flags a manoeuvre that breaks a road rule instead of removing it, so the driver's own judgment decides ([how](docs/reference/benchmarks.md#benchmarks-and-validation)). "Flagged choices" counts how often the driver went on with one. "Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. Model drives are recorded under `data/recordings/` and replay without a key. Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).
+Built from the committed records (2026-11-11 to 2026-11-21) by `scripts/build_results.py`, which also writes [`data/results.json`](data/results.json) with each row's source files. The [leaderboard](https://brendanh18.github.io/jev_fsd/results.html) shows published challenge results and the newest standard benchmark run for each suite version, driver, map, preset, weather, suite size and seed. City runs in this table use suite seed 1, lockstep clock, 40 traffic cars. A driver's runs may come from different dates. On the open track the safety filter flags a manoeuvre that breaks a road rule instead of removing it, so the driver's own judgment decides ([how](docs/reference/benchmarks.md#benchmarks-and-validation)). "Flagged choices" counts how often the driver went on with one. "Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. Model drives are recorded under `data/recordings/` and replay without a key. Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).
 
 One-challenge pilots: GPT-6 Luna (`openai/gpt-6-luna`) 1/1 (door-zone); Liquid d1 (`liquid/d1-20260930`) 1/1 (door-zone); Granite 4.2 3B (`granite4.2:3b`) 2/2 (dont-splash, left-on-red).
 <!-- results:end -->

@@ -23,6 +23,8 @@ if (parts.length < 2) fail("Give at least two recordings to merge.");
 
 const { ModelRecording, canonicalJson } = await import("../static/js/brain/recording.js");
 const { runCost } = await import("./run_manifest.mjs");
+const { arenaSuiteVersion } = await import("./canonical_suite.mjs");
+const { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } = await import("../static/js/bench/suite-version.js");
 const read = (file) => {
   try {
     const raw = fs.readFileSync(file);
@@ -47,6 +49,7 @@ const identity = (h) =>
     endpoint: h.endpoint ?? null,
     engine: h.engine,
     versions: h.versions,
+    suite_version: h.suite_version,
     manifest: manifestIdentity(h.manifest),
     set: h.arena?.set,
     track: h.arena?.track ?? null,
@@ -63,18 +66,38 @@ const maps = {},
   ids = [],
   merged = new ModelRecording({ header: { ...first }, drives: {}, results: {}, scenarios: {} });
 recordings.forEach((r, i) => {
-  for (const [id, sha] of Object.entries(r.header.maps || {})) {
+  const fingerprints = Object.entries(r.header.maps || {});
+  const shardMaps = r.header.manifest?.maps;
+  if (r.header.manifest && (!shardMaps || Object.keys(shardMaps).length !== fingerprints.length))
+    fail(`${parts[i]} has different maps in the recording and its manifest.`);
+  for (const [id, sha] of fingerprints) {
     if (maps[id] && maps[id] !== sha) fail(`${parts[i]} was made on other map data for ${id}.`);
     maps[id] = sha;
+    if (shardMaps) {
+      const entry = shardMaps[id];
+      if (entry?.fingerprint !== sha || (manifestMaps[id] && canonicalJson(manifestMaps[id]) !== canonicalJson(entry)))
+        fail(`${parts[i]} has conflicting manifest map data for ${id}.`);
+      manifestMaps[id] = entry;
+    }
   }
-  if (r.header.manifest) Object.assign(manifestMaps, r.header.manifest.maps);
-  for (const id of Object.keys(r.results)) {
+  for (const [id, result] of Object.entries(r.results)) {
     if (id in merged.results) fail(`${id} is recorded in more than one part (${parts[i]}).`);
     // (a finished drive keeps its answers, an empty set for one that asked nothing)
     if (!Object.hasOwn(r.drives, id)) fail(`${parts[i]} has a result for ${id} but no answers for it.`);
-    merged.results[id] = r.results[id];
+    const authored = r.header.manifest?.suite.drives[id];
+    if (
+      result.challenge !== id ||
+      !r.header.arena.ids.includes(id) ||
+      (r.header.manifest &&
+        (!authored ||
+          result.map !== authored.map ||
+          result.seed !== authored.seed ||
+          (authored.version !== undefined && result.version !== authored.version)))
+    )
+      fail(`${parts[i]} has a result for ${id} that disagrees with its authored drive.`);
+    merged.results[id] = result;
     merged.drives[id] = r.drives[id];
-    if (r.header.manifest) manifestDrives[id] = r.header.manifest.suite.drives[id];
+    if (authored) manifestDrives[id] = authored;
     ids.push(id);
   }
 });
@@ -91,6 +114,11 @@ if (first.manifest)
     maps: manifestMaps,
     cost_usd: runCost(Object.values(merged.results)),
   };
+if (suiteVersion(first) !== LEGACY_SUITE)
+  setRecordingSuiteVersion(
+    merged,
+    arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
+  );
 const text = merged.serialize();
 // (written beside the destination and renamed over it, so a failed write leaves an existing file as it was)
 const tmp = `${out}.tmp`;

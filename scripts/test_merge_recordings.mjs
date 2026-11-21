@@ -5,7 +5,8 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
+import { setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
 globalThis.document = { querySelector: () => null };
 const { ModelRecording } = await import("../static/js/brain/recording.js");
 const { benchRouteFingerprint } = await import("./run_manifest.mjs");
@@ -26,7 +27,9 @@ const write = (name, h, drives) => {
   const r = new ModelRecording({
     header: h,
     drives: Object.fromEntries(drives.map((id) => [id, { [`k-${id}`]: [{ response: { id } }] }])),
-    results: Object.fromEntries(drives.map((id) => [id, { challenge: id, pass: true, result_sha: id }])),
+    results: Object.fromEntries(
+      drives.map((id) => [id, { challenge: id, ...h.manifest?.suite.drives[id], pass: true, result_sha: id }]),
+    ),
   });
   const file = path.join(dir, name);
   fs.writeFileSync(file, r.serialize());
@@ -99,6 +102,7 @@ const withManifest = (id, map, fingerprint, source_commit = "a".repeat(40)) =>
     header([id], {
       maps: { [map]: fingerprint },
       manifest: {
+        format: "jev-run-manifest/1",
         source_commit,
         suite: { kind: "arena", set: "all", drives: { [id]: { map, seed: 42 } } },
         maps: { [map]: { fingerprint } },
@@ -110,15 +114,85 @@ const withManifest = (id, map, fingerprint, source_commit = "a".repeat(40)) =>
 const g = withManifest("seven", "kitsilano", "aaaa");
 const h = withManifest("eight", "toronto", "bbbb");
 assert.match(merge(g, h), /merged 2 drives from 2 recordings/);
-const provenance = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.manifest;
+const legacy = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8"));
+const provenance = legacy.header.manifest;
+assert.equal(provenance.format, "jev-run-manifest/1");
+assert.equal(provenance.suite_version, undefined);
+assert.equal(legacy.header.suite_version, undefined);
+assert.ok(Object.values(legacy.results).every((result) => result.suite_version === undefined));
 assert.deepEqual(Object.keys(provenance.suite.drives), ["seven", "eight"]);
 assert.deepEqual(Object.keys(provenance.maps), ["kitsilano", "toronto"]);
 refused([g, withManifest("nine", "toronto", "bbbb", "b".repeat(40))], /differs.*source/, "another source commit");
+const wrongMap = withManifest("ten", "kitsilano", "aaaa");
+const mapShard = ModelRecording.parse(fs.readFileSync(wrongMap, "utf8"));
+mapShard.header.manifest.maps.kitsilano.components = { roads: "other" };
+fs.writeFileSync(wrongMap, mapShard.serialize());
+refused([g, wrongMap], /conflicting manifest map data/, "manifests that disagree on a shared map");
+mapShard.header.manifest.maps.kitsilano.fingerprint = "other";
+fs.writeFileSync(wrongMap, mapShard.serialize());
+refused([h, wrongMap], /conflicting manifest map data/, "a manifest fingerprint that disagrees with its tape");
+
+const { CHALLENGES } = await import("../static/js/lab/challenges.js");
+const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
+const { activeSuite: canonical, authoredDrive } = await import("./canonical_suite.mjs");
+const { heldoutPlan } = await import("../static/js/bench/heldout.js");
+const authored = [...CHALLENGES, ...ROAD_TESTS].map((c) => [c.id, authoredDrive(c)]);
+assert.deepEqual(Object.fromEntries(authored), canonical.arena.drives);
+const { seeds, count } = canonical.bench.heldout;
+assert.deepEqual(heldoutPlan("kitsilano"), { seeds, count });
+
+function arenaShard(name, entries) {
+  const maps = Object.fromEntries(entries.map(([, { map }]) => [map, canonical.maps[map]]));
+  const ids = entries.map(([id]) => id);
+  const recording = new ModelRecording({
+    header: header(ids, {
+      maps,
+      manifest: {
+        source_commit: "a".repeat(40),
+        source_dirty: false,
+        suite: { kind: "arena", set: "all", drives: Object.fromEntries(entries) },
+        maps: Object.fromEntries(Object.entries(maps).map(([map, fingerprint]) => [map, { fingerprint }])),
+        cost_usd: 0,
+      },
+    }),
+    drives: Object.fromEntries(ids.map((id) => [id, {}])),
+    results: Object.fromEntries(
+      entries.map(([id, drive]) => [id, { challenge: id, ...drive, pass: false, result_sha: id }]),
+    ),
+  });
+  setRecordingSuiteVersion(recording, "custom");
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, recording.serialize());
+  return file;
+}
+const division = Math.floor(authored.length / 2);
+const shardA = arenaShard("arena-a.json", authored.slice(0, division));
+const shardB = arenaShard("arena-b.json", authored.slice(division));
+merge(shardA, shardB);
+const canonicalMerge = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8"));
+const firstId = authored[0][0];
+assert.equal(canonicalMerge.header.suite_version, canonical.version);
+assert.equal(canonicalMerge.results[firstId].result_sha, firstId);
+assert.equal(canonicalMerge.results[firstId].suite_version, canonical.version);
+canonicalMerge.header.manifest.format = "jev-run-manifest/1";
+assert.throws(() => ModelRecording.parse(canonicalMerge.serialize()), /disagree on suite_version/);
+canonicalMerge.header.manifest.format = "jev-run-manifest/2";
+delete canonicalMerge.results[firstId].suite_version;
+assert.throws(() => ModelRecording.parse(canonicalMerge.serialize()), /disagree on suite_version/);
+const swapped = ModelRecording.parse(fs.readFileSync(shardB, "utf8"));
+const [left, right] = Object.keys(swapped.results);
+[swapped.results[left], swapped.results[right]] = [swapped.results[right], swapped.results[left]];
+const changed = path.join(dir, "arena-swapped.json");
+fs.writeFileSync(changed, swapped.serialize());
+refused([shardA, changed], /disagrees with its authored drive/, "arena results swapped between two drive keys");
+merge(shardA, arenaShard("arena-short.json", authored.slice(division, -1)));
+assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "custom");
 
 const config = { map: "kitsilano", features: "city", count: 3, seed: 1, brain: "jev" };
 const benchScenarios = ["s1-1", "s1-2"].map((id) => ({ id, traffic_seed: 42 }));
-function benchPart(id, pass, traffic_seed = 42, name = id) {
+function benchPart(id, pass, traffic_seed = 42, name = id, version) {
   const manifest = {
+    format: "jev-run-manifest/1",
     source_commit: "a".repeat(40),
     source_dirty: false,
     maps: { kitsilano: { fingerprint: "map-sha" } },
@@ -132,14 +206,18 @@ function benchPart(id, pass, traffic_seed = 42, name = id) {
     },
     cost_usd: 0.01,
   };
-  const result = { id, arrived: pass, pass, cost_usd: 0.01, wall_ms: 10 };
+  const result = { id, arrived: pass, pass, cost_usd: 0.01, wall_ms: 10, suite_version: version };
   const tape = new ModelRecording({
     header: { driver: "jev", brain: "jev", bench: config, map_sha: "map-sha", manifest },
     drives: { [id]: {} },
   });
+  if (version !== undefined) setRecordingSuiteVersion(tape, version);
   tape.keepResult(id, result, { id, traffic_seed });
   const file = path.join(dir, `${name}.json`);
-  fs.writeFileSync(file, JSON.stringify({ manifest, config, results: [result], saved_at: "2026-11-21T08:00:00Z" }));
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ suite_version: version, manifest, config, results: [result], saved_at: "2026-11-21T08:00:00Z" }),
+  );
   fs.writeFileSync(`${file}.gz`, gzipSync(tape.serialize()));
   return file;
 }
@@ -175,10 +253,25 @@ assert.deepEqual(
   ],
 );
 assert.equal(combined.summary.cost_usd, 0.02);
+assert.equal(combined.suite_version, undefined);
+assert.equal(combined.manifest.format, "jev-run-manifest/1");
+assert.equal(combined.manifest.suite_version, undefined);
+assert.ok(combined.results.every((result) => result.suite_version === undefined));
+const combinedTape = ModelRecording.parse(gunzipSync(fs.readFileSync(`${report}.gz`)).toString("utf8"));
+assert.equal(combinedTape.header.suite_version, undefined);
+assert.deepEqual(combinedTape.header.manifest, combined.manifest);
 assert.equal(combined.manifest.suite.only, undefined);
 assert.deepEqual(combined.manifest.suite.ids, ["s1-1", "s1-2"]);
 assert.equal(combined.name, "20261121-080000-jev");
 console.log("✓ city parts merge in suite order with failed verdicts kept and duplicate drives refused");
+
+fs.rmSync(report);
+fs.rmSync(`${report}.gz`);
+mergeBench(benchPart("s1-1", false, 42, "legacy-a", "legacy"), benchPart("s1-2", true, 42, "legacy-b", "legacy"));
+const explicitLegacy = JSON.parse(fs.readFileSync(report, "utf8"));
+assert.equal(explicitLegacy.suite_version, "legacy");
+assert.equal(explicitLegacy.manifest.suite_version, "legacy");
+assert.ok(explicitLegacy.results.every((result) => result.suite_version === "legacy"));
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log("\nmerge recordings checks passed");

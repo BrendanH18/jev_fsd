@@ -68,9 +68,10 @@
  "rows": [
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "challenges",
    "track": "guarded",
-   "label": "60 challenges and 2 road tests",
+   "label": "Challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -2343,9 +2344,10 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "challenges",
    "track": "guarded",
-   "label": "60 challenges and 2 road tests",
+   "label": "Challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -3055,9 +3057,10 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "open",
    "track": "open",
-   "label": "Open track: 60 challenges and 2 road tests",
+   "label": "Open track: challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -5331,9 +5334,10 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "open",
    "track": "open",
-   "label": "Open track: 60 challenges and 2 road tests",
+   "label": "Open track: challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -6044,6 +6048,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, dry",
@@ -6157,6 +6162,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, fog",
@@ -6187,6 +6193,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, rain",
@@ -6217,6 +6224,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, snow",
@@ -6247,6 +6255,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Calgary, city preset, dry",
@@ -6277,6 +6286,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Edmonton, city preset, dry",
@@ -6307,6 +6317,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Halifax, city preset, dry",
@@ -6337,6 +6348,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Montréal, city preset, dry",
@@ -6367,6 +6379,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Mount Pleasant, city preset, dry",
@@ -6397,6 +6410,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Ottawa, city preset, dry",
@@ -6427,6 +6441,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Québec City, city preset, dry",
@@ -6457,6 +6472,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Saskatoon, city preset, dry",
@@ -6487,6 +6503,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Toronto, city preset, dry",
@@ -6517,6 +6534,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Victoria, city preset, dry",
@@ -6547,6 +6565,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Winnipeg, city preset, dry",
@@ -6577,6 +6596,7 @@
   },
   {
    "driver": "rules",
+   "suite_version": "legacy",
    "suite": "bare",
    "track": "guarded",
    "label": "Kitsilano, bare preset, dry",
@@ -6607,9 +6627,10 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "challenges",
    "track": "guarded",
-   "label": "60 challenges and 2 road tests",
+   "label": "Challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -8886,9 +8907,10 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "challenges",
    "track": "guarded",
-   "label": "60 challenges and 2 road tests",
+   "label": "Challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -9602,9 +9624,10 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "open",
    "track": "open",
-   "label": "Open track: 60 challenges and 2 road tests",
+   "label": "Open track: challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -11882,9 +11905,10 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "open",
    "track": "open",
-   "label": "Open track: 60 challenges and 2 road tests",
+   "label": "Open track: challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -12599,6 +12623,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, dry",
@@ -12741,6 +12766,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, fog",
@@ -12793,6 +12819,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, rain",
@@ -12830,6 +12857,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, snow",
@@ -12912,6 +12940,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Calgary, city preset, dry",
@@ -12949,6 +12978,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Edmonton, city preset, dry",
@@ -12995,6 +13025,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Halifax, city preset, dry",
@@ -13032,6 +13063,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Montréal, city preset, dry",
@@ -13078,6 +13110,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Mount Pleasant, city preset, dry",
@@ -13115,6 +13148,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Ottawa, city preset, dry",
@@ -13152,6 +13186,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Québec City, city preset, dry",
@@ -13197,6 +13232,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Saskatoon, city preset, dry",
@@ -13234,6 +13270,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Toronto, city preset, dry",
@@ -13279,6 +13316,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Victoria, city preset, dry",
@@ -13316,6 +13354,7 @@
   },
   {
    "driver": "cautious",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Winnipeg, city preset, dry",
@@ -13361,9 +13400,10 @@
   },
   {
    "driver": "jev",
+   "suite_version": "legacy",
    "suite": "challenges",
    "track": "guarded",
-   "label": "60 challenges and 2 road tests",
+   "label": "Challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -15011,9 +15051,10 @@
   },
   {
    "driver": "jev",
+   "suite_version": "legacy",
    "suite": "open",
    "track": "open",
-   "label": "Open track: 60 challenges and 2 road tests",
+   "label": "Open track: challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -16662,6 +16703,7 @@
   },
   {
    "driver": "jev",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, dry",
@@ -16871,9 +16913,10 @@
   },
   {
    "driver": "llm:claude-haiku-5-5",
+   "suite_version": "legacy",
    "suite": "challenges",
    "track": "guarded",
-   "label": "60 challenges and 2 road tests",
+   "label": "Challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -18529,9 +18572,10 @@
   },
   {
    "driver": "llm:claude-haiku-5-5",
+   "suite_version": "legacy",
    "suite": "open",
    "track": "open",
-   "label": "Open track: 60 challenges and 2 road tests",
+   "label": "Open track: challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -20188,6 +20232,7 @@
   },
   {
    "driver": "llm:claude-haiku-5-5",
+   "suite_version": "legacy",
    "suite": "city",
    "track": "guarded",
    "label": "Kitsilano, city preset, dry",
@@ -20388,9 +20433,10 @@
   },
   {
    "driver": "llm:deepseek",
+   "suite_version": "legacy",
    "suite": "challenges",
    "track": "guarded",
-   "label": "60 challenges and 2 road tests",
+   "label": "Challenges and road tests",
    "map": null,
    "preset": null,
    "weather": "authored per challenge",
@@ -22047,6 +22093,7 @@
   },
   {
    "driver": "llm:deepseek",
+   "suite_version": "legacy",
    "suite": "pilot",
    "track": "guarded",
    "label": "door-zone",
@@ -22111,6 +22158,7 @@
   },
   {
    "driver": "llm:luna",
+   "suite_version": "legacy",
    "suite": "pilot",
    "track": "guarded",
    "label": "door-zone",
@@ -22175,6 +22223,7 @@
   },
   {
    "driver": "decision:liquid-d1",
+   "suite_version": "legacy",
    "suite": "pilot",
    "track": "guarded",
    "label": "door-zone",
@@ -22239,6 +22288,7 @@
   },
   {
    "driver": "llm:granite",
+   "suite_version": "legacy",
    "suite": "pilot",
    "track": "guarded",
    "label": "dont-splash, left-on-red",

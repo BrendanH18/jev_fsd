@@ -143,3 +143,20 @@ over the 60 challenges and both road tests. Use the same revision and Node
 version for all six. Keep Claude Haiku at low effort through the Claude
 Platform. Record the resolved Jev version before the first run and use it
 for all three recordings. Publish all completed repeats, including failures.
+## Suite versions
+
+Suite [v1](../../data/suites/v1.json) defines the 1.0 test in three parts.
+
+- The 60 authored challenges and two road tests on the lockstep clock, with their recorded seeds, authored versions and map fingerprints. Guarded and open are separate tracks.
+- Kitsilano city, with 12 routes from seed 1, 40 traffic cars and the lockstep clock. Dry, fog, rain and snow are separate weather legs. The v1 definition pins the generated route fingerprint.
+- Kitsilano city held out, with four routes each from seeds 101, 102 and 103 and the same city settings. The definition pins these routes with a separate fingerprint. Keep these reports apart from the tuned legs.
+
+A numbered run completes one of these members. Failed drives count as completed attempts. Incomplete runs, pilots, other presets and browser-local evaluations are labeled `custom`. The merge tools can qualify a complete run from version-aware shards only after checking the inputs and coverage. Unversioned publications and tapes remain `legacy`, including when they replay exactly. The leaderboard and README show each numbered version separately from legacy history. Custom runs are listed individually on the leaderboard.
+
+The browser can compare new local runs with versionless saved baselines under matching conditions. Comparisons involving a numbered suite require the same version.
+
+New Node publication manifests use `jev-run-manifest/2`. The report, manifest, tape header and per-drive results declare the same `suite_version`. Replay checks simulation data against the recorded answers and drive hashes. Suite membership is verified separately, so labeling reports and merging shards do not change existing drive hashes.
+
+Use `bench_node.mjs --replay TAPE.json.gz --check replay --json RUN.json` to export a complete exact benchmark replay for publication. The report retains the tape's manifest and recording date when the recorded engine and suite match.
+
+When a change alters any canonical result, add a new definition and switch the Node writers to it. Keep earlier definitions and recordings so publication and replay can verify older results on their declared source and engine.

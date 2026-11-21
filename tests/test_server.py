@@ -129,6 +129,30 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class BenchRunStoreTests(unittest.TestCase):
+    def test_browser_save_accepts_custom_and_versionless_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runs = root / "runs"
+            with patch.multiple(server, RUNS_DIR=runs, PROJECT_ROOT=root):
+                body = {"config": {"brain": "rules"}, "summary": {}, "results": [{"id": "s1-1"}]}
+                with self.assertRaisesRegex(server.BadRequest, "custom suite"):
+                    server.api_bench_save(
+                        dict(body, suite_version="v1", results=[{"id": "s1-1", "suite_version": "v1"}]), {}
+                    )
+                self.assertFalse(runs.exists())
+                for payload in (
+                    body,
+                    dict(body, suite_version="custom", results=[{"id": "s1-1", "suite_version": "custom"}]),
+                ):
+                    saved = server.api_bench_save(payload, {})
+                    full = server.api_bench_runs({}, {"name": [saved["name"]]})
+                    self.assertEqual(full.get("suite_version"), payload.get("suite_version"))
+                    self.assertEqual(full["results"], payload["results"])
+                    listed = next(r for r in server.api_bench_runs({}, {})["runs"] if r["name"] == saved["name"])
+                    self.assertEqual(listed["suite_version"], payload.get("suite_version", "legacy"))
+
+
 class RecordingStoreTests(unittest.TestCase):
     """Model recordings (static/js/brain/recording.js) are saved and read back like benchmark runs."""
 
@@ -170,6 +194,15 @@ class RecordingStoreTests(unittest.TestCase):
                 with self.assertRaises(server.BadRequest):
                     server.api_recordings({}, {"name": [name]})
         self.assertEqual(server.api_recordings({}, {}), {"recordings": []})
+
+    def test_rejects_suite_version_on_a_legacy_manifest(self):
+        tape = self.recording()
+        tape["header"].update(
+            suite_version="legacy", manifest={"format": "jev-run-manifest/1", "suite_version": "legacy"}
+        )
+        tape["results"]["s1-1"]["suite_version"] = "legacy"
+        with self.assertRaisesRegex(server.BadRequest, "must agree on suite_version"):
+            server.api_recording_save(tape, {})
 
 
 class ResultsApiTests(unittest.TestCase):

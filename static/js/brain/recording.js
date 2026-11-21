@@ -134,6 +134,16 @@ export class ModelRecording {
     const json = typeof data === "string" ? JSON.parse(data) : data;
     if (json?.format !== RECORDING_FORMAT)
       throw new Error(`Not a model recording (format ${JSON.stringify(json?.format)}, expected ${RECORDING_FORMAT}).`);
+    const { header, results = {} } = json;
+    const version = header?.suite_version;
+    if (
+      (version !== undefined && (typeof version !== "string" || !/^(legacy|custom|v[1-9]\d*)$/.test(version))) ||
+      (header?.manifest?.format === "jev-run-manifest/1" && version !== undefined) ||
+      (header?.manifest?.format === "jev-run-manifest/2" && version === undefined) ||
+      (header?.manifest && header.manifest.suite_version !== version) ||
+      Object.values(results).some((result) => result.suite_version !== version)
+    )
+      throw new Error("The recording and its results disagree on suite_version.");
     return new ModelRecording(json);
   }
 
@@ -148,7 +158,10 @@ export class ModelRecording {
   // A drive's result, and its scenario: a replay drives the recorded route even if the router has
   // changed since.
   keepResult(driveId, result, scenario = null) {
-    this.results[driveId] = comparableResult(result);
+    this.results[driveId] = {
+      ...comparableResult(result),
+      ...(this.header.suite_version !== undefined ? { suite_version: this.header.suite_version } : {}),
+    };
     if (scenario) this.scenarios[driveId] = JSON.parse(JSON.stringify(scenario));
   }
   // The recorded scenarios in drive order, or null when the recording has none (a challenge drive).
@@ -186,9 +199,10 @@ export class ModelRecording {
 // A drive's result without what measures the computer rather than the drive (the wall-clock time a
 // drive took, and an arena report's wall-clock start), the tape's own counts, and the optional
 // `diagnostics` (bench_node --diagnostics 1), which a replay may ask for or not. Everything else,
-// model latency included (it is part of the recorded answer), must replay exactly.
+// model latency included (it is part of the recorded answer), must replay exactly. Suite membership
+// is run provenance and is checked separately so merges and historical tapes keep the same hashes.
 export function comparableResult(result) {
-  const { wall_ms, model_recording, diagnostics, ...rest } = result || {};
+  const { wall_ms, model_recording, diagnostics, suite_version, ...rest } = result || {};
   const out = JSON.parse(JSON.stringify(rest));
   if (out.report && typeof out.report === "object") delete out.report.started_at;
   return out;

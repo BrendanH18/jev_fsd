@@ -7,6 +7,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import helpers  # noqa: F401  (puts the repository on sys.path)
 from jev.config import PRESET_BBOXES
@@ -111,6 +112,55 @@ class ResultsTest(unittest.TestCase):
             finally:
                 build_results.committed_runs = original
 
+    def test_custom_selected_and_variant_benchmarks_are_individual_rows(self):
+        original = json.loads((build_results.RUNS / "20261121-075044-rules.json").read_text())
+        with tempfile.TemporaryDirectory(dir=ROOT / "data") as tmp:
+            paths = []
+            cases = ("selected", "hour-zero", "open", "held-out")
+            for case in cases:
+                config = dict(
+                    original["config"],
+                    **{"hour-zero": {"hour": 0}, "open": {"track": "open"}, "held-out": {"heldout": True}}.get(
+                        case, {}
+                    ),
+                )
+                results = [dict(result, suite_version="custom") for result in original["results"]]
+                if case == "selected":
+                    results = results[:1]
+                suite = dict(
+                    original["manifest"]["suite"],
+                    config=config,
+                    ids=[result["id"] for result in results],
+                    **({"only": True} if case == "selected" else {}),
+                )
+                manifest = dict(
+                    original["manifest"],
+                    format=build_results.MANIFEST_FORMAT,
+                    suite_version="custom",
+                    suite=suite,
+                    track=config.get("track", "guarded"),
+                )
+                path = Path(tmp) / f"{case}.json"
+                path.write_text(
+                    json.dumps(
+                        dict(
+                            original,
+                            name=case,
+                            suite_version="custom",
+                            config=config,
+                            results=results,
+                            manifest=manifest,
+                        )
+                    )
+                )
+                paths.append(path)
+            with patch.object(build_results, "committed_runs", return_value=paths):
+                rows = build_results.run_rows({})
+            self.assertEqual([row["label"].split(" · ")[-1] for row in rows], list(cases[:3]))
+            self.assertEqual([row["total"] for row in rows], [1, 12, 12])
+            self.assertEqual([row["track"] for row in rows], ["guarded", "guarded", "open"])
+            self.assertTrue(all(row["suite_version"] == "custom" for row in rows))
+
     def test_a_partial_run_of_the_whole_set_is_a_pilot(self):
         # `--set all --only door-zone`, or a run stopped part way, keeps set "all": it never takes the full
         # set's row, on either track (inside the repository, as published results are)
@@ -157,6 +207,7 @@ class ResultsTest(unittest.TestCase):
         recording = {
             "header": {
                 "manifest": dict(manifest),
+                "driver": "jev",
                 "model": "jev-test",
                 "engine": "node v22",
                 "maps": {"kitsilano": sha},
@@ -165,6 +216,35 @@ class ResultsTest(unittest.TestCase):
             "results": {"door-zone": dict(results[0], seed=1042)},
         }
         self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01", recording), manifest)
+        with patch.dict(recording["header"], driver="llm:other"):
+            with self.assertRaisesRegex(ValueError, "recording driver disagrees"):
+                build_results.checked_manifest(path, run, "2099-01-01", recording)
+        with patch.dict(recording["header"]["arena"], track="open"):
+            with self.assertRaisesRegex(ValueError, "arena recording track disagrees"):
+                build_results.checked_manifest(path, run, "2099-01-01", recording)
+        definition = {
+            "arena": {"drives": {"door-zone": {"map": "kitsilano", "seed": 1042, "version": 1}}},
+            "maps": {"kitsilano": sha},
+        }
+        numbered_manifest = dict(
+            manifest,
+            format=build_results.MANIFEST_FORMAT,
+            suite_version="v1",
+            suite=dict(manifest["suite"], drives=definition["arena"]["drives"]),
+        )
+        numbered_result = dict(results[0], suite_version="v1", seed=1042, version=1)
+        numbered_run = dict(run, suite_version="v1", manifest=numbered_manifest, results=[numbered_result])
+        numbered_tape = {
+            "header": dict(recording["header"], suite_version="v1", manifest=numbered_manifest),
+            "results": {"door-zone": dict(numbered_result)},
+        }
+        with patch.dict(build_results.CANONICAL, v1=definition):
+            self.assertEqual(
+                build_results.checked_manifest(path, numbered_run, "2099-01-01", numbered_tape), numbered_manifest
+            )
+            numbered_tape["results"]["door-zone"]["stopped"] = True
+            with self.assertRaisesRegex(ValueError, "canonical arena recording contains a stopped drive"):
+                build_results.checked_manifest(path, numbered_run, "2099-01-01", numbered_tape)
         results.append({"challenge": "undeclared", "map": None})
         with self.assertRaisesRegex(ValueError, "arena drives disagree"):
             build_results.checked_manifest(path, run, "2099-01-01", recording)
@@ -183,6 +263,124 @@ class ResultsTest(unittest.TestCase):
         recording["header"]["manifest"]["source_commit"] = "b" * 40
         with self.assertRaisesRegex(ValueError, "recording and results disagree"):
             build_results.checked_manifest(path, run, "2099-01-01", recording)
+
+    def test_suite_version_checks_benchmark_membership(self):
+        path = ROOT / "data/runs/20990101-000000-rules.json"
+        definition = build_results.CANONICAL["v1"]
+        bench = definition["bench"]
+        config = dict(bench["config"], brain="rules", weather="snow", pack=10, engine="node v22")
+        suite = {
+            "kind": "bench",
+            "config": config,
+            "ids": bench["ids"],
+            "generated_ids": bench["ids"],
+            "route_sha": bench["route_sha"],
+        }
+        manifest = {
+            "format": build_results.MANIFEST_FORMAT,
+            "suite_version": "v1",
+            "source_commit": "a" * 40,
+            "source_dirty": False,
+            "engine": config["engine"],
+            "engine_version": "12",
+            "driver": "rules",
+            "track": "guarded",
+            "cost_usd": 0,
+            "suite": suite,
+            "maps": {
+                "kitsilano": {
+                    "pack_version": config["pack"],
+                    "fingerprint": definition["maps"]["kitsilano"],
+                    "components": {"roads": "1" * 16},
+                },
+            },
+        }
+        run = {
+            "suite_version": "v1",
+            "config": config,
+            "summary": {"cost_usd": 0},
+            "results": [{"id": drive, "suite_version": "v1", "pass": False} for drive in bench["ids"]],
+            "manifest": manifest,
+        }
+        self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01"), manifest)
+        with self.assertRaisesRegex(ValueError, "report and manifest disagree"):
+            build_results.checked_manifest(
+                path, dict(run, manifest=dict(manifest, suite_version="custom")), "2099-01-01"
+            )
+        with self.assertRaisesRegex(ValueError, "run and results disagree"):
+            build_results.checked_manifest(path, dict(run, suite_version="custom"), "2099-01-01")
+        for key, value in (("npcs", 10), ("park", True), ("hour", 0), ("weather", "ice")):
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "outside the canonical v1 suite"):
+                config[key] = value
+                try:
+                    build_results.checked_manifest(path, run, "2099-01-01")
+                finally:
+                    config.clear()
+                    config.update(bench["config"], brain="rules", weather="snow", pack=10, engine="node v22")
+        with self.assertRaisesRegex(ValueError, "outside the canonical v1 suite"):
+            build_results.checked_manifest(path, dict(run, stopped="reserve"), "2099-01-01")
+        with self.assertRaisesRegex(ValueError, "outside the canonical v1 suite"):
+            suite["only"] = True
+            build_results.checked_manifest(path, run, "2099-01-01")
+
+    def test_numbered_benchmark_tape_must_contain_the_frozen_routes(self):
+        definition = build_results.CANONICAL["v1"]
+        bench = definition["bench"]
+        config = dict(bench["config"], brain="jev", weather="dry", pack="6", engine="node v22")
+        ids = bench["ids"]
+        scenarios = {drive: {"id": drive, "start": {"s": 12.125 + index}} for index, drive in enumerate(ids)}
+        route_sha = build_results.bench_route_fingerprint(list(scenarios.values()))
+        manifest = {
+            "format": build_results.MANIFEST_FORMAT,
+            "suite_version": "v1",
+            "source_commit": "a" * 40,
+            "source_dirty": False,
+            "engine": config["engine"],
+            "engine_version": "12",
+            "driver": "jev",
+            "track": "guarded",
+            "model": "jev-test",
+            "prompt_hash": "1" * 16,
+            "cost_usd": 0,
+            "suite": {"kind": "bench", "config": config, "ids": ids, "generated_ids": ids, "route_sha": route_sha},
+            "maps": {
+                "kitsilano": {
+                    "pack_version": config["pack"],
+                    "fingerprint": definition["maps"]["kitsilano"],
+                    "components": {"roads": "1" * 16},
+                },
+            },
+        }
+        results = [{"id": drive, "suite_version": "v1", "pass": False} for drive in ids]
+        run = {
+            "suite_version": "v1",
+            "config": config,
+            "summary": {"cost_usd": 0},
+            "results": results,
+            "manifest": manifest,
+        }
+        tape = {
+            "header": {
+                "driver": "jev",
+                "suite_version": "v1",
+                "model": manifest["model"],
+                "engine": config["engine"],
+                "map_sha": definition["maps"]["kitsilano"],
+                "manifest": manifest,
+                "bench": config,
+            },
+            "results": {result["id"]: result for result in results},
+            "scenarios": scenarios,
+        }
+        path = ROOT / "data/runs/20990101-000000-jev.json"
+        with patch.dict(build_results.CANONICAL, v1=dict(definition, bench=dict(bench, route_sha=route_sha))):
+            self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01", tape), manifest)
+            with patch.dict(tape, scenarios=None):
+                with self.assertRaisesRegex(ValueError, "benchmark recording settings or scenarios disagree"):
+                    build_results.checked_manifest(path, run, "2099-01-01", tape)
+            scenarios[ids[0]]["start"]["s"] += 1
+            with self.assertRaisesRegex(ValueError, "benchmark recording routes disagree"):
+                build_results.checked_manifest(path, run, "2099-01-01", tape)
 
     def test_a_newer_challenge_run_leads(self):
         # a second published full run for a driver: its summary and the README take the newest

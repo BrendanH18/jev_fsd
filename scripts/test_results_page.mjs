@@ -22,7 +22,7 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 
 const data = checkResults(JSON.parse(fs.readFileSync(new URL("../data/results.json", import.meta.url), "utf8")));
 const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
-const block = readme.slice(readme.indexOf("<!-- results:start -->"), readme.indexOf("<!-- results:end -->"));
+const block = readme.slice(readme.indexOf("### Legacy results"), readme.indexOf("<!-- results:end -->"));
 // README rows: | Driver | Model | challenges | open track | Kitsilano weathers | other maps | own decisions | cost |
 const readmeRows = block
   .split("\n")
@@ -124,10 +124,23 @@ test("manual comparison finds the newest guarded drive with the same map data an
   const changedMap = { ...rules, drives: [{ ...match, map_sha: "changed", time_s: 0 }] };
   const changedVersion = { ...rules, drives: [{ ...match, version: match.version + 1, time_s: 0 }] };
   const open = { ...rules, suite: "open", drives: [{ ...match, time_s: 0 }] };
-  const history = { rows: [changedMap, changedVersion, open, rules] };
+  const custom = { ...rules, suite_version: "custom", drives: [{ ...match, time_s: 0 }] };
+  const history = { rows: [changedMap, changedVersion, open, custom, rules] };
   assert.deepEqual(compatibleChallengeDrive(history, "rules", config), { ...match, failures: [] });
   assert.equal(compatibleChallengeDrive(history, "rules", { ...config, map_sha: "unknown" }), null);
   assert.equal(compatibleChallengeDrive(history, "rules", { ...config, map_sha: undefined }), null);
+});
+
+test("each leaderboard cohort selects its own newest runs", () => {
+  const challenges = data.rows.find((r) => r.driver === "rules" && r.suite === "challenges");
+  const city = data.rows.find((r) => r.driver === "rules" && r.suite === "city");
+  const v1 = [challenges, city].map((r) => ({ ...r, suite_version: "v1", passed: 0 }));
+  const mixed = { ...data, rows: [...v1, { ...challenges, suite_version: "custom" }, ...data.rows] };
+  assert.equal(summary(mixed, "v1").drivers.length, 1);
+  assert.equal(summary(mixed).drivers[0].challenges.passed, challenges.passed);
+  assert.deepEqual(challengeMatrix(mixed, "challenges", "v1").runs, [v1[0]]);
+  assert.deepEqual(cityGrid(mixed, "v1").rows[0].cells, [v1[1]]);
+  assert.deepEqual(challengeMatrix(mixed, "challenges", "custom").runs, []);
 });
 
 test("every recording offered for replay is committed", () => {

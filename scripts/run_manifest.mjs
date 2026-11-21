@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { CUSTOM_SUITE } from "../static/js/bench/suite-version.js";
 import { OPEN_SYSTEM_PROMPT, SYSTEM_PROMPT } from "../static/js/brain/llm-prompt.js";
 import { canonicalJson, driverKind, hashText, mapFingerprint } from "../static/js/brain/recording.js";
 
@@ -35,7 +36,8 @@ function promptHash(kind, track) {
 
 export function runManifest({ driver, model, track, suite, maps, fingerprints = {} }) {
   return {
-    format: "jev-run-manifest/1",
+    format: "jev-run-manifest/2",
+    suite_version: CUSTOM_SUITE,
     ...source(),
     engine: `node ${process.version}`,
     engine_version: process.versions.v8,
