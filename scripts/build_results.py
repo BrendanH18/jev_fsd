@@ -129,6 +129,22 @@ def read_recording(path: Path) -> dict:
         return json.load(f)
 
 
+_FACTS: dict[tuple, dict] = {}
+
+
+def recording_facts(path: Path) -> dict:
+    """What build() reads from a recording: everything but its drives, which it only counts, with
+    answered_by() of them under "answered". Cached by file, modification time and size, since the
+    tests build many times and the drives come to over a gigabyte once parsed. Callers must not
+    change what it returns."""
+    stat = path.stat()
+    key = (path.resolve(), stat.st_mtime_ns, stat.st_size)
+    if key not in _FACTS:
+        full = read_recording(path)
+        _FACTS[key] = {**{k: v for k, v in full.items() if k != "drives"}, "answered": answered_by(full)}
+    return _FACTS[key]
+
+
 def answered_by(recording: dict) -> tuple[list[str], float | None, int]:
     """The model ids that answered (from each reply's meta), the cost billed by the provider when
     every reply carries `usage.cost`, and the number of replies."""
@@ -451,7 +467,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
         recording_path = RECORDINGS / f"{name}-{date}.json.gz"
         row_results, cost, cost_basis, model, requested = results, summary.get("cost_usd") or 0, None, None, None
         sources = [rel(path)]
-        recording = read_recording(recording_path) if recording_path.is_file() else None
+        recording = recording_facts(recording_path) if recording_path.is_file() else None
         manifest = checked_manifest(path, published, date, recording)
         map_shas = {key: entry["fingerprint"] for key, entry in manifest["maps"].items()} if manifest else {}
         if recording is not None:
@@ -467,7 +483,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
             if mine != theirs:
                 raise ValueError(f"{rel(recording_path)} and {rel(path)} disagree on which drives passed")
             sources.append(rel(recording_path))
-            models, billed, _ = answered_by(recording)
+            models, billed, _ = recording["answered"]
             requested = header.get("model")
             model = models[0] if models else requested
             if billed is not None:
@@ -571,7 +587,7 @@ def run_rows(drivers: dict) -> list[dict]:
         ):
             continue
         recording_path = RECORDINGS / f"{path.stem}.json.gz"
-        recording = read_recording(recording_path) if recording_path.is_file() else None
+        recording = recording_facts(recording_path) if recording_path.is_file() else None
         manifest = checked_manifest(path, run, run["saved_at"][:10], recording)
         if variant and version != CUSTOM_SUITE:  # Numbered held-out results are reported apart.
             continue
@@ -613,7 +629,7 @@ def run_rows(drivers: dict) -> list[dict]:
         sources, model, requested = [rel(path)], None, None
         if recording is not None:
             sources.append(rel(recording_path))
-            models, _, _ = answered_by(recording)
+            models, _, _ = recording["answered"]
             header = recording["header"]
             requested = header.get("model")
             model = models[0] if models else requested

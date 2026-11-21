@@ -21,17 +21,27 @@ export function measuredTimes(path = `${SCRIPTS}ci_test_times.json`) {
   return JSON.parse(readFileSync(path, "utf8")).seconds;
 }
 
-// [{ files, seconds }] for `count` shards; files are bare names (test_x.mjs).
-export function plan(files, times, count) {
+// The measured seconds of each file, the median for one not in `times`.
+export function costs(files, times) {
   const known = files
     .map((f) => times[f])
     .filter((s) => Number.isFinite(s))
     .sort((a, b) => a - b);
   const fallback = known.length ? known[known.length >> 1] : 1;
-  const cost = (f) => (Number.isFinite(times[f]) ? times[f] : fallback);
+  return (f) => (Number.isFinite(times[f]) ? times[f] : fallback);
+}
+
+// The files longest first, ties by name.
+export function longestFirst(files, times) {
+  const cost = costs(files, times);
+  return [...files].sort((a, b) => cost(b) - cost(a) || (a < b ? -1 : a > b ? 1 : 0));
+}
+
+// [{ files, seconds }] for `count` shards; files are bare names (test_x.mjs).
+export function plan(files, times, count) {
+  const cost = costs(files, times);
   const shards = Array.from({ length: count }, () => ({ files: [], seconds: 0 }));
-  const order = [...files].sort((a, b) => cost(b) - cost(a) || (a < b ? -1 : a > b ? 1 : 0));
-  for (const f of order) {
+  for (const f of longestFirst(files, times)) {
     let best = 0;
     for (let i = 1; i < count; i++) if (shards[i].seconds < shards[best].seconds) best = i;
     shards[best].files.push(f);
