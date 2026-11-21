@@ -35,8 +35,7 @@ import {
   TAIL_STOP_DECEL,
   behindInLane,
 } from "../sim/tailgaters.js";
-import { officerStopLaw } from "../sim/traffic-officer.js";
-import { PRIORITY_IDS, featureObstacle, hooks } from "../sim/features/index.js";
+import { junctionPlan, PRIORITY_IDS, featureObstacle, hooks } from "../sim/features/index.js";
 
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
 // feature's own code used to be.
@@ -44,6 +43,7 @@ const CANDIDATES = {
   restrictions: hooks("candidates", "restrictions"),
   driveways: hooks("candidates", "driveways"),
   streetHazards: hooks("candidates", "streetHazards"),
+  junctions: hooks("candidates", "junctions"),
   tailgaters: hooks("candidates", "tailgaters"),
 };
 const PULL_OVER_DETOUR = hooks("pullOverDetour");
@@ -352,6 +352,7 @@ export function sampleCandidates(snap, world) {
       limit,
       s,
       laneUntil,
+      nudge,
       inLane,
       approach,
       queue,
@@ -386,35 +387,7 @@ export function sampleCandidates(snap, world) {
         speed: "approach and stop at the line",
       });
     }
-    // A police officer directing traffic at the junction ahead (sim/traffic-officer.js): held, stop at the
-    // line and wait there, even on a green, never speeding up on the way and braking early and gently; waved
-    // through, go, even on a red
-    // (still giving way to whoever is in the junction, and to oncoming traffic turning left, as ever).
-    const officer = snap.intersection?.officer;
-    if (officer?.direction === "stop" && snap.intersection.bumper_to_line_m > 0.3) {
-      out.push({
-        id: "wait_for_officer",
-        laneUntil,
-        law: inLane({
-          kind: "lane",
-          offset: nudge,
-          vTarget: Math.min(approach, Math.max(v, 3)),
-          ...officerStopLaw(world.ego.spec, snap.tailgater ? TAIL_STOP_DECEL : Infinity),
-          stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5),
-        }),
-        steer: "hold lane",
-        speed: "stop at the line and wait for the officer's wave",
-      });
-    }
-    if (officer?.direction === "go" && !snap.intersection.entered) {
-      out.push({
-        id: "go_on_officer_wave",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: target }),
-        steer: "hold lane",
-        speed: `go on the officer's wave${officer.against_light ? `, though the light is ${officer.signal}` : ""}`,
-      });
-    }
+    for (const add of CANDIDATES.junctions) add(featureCtx, out);
     // Giving way at a two-way stop or a junction without a sign: past the line, wait where the car
     // looks from; to look along a street it cannot see, creep up to that point.
     const give = snap.intersection?.give_way;
@@ -956,14 +929,14 @@ export function simulateAll(candidates, snap, world) {
   const startS = snap.routeProj ? snap.routeProj.s : 0;
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
-  // (a police officer directing traffic there decides, not the light: sim/traffic-officer.js)
+  const directive = junctionPlan(control);
   const mustStop =
     control &&
     !control.clear_entered &&
     control.bumper_to_line_m > -CLEARING_M &&
-    ((control.control === "signal" && control.officer?.direction === "stop") ||
+    ((control.control === "signal" && directive?.direction === "stop") ||
       (control.control === "signal" &&
-        !control.officer &&
+        !directive &&
         ((control.signal === "red" && !(control.right_on_red?.go || control.left_on_red?.go)) ||
           control.signal === "unknown" ||
           (control.signal === "yellow" &&
@@ -1353,13 +1326,13 @@ export function simulateAll(candidates, snap, world) {
     else if (meets && c.law.kind !== "hard_brake") reject = "crosses_into_oncoming_traffic";
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
     else if (crosses)
-      reject = control.officer
-        ? "passes_officer_stop"
-        : control.control === "signal"
+      reject =
+        directive?.rejection ??
+        (control.control === "signal"
           ? "runs_red"
           : control.control === "yield" || control.stop_completed
             ? "fails_to_yield"
-            : "runs_stop";
+            : "runs_stop");
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";

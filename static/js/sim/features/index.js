@@ -11,7 +11,7 @@
 //   calls     the World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
 //   metric    { at, name, failure }: the violation counted, and the failure text (at "driveways",
-//             "streetHazards", "tailgaters" or "late" among the metrics and failures)
+//             "streetHazards", "tailgaters", "late" or "junctions" among the metrics and failures)
 //   obstacle  { test(o), traffic?, likePedestrian?, fixed?, predict(o, t)?, visible(world, observer, o)? }:
 //             an obstacle supplied by the feature. `traffic` allows it in the traffic sensing pass.
 //             `likePedestrian` assigns fault to the ego car on impact. `fixed` treats it as scenery.
@@ -38,12 +38,12 @@
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
 //   evKerb(world, road, front)          the emergency audit's furthest right the car can be asked to pull
 //                                       over, metres right of its lane's centre, or Infinity ("end")
-//   sense(world, snap, ctx)             the sensing pass: "driveways", "streetHazards", "late"
+//   sense(world, snap, ctx)             the sensing pass: "driveways", "streetHazards", "late", "junctions"
 //   limit(snap)                         the speed ceiling `snap.limit`: "driveways", "streetHazards", "parking" (once
 //                                       the turnaround and the parking are known)
 //   target(snap, v, reasons, ctx)       `desiredSpeed`, returns the new speed: "restrictions", "driveways", "streetHazards", "beforeEmergency"
 //   hazard(snap)                        a hazard flag, a list of them, or null: "driveways", "streetHazards",
-//                                       "officers", "late"
+//                                       "late"
 //   detour(snap)                        the move inside the lane it has the car make, or null: after a
 //                                       contraflow cyclist's ("contraflow")
 //   evStop(world, route, frontS, v, stop, decel)  where the car stops for an emergency vehicle, kept short
@@ -51,7 +51,7 @@
 //   blocksView(world, from, to)         true: it blocks the car's view along a street from a junction ("end")
 //   turnPace(world, frontS, distance)   { mps, accel } the car crosses a junction at, over what the feature
 //                                       makes slippery, or null ("end")
-//   candidates(ctx, out)                lane candidates: "restrictions", "driveways", "streetHazards", "tailgaters"
+//   candidates(ctx, out)                lane candidates: "restrictions", "driveways", "streetHazards", "junctions", "tailgaters"
 //   adjust(ctx, list)                   every lane candidate once the list is cut: "streetHazards", "end"
 //   pullOverDetour(snap, detour, stopS) true: pulling over for an emergency vehicle to stop at `stopS`
 //                                       drops the lane's `detour` ("end")
@@ -62,20 +62,25 @@
 //                                       whose rejection comes at its slot: "first", "driveways", "streetHazards", "beforeEmergency", "end";
 //                                       `settle` runs once every candidate is judged (after the tailgater's
 //                                       ceiling), and may let a rejection stand down
-//   state(snap, state)                  the decision state: "restrictions", "driveways", "streetHazards", "tailgaters"
+//   state(snap, state)                  the decision state: "restrictions", "driveways", "streetHazards", "junctions", "tailgaters"
 //   outcome(c, snap)                    a candidate's outcome label by its id, or null: "ids"
 //   slowOutcome(c, snap)                the outcome of a lane candidate slowed for it, or null: "lane", "end"
 //   clause(snap)                        the situation's wording (a sentence or a list), or null: "restrictions",
 //                                       "driveways", "streetHazards", "ice" (after black ice's), "tailgaters"
 //   holdStill(snap)                     when holding still is right, or "": "driveways", "late"
 //   prompt                              { at, text }: a line of the LLM system prompt: "restrictions",
-//                                       "streetHazards", "driveways", "snowbanks", "beforeOfficer", "tailgaters"
+//                                       "streetHazards", "driveways", "snowbanks", "junctions", "tailgaters"
+//   controlDirection(world, vehicle, edgeId) direction overriding the normal signal ("end")
+//   controlAudit(world, control, edge, rc, past, entered) true if the feature audits that signal itself ("end")
+//   controlSense(world, routeControl, frontS) { direction, fields(signal) } for a visible override ("end")
+//   junctionPlan(intersection)          what the sensed override means for speed, rejection and models ("end")
+//   trafficControl(world, vehicle, edgeId) direction overriding traffic's signal, with per-car state ("end")
 //   evQueueHold(world, front)         { distance, vehicle } of a stopped queue the ego approaches ("end")
 //   trafficManage(world, fleet)         update fleet-wide feature state before the vehicle loop ("end")
 //   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("end")
 //   trafficLeaderHold(world, n, path, front) { gap, vehicle } of a virtual traffic leader ("end")
 //   trafficParkingPlan(n, standstillGap) { shift, stop, signal } for a car preparing to park ("end")
-//   trafficStart(world, n)              each traffic vehicle, each step, first ("end")
+//   trafficStart(world, n)              each vehicle step, first ("end") or before scanning signals ("beforeControl")
 //   trafficReplan(world, n)             before its path is extended; true when re-planned ("end")
 //   trafficLane(world, n, front, busy, dt, { offset, moves, pursuit })  { result, shift, aim, now, easing }:
 //                                       a move inside the lane ("contraflow", or "late" for a line it keeps
@@ -101,13 +106,14 @@ import balls from "./balls.js";
 import driveways from "./driveways.js";
 import potholes from "./potholes.js";
 import geese from "./geese.js";
+import officers from "./officers.js";
 import ice from "./black-ice.js";
 import snowbanks from "./snowbanks.js";
 import puddles from "./puddles.js";
 import parkers from "./parkers.js";
 import roadClosures from "./road-closures.js";
 
-export const FEATURES = [driveways, balls, potholes, geese, ice, snowbanks, puddles, parkers, roadClosures];
+export const FEATURES = [driveways, balls, potholes, geese, officers, ice, snowbanks, puddles, parkers, roadClosures];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
 // run, so `hooks` refuses to load one (and scripts/test_feature_registry.mjs checks every record).
@@ -116,28 +122,33 @@ export const SLOTS = {
   stepBeforeTraffic: ["first", "end"],
   stepAfterTraffic: ["end"],
   audit: ["driveways", "streetHazards", "tailgaters", "late"],
-  sense: ["driveways", "streetHazards", "late"],
+  sense: ["driveways", "streetHazards", "late", "junctions"],
   limit: ["driveways", "streetHazards", "parking"],
   target: ["restrictions", "driveways", "streetHazards", "beforeEmergency"],
-  hazard: ["driveways", "streetHazards", "officers", "late"],
+  hazard: ["driveways", "streetHazards", "late"],
+  controlDirection: ["end"],
+  controlAudit: ["end"],
+  controlSense: ["end"],
+  junctionPlan: ["end"],
+  trafficControl: ["end"],
   turnPace: ["end"],
-  candidates: ["restrictions", "driveways", "streetHazards", "tailgaters"],
+  candidates: ["restrictions", "driveways", "streetHazards", "junctions", "tailgaters"],
   adjust: ["streetHazards", "end"],
   brakeDetour: ["end"],
   sim: ["first", "driveways", "streetHazards", "beforeEmergency", "end"],
-  state: ["restrictions", "driveways", "streetHazards", "tailgaters"],
+  state: ["restrictions", "driveways", "streetHazards", "junctions", "tailgaters"],
   outcome: ["ids"],
   slowOutcome: ["lane", "end"],
   clause: ["restrictions", "driveways", "streetHazards", "ice", "tailgaters"],
   holdStill: ["driveways", "late"],
-  prompt: ["restrictions", "streetHazards", "driveways", "snowbanks", "beforeOfficer", "tailgaters"],
-  metric: ["driveways", "streetHazards", "tailgaters", "late"],
+  prompt: ["restrictions", "streetHazards", "driveways", "snowbanks", "junctions", "tailgaters"],
+  metric: ["driveways", "streetHazards", "tailgaters", "late", "junctions"],
   evQueueHold: ["end"],
   trafficManage: ["end"],
   trafficManeuver: ["end"],
   trafficLeaderHold: ["end"],
   trafficParkingPlan: ["end"],
-  trafficStart: ["end"],
+  trafficStart: ["end", "beforeControl"],
   trafficReplan: ["end"],
   trafficLane: ["contraflow", "late"],
   trafficYield: ["end"],
@@ -193,6 +204,20 @@ function fillHooks(out, name, slot) {
     if (at === slot) out.push((typeof h === "function" ? h : h.run).bind(f));
   }
 }
+
+// Return the first result when a feature takes over a junction control.
+export function firstHookResult(list, ...args) {
+  for (const run of list) {
+    const result = run(...args);
+    if (result) return result;
+  }
+  return null;
+}
+
+const CONTROL_DIRECTION = hooks("controlDirection");
+const JUNCTION_PLAN = hooks("junctionPlan");
+export const controlDirection = (world, vehicle, edgeId) => firstHookResult(CONTROL_DIRECTION, world, vehicle, edgeId);
+export const junctionPlan = (intersection) => firstHookResult(JUNCTION_PLAN, intersection);
 
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
 export const recordsAt = (name, slot) => FEATURES.filter((f) => f[name] && (f[name].at || "end") === slot);

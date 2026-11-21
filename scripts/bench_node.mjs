@@ -64,11 +64,11 @@ if (args.record && args.replay) fail("Use --record or --replay, not both.");
 const reserve = args.reserve === undefined ? null : Number(args.reserve);
 if (reserve !== null && (!args.record || !Number.isFinite(reserve) || reserve <= 0))
   fail("--reserve needs --record and a positive number of dollars.");
-if (args["prompt-audit"]) {
+const auditPath = args["prompt-audit"];
+const audit = auditPath ? await import("./prompt_audit.mjs") : null;
+if (audit) {
   if (!args.record && !args.replay) fail("--prompt-audit needs --record or --replay.");
-  const { resolve } = await import("node:path");
-  if ([args.record, args.replay, args.json].some((path) => path && resolve(path) === resolve(args["prompt-audit"])))
-    fail("--prompt-audit needs its own output path.");
+  audit.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
 }
 if (args.check === "replay" && !args.replay) fail("--check replay requires --replay.");
 // A replay takes its driver, map and suite from the recording.
@@ -272,17 +272,24 @@ if (manifestModule) {
 }
 const results = [],
   drifted = [];
-const auditPath = args["prompt-audit"];
-const audit = auditPath ? await import("./prompt_audit.mjs") : null;
 const promptSizes = {};
 let budgetStop = null;
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
 const saveRecording = async () => {
   const fs = await import("node:fs"),
-    text = recording.serialize(),
-    tmp = `${args.record}.tmp`;
-  fs.writeFileSync(tmp, args.record.endsWith(".gz") ? (await import("node:zlib")).gzipSync(text, { level: 9 }) : text);
-  fs.renameSync(tmp, args.record);
+    { dirname, join } = await import("node:path"),
+    text = recording.serialize();
+  const directory = fs.mkdtempSync(join(dirname(args.record), ".bench-recording-"));
+  const tmp = join(directory, "recording");
+  try {
+    fs.writeFileSync(
+      tmp,
+      args.record.endsWith(".gz") ? (await import("node:zlib")).gzipSync(text, { level: 9 }) : text,
+    );
+    fs.renameSync(tmp, args.record);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 };
 for (const sc of selected) {
   if (reserve !== null) {
@@ -326,6 +333,7 @@ for (const sc of selected) {
   }
   results.push(r);
   if (prompt) {
+    audit.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
     promptSizes[sc.id] = prompt.result();
     (await import("node:fs")).writeFileSync(auditPath, `${JSON.stringify(promptSizes, null, 2)}\n`);
   }
@@ -345,6 +353,7 @@ if (heldout)
     `held-out suite (seeds ${config.seeds.join(", ")}): ${results.filter((r) => r.pass).length}/${results.length} passed; report apart from the tuned suites and never debug against it (docs/rules-baseline.md)`,
   );
 if (args.json) {
+  audit?.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
   const saved = { config, summary, results, ...(budgetStop ? { stopped: budgetStop } : {}) };
   if (manifest) {
     manifest.cost_usd = summary.cost_usd;

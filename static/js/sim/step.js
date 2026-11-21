@@ -2,7 +2,6 @@
 // call this, so a benchmark measures exactly what you watch.
 
 import { stepChallenge } from "../lab/challenges.js";
-import { stepOfficers } from "./traffic-officer.js";
 import { hooks } from "./features/index.js";
 
 // The registered features' steps (sim/features/index.js): first of all, before the traffic moves, and
@@ -25,9 +24,6 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   world.doubleParked.step(dt);
   world.stepOuts.step(dt);
   world.crossingGuards.step(dt);
-  // (police officers directing traffic, with that option on: sim/traffic-officer.js; before the traffic
-  // takes their directions)
-  if (world.officers?.enabled) stepOfficers(world, dt);
   for (const step of BEFORE_TRAFFIC) step(world, fleet, dt);
   fleet.step(dt);
   // (contraflow cyclists, with that option on: sim/contraflow.js)

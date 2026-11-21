@@ -36,7 +36,7 @@ const CORE = [
 test("every record is whole, its option and flags its own, and every hook at a slot the core runs", () => {
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
-    ["driveways", "balls", "potholes", "geese", "ice", "snowbanks", "puddles", "parkers", "roadClosures"],
+    ["driveways", "balls", "potholes", "geese", "officers", "ice", "snowbanks", "puddles", "parkers", "roadClosures"],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
   for (const field of ["key", "seen", "calls"])
@@ -56,7 +56,8 @@ test("the core runs every slot, and names no registered feature", () => {
         slot === "end"
           ? new RegExp(`hook(?:s|Entries)\\("${name}"\\)`)
           : new RegExp(`hook(?:s|Entries)\\("${name}", "${slot}"\\)`);
-      assert.ok(call.test(core), `the core runs ${name} at ${slot}`);
+      const dispatches = ["controlDirection", "junctionPlan"].includes(name) ? source("sim/features/index.js") : core;
+      assert.ok(call.test(dispatches), `the core runs ${name} at ${slot}`);
     }
   }
   for (const slot of R.SLOTS.metric) {
@@ -88,6 +89,8 @@ test("the core runs every slot, and names no registered feature", () => {
       './snowbanks.js"',
       './ball-chase.js"',
       './parkers.js"',
+      'sim/traffic-officer.js"',
+      './traffic-officer.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -139,6 +142,13 @@ test("the core runs every slot, and names no registered feature", () => {
       "this.snowbanks",
       "sbShift",
       "snowbanksSeen",
+      "officerHeld",
+      "officersSeen",
+      "snap.traffic_officer",
+      "officer_violations",
+      '"wait_for_officer"',
+      '"go_on_officer_wave"',
+      '"passes_officer_stop"',
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -164,6 +174,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     snowbanks: true,
     puddles: true,
     parkers: true,
+    officers: true,
     roadClosures: true,
   });
   for (const f of R.FEATURES) {
@@ -201,12 +212,14 @@ test("metrics and failures appear only once a feature has met the car, each at i
     snowbanksSeen: false,
     puddlesSeen: true,
     roadClosuresSeen: true,
+    officersSeen: true,
   };
   const v = { wildlife_conflicts: 2 };
   assert.deepEqual(R.featureMetrics(world, v, "driveways"), {});
   assert.deepEqual(R.featureMetrics(world, v, "streetHazards"), { wildlife_conflicts: 2 });
   assert.deepEqual(R.featureMetrics(world, v, "tailgaters"), { ice_overspeed: 0, pedestrians_splashed: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "late"), { closure_entries: 0 });
+  assert.deepEqual(R.featureMetrics(world, v, "junctions"), { officer_violations: 0 });
   world.ballsSeen = true;
   world.parkersSeen = true;
   assert.deepEqual(Object.keys(R.featureMetrics(world, v, "streetHazards")), [

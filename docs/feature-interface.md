@@ -6,9 +6,9 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Nine features have moved: driveway reversers, ball chase, spring potholes, Canada geese, black ice,
-snowbanks, puddles, traffic parking and road closures. Each record holds the hooks into the core pipeline
-and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
+Ten features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police officers,
+black ice, snowbanks, puddles, traffic parking and road closures. Each record holds the hooks into the core
+pipeline and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
 
@@ -45,6 +45,13 @@ A core module asks for its hooks once, when it loads (`hooks(name, slot)`). Thro
 can be before the records have loaded (the snowbanks record's simulation reaches `sim/npc.js`, say), so the
 list `hooks()` hands out is filled as soon as the registry has loaded, before anything can run it; a slot
 the core never runs is still refused, then.
+
+An override of a signal has separate hooks for the physical direction, the direction the car can see, and
+the crossing audit. `controlDirection` serves the world light and oncoming-traffic checks.
+`trafficControl` also records whether a traffic vehicle must keep waiting at the line. `controlSense`
+supplies the visible direction and its snapshot fields. `junctionPlan` reads those fields to set the
+stop target, rejection and model wording. `controlAudit` takes over the signal audit while the override
+applies and preserves the record used to check a left turn across oncoming traffic.
 
 ## Slots: why results stay exactly the same
 
@@ -104,12 +111,25 @@ audit metrics in their own challenges. The guarded and open system prompts match
 the Jev fixtures stayed current, and all 62 drives in the published Jev open-track recording
 replayed exactly.
 
-**Run before and after against one server process, or set `PYTHONHASHSEED`.** The first city comparison
+**Police officers** were compared against `b1d5283` in Boat with Node 22.23.5. Rules and the
+cautious agent passed all 62 challenges and road tests on both trees. Each comparable result,
+including decision traces and events, matched. Both drivers reported the officer audit in
+**Follow the officer**. Rules also matched every result field apart from timings in three
+12-route dry suites at seed 1, using one server with `PYTHONHASHSEED=0`. Kitsilano bare passed
+12/12 (10.53 km), Kitsilano city passed 12/12 (12.81 km), and Toronto city passed 9/12 on both
+trees (10.65 km), with timeouts on `s1-6`, `s1-10` and `s1-11`. Six Kitsilano city routes and seven
+Toronto city routes reported the officer audit. The officer challenge replayed exactly from the
+published Jev and Claude Haiku open-track recordings. The LLM system prompt was byte-identical,
+the Jev fixtures stayed current, and the registry, traffic-officer, free-drive, open-track and
+model-recording checks passed.
+
+Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
+`PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
 where the server's `/api/route` returned a different number of alternative routes for the same request.
 The untouched tree, run again against the restarted server, gave the new results exactly. The server's
-lane snapping (`jev/routing.py` `snap`) iterates a Python `set` of string-keyed lanes and keeps the first
-of equally near ones, so a tie can depend on the process's hash seed. With `PYTHONHASHSEED=0` both trees
+lane snapping (`jev/routing.py` `snap`) iterated a Python `set` of string-keyed lanes and kept the first
+of equally near ones, so a tie depended on the process's hash seed. With `PYTHONHASHSEED=0` both trees
 gave identical city results, the 12.81 km of the committed reference.
 
 ## How close a new feature is to "its own file, its challenge, its test and one registration line"

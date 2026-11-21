@@ -1,11 +1,11 @@
-// scripts/merge_recordings.mjs: arena recordings made in parts merge into one that holds every part's
-// drives, answers and results, and parts that disagree, or record a drive twice, are refused.
+// Arena and seeded benchmark recordings made in parts merge with every drive, answer and result.
 // node --experimental-default-type=module scripts/test_merge_recordings.mjs
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 globalThis.document = { querySelector: () => null };
 const { ModelRecording } = await import("../static/js/brain/recording.js");
 
@@ -19,6 +19,7 @@ const header = (ids, extra = {}) => ({
   versions: { format: "jev-model-recording/1" },
   arena: { set: "all", ids, ...(extra.track ? { track: extra.track } : {}) },
   maps: extra.maps || { kitsilano: "aaaa" },
+  ...(extra.manifest ? { manifest: extra.manifest } : {}),
 });
 const write = (name, h, drives) => {
   const r = new ModelRecording({
@@ -90,6 +91,81 @@ const torn = new ModelRecording({
 });
 fs.writeFileSync(path.join(dir, "f.json"), torn.serialize());
 refused([a, path.join(dir, "f.json")], /no answers/, "a result without its answers");
+
+const withManifest = (id, map, fingerprint, source_commit = "a".repeat(40)) =>
+  write(
+    `${id}.json`,
+    header([id], {
+      maps: { [map]: fingerprint },
+      manifest: {
+        source_commit,
+        suite: { kind: "arena", set: "all", drives: { [id]: { map, seed: 42 } } },
+        maps: { [map]: { fingerprint } },
+        cost_usd: 0,
+      },
+    }),
+    [id],
+  );
+const g = withManifest("seven", "kitsilano", "aaaa");
+const h = withManifest("eight", "toronto", "bbbb");
+assert.match(merge(g, h), /merged 2 drives from 2 recordings/);
+const provenance = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.manifest;
+assert.deepEqual(Object.keys(provenance.suite.drives), ["seven", "eight"]);
+assert.deepEqual(Object.keys(provenance.maps), ["kitsilano", "toronto"]);
+refused([g, withManifest("nine", "toronto", "bbbb", "b".repeat(40))], /differs.*source/, "another source commit");
+
+const config = { map: "kitsilano", features: "city", count: 2, seed: 1, brain: "jev" };
+function benchPart(id, pass) {
+  const manifest = {
+    source_commit: "a".repeat(40),
+    source_dirty: false,
+    maps: { kitsilano: { fingerprint: "map-sha" } },
+    suite: { kind: "bench", only: true, config, ids: [id] },
+    cost_usd: 0.01,
+  };
+  const result = { id, arrived: pass, pass, cost_usd: 0.01, wall_ms: 10 };
+  const tape = new ModelRecording({
+    header: { driver: "jev", brain: "jev", bench: config, map_sha: "map-sha", manifest },
+    drives: { [id]: {} },
+  });
+  tape.keepResult(id, result, { id, traffic_seed: 42 });
+  const file = path.join(dir, `${id}.json`);
+  fs.writeFileSync(file, JSON.stringify({ manifest, config, results: [result], saved_at: "2026-11-21T08:00:00Z" }));
+  fs.writeFileSync(`${file}.gz`, gzipSync(tape.serialize()));
+  return file;
+}
+const first = benchPart("s1-1", false),
+  second = benchPart("s1-2", true),
+  report = path.join(dir, "bench.json");
+const mergeBench = (...files) =>
+  execFileSync(
+    process.execPath,
+    [
+      new URL("merge_bench_recordings.mjs", import.meta.url).pathname,
+      "--json",
+      report,
+      "--record",
+      `${report}.gz`,
+      ...files,
+    ],
+    { stdio: "pipe" },
+  ).toString();
+assert.throws(() => mergeBench(first, first), /Unexpected or repeated drive s1-1/);
+assert.equal(fs.existsSync(report), false);
+assert.match(mergeBench(second, first), /Merged 2 drives from 2 parts/);
+const combined = JSON.parse(fs.readFileSync(report, "utf8"));
+assert.deepEqual(
+  combined.results.map((result) => [result.id, result.pass]),
+  [
+    ["s1-1", false],
+    ["s1-2", true],
+  ],
+);
+assert.equal(combined.summary.cost_usd, 0.02);
+assert.equal(combined.manifest.suite.only, undefined);
+assert.deepEqual(combined.manifest.suite.ids, ["s1-1", "s1-2"]);
+console.log("✓ city parts merge in suite order with failed verdicts kept and duplicate drives refused");
+
 fs.rmSync(dir, { recursive: true, force: true });
 console.log("\nmerge recordings checks passed");
 process.exit(0);

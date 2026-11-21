@@ -1,5 +1,18 @@
 // Report request sizes for the city pilot without saving the request contents.
 // Count Unicode code points, as the server does when validating Jev instructions.
+import { statSync } from "node:fs";
+import { resolve } from "node:path";
+
+export function checkAuditPath(path, otherPaths, fail) {
+  const resolved = resolve(path);
+  const auditFile = statSync(resolved, { throwIfNoEntry: false });
+  for (const other of otherPaths.filter(Boolean)) {
+    const file = statSync(other, { throwIfNoEntry: false });
+    if (resolve(other) === resolved || (file && auditFile && file.dev === auditFile.dev && file.ino === auditFile.ino))
+      fail("--prompt-audit needs its own output path.");
+  }
+}
+
 export function promptAudit() {
   const counters = new Map();
   const report = { requests: 0 };

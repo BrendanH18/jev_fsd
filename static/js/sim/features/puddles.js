@@ -87,7 +87,7 @@ export default {
       return v;
     },
   },
-  hazard: { at: "officers", run: (snap) => (snap.puddle_splash ? "puddle by the kerb" : null) },
+  hazard: { at: "late", run: (snap) => (snap.puddle_splash ? "puddle by the kerb" : null) },
 
   // Over to the left inside the lane, the right wheels clear of it, and back, keeping its speed.
   candidates: {

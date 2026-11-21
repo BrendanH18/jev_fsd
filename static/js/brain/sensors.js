@@ -157,7 +157,14 @@ import {
 } from "../sim/work-zone.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import { TAIL_ROOM, tailgaterSensing } from "../sim/tailgaters.js";
-import { isParkingTraffic, isTrafficObstacle, hooks } from "../sim/features/index.js";
+import {
+  controlDirection,
+  firstHookResult,
+  isParkingTraffic,
+  isTrafficObstacle,
+  hooks,
+  junctionPlan,
+} from "../sim/features/index.js";
 
 // The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
@@ -165,6 +172,7 @@ const SENSE = {
   driveways: hooks("sense", "driveways"),
   streetHazards: hooks("sense", "streetHazards"),
   late: hooks("sense", "late"),
+  junctions: hooks("sense", "junctions"),
 };
 const LIMIT = {
   driveways: hooks("limit", "driveways"),
@@ -180,7 +188,6 @@ const TARGET = {
 const HAZARD = {
   driveways: hooks("hazard", "driveways"),
   streetHazards: hooks("hazard", "streetHazards"),
-  officers: hooks("hazard", "officers"),
   late: hooks("hazard", "late"),
 };
 // (and how slowly and gently it crosses a junction over what a registered feature makes slippery)
@@ -197,7 +204,7 @@ export const featureDetour = (snap) => {
   }
   return null;
 };
-import { officerDirection, officerLight, officerSensing } from "../sim/traffic-officer.js";
+const CONTROL_SENSE = hooks("controlSense");
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -435,17 +442,15 @@ export function buildSnapshot(world, executing = null) {
       // sim/outage.js; until then it is a signal it cannot see)
       const inter = c.control.type === "signal" ? map.intersections.get(c.control.id) : null;
       const junction = inter ? [inter.x, inter.y] : c.junction;
-      // (a police officer directing traffic there, once the car can see them: their directions, not the
-      // light's, even in a power cut or overnight: sim/traffic-officer.js)
-      const officer = inter && world.officers?.list.length ? officerSensing(world, c, frontS) : null;
+      const directive = inter ? firstHookResult(CONTROL_SENSE, world, c, frontS) : null;
       const dark =
-        !officer &&
+        !directive &&
         !!inter &&
         world.outages?.isDark(inter.id) &&
         !!junction &&
         world.visibility.canSee(ego, ...junction);
       const seenFlash =
-        !officer && inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction)
+        !directive && inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction)
           ? flashState(inter, c.control.group, world)
           : null;
       const control = dark
@@ -478,9 +483,8 @@ export function buildSnapshot(world, executing = null) {
       const signal =
         seenFlash ||
         (control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null);
-      if (officer) officerLight(officer, world.outages?.isDark(inter.id) ? "dark" : signal);
       const advance =
-        !shows || officer
+        !shows || directive
           ? null
           : ADVANCE_LIGHTS[shows]
             ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
@@ -520,8 +524,8 @@ export function buildSnapshot(world, executing = null) {
       const priority = control.type === "stop" && control.all_way ? allWayPriority(world, control, visible) : null;
       // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn;
       // without a sign or signal, always
-      const turnNow = officer
-        ? entered || officer.direction === "go"
+      const turnNow = directive
+        ? entered || directive.direction === "go"
         : control.type === "stop"
           ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
           : control.type === "uncontrolled" ||
@@ -546,7 +550,7 @@ export function buildSnapshot(world, executing = null) {
               world,
               c,
               frontS,
-              !(control.type === "signal" && entered && signal !== "green" && officer?.direction !== "go"),
+              !(control.type === "signal" && entered && signal !== "green" && directive?.direction !== "go"),
             )
           : null;
       // A junction without a sign that asks nothing of the car right now (it has the right of way,
@@ -560,15 +564,15 @@ export function buildSnapshot(world, executing = null) {
         next.sRoute - frontS <= LOOK_AHEAD_CONTROL_M
       )
         continue;
-      const redTurnBan = control.type === "signal" && !officer && routeRedTurnBanned(world, c);
+      const redTurnBan = control.type === "signal" && !directive && routeRedTurnBanned(world, c);
       snap.intersection = {
         id: control.id,
         control: control.type,
         signal,
         group: control.group || null,
         advance,
-        ...(officer ? { officer } : {}),
-        ...(world.amberLights && control.type === "signal" && inter && !officer
+        ...directive?.fields(world.outages?.isDark(inter.id) ? "dark" : signal),
+        ...(world.amberLights && control.type === "signal" && inter && !directive
           ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) }
           : {}),
         bumper_to_line_m: bumperToLine,
@@ -580,7 +584,7 @@ export function buildSnapshot(world, executing = null) {
         // (never at a scramble crossing, sim/signals.js: `scramble` says so)
         right_on_red:
           control.type === "signal" &&
-          !officer &&
+          !directive &&
           map.rightOnRed &&
           !redTurnBan &&
           !isScramble(inter) &&
@@ -595,7 +599,7 @@ export function buildSnapshot(world, executing = null) {
           ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } }
           : {}),
         ...(world.leftOnRed &&
-        !officer &&
+        !directive &&
         control.type === "signal" &&
         signal === "red" &&
         c.turn === "left" &&
@@ -613,7 +617,7 @@ export function buildSnapshot(world, executing = null) {
         give_way: giveWay,
         roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
         cross_traffic_moving: crossTraffic,
-        seconds_to_green: c.secondsToGreen && !dark && !seenFlash && !officer ? c.secondsToGreen(world.t) : null,
+        seconds_to_green: c.secondsToGreen && !dark && !seenFlash && !directive ? c.secondsToGreen(world.t) : null,
       };
       break;
     }
@@ -682,7 +686,7 @@ export function buildSnapshot(world, executing = null) {
       snap.contraflow_cyclist = contraflowCyclist(world, p, frontS, lane, road, executing);
     // (a car running the red across the car's way as its light is green, with that option on:
     // sim/red-light-runner.js)
-    if (world.redRunners?.enabled && snap.intersection?.control === "signal" && !snap.intersection.officer) {
+    if (world.redRunners?.enabled && snap.intersection?.control === "signal" && !junctionPlan(snap.intersection)) {
       const runner = redLightRunner(world, snap.intersection, route.headingAt(snap.intersection.s_line_route));
       if (runner) snap.red_light_runner = runner;
     }
@@ -690,8 +694,7 @@ export function buildSnapshot(world, executing = null) {
     for (const sense of SENSE.driveways) sense(world, snap, senseCtx);
     for (const sense of SENSE.streetHazards) sense(world, snap, senseCtx);
     for (const sense of SENSE.late) sense(world, snap, senseCtx);
-    // (a police officer directing traffic at the junction ahead, with that option on: sim/traffic-officer.js)
-    if (world.officers?.enabled) snap.traffic_officer = snap.intersection?.officer || null;
+    for (const sense of SENSE.junctions) sense(world, snap, senseCtx);
     // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
     // Once moving past the line the car has committed and carries on.
     const ltor = snap.intersection?.left_on_red;
@@ -1153,7 +1156,7 @@ function oncomingYield(world, c, frontS, look = true) {
       ctl.id === c.control.id &&
       !world.outages.isDark(ctl.id) &&
       !flashState(world.map.intersections.get(ctl.id), ctl.group, world) &&
-      officerDirection(world, n, lane.edge) !== "stop" &&
+      controlDirection(world, n, lane.edge) !== "stop" &&
       movementSignal(approachPhase(world.map.intersections.get(ctl.id), lane.edge, world.t), "straight") === "green";
     if (n.v < 1 && !(n.v > 0.05 && n.a > 0.3) && !starting) continue;
     if (n.signal === "left" && !n.pull && d < LEFT_SIGNAL_M && lane && lane.idx === 0) continue;
@@ -2983,15 +2986,16 @@ export function desiredSpeed(snap) {
   } else if (cp?.go && cyclistPassSpeed(cp) <= v + 0.05)
     reasons.push(cp.going ? "passing a cyclist" : "cyclist ahead: way clear to pass");
   const i = snap.intersection;
+  const directive = junctionPlan(i);
   // (a car just past a signal's line, short of CLEARING_M, still stops for it, unless it is turning
   // right or left on red)
   if (
     i &&
     !i.clear_entered &&
     (i.control === "signal" ? i.bumper_to_line_m > -CLEARING_M : !i.entered) &&
-    ((i.control === "signal" && i.officer && i.officer.direction === "stop") ||
+    ((i.control === "signal" && directive?.direction === "stop") ||
       (i.control === "signal" &&
-        !i.officer &&
+        !directive &&
         (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") &&
         !(i.right_on_red?.go || i.left_on_red?.go)) ||
       (i.control === "stop" && !i.stop_completed))
@@ -3007,7 +3011,7 @@ export function desiredSpeed(snap) {
         : stopSpeedFor(Math.max(0, i.bumper_to_line_m - 0.5), decel);
     if (vs < v) {
       v = vs;
-      reasons.push(i.officer ? "police officer: stop" : i.control === "signal" ? `${i.signal} light` : "stop sign");
+      reasons.push(directive?.stopReason ?? (i.control === "signal" ? `${i.signal} light` : "stop sign"));
     }
   }
   const amber = snap.amber_clear || i?.amber;
@@ -3382,12 +3386,6 @@ export function hazardFlags(snap) {
     else if (x) f.push(x);
   }
   if (snap.tailgater) f.push("tailgater");
-  if (snap.traffic_officer) f.push("traffic officer");
-  for (const flag of HAZARD.officers) {
-    const x = flag(snap);
-    if (Array.isArray(x)) f.push(...x);
-    else if (x) f.push(x);
-  }
   for (const flag of HAZARD.late) {
     const x = flag(snap);
     if (Array.isArray(x)) f.push(...x);

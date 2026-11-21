@@ -97,7 +97,7 @@ export function cityGrid(data) {
   };
 }
 
-// Model drives that replay with no key, one command each (scripts/arena_node.mjs, docs/model-results.md).
+// Model drives that replay with no key, one command each.
 export function recordings(data) {
   return data.rows
     .filter((r) => r.recording)
@@ -105,7 +105,7 @@ export function recordings(data) {
       driver: r.driver,
       label: r.label,
       recording: r.recording,
-      command: `node --experimental-default-type=module scripts/arena_node.mjs --replay ${r.recording} --check 1`,
+      command: `node --experimental-default-type=module scripts/${r.map ? "bench_node" : "arena_node"}.mjs --port 8322 --replay ${r.recording} --check replay`,
     }));
 }
 

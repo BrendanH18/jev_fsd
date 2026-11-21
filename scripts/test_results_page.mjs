@@ -91,8 +91,19 @@ test("every recording offered for replay is committed", () => {
   assert.equal(list.length, 9);
   for (const r of list) {
     assert.ok(fs.existsSync(new URL(`../${r.recording}`, import.meta.url)), r.recording);
-    assert.ok(r.command.includes(`--replay ${r.recording}`));
+    assert.ok(r.command.includes(`scripts/arena_node.mjs --port 8322 --replay ${r.recording} --check replay`));
   }
+});
+
+test("replay instructions for a city recording use the benchmark runner", () => {
+  const [city] = recordings({
+    rows: [{ driver: "jev", map: "kitsilano", recording: "data/recordings/jev-city.json.gz" }],
+  });
+  assert.ok(
+    city.command.includes(
+      "scripts/bench_node.mjs --port 8322 --replay data/recordings/jev-city.json.gz --check replay",
+    ),
+  );
 });
 
 test("formatting agrees with scripts/build_results.py", () => {

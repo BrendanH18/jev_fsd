@@ -111,9 +111,9 @@ await test("the tracks, and every check the filter can fail has words for a mode
   for (const text of [source, features])
     for (const m of text.matchAll(/(?:reject\s*=|\?|:)\s*"([a-z]+(?:_[a-z]+)+)"/g)) ids.add(m[1]);
   for (const m of source.matchAll(/c\.reject === "([a-z_]+)"/g)) ids.add(m[1]);
-  // (what the scrape also finds that is no rejection: candidate ids, a law, a collision kind, metric names)
+  // (what the scrape also finds: candidate ids, law and collision kinds, event and metric names)
   const notChecks =
-    /^(?:stop|wait|keep|change|creep|pull|let|ease|slow|go|yield|follow|pass|move|turn|hold|reverse)_|^(?:hard_brake|rear_end)$|_(?:conflicts|hits|entries|overspeed|splashed)$/;
+    /^(?:stop|wait|keep|change|creep|pull|let|ease|slow|go|yield|follow|pass|move|turn|hold|reverse)_|^(?:hard_brake|rear_end)$|_(?:conflicts|hits|entries|overspeed|splashed|violation)$/;
   const metrics = new Set(FEATURES.flatMap(({ metric }) => (metric ? [metric.name] : [])));
   const missing = [...ids].filter(
     (id) => id !== "collision" && !FLAG_TEXT[id] && !metrics.has(id) && !notChecks.test(id),

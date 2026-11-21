@@ -5,11 +5,13 @@
 // node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/jev-challenges.json --check 1
 // Options: --brain (rules, cautious, jev, decision:<name>, llm:<name>), --set (challenges, the default;
 // road-tests; or all), --only id,id (just these), --port, --json out.json (a summary per drive, no
-// decision trace), --check 1 (exit with status 1 if a drive fails or a replay does not play out as
-// recorded), --record out.json and --replay rec.json (model drivers only; docs/agents.md; a name
+// decision trace), --check 1 (exit with status 1 if a drive fails or a replay differs), --check replay
+// (require an exact replay regardless of the verdict), --record out.json and --replay rec.json
+// (model drivers only; docs/agents.md; a name
 // ending .gz is gzipped), --reserve 0.5 (stop between drives once the server's budget runs low), --track
 // open (the open track: road-rule checks flag manoeuvres instead of removing them, brain/tracks.js; a
-// recording keeps its track), --browser-replay out.json (export a playable street view of one
+// recording keeps its track), --agent local-path (load a trusted driver module),
+// --browser-replay out.json (export a playable street view of one
 // exact replay selected with --only).
 //
 // A recording here covers several maps, so its header keeps one map fingerprint per map
@@ -37,6 +39,7 @@ const OPTIONS = [
   "replay",
   "reserve",
   "track",
+  "agent",
   "browser-replay",
 ];
 for (const [name, value] of Object.entries(args)) {
@@ -44,6 +47,10 @@ for (const [name, value] of Object.entries(args)) {
   if (value === true) fail(`--${name} needs a value.`);
 }
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
+if (args.agent && (args.brain || args.record || args.replay))
+  fail("--agent selects a local driver. Drop --brain, --record and --replay.");
+if (args.check === "replay" && (!args.replay || args.reserve !== undefined))
+  fail("--check replay requires --replay without a budget reserve.");
 if (args["browser-replay"] && (!args.replay || !args.only || String(args.only).includes(",")))
   fail("--browser-replay needs --replay and exactly one drive selected with --only.");
 const fs = await import("node:fs"),
@@ -86,12 +93,24 @@ const { MapData } = await import("../static/js/map/mapdata.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const { evaluateChallenge } = await import("../static/js/lab/evaluation.js");
-const { agentDefinitions } = await import("../static/js/brain/registry.js");
+const { agentDefinitions, registerAgent } = await import("../static/js/brain/registry.js");
 const rec = await import("../static/js/brain/recording.js");
 const { driverScores } = await import("../static/js/bench/scores.js");
 const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).captureBrowserReplay() : null;
 
-const brain = String(args.brain || "rules");
+let brain = String(args.brain || "rules");
+if (args.agent) {
+  try {
+    const { pathToFileURL } = await import("node:url");
+    const { default: definition } = await import(pathToFileURL(args.agent).href);
+    if (typeof definition?.id !== "string" || definition.id.includes(":"))
+      throw new Error("Use a local driver id without a provider prefix.");
+    registerAgent(definition);
+    brain = definition.id;
+  } catch (error) {
+    fail(`Cannot load agent ${args.agent}: ${error.message}`);
+  }
+}
 if (/^(?:decision|llm):/.test(brain) && !replayJson) {
   const status = await api("/api/status");
   (await import("../static/js/brain/decision.js")).registerDecisionAgents(status.decision);
@@ -121,6 +140,7 @@ const only = args.only ? String(args.only).split(",") : null;
 const unknown = (only || []).filter((id) => !drives.some((c) => c.id === id));
 if (unknown.length) fail(`No drive ${unknown.join(", ")} in ${set}.`);
 if (only) drives = drives.filter((c) => only.includes(c.id));
+if (args.check === "replay" && !drives.length) fail("The recording has no drives to check.");
 
 // The challenge maps, with every layer, as the app loads them.
 const maps = {};
@@ -129,6 +149,9 @@ for (const id of new Set(drives.map((c) => c.map)))
 const shas = Object.fromEntries(Object.entries(maps).map(([id, map]) => [id, rec.mapFingerprint(map)]));
 
 let recording = null;
+const manifestModule =
+  !replayJson && !args.agent && (args.json || args.record) ? await import("./run_manifest.mjs") : null;
+let manifest = null;
 if (replayJson) {
   try {
     recording = rec.ModelRecording.parse(replayJson);
@@ -138,18 +161,29 @@ if (replayJson) {
   const changed = Object.keys(shas).filter((id) => recording.header.maps?.[id] !== shas[id]);
   if (changed.length)
     fail(`The map data of ${changed.join(", ")} has changed since this recording was made (a rebuilt pack or layer).`);
-} else if (args.record) {
+} else if (manifestModule) {
   const definition = agentDefinitions().find((d) => d.id === brain);
-  const model = brain === "jev" ? (await api("/api/status")).decision?.jev?.model : null;
-  recording = new rec.ModelRecording({
-    header: rec.recordingHeader({
-      driver: brain,
-      brain: { endpoint: definition?.llm || definition?.decision },
-      model,
-      arena: { set, ids: drives.map((c) => c.id), ...(track === "open" ? { track } : {}) },
-      maps: shas,
-    }),
+  const endpoint = definition?.llm || definition?.decision;
+  const model = brain === "jev" ? (await api("/api/status")).decision?.jev?.model : endpoint?.model;
+  manifest = manifestModule.runManifest({
+    driver: brain,
+    model,
+    track,
+    suite: { kind: "arena", set, drives: Object.fromEntries(drives.map((c) => [c.id, { map: c.map, seed: c.seed }])) },
+    maps,
+    fingerprints: shas,
   });
+  if (args.record)
+    recording = new rec.ModelRecording({
+      header: rec.recordingHeader({
+        driver: brain,
+        brain: { endpoint },
+        model,
+        arena: { set, ids: drives.map((c) => c.id), ...(track === "open" ? { track } : {}) },
+        maps: shas,
+        manifest,
+      }),
+    });
 }
 
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
@@ -211,6 +245,7 @@ for (const challenge of drives) {
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
   if (args.record) {
     recording.results[challenge.id] = { ...trimmed(r), result_sha: resultSha(r) };
+    manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
     save(recording);
   }
   if (replayJson) {
@@ -256,11 +291,13 @@ const summary = {
   cost_usd: Math.round(cost * 1e6) / 1e6,
   engine: `node ${process.version}`,
 };
+if (manifest) manifest.cost_usd = summary.cost_usd;
 if (args.json)
   fs.writeFileSync(
     args.json,
     JSON.stringify(
       {
+        ...(manifest ? { manifest } : {}),
         summary,
         results: results.map((r) =>
           Object.fromEntries(SUMMARY.filter((k) => r[k] !== undefined).map((k) => [k, r[k]])),
@@ -278,11 +315,12 @@ if (replayJson)
       : `replay: all ${results.length} drives played out as recorded`,
   );
 const failed =
-  args.check && args.check !== "0"
+  args.check && args.check !== "0" && args.check !== "replay"
     ? [...new Set([...results.filter((r) => !r.pass).map((r) => r.challenge), ...drifted])]
     : [];
 if (failed.length)
   console.error(
     `${failed.length} of ${results.length} drives failed${drifted.length ? " or did not replay as recorded" : ""}: ${failed.join(", ")}`,
   );
-process.stdout.write(`${JSON.stringify(summary)}\n`, () => process.exit(failed.length ? 1 : 0));
+const failedReplay = args.check === "replay" && drifted.length > 0;
+process.stdout.write(`${JSON.stringify(summary)}\n`, () => process.exit(failed.length || failedReplay ? 1 : 0));

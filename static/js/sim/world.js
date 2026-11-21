@@ -83,8 +83,14 @@ import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
 import { auditTailgaters, createTailgaters } from "./tailgaters.js";
-import { FEATURES, featureNeedsDay, featureObstacle, hooks } from "./features/index.js";
-import { SEEN_M as OFFICER_SEEN_M, createOfficers, officerAt, officerDirection } from "./traffic-officer.js";
+import {
+  FEATURES,
+  controlDirection,
+  featureNeedsDay,
+  featureObstacle,
+  firstHookResult,
+  hooks,
+} from "./features/index.js";
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
 import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
@@ -98,6 +104,7 @@ const HIDES = hooks("hides"),
   EV_KERB = hooks("evKerb"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
+const CONTROL_AUDIT = hooks("controlAudit");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -285,8 +292,6 @@ export class World {
   // what they can see (sim/sun-glare.js).
   // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
   // not brake-check it, and lets it by (sim/tailgaters.js).
-  // `officers`: now and then a police officer directs traffic at a signal on the car's way, and everyone
-  // obeys the officer rather than the lights (sim/traffic-officer.js).
   // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
@@ -322,7 +327,6 @@ export class World {
       redRunners = false,
       sunGlare = false,
       tailgaters = false,
-      officers = false,
       ...features
     } = {},
   ) {
@@ -463,10 +467,6 @@ export class World {
     this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
     this.tailgatersSeen = false;
     this.tailgaterCall = null;
-    // police officers directing traffic (sim/traffic-officer.js): whether they come, and whether the car has
-    // come up to a junction one governs this drive
-    this.officers = createOfficers({ enabled: officers, seed });
-    this.officersSeen = false;
     // each registered feature (sim/features/index.js): what it builds, whether it has met the car this
     // drive, and its audit's calls
     for (const f of FEATURES) {
@@ -586,9 +586,8 @@ export class World {
   // (sim/signals.js: under a left arrow only a left turn has a green), or "dark" while its lights are
   // out (sim/outage.js).
   light(intersectionId, edgeId, turn = "straight") {
-    // (a police officer directing traffic there: the car's light is their direction, sim/traffic-officer.js)
-    const officer = this.officers.list.length ? officerDirection(this, this.ego, edgeId) : null;
-    if (officer) return officer === "go" ? "green" : "red";
+    const direction = controlDirection(this, this.ego, edgeId);
+    if (direction) return direction === "go" ? "green" : "red";
     if (this.outages?.isDark(intersectionId)) return "dark";
     const inter = this.map.intersections.get(intersectionId);
     const flash = flashState(inter, this.map.edges.get(edgeId)?.control?.group, this);
@@ -874,13 +873,12 @@ export class World {
         this.nightFlashSeen = true;
       const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
-      // (a police officer directing traffic there: their directions, not the light's, sim/traffic-officer.js)
-      const officer = control.type === "signal" && this.officers.list.length ? officerAt(this, control.id) : null;
-      if (officer && Math.abs(past) < OFFICER_SEEN_M && this.visibility.canSee(this.ego, officer.x, officer.y))
-        this.officersSeen = true;
+      const entered = this.lastRoad?.edgeId === key && !this.lastRoad.crossed && crossed;
+      const handled =
+        control.type === "signal" && firstHookResult(CONTROL_AUDIT, this, control, edge, rc, past, entered);
       // Observe independently of the selected manoeuvre, before auditing the real line crossing.
       const amberInter =
-        this.amberLights && control.type === "signal" && !officer ? this.map.intersections.get(control.id) : null;
+        this.amberLights && control.type === "signal" && !handled ? this.map.intersections.get(control.id) : null;
       const amberShows = amberInter ? approachPhase(amberInter, edge.id, this.t) : null;
       // A manual takeover can keep navigation for a different turn. Observe the
       // physical arrow independently; auditArrow judges the actual exit.
@@ -901,7 +899,7 @@ export class World {
       if (amber && !crossed) this.amberLightsSeen = true;
       // a car running the red across the car's way as it enters on green (sim/red-light-runner.js)
       const runner =
-        this.redRunners.enabled && control.type === "signal" && !officer
+        this.redRunners.enabled && control.type === "signal" && !handled
           ? auditRunner(
               this,
               control.id,
@@ -911,9 +909,8 @@ export class World {
               past,
             )
           : null;
-      if (this.lastRoad && this.lastRoad.edgeId === key && !this.lastRoad.crossed && crossed) {
-        if (officer) this.auditOfficer(officer, control, edge, rc);
-        else if (control.type === "signal") {
+      if (entered && !handled) {
+        if (control.type === "signal") {
           if (runner) {
             this.violations.fresh_green_conflicts = (this.violations.fresh_green_conflicts || 0) + 1;
             this.events.push({ type: "fresh_green_conflict", with: runner.vehicle.id ?? null });
@@ -1134,30 +1131,6 @@ export class World {
     for (const audit of AUDIT_LATE) audit(this);
     this.auditKerb();
     leftSpace(this);
-  }
-
-  // Crossing the line of a junction a police officer governs while they hold the car (sim/traffic-officer.js):
-  // counted in place of the light's checks (red, amber, right on red, a car running the red), which do not
-  // apply under an officer; a left turn waved through still yields to oncoming traffic (auditOncoming).
-  auditOfficer(officer, control, edge, rc) {
-    if (officerDirection(this, this.ego, edge.id) === "stop") {
-      this.violations.officer_violations = (this.violations.officer_violations || 0) + 1;
-      this.events.push({ type: "officer_violation", officer: officer.id, junction: control.id });
-    }
-    this.arrowCheck = null;
-    const inter = this.map.intersections.get(control.id);
-    if (!inter) return;
-    const exit =
-      rc && rc.sJunction !== null ? this.route.headingAt(Math.min(this.route.length, rc.sJunction + 15)) : null;
-    const approach = rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id);
-    this.lastSignal = {
-      centre: [inter.x, inter.y],
-      nodes: this.map.junctionNodes(inter),
-      approaches: new Set(inter.approaches.map((a) => a.edge)),
-      facing: approach + Math.PI,
-      exit,
-      counted: false,
-    };
   }
 
   // Parking or pulling out (sim/parallel-park.js), a tyre on the kerb is a kerb strike: counted once a

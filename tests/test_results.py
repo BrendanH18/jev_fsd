@@ -74,6 +74,9 @@ class ResultsTest(unittest.TestCase):
                 ):
                     heldout.write_text(json.dumps(dict(run, config=dict(run["config"], **variant))))
                     self.assertEqual(build_results.build()["rows"], self.data["rows"], variant)
+                partial = dict(run, manifest={"suite": {"only": True}})
+                heldout.write_text(json.dumps(partial))
+                self.assertEqual(build_results.build()["rows"], self.data["rows"])
             finally:
                 build_results.committed_runs = original
 
@@ -81,7 +84,7 @@ class ResultsTest(unittest.TestCase):
         # `--set all --only door-zone`, or a run stopped part way, keeps set "all": it never takes the full
         # set's row, on either track (inside the repository, as published results are)
         with tempfile.TemporaryDirectory(dir=ROOT / "data") as tmp:
-            day = Path(tmp) / "2099-01-01"
+            day = Path(tmp) / "2026-11-20"
             day.mkdir()
             for track in ("guarded", "open"):
                 summary = {"brain": "llm:partial", "set": "all", "drives": 1, "passed": 1, "cost_usd": 0.1}
@@ -97,6 +100,54 @@ class ResultsTest(unittest.TestCase):
                 build_results.RESULTS = original
         self.assertEqual(sorted(r["suite"] for r in rows), ["pilot", "pilot"])
         self.assertEqual(len(build_results.full_set_ids()), 62)
+
+    def test_new_run_requires_provenance_matching_the_tape(self):
+        path = ROOT / "data/results/2099-01-01/jev.json"
+        sha = "1" * 16
+        results = [{"challenge": "door-zone", "map": "kitsilano", "cost_usd": 0.01}]
+        run = {"summary": {"brain": "jev", "set": "all", "engine": "node v22", "cost_usd": 0.01}, "results": results}
+        with self.assertRaisesRegex(ValueError, "run manifest is required"):
+            build_results.checked_manifest(path, run, "2099-01-01")
+        manifest = {
+            "format": "jev-run-manifest/1",
+            "source_commit": "a" * 40,
+            "source_dirty": False,
+            "engine": "node v22",
+            "engine_version": "12",
+            "driver": "jev",
+            "model": "jev-test",
+            "prompt_hash": sha,
+            "track": "guarded",
+            "suite": {"kind": "arena", "set": "all", "drives": {"door-zone": {"map": "kitsilano", "seed": 1042}}},
+            "maps": {"kitsilano": {"pack_version": "6", "fingerprint": sha, "components": {"roads": sha}}},
+            "cost_usd": 0.01,
+        }
+        run["manifest"] = manifest
+        recording = {
+            "header": {
+                "manifest": dict(manifest),
+                "model": "jev-test",
+                "engine": "node v22",
+                "maps": {"kitsilano": sha},
+                "arena": {"set": "all", "ids": ["door-zone"]},
+            },
+            "results": {"door-zone": dict(results[0], seed=1042)},
+        }
+        self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01", recording), manifest)
+        recording["header"]["arena"]["set"] = "road-tests"
+        with self.assertRaisesRegex(ValueError, "arena recording set or drive list"):
+            build_results.checked_manifest(path, run, "2099-01-01", recording)
+        recording["header"]["arena"]["set"] = "all"
+        run["results"][0]["time_s"] = 75
+        recording["results"]["door-zone"]["time_s"] = 60
+        with self.assertRaisesRegex(ValueError, "arena report and recording disagree on per-drive data"):
+            build_results.checked_manifest(path, run, "2099-01-01", recording)
+        recording["results"]["door-zone"]["time_s"] = 75
+        with self.assertRaisesRegex(ValueError, "model runs need a corresponding recording"):
+            build_results.checked_manifest(path, run, "2099-01-01")
+        recording["header"]["manifest"]["source_commit"] = "b" * 40
+        with self.assertRaisesRegex(ValueError, "recording and results disagree"):
+            build_results.checked_manifest(path, run, "2099-01-01", recording)
 
     def test_a_newer_challenge_run_leads(self):
         # a second published full run for a driver: its summary and the README take the newest
