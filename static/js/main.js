@@ -115,7 +115,7 @@ import { ModelSetup, ModelMenu, KINDS } from "./ui/model-setup.js";
 import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
-import { decidedByCounts } from "./bench/metrics.js";
+import { DriveMetrics, decidedByCounts } from "./bench/metrics.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
 import { advanceNotice, approachPhase, pedPhase, scrambleNotice } from "./sim/signals.js";
@@ -134,7 +134,7 @@ import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-mod
 import { OrbitControls } from "./ui/orbit-controls.js";
 import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
-import { savePractice } from "./lab/practice.js";
+import { practiceEligible, savePractice } from "./lab/practice.js";
 import { saveRoadTest } from "./lab/practice.js";
 import { RoadTestObserver, examine } from "./lab/examiner.js";
 import { ExaminerPrompt } from "./ui/road-test.js";
@@ -144,7 +144,7 @@ import { DriveLab } from "./ui/lab.js";
 import { PerceptionView } from "./render/perception.js";
 import { setupChallenge } from "./lab/evaluation.js";
 import { CITY_STYLES, buildCityIdentity } from "./render/city-identity.js";
-import { buildSnapshot } from "./brain/sensors.js";
+import { buildSnapshot, manualMetricSnapshot } from "./brain/sensors.js";
 import { sampleCandidates, simulateAll } from "./brain/candidates.js";
 
 const FIXED_DT = 1 / 60;
@@ -910,6 +910,8 @@ export async function boot() {
       map: pack.synthetic ? "Practice grid" : status.map.label,
       driver: autopilot.enabled ? autopilot.brainName : "manual",
     });
+    if (challenge && !challengeModified && route && drive.driver === "manual")
+      drive.metrics = new DriveMetrics(route.length);
     if (challenge?.roadTest) drive.observer = new RoadTestObserver(); // (the road test's examiner: lab/examiner.js)
     arrivalPending = false;
     recorder.reset();
@@ -978,6 +980,8 @@ export async function boot() {
     report.recording_id = recorder.recordingId;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
+    if (drive.metrics?.jerkN && challenge && practiceEligible(challenge, report))
+      report.benchmarkMetrics = drive.metrics.summary(world, autopilot, report.status === "arrived");
     withDecidedBy(report);
     if (challenge) {
       const practice = challenge.roadTest
@@ -1386,7 +1390,15 @@ export async function boot() {
         for (const car of world.driveways.cars) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
         for (const p of world.crowd.list) previousPeople.set(p.id, capturePose(p, previousPeople.get(p.id)));
         try {
-          stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
+          const road = stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
+          if (
+            drive?.metrics &&
+            !drive.finished &&
+            drive.driver === "manual" &&
+            !challengeModified &&
+            !recorder.branched
+          )
+            drive.metrics.record(world, manualMetricSnapshot(world), road, FIXED_DT);
         } catch (error) {
           simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
           console.error("Simulation stopped", error);

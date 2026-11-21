@@ -62,6 +62,12 @@ PRACTICE_FINISH = """async kind => {
         detail: JSON.stringify({ reports: reports.map(r => ({ title: r.title, status: r.status, modified: r.modified, collisions: r.collisions })), record }) }];
     }
     const parking = ['parked', 'wide-kerb', 'outside-space', 'simulation-error'].includes(kind);
+    if (kind === 'early') {
+      app.world.paused = false;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
+      app.advance(2);
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'w' }));
+    }
     if (kind === 'modified') app.setTime('morning');
     if (kind === 'branched') app.recorder.branched = true;
     if (parking) {
@@ -248,6 +254,9 @@ def check(url, chromium=None, groups=GROUPS):
                 comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
                 assert comparison.locator("tbody th").all_text_contents() == ["You", "Rules", "Jev", "Claude Haiku 5.5"]
                 assert comparison.locator("tbody td").nth(0).inner_text() == ("Fail" if kind == "early" else "Pass")
+                if kind == "early":
+                    score = comparison.locator("tbody tr").first.locator("td").nth(2).inner_text()
+                    assert float(score) > 0, score
             elif kind in ("rules", "branched", "modified"):
                 assert comparison.count() == 0
             page.close()

@@ -167,7 +167,7 @@ export class DriveReport {
       "You",
       reasons.length ? "Fail" : "Pass",
       report.elapsed_s,
-      "Unmeasured",
+      report.benchmarkMetrics ? driveScores(report.benchmarkMetrics).score : "Unmeasured",
       [...new Set([...reasons, ...report.incidents.map((i) => i.message)])].join(" · ") || "None recorded",
     );
     const body = h("tbody", {}, manual);
@@ -219,8 +219,7 @@ export class DriveReport {
             ),
           );
         }
-        status.textContent =
-          "Manual reports lack the jerk and clearance measurements needed for a benchmark score. Published rows use guarded-track results.";
+        status.textContent = "Published rows use guarded-track results.";
       })
       .catch(() => {
         status.textContent = "Published comparisons could not be loaded.";
