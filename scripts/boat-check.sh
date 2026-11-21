@@ -87,9 +87,15 @@ fi
 echo $$ > "$lock/pid"
 id=$(cat "$id_file" 2>/dev/null || true)
 extended=0 keepalive="" build="" saving=0
+stop_keepalive() {   # the keepalive loop and its sleep
+    [ -n "$keepalive" ] || return 0
+    pkill -P "$keepalive" 2>/dev/null || true
+    kill "$keepalive" 2>/dev/null || true
+    keepalive=""
+}
 cleanup() {
     set +e
-    [ -z "$keepalive" ] || kill "$keepalive" 2>/dev/null
+    stop_keepalive
     # Leave auto-stop JEV_BOAT_IDLE seconds from now, whatever happened to the check.
     if [ "$extended" = 1 ] && [ -n "$id" ]; then
         boat extend "$id" --ttl "$idle" --json >/dev/null 2>&1 \
@@ -269,14 +275,14 @@ unframe() {
 # Auto-stop is pushed back every 30 minutes meanwhile, so a long check never reaches it.
 run_remote() {
     local codes rc
-    ( while sleep 1800; do boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1; done ) &
+    # Its own stdio, so its sleep never holds the caller's output pipe open after the script ends.
+    ( while sleep 1800; do boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1; done ) </dev/null >/dev/null 2>&1 &
     keepalive=$!
     set +e
     boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" | frames | unframe
     codes=("${PIPESTATUS[@]}")
     set -e
-    kill "$keepalive" 2>/dev/null || true
-    keepalive=""
+    stop_keepalive
     rc=${codes[2]}
     if [ "$rc" = 255 ]; then   # no exit frame: the CLI failed before or while running the command
         rc=${codes[0]}
