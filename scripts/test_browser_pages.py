@@ -279,6 +279,8 @@ def check(url, chromium=None, groups=GROUPS):
             page.evaluate("window.__jev.finishDrive('finished')")
             comparison = page.locator(".drive-comparison")
             comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
+            assert comparison.get_by_role("columnheader", name="Benchmark verdict").is_visible()
+            assert "The examiner’s sheet determines road-test completion." in comparison.inner_text()
             assert comparison.locator("tbody td").first.inner_text() == "Fail"
             for score in comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents():
                 assert 0 <= float(score) <= 100, score

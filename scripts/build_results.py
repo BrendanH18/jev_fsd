@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import math
 import re
 import subprocess
 import sys
@@ -280,18 +281,30 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
     return manifest
 
 
+def finite_number(value) -> bool:
+    return type(value) is int or (type(value) is float and math.isfinite(value))
+
+
 def published_drive(result: dict, map_sha: str | None = None) -> dict:
-    drive = {"id": result["challenge"], "map": result["map"], "pass": result["pass"], "time_s": result.get("time_s")}
+    seconds = result.get("time_s")
+    drive = {
+        "id": result["challenge"],
+        "map": result["map"],
+        "pass": result["pass"],
+        "time_s": seconds if finite_number(seconds) else None,
+    }
     drive.update({key: result[key] for key in ("version", "pack") if key in result})
     if map_sha:
         drive["map_sha"] = map_sha
-    drive["incident_counts"] = {k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if k in result}
+    drive["incident_counts"] = {
+        k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if finite_number(result.get(k))
+    }
     numeric = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
     nullable = ("min_ttc_s", "min_headway_s")
     if (
         isinstance(result.get("arrived"), bool)
-        and all(type(result.get(k)) in (int, float) for k in (*numeric, "time_s"))
-        and all(k in result and (result[k] is None or type(result[k]) in (int, float)) for k in nullable)
+        and all(finite_number(result.get(k)) for k in (*numeric, "time_s"))
+        and all(k in result and (result[k] is None or finite_number(result[k])) for k in nullable)
     ):
         drive["score_inputs"] = {k: result[k] for k in ("arrived", *numeric, *nullable)}
     return drive
@@ -625,7 +638,7 @@ def readme_block(data: dict) -> str:
 
 
 def render(data: dict) -> str:
-    return json.dumps(data, indent=1, ensure_ascii=False) + "\n"
+    return json.dumps(data, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
 
 
 def readme_with(text: str, block: str) -> str:

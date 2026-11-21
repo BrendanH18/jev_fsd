@@ -11,6 +11,7 @@ const { toJevState, buildQuestions } = await import("../static/js/brain/state.js
 const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { CautiousAgent } = await import("../static/js/agents/cautious.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
+const { DriveMetrics } = await import("../static/js/bench/metrics.js");
 const { cloneState } = await import("../static/js/lab/recorder.js");
 const { EvaluationTrace } = await import("../static/js/lab/trace.js");
 const { NpcFleet, NpcPath } = await import("../static/js/sim/npc.js");
@@ -83,6 +84,18 @@ test("manual following measures a cyclist ahead until the car moves beside their
   w.ego.y += 1.5;
   assert.equal(manualMetricSnapshot(w).following, null);
   assert.equal(w.route.hint, hint);
+});
+test("manual benchmark progress stays at the last point sampled on the route", () => {
+  const w = setup();
+  const metrics = new DriveMetrics(w.route.length);
+  metrics.record(w, manualMetricSnapshot(w), null, 0.1);
+  const progress = metrics.maxProgress;
+  w.ego.x += 20;
+  w.ego.y += 50;
+  assert.equal(manualMetricSnapshot(w), null);
+  metrics.record(w, manualMetricSnapshot(w), null, 0.1);
+  assert.equal(metrics.maxProgress, progress);
+  assert.equal(metrics.t, 0.2);
 });
 test("ordinary traffic rebuilds more room under the shared wet-road policy", () => {
   function run(enabled) {

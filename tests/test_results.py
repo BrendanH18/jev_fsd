@@ -33,14 +33,32 @@ class ResultsTest(unittest.TestCase):
         tape = build_results.read_recording(next(build_results.RECORDINGS.glob("jev-arena-*.json.gz")))
         result = next(iter(tape["results"].values()))
         inputs = build_results.published_drive(result)["score_inputs"]
-        self.assertEqual(inputs, {key: result[key] for key in inputs})
-        for key in (*inputs, "time_s"):
+        fields = (
+            "arrived",
+            "progress",
+            "distance_m",
+            "rms_jerk",
+            "hard_brakes",
+            "max_lat_accel",
+            "collisions",
+            "safety_brakes",
+            "min_ttc_s",
+            "min_headway_s",
+        )
+        self.assertEqual(inputs, {key: result[key] for key in fields})
+        for key in (*fields, "time_s"):
             with self.subTest(key=key):
                 partial = result.copy()
                 del partial[key]
                 self.assertNotIn("score_inputs", build_results.published_drive(partial))
         clear_road = dict(result, min_ttc_s=None, min_headway_s=None)
         self.assertIn("score_inputs", build_results.published_drive(clear_road))
+        invalid = build_results.published_drive(dict(result, time_s=float("inf"), hard_brakes=float("nan")))
+        self.assertIsNone(invalid["time_s"])
+        self.assertNotIn("hard_brakes", invalid["incident_counts"])
+        self.assertNotIn("score_inputs", invalid)
+        with self.assertRaises(ValueError):
+            build_results.render({"driving_s": float("inf")})
 
     def test_check_fails_when_the_file_is_stale(self):
         with tempfile.TemporaryDirectory() as tmp:

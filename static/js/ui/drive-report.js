@@ -185,7 +185,7 @@ export class DriveReport {
           h(
             "tr",
             {},
-            ["Driver", "Verdict", "Duration", "Benchmark score / 100", "Incidents"].map((label) =>
+            ["Driver", "Benchmark verdict", "Duration", "Benchmark score / 100", "Incidents"].map((label) =>
               h("th", { scope: "col" }, label),
             ),
           ),
@@ -217,7 +217,9 @@ export class DriveReport {
             ),
           );
         }
-        status.textContent = "Published rows use guarded-track results.";
+        status.textContent =
+          (challenge.roadTest ? "The examiner’s sheet determines road-test completion. " : "") +
+          "Published rows use guarded-track results. Your following measurements come from the car’s path. Published following measurements come from the planner’s snapshots.";
       })
       .catch(() => {
         status.textContent = "Published comparisons could not be loaded.";

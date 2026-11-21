@@ -405,6 +405,7 @@ export function manualMetricSnapshot(world) {
   const { ego, route } = world;
   if (!route) return null;
   const p = route.project(ego.x, ego.y, route.hint);
+  if (p.distance >= 25 || Math.abs(wrap(ego.psi - p.heading)) >= (Math.PI * 100) / 180) return null;
   const lane = laneState(route, p);
   const vehicles = world
     .visibleObstaclesNear(ego.x, ego.y, TRAFFIC_RADIUS_M)
@@ -412,7 +413,7 @@ export function manualMetricSnapshot(world) {
   return {
     routeProj: p,
     lane,
-    onRoute: p.distance < 25 && Math.abs(wrap(ego.psi - p.heading)) < (Math.PI * 100) / 180,
+    onRoute: true,
     // Manual following measurements use the car's actual lateral position and body width.
     following: followingInLane(ego, route, p, lane, vehicles, (s) => route.frameMove(p.s, s), null),
   };

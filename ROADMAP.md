@@ -593,6 +593,9 @@ never set beside a model's result on the same drive.
   of `bench/scores.js` and incidents. As for practice, only the original unchanged manual attempt
   counts, and every verdict comes from `challengeFailures`. The comparison selects the latest
   guarded drive with the matching authored version and map fingerprint.
+  *Follow-up:* Manual scores measure following from the driven corridor. Published scores use
+  the planner snapshot saved by the arena. Share one sampler for future runs and remeasure older
+  comparisons from exact replays before ranking scores across the two methods.
 - [x] **8.2 From the leaderboard to the wheel.** (S) Each challenge on `/results` links to driving it
   with its authored setup, and the leaderboard shows the scores of `bench/scores.js` beside pass and
   fail when the recording or report has the required measurements.
