@@ -30,13 +30,26 @@ const CORE = [
   "brain/candidates.js",
   "brain/state.js",
   "brain/llm-prompt.js",
+  "brain/tracks.js",
   "bench/metrics.js",
 ];
 
 test("every record is whole, its option and flags its own, and every hook at a slot the core runs", () => {
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
-    ["driveways", "balls", "potholes", "geese", "officers", "ice", "snowbanks", "puddles", "parkers", "roadClosures"],
+    [
+      "driveways",
+      "balls",
+      "potholes",
+      "geese",
+      "officers",
+      "tailgaters",
+      "ice",
+      "snowbanks",
+      "puddles",
+      "parkers",
+      "roadClosures",
+    ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
   for (const field of ["key", "seen", "calls"])
@@ -90,6 +103,7 @@ test("the core runs every slot, and names no registered feature", () => {
       './ball-chase.js"',
       './parkers.js"',
       'sim/traffic-officer.js"',
+      'tailgaters.js"',
       './traffic-officer.js"',
     ]) {
       const imports = text
@@ -145,6 +159,14 @@ test("the core runs every slot, and names no registered feature", () => {
       "officerHeld",
       "officersSeen",
       "snap.traffic_officer",
+      "snap.tailgater",
+      "world.tailgaters",
+      ".tailgate",
+      ".tgPeek",
+      "brake_checks",
+      '"let_tailgater_pass"',
+      '"ease_off_for_tailgater"',
+      '"brakes_hard_with_tailgater"',
       "officer_violations",
       '"wait_for_officer"',
       '"go_on_officer_wave"',
@@ -175,6 +197,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     puddles: true,
     parkers: true,
     officers: true,
+    tailgaters: true,
     roadClosures: true,
   });
   for (const f of R.FEATURES) {
@@ -189,6 +212,7 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.equal(off.driveways.random, null);
   assert.equal(off.balls.random, null);
   assert.equal(off.parkers.random, null);
+  assert.equal(off.tailgaters.random, null);
   assert.equal(off.potholes.list.length, 0);
   assert.equal(off.puddles.list.length, 0);
   assert.ok(on.puddles.list.length > 0);
@@ -217,9 +241,17 @@ test("metrics and failures appear only once a feature has met the car, each at i
   const v = { wildlife_conflicts: 2 };
   assert.deepEqual(R.featureMetrics(world, v, "driveways"), {});
   assert.deepEqual(R.featureMetrics(world, v, "streetHazards"), { wildlife_conflicts: 2 });
-  assert.deepEqual(R.featureMetrics(world, v, "tailgaters"), { ice_overspeed: 0, pedestrians_splashed: 0 });
+  assert.deepEqual(R.featureMetrics(world, v, "rearTraffic"), { ice_overspeed: 0, pedestrians_splashed: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "late"), { closure_entries: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "junctions"), { officer_violations: 0 });
+  world.tailgatersSeen = true;
+  world.snowbanksSeen = true;
+  assert.deepEqual(Object.keys(R.featureMetrics(world, v, "rearTraffic")), [
+    "brake_checks",
+    "ice_overspeed",
+    "snowbank_conflicts",
+    "pedestrians_splashed",
+  ]);
   world.ballsSeen = true;
   world.parkersSeen = true;
   assert.deepEqual(Object.keys(R.featureMetrics(world, v, "streetHazards")), [

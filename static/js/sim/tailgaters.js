@@ -34,7 +34,7 @@
 
 import { rng } from "../common.js";
 import { CAR, comfort } from "./vehicle.js";
-import { FOLLOWING_STANDSTILL_M } from "./following.js";
+import { behindInLane, FOLLOWING_STANDSTILL_M } from "./following.js";
 import { amberStoppingDistance } from "./amber.js";
 import { approachPhase, movementSignal } from "./signals.js";
 import { controlAt } from "./outage.js";
@@ -76,11 +76,10 @@ export const TAIL_PEEK_FOR_S = 2.5;
 export const TAIL_PEEK_MPS = 0.4;
 export const TAIL_FLASH_EVERY_S = 9;
 // The one test: closer behind than this (front bumper to rear bumper, in seconds of its speed), going
-// at least this fast, within TAIL_LOOK_M behind and TAIL_SIDE_M of the observer's line.
+// at least this fast, within TAIL_LOOK_M behind and in the observer's lane.
 export const TAIL_THREAT_S = 0.8;
 export const TAIL_THREAT_MIN_MPS = 3;
 export const TAIL_LOOK_M = 30;
-export const TAIL_SIDE_M = 1.4;
 // Tailgated, the driven car leaves this many times its usual following gap ahead; brakes no harder
 // than TAIL_GENTLE_DECEL, or TAIL_NEED_SLACK above what is ahead requires (or TAIL_GENTLEST_SLACK above
 // the gentlest manoeuvre that passes every other check); and, with no lane to move right into, eases off
@@ -138,18 +137,6 @@ const ordinary = (n) =>
   !isEmergency(n) &&
   !isEmergencyVehicle(n);
 
-// How far `o` is behind `observer` in its lane, going its way: from its front bumper to the observer's
-// rear bumper (m), or null.
-export function behindInLane(observer, o, look = TAIL_LOOK_M) {
-  if (Math.cos(wrap(o.psi - observer.psi)) < 0.87) return null;
-  const spec = observer.spec || CAR,
-    os = o.spec || CAR,
-    local = observer.toLocal(o.x, o.y);
-  if (Math.abs(local.right) > TAIL_SIDE_M) return null;
-  const gap = -spec.rearOverhang - (local.ahead + (os.length - os.rearOverhang) * Math.cos(wrap(o.psi - observer.psi)));
-  return gap < -0.5 || gap > look ? null : gap;
-}
-
 // The one test. Of `others`, the vehicle tailgating `observer`, nearest behind it, or null:
 // { vehicle, gap_m, headway_s, closing_mps }.
 export function tailgaterThreat(_world, observer, others) {
@@ -166,7 +153,7 @@ export function tailgaterThreat(_world, observer, others) {
     )
       continue;
     if (Math.abs(o.x - observer.x) > TAIL_LOOK_M + 10 || Math.abs(o.y - observer.y) > TAIL_LOOK_M + 10) continue;
-    const gap = behindInLane(observer, o);
+    const gap = behindInLane(observer, o, TAIL_LOOK_M);
     if (gap === null) continue;
     const headway = Math.max(0, gap) / o.v;
     if (headway >= TAIL_THREAT_S || (best && gap >= best.gap_m)) continue;
@@ -395,18 +382,19 @@ export function brakingNeed(world, ego = world.ego, s = null) {
 }
 
 // The audit, each step: a brake check (see the top of this file), counted once a braking, as
-// `brake_checks` (`world.tailgaterCall` follows the braking).
+// `brake_checks` (the audit call follows the braking).
 export function auditTailgaters(world) {
   const ego = world.ego,
     decel = -(ego.ax || 0);
-  let call = world.tailgaterCall;
+  let call = world.tailgaterCalls.get("braking");
   if (decel < BRAKE_RELEASE_DECEL) {
-    world.tailgaterCall = null;
+    world.tailgaterCalls.delete("braking");
     return;
   }
   if (!call) {
     if (decel < BRAKE_CHECK_DECEL || ego.v < BRAKE_CHECK_MIN_MPS) return;
-    call = world.tailgaterCall = { since: world.t, max: 0, need: 0, why: null, threat: null, counted: false };
+    call = { since: world.t, max: 0, need: 0, why: null, threat: null, counted: false };
+    world.tailgaterCalls.set("braking", call);
   }
   if (call.counted) return;
   call.max = Math.max(call.max, decel);

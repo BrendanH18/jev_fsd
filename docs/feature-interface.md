@@ -6,9 +6,9 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Ten features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police officers,
-black ice, snowbanks, puddles, traffic parking and road closures. Each record holds the hooks into the core
-pipeline and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
+Eleven features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police officers,
+tailgaters, black ice, snowbanks, puddles, traffic parking and road closures. Each record holds the hooks
+into the core pipeline and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
 
@@ -123,6 +123,24 @@ published Jev and Claude Haiku open-track recordings. The LLM system prompt was 
 the Jev fixtures stayed current, and the registry, traffic-officer, free-drive, open-track and
 model-recording checks passed.
 
+**Tailgaters** were compared against `2333e9a` in Boat with Node 22.23.5. Both Rules and the
+cautious agent passed all 62 challenges and road tests on both trees. All comparable result
+fields matched, including decision traces, events and reports apart from the start timestamp.
+Both drivers reported the brake-check audit in **On your bumper**.
+
+The full dry Kitsilano bare and city suites (12 routes each, seed 1) matched in every result
+field apart from timings, using one server with `PYTHONHASHSEED=0`. Rules passed 12/12 in bare
+(10.53 km) and city (12.81 km). The cautious agent passed 12/12 in bare (10.56 km) and 9/12 in
+city (12.22 km). On both trees, it got stuck on `s1-2` and ran red lights on `s1-8` and
+`s1-10`. Its city routes `s1-4` and `s1-6` reported `brake_checks: 0`. Rules also passed
+the rainy city route `s1-12`, which matched field for field apart from timings and reported
+`brake_checks: 0` on both trees.
+
+The guarded and open LLM system prompts and the regenerated **On your bumper** Jev request
+matched byte for byte. The published Jev and Claude
+Haiku open-track recordings of that challenge replayed exactly. The Jev fixture, registry,
+tailgater, following, traffic-officer, free-drive, open-track and model-recording checks passed.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
@@ -163,8 +181,9 @@ pipeline need nothing.
   that order in sensing, the audit and the hazard flags, but puddles come first in the speed ceiling, the
   target, the candidates, the decision state and the wording, beside potholes, and black ice's lane
   adjustment and slowed-outcome wording come after puddles' (`"end"`). The temporary `"snowbanks"` slots
-  that puddles used went once snowbanks moved. The remaining hooks run at `"officers"`,
-  `"tailgaters"`, `"parking"` and `"late"`.
+  that puddles used went once snowbanks moved. Tailgaters register before ice, snowbanks, puddles and
+  parkers. The shared `"rearTraffic"` slot keeps their audits, metrics, candidate insertion and model
+  text in the established order. Each pipeline still calls the slot where those hooks belong.
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).
@@ -189,6 +208,13 @@ pipeline need nothing.
   The fleet uses hooks to schedule parkers, step them as they reverse, give traffic a virtual leader at
   their hold line, and apply their approach offset, stop and signal. The emergency audit uses
   `evQueueHold` when a stopped or reversing parker has room reserved behind it.
+* **Tailgaters.** The fleet runs its scheduler before the parking scheduler and takes a
+  `trafficDriver` override for peeking, delayed observation of the lead car, speed and braking.
+  The `following` sensing slot runs after the vehicles ahead and behind are known. Lane offers can
+  add a move before bus-lane legality is checked, and `finishLanes` reads the final offers.
+  Candidates can handle a special lane offer and adjust the stop-at-line law. Prediction skips the
+  close follower and checks braking against the gentlest otherwise eligible candidate before the
+  existing post-simulation hooks can lift their rejections.
 * **Hooks still to add.** Driver preferences (Rules, the cautious agent), the coach, the HUD and
   renderers, checkpoint fixes and the re-plan, as in the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are

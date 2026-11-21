@@ -134,9 +134,7 @@ export class DriveMetrics {
       // sim/features/index.js; the car coming near a pothole, say)
       ...featureMetrics(world, v, "driveways"),
       ...featureMetrics(world, v, "streetHazards"),
-      // (only for a drive a tailgater followed the car in: sim/tailgaters.js)
-      ...(world.tailgatersSeen ? { brake_checks: v.brake_checks || 0 } : {}),
-      ...featureMetrics(world, v, "tailgaters"),
+      ...featureMetrics(world, v, "rearTraffic"),
       ...featureMetrics(world, v, "late"),
       ...featureMetrics(world, v, "junctions"),
       off_road_s: r(v.off_road_s),
@@ -201,8 +199,7 @@ export function failures(m) {
   if (m.fresh_green_conflicts) f.push("entered on green ahead of a car running the red");
   f.push(...featureFailures(m, "driveways"));
   f.push(...featureFailures(m, "streetHazards"));
-  if (m.brake_checks) f.push("braked hard with a tailgater close behind");
-  f.push(...featureFailures(m, "tailgaters"));
+  f.push(...featureFailures(m, "rearTraffic"));
   f.push(...featureFailures(m, "late"));
   f.push(...featureFailures(m, "junctions"));
   // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm

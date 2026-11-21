@@ -75,7 +75,7 @@ export default {
   },
   hazard: { at: "late", run: (snap) => (snap.parking_ahead ? "car parking ahead" : null) },
   candidates: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run({ snap, laneUntil, inLane, approach, queue, FRONT }, out) {
       // A car ahead parallel parking (sim/parkers.js): stop well back, at its hold line, short of the room it
       // reverses into, and wait until it is in (offered once the hold line is nearer than the queue behind it:
@@ -113,7 +113,7 @@ export default {
     },
   },
   state: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run(snap, state) {
       if (snap.parking_ahead) {
         const a = snap.parking_ahead;
@@ -139,7 +139,7 @@ export default {
       return null;
     },
   },
-  clause: { at: "tailgaters", run: (snap) => (snap.parking_ahead ? parkerClause(snap.parking_ahead) : null) },
+  clause: { at: "rearTraffic", run: (snap) => (snap.parking_ahead ? parkerClause(snap.parking_ahead) : null) },
   motion: (snap) => snap.parking_ahead?.wait,
   holdStill: {
     at: "late",

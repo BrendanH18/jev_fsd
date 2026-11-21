@@ -52,7 +52,7 @@ export default {
   // (whether conditions favour it depends on the time of year: the clock keeps its `day` while it is on)
   day: true,
   metric: {
-    at: "tailgaters",
+    at: "rearTraffic",
     name: "ice_overspeed",
     failure: "crossed black ice too fast, or braked or steered hard on it",
   },
@@ -65,7 +65,7 @@ export default {
     },
   },
   audit: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run(world) {
       if (world.ice?.enabled) auditIce(world);
     },
@@ -119,7 +119,7 @@ export default {
   // Ease off early, on the dry road, to the speed to cross it at, and hold that across it, without
   // braking, accelerating or steering hard on it.
   candidates: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run({ snap, laneUntil, inLane, target }, out) {
       const ice = snap.black_ice_ahead;
       if (ice) {
@@ -177,7 +177,7 @@ export default {
   },
 
   state: {
-    at: "tailgaters",
+    at: "rearTraffic",
     run(snap, state) {
       if (snap.black_ice) {
         const a = snap.black_ice;
@@ -231,7 +231,7 @@ export default {
       snap.black_ice || snap.ice_caution ? iceClause(snap.black_ice, snap.ice_caution, snap.black_ice_ahead) : null,
   },
   prompt: {
-    at: "tailgaters",
+    at: "rearTraffic",
     text: `- Near freezing (\`ice_caution\`), black ice forms first on bridges, overpasses and shaded stretches, and it is nearly invisible. Keep to \`ice_caution.bridge.keep_to\` across a bridge. Once \`black_ice\` is reported, choose \`slow_for_ice\` (or another candidate whose \`end_speed\` is at or below \`car.target_speed\`): slow on the dry road, before the ice, to \`black_ice.cross_at\`, then cross it steadily. On the ice (\`black_ice.under_car\`), never brake, accelerate or steer sharply: ease off and hold steady until the car is off it, and leave extra room to anything ahead.`,
   },
 

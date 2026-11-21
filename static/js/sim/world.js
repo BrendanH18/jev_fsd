@@ -82,7 +82,6 @@ import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, minPassM } from "./cyclist-pass.js";
 import { ContraflowRiders, auditContraflow } from "./contraflow.js";
-import { auditTailgaters, createTailgaters } from "./tailgaters.js";
 import {
   FEATURES,
   controlDirection,
@@ -98,7 +97,7 @@ import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guard
 const OBSTACLES_NEAR = hooks("obstacles");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_STREET_HAZARDS = hooks("audit", "streetHazards");
-const AUDIT_AFTER_TAILGATERS = hooks("audit", "tailgaters");
+const AUDIT_REAR_TRAFFIC = hooks("audit", "rearTraffic");
 const HIDES = hooks("hides"),
   PLACE_EGO = hooks("placeEgo"),
   EV_KERB = hooks("evKerb"),
@@ -290,8 +289,6 @@ export class World {
   // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
   // both ways for them (sim/contraflow.js). `sunGlare`: a low sun ahead dazzles drivers, who slow to
   // what they can see (sim/sun-glare.js).
-  // `tailgaters`: now and then a car behind closes up to well under a second and holds it; the car must
-  // not brake-check it, and lets it by (sim/tailgaters.js).
   // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
@@ -326,7 +323,6 @@ export class World {
       followingDistance = false,
       redRunners = false,
       sunGlare = false,
-      tailgaters = false,
       ...features
     } = {},
   ) {
@@ -462,11 +458,6 @@ export class World {
     this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
     this.contraflowSeen = false;
     this.contraflowCalls = new Map();
-    // tailgaters (sim/tailgaters.js): whether traffic now and then closes up right behind the car, whether
-    // one has followed it this drive, and the braking the audit follows
-    this.tailgaters = createTailgaters({ enabled: tailgaters, seed });
-    this.tailgatersSeen = false;
-    this.tailgaterCall = null;
     // each registered feature (sim/features/index.js): what it builds, whether it has met the car this
     // drive, and its audit's calls
     for (const f of FEATURES) {
@@ -638,7 +629,6 @@ export class World {
     this.guardCalls?.clear();
     this.contraflowCalls?.clear();
     this.runnerCall = null;
-    this.tailgaterCall = null;
     for (const f of FEATURES) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn])
@@ -1127,8 +1117,7 @@ export class World {
     if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this);
     for (const audit of AUDIT_STREET_HAZARDS) audit(this);
-    if (this.tailgaters?.enabled) auditTailgaters(this);
-    for (const audit of AUDIT_AFTER_TAILGATERS) audit(this);
+    for (const audit of AUDIT_REAR_TRAFFIC) audit(this);
     for (const audit of AUDIT_LATE) audit(this);
     this.auditKerb();
     leftSpace(this);

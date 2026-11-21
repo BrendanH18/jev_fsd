@@ -1,5 +1,8 @@
 # Tailgaters (`sim/tailgaters.js`)
 
+The [feature record](../../static/js/sim/features/tailgaters.js) connects tailgaters to the World,
+traffic, sensing, candidates, the brake-check audit and model wording.
+
 The first hazard behind the car rather than ahead of it. `World` option `tailgaters` is on in free
 drives unless `?tailgaters=0`, and in the **On your bumper** challenge (`tailgaters: true`). From
 20 s into a drive, every 2 s while none is active and 60 s after the last, the ordinary traffic car
