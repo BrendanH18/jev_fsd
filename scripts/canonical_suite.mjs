@@ -3,6 +3,8 @@ import canonical from "../data/suites/v1.json" with { type: "json" };
 import { CUSTOM_SUITE } from "../static/js/bench/suite-version.js";
 import { canonicalJson } from "../static/js/brain/recording.js";
 
+export { canonical as activeSuite };
+
 export const authoredDrive = (challenge) => ({
   map: challenge.map,
   seed: challenge.seed,

@@ -71,13 +71,24 @@ recordings.forEach((r, i) => {
     maps[id] = sha;
   }
   if (r.header.manifest) Object.assign(manifestMaps, r.header.manifest.maps);
-  for (const id of Object.keys(r.results)) {
+  for (const [id, result] of Object.entries(r.results)) {
     if (id in merged.results) fail(`${id} is recorded in more than one part (${parts[i]}).`);
     // (a finished drive keeps its answers, an empty set for one that asked nothing)
     if (!Object.hasOwn(r.drives, id)) fail(`${parts[i]} has a result for ${id} but no answers for it.`);
-    merged.results[id] = r.results[id];
+    const authored = r.header.manifest?.suite.drives[id];
+    if (
+      result.challenge !== id ||
+      !r.header.arena.ids.includes(id) ||
+      (r.header.manifest &&
+        (!authored ||
+          result.map !== authored.map ||
+          result.seed !== authored.seed ||
+          (authored.version !== undefined && result.version !== authored.version)))
+    )
+      fail(`${parts[i]} has a result for ${id} that disagrees with its authored drive.`);
+    merged.results[id] = result;
     merged.drives[id] = r.drives[id];
-    if (r.header.manifest) manifestDrives[id] = r.header.manifest.suite.drives[id];
+    if (authored) manifestDrives[id] = authored;
     ids.push(id);
   }
 });
@@ -94,12 +105,11 @@ if (first.manifest)
     maps: manifestMaps,
     cost_usd: runCost(Object.values(merged.results)),
   };
-setRecordingSuiteVersion(
-  merged,
-  suiteVersion(first) === LEGACY_SUITE
-    ? LEGACY_SUITE
-    : arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
-);
+if (suiteVersion(first) !== LEGACY_SUITE)
+  setRecordingSuiteVersion(
+    merged,
+    arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
+  );
 const text = merged.serialize();
 // (written beside the destination and renamed over it, so a failed write leaves an existing file as it was)
 const tmp = `${out}.tmp`;

@@ -5,8 +5,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { gzipSync } from "node:zlib";
-import canonical from "../data/suites/v1.json" with { type: "json" };
+import { gunzipSync, gzipSync } from "node:zlib";
 import { setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
 globalThis.document = { querySelector: () => null };
 const { ModelRecording } = await import("../static/js/brain/recording.js");
@@ -28,7 +27,9 @@ const write = (name, h, drives) => {
   const r = new ModelRecording({
     header: h,
     drives: Object.fromEntries(drives.map((id) => [id, { [`k-${id}`]: [{ response: { id } }] }])),
-    results: Object.fromEntries(drives.map((id) => [id, { challenge: id, pass: true, result_sha: id }])),
+    results: Object.fromEntries(
+      drives.map((id) => [id, { challenge: id, ...h.manifest?.suite.drives[id], pass: true, result_sha: id }]),
+    ),
   });
   const file = path.join(dir, name);
   fs.writeFileSync(file, r.serialize());
@@ -101,6 +102,7 @@ const withManifest = (id, map, fingerprint, source_commit = "a".repeat(40)) =>
     header([id], {
       maps: { [map]: fingerprint },
       manifest: {
+        format: "jev-run-manifest/1",
         source_commit,
         suite: { kind: "arena", set: "all", drives: { [id]: { map, seed: 42 } } },
         maps: { [map]: { fingerprint } },
@@ -112,18 +114,20 @@ const withManifest = (id, map, fingerprint, source_commit = "a".repeat(40)) =>
 const g = withManifest("seven", "kitsilano", "aaaa");
 const h = withManifest("eight", "toronto", "bbbb");
 assert.match(merge(g, h), /merged 2 drives from 2 recordings/);
-const provenance = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.manifest;
-assert.equal(provenance.suite_version, "legacy");
+const legacy = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8"));
+const provenance = legacy.header.manifest;
+assert.equal(provenance.format, "jev-run-manifest/1");
+assert.equal(provenance.suite_version, undefined);
+assert.equal(legacy.header.suite_version, undefined);
+assert.ok(Object.values(legacy.results).every((result) => result.suite_version === undefined));
 assert.deepEqual(Object.keys(provenance.suite.drives), ["seven", "eight"]);
 assert.deepEqual(Object.keys(provenance.maps), ["kitsilano", "toronto"]);
 refused([g, withManifest("nine", "toronto", "bbbb", "b".repeat(40))], /differs.*source/, "another source commit");
 
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
-const { authoredDrive } = await import("./canonical_suite.mjs");
+const { activeSuite: canonical, authoredDrive } = await import("./canonical_suite.mjs");
 const { heldoutPlan } = await import("../static/js/bench/heldout.js");
-assert.equal(CHALLENGES.length, 60);
-assert.equal(ROAD_TESTS.length, 2);
 const authored = [...CHALLENGES, ...ROAD_TESTS].map((c) => [c.id, authoredDrive(c)]);
 assert.deepEqual(Object.fromEntries(authored), canonical.arena.drives);
 const { seeds, count } = canonical.bench.heldout;
@@ -153,22 +157,31 @@ function arenaShard(name, entries) {
   fs.writeFileSync(file, recording.serialize());
   return file;
 }
-const shardA = arenaShard("arena-a.json", authored.slice(0, 31));
-const shardB = arenaShard("arena-b.json", authored.slice(31));
+const division = Math.floor(authored.length / 2);
+const shardA = arenaShard("arena-a.json", authored.slice(0, division));
+const shardB = arenaShard("arena-b.json", authored.slice(division));
 merge(shardA, shardB);
 const canonicalMerge = ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8"));
-assert.equal(canonicalMerge.header.suite_version, "v1");
-assert.equal(canonicalMerge.results["door-zone"].result_sha, "door-zone");
-assert.equal(canonicalMerge.results["door-zone"].suite_version, "v1");
-delete canonicalMerge.results["door-zone"].suite_version;
+const firstId = authored[0][0];
+assert.equal(canonicalMerge.header.suite_version, canonical.version);
+assert.equal(canonicalMerge.results[firstId].result_sha, firstId);
+assert.equal(canonicalMerge.results[firstId].suite_version, canonical.version);
+delete canonicalMerge.results[firstId].suite_version;
 assert.throws(() => ModelRecording.parse(canonicalMerge.serialize()), /disagree on suite_version/);
-merge(shardA, arenaShard("arena-short.json", authored.slice(31, -1)));
+const swapped = ModelRecording.parse(fs.readFileSync(shardB, "utf8"));
+const [left, right] = Object.keys(swapped.results);
+[swapped.results[left], swapped.results[right]] = [swapped.results[right], swapped.results[left]];
+const changed = path.join(dir, "arena-swapped.json");
+fs.writeFileSync(changed, swapped.serialize());
+refused([shardA, changed], /disagrees with its authored drive/, "arena results swapped between two drive keys");
+merge(shardA, arenaShard("arena-short.json", authored.slice(division, -1)));
 assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "custom");
 
 const config = { map: "kitsilano", features: "city", count: 3, seed: 1, brain: "jev" };
 const benchScenarios = ["s1-1", "s1-2"].map((id) => ({ id, traffic_seed: 42 }));
 function benchPart(id, pass, traffic_seed = 42, name = id) {
   const manifest = {
+    format: "jev-run-manifest/1",
     source_commit: "a".repeat(40),
     source_dirty: false,
     maps: { kitsilano: { fingerprint: "map-sha" } },
@@ -225,7 +238,13 @@ assert.deepEqual(
   ],
 );
 assert.equal(combined.summary.cost_usd, 0.02);
-assert.equal(combined.suite_version, "legacy");
+assert.equal(combined.suite_version, undefined);
+assert.equal(combined.manifest.format, "jev-run-manifest/1");
+assert.equal(combined.manifest.suite_version, undefined);
+assert.ok(combined.results.every((result) => result.suite_version === undefined));
+const combinedTape = ModelRecording.parse(gunzipSync(fs.readFileSync(`${report}.gz`)).toString("utf8"));
+assert.equal(combinedTape.header.suite_version, undefined);
+assert.deepEqual(combinedTape.header.manifest, combined.manifest);
 assert.equal(combined.manifest.suite.only, undefined);
 assert.deepEqual(combined.manifest.suite.ids, ["s1-1", "s1-2"]);
 assert.equal(combined.name, "20261121-080000-jev");

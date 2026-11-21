@@ -13,7 +13,8 @@ Every number comes from a committed file, and each row names it:
     uv run scripts/build_results.py           # rewrite data/results.json and the README block
     uv run scripts/build_results.py --check   # fail if either is out of date
 
-Python standard library only. The output has no timestamps, so it changes only with the records.
+Numbered benchmark tapes also use Node 22 to verify their ordered scenario fingerprint.
+The output has no timestamps, so it changes only with the records.
 """
 
 from __future__ import annotations
@@ -171,6 +172,26 @@ def comparable_bench_result(result: dict) -> dict:
     if isinstance(compact.get("report"), dict):
         compact["report"] = {key: value for key, value in compact["report"].items() if key != "started_at"}
     return compact
+
+
+def bench_route_fingerprint(scenarios: list[dict]) -> str:
+    # Use the runner's canonical JSON, including JavaScript's number formatting.
+    script = """
+        import { readFileSync } from "node:fs";
+        import { benchRouteFingerprint } from "./scripts/run_manifest.mjs";
+        console.log(benchRouteFingerprint(JSON.parse(readFileSync(0, "utf8"))));
+    """
+    try:
+        return subprocess.run(
+            ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
+            cwd=ROOT,
+            input=json.dumps(scenarios, allow_nan=False),
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (FileNotFoundError, subprocess.CalledProcessError) as error:
+        raise ValueError("Node 22 is required to fingerprint numbered benchmark tape scenarios") from error
 
 
 def canonical_member(run: dict, manifest: dict, definition: dict) -> bool:
@@ -359,9 +380,14 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
             )
         else:
             if version in CANONICAL:
+                scenarios = recording.get("scenarios", {})
                 require(
-                    header.get("bench") == config and list(recording.get("scenarios", {})) == suite["ids"],
+                    header.get("bench") == config and list(scenarios) == suite["ids"],
                     "benchmark recording settings or scenarios disagree with the manifest",
+                )
+                require(
+                    bench_route_fingerprint(list(scenarios.values())) == suite["route_sha"],
+                    "benchmark recording routes disagree with the canonical suite",
                 )
             require(
                 all(
@@ -453,11 +479,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "suite_version": version,
                 "suite": ("open" if track == "open" else "challenges") if full else "pilot",
                 "track": track,
-                "label": (
-                    "Open track: 60 challenges and 2 road tests"
-                    if track == "open"
-                    else "60 challenges and 2 road tests"
-                )
+                "label": ("Open track: challenges and road tests" if track == "open" else "Challenges and road tests")
                 if full
                 else ", ".join(sorted(r["challenge"] for r in row_results)),
                 "map": None,
@@ -676,7 +698,7 @@ def readme_cohort(data: dict, rows: list[dict]) -> str:
     home_map = data["maps"].get(HOME_MAP, MAP_NAMES[HOME_MAP])
     other_maps = sorted({r["map"] for r in city_rows if r["map"] != HOME_MAP})
     lines = [
-        f"| Driver | Model | 60 challenges + 2 road tests | Open track | City suite, {home_map}: {' · '.join(WEATHERS)} "
+        f"| Driver | Model | Challenges and road tests | Open track | City suite, {home_map}: {' · '.join(WEATHERS)} "
         f"| City suite, {len(other_maps)} other maps (dry) | Own decisions | Cost of the challenges |",
         "|---|---|---|---|---|---|---|---|",
     ]

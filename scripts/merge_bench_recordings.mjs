@@ -125,12 +125,12 @@ function merge(paths, reportPath, recordingPath, suitePath) {
     cost_usd: summary.cost_usd,
   };
   merged.header.manifest = manifest;
-  const suite_version =
-    suiteVersion(first.tape.header) === LEGACY_SUITE
-      ? LEGACY_SUITE
-      : benchSuiteVersion({ ...manifest.suite, map_sha: merged.header.map_sha }, ordered);
-  setRecordingSuiteVersion(merged, suite_version);
-  for (const result of ordered) result.suite_version = suite_version;
+  let suite_version;
+  if (suiteVersion(first.tape.header) !== LEGACY_SUITE) {
+    suite_version = benchSuiteVersion({ ...manifest.suite, map_sha: merged.header.map_sha }, ordered);
+    setRecordingSuiteVersion(merged, suite_version);
+    for (const result of ordered) result.suite_version = suite_version;
+  }
   merged.header.recorded_at = parts
     .map(({ tape }) => tape.header.recorded_at)
     .sort()

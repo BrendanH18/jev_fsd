@@ -156,7 +156,7 @@ To compare it with other drivers, load the same path under **Add a trusted local
 <!-- results:start -->
 ### Legacy results
 
-| Driver | Model | 60 challenges + 2 road tests | Open track | City suite, Kitsilano: dry · fog · rain · snow | City suite, 11 other maps (dry) | Own decisions | Cost of the challenges |
+| Driver | Model | Challenges and road tests | Open track | City suite, Kitsilano: dry · fog · rain · snow | City suite, 11 other maps (dry) | Own decisions | Cost of the challenges |
 |---|---|---|---|---|---|---|---|
 | Rules | none | 62/62 | 62/62, 0 flagged choices | 12/12 · 12/12 · 12/12 · 12/12 | 22/22 | n/a | $0 |
 | Cautious agent | none | 62/62 | 62/62, 0 flagged choices | 9/12 · 10/12 · 12/12 · 6/12 | 17/22 | 99.98% | $0 |

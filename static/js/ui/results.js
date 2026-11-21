@@ -53,7 +53,7 @@ function summaryTable(data, { drivers, pilots }) {
           {},
           h("th", {}, "Driver"),
           h("th", {}, "Model"),
-          h("th", {}, "60 challenges + 2 road tests"),
+          h("th", {}, "Challenges and road tests"),
           h("th", {}, "Open track"),
           h("th", {}, `City suite, ${maps[HOME_MAP] || HOME_MAP}: ${WEATHERS.join(" · ")}`),
           h("th", {}, `City suite, ${others} other maps (dry)`),
