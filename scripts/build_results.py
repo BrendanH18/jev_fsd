@@ -280,9 +280,11 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
     return manifest
 
 
-def published_drive(result: dict) -> dict:
+def published_drive(result: dict, map_sha: str | None = None) -> dict:
     drive = {"id": result["challenge"], "map": result["map"], "pass": result["pass"], "time_s": result.get("time_s")}
     drive.update({key: result[key] for key in ("version", "pack") if key in result})
+    if map_sha:
+        drive["map_sha"] = map_sha
     drive["incident_counts"] = {k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if k in result}
     numeric = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
     nullable = ("min_ttc_s", "min_headway_s")
@@ -309,8 +311,10 @@ def challenge_rows(drivers: dict) -> list[dict]:
         sources = [rel(path)]
         recording = read_recording(recording_path) if recording_path.is_file() else None
         manifest = checked_manifest(path, published, date, recording)
+        map_shas = {key: entry["fingerprint"] for key, entry in manifest["maps"].items()} if manifest else {}
         if recording is not None:
             header = recording["header"]
+            map_shas = header.get("maps") or map_shas
             if header.get("driver") != driver:
                 raise ValueError(f"{rel(recording_path)} is for {header.get('driver')}, {rel(path)} for {driver}")
             if ((header.get("arena") or {}).get("track") or "guarded") != track:
@@ -372,7 +376,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "cost_usd": round(cost, 6),
                 "cost_basis": cost_basis,
                 "failed": failed,
-                "drives": [published_drive(r) for r in row_results],
+                "drives": [published_drive(r, map_shas.get(r["map"])) for r in row_results],
                 "sources": sources,
                 "recording": rel(recording_path) if recording_path.is_file() else None,
                 **({"manifest": manifest} if manifest else {}),

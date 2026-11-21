@@ -146,6 +146,7 @@ import { setupChallenge } from "./lab/evaluation.js";
 import { CITY_STYLES, buildCityIdentity } from "./render/city-identity.js";
 import { buildSnapshot, manualMetricSnapshot } from "./brain/sensors.js";
 import { sampleCandidates, simulateAll } from "./brain/candidates.js";
+import { mapFingerprint } from "./brain/recording.js";
 
 const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
@@ -180,7 +181,7 @@ export async function boot() {
   }
   const quality = params.get("quality") || savedQuality || "high";
   let hour = replay?.hour ?? parseHour(params.get("time"));
-  const clock = new WorldClock(hour, options.clockRate, Number(params.get("weekday") || 0));
+  const clock = new WorldClock(hour, options.clockRate, challenge ? 0 : Number(params.get("weekday") || 0));
   const view = new SceneView($("#view"), map.extent, { quality });
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
@@ -980,8 +981,14 @@ export async function boot() {
     report.recording_id = recorder.recordingId;
     report.config.pack = pack.pack_version;
     report.modified = challengeModified;
-    if (drive.metrics?.jerkN && challenge && practiceEligible(challenge, report))
-      report.benchmarkMetrics = drive.metrics.summary(world, autopilot, report.status === "arrived");
+    if (challenge && practiceEligible(challenge, report)) {
+      report.config.map_sha = mapFingerprint(map);
+      if (drive.metrics?.jerkN)
+        report.benchmarkMetrics = {
+          ...drive.metrics.summary(world, autopilot, report.status === "arrived"),
+          hard_brakes: report.hard_brakes,
+        };
+    }
     withDecidedBy(report);
     if (challenge) {
       const practice = challenge.roadTest

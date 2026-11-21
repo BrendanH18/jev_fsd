@@ -54,12 +54,15 @@ export function summary(data) {
   return { drivers, pilots };
 }
 
+function withFailures(run, drive) {
+  return { ...drive, failures: run.failed.find((f) => f.id === drive.id)?.failures ?? [] };
+}
+
 // The challenge set as a matrix: one row per challenge or road test, in the order the first driver
 // drove them, one cell per driver that ran the full set; `suite` "open" for the open track's runs.
 export function challengeMatrix(data, suite = "challenges") {
   const latest = new Map();
-  for (const row of data.rows)
-    if (row.suite === suite && !latest.has(row.driver)) latest.set(row.driver, row);
+  for (const row of data.rows) if (row.suite === suite && !latest.has(row.driver)) latest.set(row.driver, row);
   const runs = [...latest.values()];
   const order = [];
   for (const run of runs)
@@ -71,12 +74,28 @@ export function challengeMatrix(data, suite = "challenges") {
       ...o,
       cells: runs.map((run) => {
         const drive = run.drives.find((d) => d.id === o.id);
-        if (!drive) return null;
-        const failed = run.failed.find((f) => f.id === o.id);
-        return { ...drive, failures: failed ? failed.failures : [] };
+        return drive ? withFailures(run, drive) : null;
       }),
     })),
   };
+}
+
+// Result rows are newest first within each driver and suite.
+export function compatibleChallengeDrive(data, driver, config) {
+  if (!config.map_sha) return null;
+  for (const run of data.rows) {
+    if (run.suite !== "challenges" || run.driver !== driver) continue;
+    const drive = run.drives.find(
+      (d) =>
+        d.id === config.challenge &&
+        d.map === config.map &&
+        d.version === config.version &&
+        d.pack === config.pack &&
+        d.map_sha === config.map_sha,
+    );
+    if (drive) return withFailures(run, drive);
+  }
+  return null;
 }
 
 // The city suite: one row per map and weather, one column per driver that ran it.

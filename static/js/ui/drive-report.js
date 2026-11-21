@@ -7,7 +7,7 @@ import { examinerSheet, roadTestNote } from "./road-test.js";
 import { decidedByText } from "../bench/metrics.js";
 
 import { driveScores } from "../bench/scores.js";
-import { challengeMatrix, checkResults } from "../lab/results.js";
+import { checkResults, compatibleChallengeDrive } from "../lab/results.js";
 
 const time = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
@@ -197,12 +197,10 @@ export class DriveReport {
     api("/api/results")
       .then(checkResults)
       .then((data) => {
-        const matrix = challengeMatrix(data);
-        const match = matrix.rows.find((r) => r.id === challenge.id && r.map === challenge.map);
         for (const id of ["rules", "jev", "llm:claude-haiku-5-5"]) {
-          const cell = match?.cells[matrix.drivers.indexOf(id)];
+          const cell = compatibleChallengeDrive(data, id, report.config);
           const label = data.drivers[id]?.label || id;
-          if (!cell || cell.version !== (challenge.version || 1) || cell.pack !== report.config.pack) {
+          if (!cell) {
             body.append(row(label, "No published drive", null, "—", "—"));
             continue;
           }

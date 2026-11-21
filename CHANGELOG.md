@@ -17,6 +17,9 @@
 - Measure city pilot prompts, reserve budget between drives and compare repeated arena recordings offline.
 - Register police officers through the feature interface.
 - Check a local driver on both tracks and use dedicated issue templates for map and driving problems.
+- Compare an unchanged manual challenge or road-test attempt with published drivers and see measured
+  benchmark scores from the challenge leaderboard.
+- Measure open-track flagged choices in replay and keep driving scores based on outcomes.
 
 ## 0.3.0 (20 November 2026)
 

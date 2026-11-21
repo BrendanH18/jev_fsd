@@ -262,12 +262,17 @@ def check(url, chromium=None, groups=GROUPS):
             page.close()
 
         if "practice" in groups:
+            page = open_page("/?challenge=bus-lanes&drive=manual&quality=low&weekday=6")
+            assert page.evaluate("window.__jev.world.clock.weekday") == 0
+            page.close()
+
             page = open_page("/?challenge=road-test-kitsilano&drive=manual&quality=low")
             page.evaluate("window.__jev.finishDrive('finished')")
             comparison = page.locator(".drive-comparison")
             comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
             assert comparison.locator("tbody td").first.inner_text() == "Fail"
-            assert comparison.locator("tbody tr").nth(2).locator("td").nth(2).inner_text() != "Unmeasured"
+            for score in comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents():
+                assert 0 <= float(score) <= 100, score
             page.close()
 
         if "parking" in groups:
