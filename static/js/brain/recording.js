@@ -139,10 +139,10 @@ export class ModelRecording {
 
   // A tape for one drive. `mode` is "record" (calls go to the server and are kept) or "replay"
   // (answers come from the recording; no call is made).
-  tape(driveId, mode) {
+  tape(driveId, mode, { onRequest = null } = {}) {
     if (!["record", "replay"].includes(mode)) throw new Error(`Unknown tape mode "${mode}".`);
     if (mode === "record") this.drives[driveId] = {};
-    return new DriveTape(this, String(driveId), mode);
+    return new DriveTape(this, String(driveId), mode, onRequest);
   }
 
   // A drive's result, and its scenario: a replay drives the recorded route even if the router has
@@ -196,10 +196,11 @@ export function comparableResult(result) {
 export const sameResult = (a, b) => canonicalJson(comparableResult(a)) === canonicalJson(comparableResult(b));
 
 export class DriveTape {
-  constructor(recording, driveId, mode) {
+  constructor(recording, driveId, mode, onRequest) {
     this.recording = recording;
     this.driveId = driveId;
     this.mode = mode;
+    this.onRequest = onRequest;
     this.answers = mode === "record" ? recording.drives[driveId] : recording.drives[driveId] || {};
     this.cursor = new Map();
     this.stats = { calls: 0, served: 0, missing: 0, drift: 0 };
@@ -230,6 +231,7 @@ export class DriveTape {
   }
 
   async record(autopilot, inner, path, body, { signal } = {}) {
+    this.onRequest?.(body);
     const key = this.key(path, body);
     this.stats.calls++;
     let outcome;
@@ -255,6 +257,7 @@ export class DriveTape {
   }
 
   async replay(autopilot, path, body, { signal } = {}) {
+    this.onRequest?.(body);
     const key = this.key(path, body);
     this.stats.calls++;
     const n = this.cursor.get(key) || 0;

@@ -9,6 +9,8 @@
 // --park 1, --hour 23.5 (both presets), --without geese,ice (city), --cover 0 (city pairwise row),
 // --diagnostics 1 (incident positions and actors), --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
 // (exit with status 1 if any route fails, as CI does).
+// --prompt-audit out.json with --record or --replay reports request sizes without storing prompts.
+// --reserve 0.5 stops a recording between drives when the server's remaining budget is less than $0.50.
 // --heldout 1 runs the map's held-out routes (bench/heldout.js; never debug against them,
 // docs/rules-baseline.md) instead of --seed/--count, and reports them as a held-out suite.
 // Each drive's line ends with its score, and a `scores` line before the summary gives the driver's
@@ -17,7 +19,7 @@
 // model driver (--brain jev, decision:<name> or llm:<name>) gets, keyed by its request, with each drive's
 // result; --replay rec.json drives again from those answers with no model call and no key, taking the
 // driver, map and suite from the recording, and reports whether each drive played out as recorded
-// (with --check 1, a drive that did not fails the run).
+// (--check 1 also checks verdicts; --check replay checks replay fidelity alone).
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((out, a, i, all) => {
     if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
@@ -47,6 +49,8 @@ const OPTIONS = [
   "without",
   "cover",
   "diagnostics",
+  "prompt-audit",
+  "reserve",
   "record",
   "replay",
   "heldout",
@@ -57,6 +61,16 @@ for (const [name, value] of Object.entries(args)) {
   if (value === true) fail(`--${name} needs a value.`);
 }
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
+const reserve = args.reserve === undefined ? null : Number(args.reserve);
+if (reserve !== null && (!args.record || !Number.isFinite(reserve) || reserve <= 0))
+  fail("--reserve needs --record and a positive number of dollars.");
+if (args["prompt-audit"]) {
+  if (!args.record && !args.replay) fail("--prompt-audit needs --record or --replay.");
+  const { resolve } = await import("node:path");
+  if ([args.record, args.replay, args.json].some((path) => path && resolve(path) === resolve(args["prompt-audit"])))
+    fail("--prompt-audit needs its own output path.");
+}
+if (args.check === "replay" && !args.replay) fail("--check replay requires --replay.");
 // A replay takes its driver, map and suite from the recording.
 const SUITE_OPTIONS = [
   "map",
@@ -206,27 +220,10 @@ const config = {
   engine: `node ${process.version}`,
 };
 const features = config.features || "bare";
+const driver = config.brain;
+if (args.record && !recordingModule.driverKind(driver))
+  fail(`--record needs a model driver (jev, decision:<name> or llm:<name>), not "${driver}".`);
 let recording = replaying;
-if (args.record) {
-  const driver = config.brain;
-  if (!recordingModule.driverKind(driver))
-    fail(`--record needs a model driver (jev, decision:<name> or llm:<name>), not "${driver}".`);
-  const definition = agentDefinitions().find((d) => d.id === driver);
-  const jevModel = driver === "jev" ? (status || (await api("/api/status"))).decision?.jev?.model : null;
-  recording = new recordingModule.ModelRecording({
-    header: recordingModule.recordingHeader({
-      driver,
-      brain: { endpoint: definition?.llm || definition?.decision },
-      model: jevModel,
-      map: preset,
-      map_sha: recordingModule.mapFingerprint(map),
-      seed: config.seed,
-      preset: features,
-      weather: config.weather,
-      bench: config,
-    }),
-  });
-}
 if (replaying)
   try {
     recordingModule.checkMap(replaying, map);
@@ -243,8 +240,42 @@ if (!suite.length) fail(`No routable scenarios on "${preset}".`);
 const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
 if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);
+const selected = only ? suite.filter((sc) => only.includes(sc.id)) : suite;
+const manifestModule = !replaying && (args.json || args.record) ? await import("./run_manifest.mjs") : null;
+let manifest = null;
+if (manifestModule) {
+  const definition = agentDefinitions().find((d) => d.id === driver);
+  const endpoint = definition?.llm || definition?.decision;
+  const model = driver === "jev" ? (status || (await api("/api/status"))).decision?.jev?.model : endpoint?.model;
+  manifest = manifestModule.runManifest({
+    driver,
+    model,
+    track: config.track || "guarded",
+    suite: { kind: "bench", config, ids: selected.map((sc) => sc.id), ...(only ? { only: true } : {}) },
+    maps: { [preset]: map },
+  });
+  if (args.record)
+    recording = new recordingModule.ModelRecording({
+      header: recordingModule.recordingHeader({
+        driver,
+        brain: { endpoint },
+        model,
+        map: preset,
+        map_sha: manifest.maps[preset].fingerprint,
+        seed: config.seed,
+        preset: features,
+        weather: config.weather,
+        bench: config,
+        manifest,
+      }),
+    });
+}
 const results = [],
   drifted = [];
+const auditPath = args["prompt-audit"];
+const audit = auditPath ? await import("./prompt_audit.mjs") : null;
+const promptSizes = {};
+let budgetStop = null;
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
 const saveRecording = async () => {
   const fs = await import("node:fs"),
@@ -253,9 +284,23 @@ const saveRecording = async () => {
   fs.writeFileSync(tmp, args.record.endsWith(".gz") ? (await import("node:zlib")).gzipSync(text, { level: 9 }) : text);
   fs.renameSync(tmp, args.record);
 };
-for (const sc of suite) {
-  if (only && !only.includes(sc.id)) continue;
-  const tape = recording ? recording.tape(sc.id, args.record ? "record" : "replay") : null;
+for (const sc of selected) {
+  if (reserve !== null) {
+    const { budget_usd: budget, spent_usd: spent } = (await api("/api/status")).spend || {};
+    // A zero budget disables the spend limit. Refuse to start a reserved run without a limit.
+    if (!Number.isFinite(budget) || budget <= 0 || !Number.isFinite(spent))
+      fail("--reserve needs a finite server spend limit.");
+    const remaining = budget - spent;
+    if (remaining < reserve) {
+      budgetStop = `stopped before ${sc.id}: $${remaining.toFixed(2)} of the budget left`;
+      console.error(budgetStop);
+      break;
+    }
+  }
+  const prompt = audit?.promptAudit();
+  const tape = recording
+    ? recording.tape(sc.id, args.record ? "record" : "replay", { onRequest: prompt?.observe })
+    : null;
   const r = await runScenario(map, sc, {
     brain: config.brain,
     npcs: config.npcs,
@@ -268,6 +313,7 @@ for (const sc of suite) {
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
   if (args.record) {
     recording.keepResult(sc.id, r, sc);
+    manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
     await saveRecording();
   }
   // (a replay matches when every call was answered from the recording and the drive's result is the
@@ -279,6 +325,10 @@ for (const sc of suite) {
     if (r.model_recording.same_result !== true || !r.model_recording.exact) drifted.push(r.id);
   }
   results.push(r);
+  if (prompt) {
+    promptSizes[sc.id] = prompt.result();
+    (await import("node:fs")).writeFileSync(auditPath, `${JSON.stringify(promptSizes, null, 2)}\n`);
+  }
   const hits = r.events
     .filter((e) => e.type === "collision")
     .map((e) => `${e.with}:${e.kind}@${e.t}`)
@@ -294,9 +344,17 @@ if (heldout)
   console.log(
     `held-out suite (seeds ${config.seeds.join(", ")}): ${results.filter((r) => r.pass).length}/${results.length} passed; report apart from the tuned suites and never debug against it (docs/rules-baseline.md)`,
   );
-if (args.json)
-  (await import("node:fs")).writeFileSync(args.json, JSON.stringify({ config, summary, results }, null, 1));
-if (args.record) console.log(`recorded ${results.length} drives to ${args.record}`);
+if (args.json) {
+  const saved = { config, summary, results, ...(budgetStop ? { stopped: budgetStop } : {}) };
+  if (manifest) {
+    manifest.cost_usd = summary.cost_usd;
+    const savedAt = new Date().toISOString();
+    const name = `${savedAt.slice(0, 19).replaceAll(/[-:]/g, "").replace("T", "-")}-${driver.replaceAll(/[^a-z0-9]/gi, "")}`;
+    Object.assign(saved, { name, saved_at: savedAt, manifest });
+  }
+  (await import("node:fs")).writeFileSync(args.json, JSON.stringify(saved, null, 1));
+}
+if (args.record && results.length) console.log(`recorded ${results.length} drives to ${args.record}`);
 // The runner's MessageChannel would keep Node alive; exit once the summary has been written out.
 if (replaying)
   console.log(
@@ -305,11 +363,14 @@ if (replaying)
       : `replay: all ${results.length} drives played out as recorded`,
   );
 const failed =
-  args.check && args.check !== "0"
+  args.check && args.check !== "0" && args.check !== "replay"
     ? [...new Set([...results.filter((r) => !r.pass).map((r) => r.id), ...drifted])]
     : [];
 if (failed.length)
   console.error(
     `${failed.length} of ${results.length} routes failed${drifted.length ? " or did not replay as recorded" : ""}: ${failed.join(", ")}`,
   );
-process.stdout.write(`${JSON.stringify({ config, summary })}\n`, () => process.exit(failed.length ? 1 : 0));
+const failedReplay = args.check === "replay" && drifted.length > 0;
+process.stdout.write(`${JSON.stringify({ config, summary })}\n`, () =>
+  process.exit(failed.length || failedReplay || budgetStop ? 1 : 0),
+);

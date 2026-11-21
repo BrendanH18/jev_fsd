@@ -76,6 +76,16 @@ class Router:
 
     # Snapping
 
+    def _nearby_lane_keys(self, x: float, y: float, max_m: float) -> List[Tuple[str, int]]:
+        cx, cy = int(math.floor(x / GRID_CELL_M)), int(math.floor(y / GRID_CELL_M))
+        radius = int(math.ceil(max_m / GRID_CELL_M))
+        candidates = set()
+        for i in range(cx - radius, cx + radius + 1):
+            for j in range(cy - radius, cy + radius + 1):
+                candidates.update(self._grid.get((i, j), ()))
+        # Strict distance comparisons keep the first match. Break ties by edge ID, then lane index.
+        return sorted(candidates)
+
     def snap(
         self,
         x: float,
@@ -86,12 +96,7 @@ class Router:
     ) -> Optional[dict]:
         """Nearest lane point. With a heading, lanes pointing the other way are ignored (within
         the tolerance) unless nothing else is nearby."""
-        cx, cy = int(math.floor(x / GRID_CELL_M)), int(math.floor(y / GRID_CELL_M))
-        radius = int(math.ceil(max_m / GRID_CELL_M))
-        candidates = set()
-        for i in range(cx - radius, cx + radius + 1):
-            for j in range(cy - radius, cy + radius + 1):
-                candidates.update(self._grid.get((i, j), ()))
+        candidates = self._nearby_lane_keys(x, y, max_m)
         best = None
         for pass_no in (0, 1):
             for key in candidates:
@@ -112,14 +117,8 @@ class Router:
         """Nearest lane point per edge, keeping every edge within `slack_m` of the closest one. A click
         on a two-way street's centerline is equidistant from both directions; the caller routes to each
         and keeps the cheaper."""
-        cx, cy = int(math.floor(x / GRID_CELL_M)), int(math.floor(y / GRID_CELL_M))
-        radius = int(math.ceil(max_m / GRID_CELL_M))
-        candidates = set()
-        for i in range(cx - radius, cx + radius + 1):
-            for j in range(cy - radius, cy + radius + 1):
-                candidates.update(self._grid.get((i, j), ()))
         per_edge: Dict[str, dict] = {}
-        for key in candidates:
+        for key in self._nearby_lane_keys(x, y, max_m):
             lane = self.lanes[key]
             proj = g.project_point(lane["pts"], (x, y), lane["cum"])
             if proj["distance"] > max_m:
