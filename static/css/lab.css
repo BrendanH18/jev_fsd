@@ -115,3 +115,6 @@ body:has(.replay-controls:not([hidden])) .cluster { bottom: 180px; }
 .drive-comparison { overflow-x: auto; }
 .drive-comparison table { width: 100%; border-collapse: collapse; }
 .drive-comparison th, .drive-comparison td { padding: 6px; text-align: left; vertical-align: top; }
+.incident-model { position: fixed; z-index: 12; right: 12px; top: 72px; width: min(350px, 43vw); max-height: 55dvh; overflow: auto; padding: 12px; font-size: 12px; }
+.incident-model canvas { display: block; width: 100%; height: auto; }
+.incident-model p { margin: 5px 0; }

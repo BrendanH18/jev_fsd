@@ -825,7 +825,7 @@ export async function boot() {
     signalRight: () => signal("right"),
     horn: () => audio.horn(),
     reset: () => {
-      if (photo.active) return;
+      if (photo.active || lab?.reviewing) return;
       if (challenge) challengeModified = true;
       drive?.reset();
       world.resetToLane();
@@ -890,9 +890,9 @@ export async function boot() {
     onFinish: () => finishDrive("finished"),
     onNewDrive: () => explorer.open(),
     getReplayTarget: (report, incident) => reportIncidentTarget(recorder, report, incident),
-    onReplay: (index) => {
+    onReplay: (index, comparison) => {
       lab.update(recorder, performance.now());
-      lab.openReplay(index);
+      lab.openReplay(index, comparison);
     },
     onOpen: () => {
       pausedBeforeReport = world.paused;

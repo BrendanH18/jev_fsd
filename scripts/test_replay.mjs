@@ -1,9 +1,69 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { replayPosition, reportIncidentTarget } from "../static/js/lab/playback.js";
 import { DriveRecorder } from "../static/js/lab/recorder.js";
 
 globalThis.document = { querySelector: () => null };
 const { DriveLab } = await import("../static/js/ui/lab.js");
+const { incidentDrive, loadPublishedDrive } = await import("../static/js/ui/published-replay.js");
+const fetchDrive = globalThis.fetch;
+try {
+  for (const [driver, challenges] of [
+    ["jev", ["flagger", "right-on-red", "unprotected-left"]],
+    ["claude-haiku", ["flagger"]],
+  ]) {
+    const recording = `data/recordings/${driver}-open-2026-11-20.json.gz`;
+    const source = JSON.parse(gunzipSync(readFileSync(new URL(`../${recording}`, import.meta.url))));
+    for (const challenge of challenges) {
+      const id = `${driver}-${challenge}`;
+      const replay = JSON.parse(readFileSync(new URL(`../static/replays/${id}.json`, import.meta.url)));
+      const { map, pack, version, seed, weather, time, result_sha, pass, flagged_choices } = source.results[challenge];
+      assert.equal(replay.challenge, challenge);
+      assert.equal(replay.source, recording);
+      assert.equal(replay.suite_version, "legacy");
+      assert.equal(replay.model, source.header.model);
+      assert.equal(replay.result_sha, result_sha);
+      assert.equal(replay.pass, pass);
+      assert.equal(replay.choices.filter((choice) => choice.flag).length, flagged_choices);
+      assert.ok(replay.frames.every((frame, i) => i === 0 || frame.t > replay.frames[i - 1].t));
+      globalThis.fetch = async () => Response.json(replay);
+      assert.equal((await loadPublishedDrive(id)).result_sha, result_sha);
+      if (driver === "jev") {
+        const config = { challenge, map, pack, version, seed, weather, time, map_sha: source.header.maps[map] };
+        const end = replay.frames.at(-1).t;
+        assert.equal(incidentDrive(config, { at_s: end }), id);
+        assert.equal(incidentDrive(config, { at_s: Math.round(end * 10) / 10 }), id);
+        for (const at_s of [end + 0.051, -1, Number.NaN, Infinity, undefined, null])
+          assert.equal(incidentDrive(config, { at_s }), null);
+        for (const mismatch of [{ map_sha: undefined }, { seed: seed + 1 }, { weather: "rain" }, { time: "night" }])
+          assert.equal(incidentDrive({ ...config, ...mismatch }, { at_s: 1 }), null);
+      }
+    }
+  }
+  const replay = JSON.parse(readFileSync(new URL("../static/replays/jev-flagger.json", import.meta.url)));
+  for (const bad of [
+    { choices: {} },
+    { events: null },
+    { route: [] },
+    { bounds: [] },
+    { signals: {} },
+    { frames: [] },
+  ]) {
+    globalThis.fetch = async () => Response.json({ ...replay, ...bad });
+    await assert.rejects(loadPublishedDrive("jev-flagger"), /Replay data is incomplete/);
+  }
+  globalThis.fetch = async () => new Response(null, { status: 503 });
+  await assert.rejects(loadPublishedDrive("jev-flagger"), /Request failed \(503\)/);
+  globalThis.fetch = async () => Response.json(replay);
+  replay.challenge = "right-on-red";
+  await assert.rejects(loadPublishedDrive("jev-flagger"), /does not match the selected drive/);
+  replay.challenge = "flagger";
+  replay.result_sha = "another-result";
+  await assert.rejects(loadPublishedDrive("jev-flagger"), /does not match the selected drive/);
+} finally {
+  globalThis.fetch = fetchDrive;
+}
 const frames = [10, 10.5, 11, 11.2, 11.2].map((t) => ({ t }));
 const near = (actual, expected) => assert(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
 let position = replayPosition(frames, 0, 0.25);

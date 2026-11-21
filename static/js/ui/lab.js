@@ -1,3 +1,4 @@
+import { showDrive } from "./published-replay.js";
 import { $, h, appUrl } from "../common.js";
 import { CHALLENGES, challengeConfig } from "../lab/challenges.js";
 import { driveLink } from "../lab/share.js";
@@ -562,6 +563,11 @@ export class DriveLab {
       }
       this.lastTick = now;
     }
+    if (this.modelPlayer) {
+      const at = recorder.frames[Number(this.slider.value)].state.drive.elapsed + this.replayElapsed;
+      if (this.modelTime !== at) this.modelPlayer.render(at);
+      this.modelTime = at;
+    }
     if (!this.reviewing) {
       this.slider.max = Math.max(0, recorder.frames.length - 1);
       this.slider.value = this.slider.max;
@@ -574,8 +580,31 @@ export class DriveLab {
     this.lastTick = performance.now();
     this.play.textContent = this.playing ? "Pause replay" : "Play replay";
   }
-  openReplay(index) {
+  openReplay(index, comparison) {
     if (!this.recorder?.frames.length || (this.reviewing && index === undefined)) return;
+    let modelView = null,
+      modelPlayer = null,
+      modelTime;
+    if (comparison) {
+      const player = h("div");
+      modelView = h(
+        "aside",
+        { class: "incident-model panel", "aria-label": "Model incident replay" },
+        h(
+          "strong",
+          {},
+          `Matched by elapsed challenge time · Your incident at ${comparison.incident.at_s.toFixed(1)} s`,
+        ),
+        player,
+      );
+      modelTime = this.recorder.frames[index].state.drive.elapsed;
+      modelPlayer = showDrive(player, comparison.replay, modelTime);
+    }
+    this.modelView?.remove();
+    if (modelView) document.body.append(modelView);
+    this.modelView = modelView;
+    this.modelPlayer = modelPlayer;
+    this.modelTime = modelTime;
     this.reviewing = true;
     this.controls.hidden = false;
     this.playing = false;
@@ -623,6 +652,9 @@ export class DriveLab {
     this.endReview();
   }
   endReview() {
+    this.modelPlayer = null;
+    this.modelView?.remove();
+    this.modelView = null;
     this.reviewing = false;
     this.playing = false;
     this.replayElapsed = 0;

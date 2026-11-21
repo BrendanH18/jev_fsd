@@ -597,12 +597,12 @@ never set beside a model's result on the same drive.
 - [x] **8.2 From the leaderboard to the wheel.** (S) Each challenge on `/results` links to driving it
   with its authored setup, and the leaderboard shows the scores of `bench/scores.js` beside pass and
   fail when the recording or report has the required measurements.
-- [ ] **8.3 A gallery of model drives.** (M) Generalise `ui/published-replay.js` from one drive to a
-  list of exported drives: four to six that show a difference (Claude Haiku at the flagger, one of
-  Jev's flagged lefts, a pass and a fail on the same challenge), with the chosen and flagged manoeuvres
-  marked. Keep the demo's size in check.
-- [ ] **8.4 Compare an incident.** (M) For a challenge you failed, play your incident beside a model's
-  drive through the same moment, reusing the debrief and the replay player.
+- [x] **8.3 A gallery of model drives.** Browse four verified recordings, including Jev and Claude
+  Haiku at the same Ottawa flagger. The player loads only the selected drive and marks the chosen
+  and flagged manoeuvres.
+- [x] **8.4 Compare an incident.** On a failed original manual attempt at Right on red, Follow the
+  flagger or The unprotected left, replay a retained incident beside Jev's published open-track drive.
+  Both views follow elapsed challenge time using the manual replay controls.
 
 Exit: on the public demo, with no key, a visitor drives a challenge, sees their result beside Rules,
 Jev and Claude Haiku on the same drive, and can watch at least four contrasting model drives.

@@ -182,6 +182,9 @@ def check_published_replay(page, url):
     page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
     replay.get_by_role("button", name="Pause replay").click()
     slider = replay.get_by_role("slider", name="Replay time")
+    seek_trigger = "slider => { slider.value = 5; slider.dispatchEvent(new Event('input')); }"
+    slider.evaluate(seek_trigger)
+    assert replay.get_by_role("status").inner_text() == "Cross traffic released"
     slider.press("End")
     ended = replay.get_by_role("status").inner_text() == "Reached the destination"
     changed = first != canvas.evaluate("canvas => canvas.toDataURL()")
@@ -191,6 +194,26 @@ def check_published_replay(page, url):
     play.click()
     replay.get_by_role("button", name="Play again").wait_for()
     reached_last_frame = slider.input_value() == slider.get_attribute("max")
+    select = replay.get_by_role("combobox", name="Published drive")
+    for drive, verdict, flag, trigger in [
+        ("claude-haiku-flagger", "Fail", "runs_flagger_stop", "Oncoming traffic enters the work zone"),
+        ("jev-flagger", "Pass", None, "Oncoming traffic enters the work zone"),
+        ("jev-unprotected-left", "Pass", "fails_to_yield_to_oncoming", "Oncoming traffic released"),
+    ]:
+        select.select_option(drive)
+        replay.get_by_text(f"Open track · {verdict}", exact=False).wait_for()
+        play.click()
+        page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
+        slider.evaluate(seek_trigger)
+        assert replay.get_by_role("status").inner_text() == trigger
+        if flag:
+            replay.get_by_role("button", name="Flagged at").first.click()
+            replay.get_by_text(f"Flagged: {flag}", exact=False).wait_for()
+    page.route("**/jev-flagger.json", lambda route: route.fulfill(status=503))
+    select.select_option("jev-flagger")
+    replay.get_by_text("Could not load the browser replay. Request failed (503).", exact=True).wait_for()
+    assert canvas.count() == 0
+    page.unroute("**/jev-flagger.json")
     return report(
         "published browser replay",
         [
@@ -200,6 +223,122 @@ def check_published_replay(page, url):
             }
         ],
     )
+
+
+def check_incident_comparison(page):
+    replay_requests = []
+    page.on("request", lambda req: replay_requests.append(req.url) if "/replays/" in req.url else None)
+    page.evaluate("""() => {
+      const app = window.__jev, render = app.view.render;
+      app.view.render = () => {};
+      try {
+        app.world.paused = false;
+        window.dispatchEvent(new KeyboardEvent('keydown', {key: 'w'}));
+        app.advance(9);
+        window.dispatchEvent(new KeyboardEvent('keyup', {key: 'w'}));
+        app.finishDrive('finished');
+      } finally { app.view.render = render; }
+    }""")
+    dialog = page.get_by_role("dialog", name="Drive report")
+    print("Recorded events:", dialog.locator(".incident-replay").all_text_contents(), flush=True)
+    stop = dialog.locator(".incident-replay").filter(has_text="Missed stop").first
+    stop.wait_for(state="attached")
+    stop.locator("xpath=ancestor::details").evaluate("d => d.open = true")
+    print("Manual incident:", stop.inner_text(), flush=True)
+    assert not replay_requests
+    model = page.get_by_role("complementary", name="Model incident replay")
+    page.route("**/jev-flagger.json", lambda route: route.fulfill(status=503))
+    stop.locator("..").get_by_role("button", name="Compare with Jev").click()
+    retry = stop.locator("..").get_by_role("button", name="Model replay unavailable")
+    retry.wait_for()
+    assert dialog.is_visible() and model.count() == 0 and page.evaluate("!window.__jev.lab.reviewing")
+    page.unroute("**/jev-flagger.json")
+    retry.click()
+    model.get_by_text("Matched by elapsed challenge time", exact=False).wait_for()
+    print("Aligned model view:", model.inner_text(), flush=True)
+    assert len(replay_requests) == 2 and all(url.endswith("/jev-flagger.json") for url in replay_requests)
+    assert model.get_by_text("Open track · Pass", exact=False).is_visible()
+    deck = page.get_by_role("region", name="Recorded drive replay")
+    # Step the replay clock through the event in one browser task so software WebGL
+    # cannot skip to the end while Playwright is waiting to press Pause.
+    incident_time = float(model.locator("strong").inner_text().split()[-2])
+    sync = deck.evaluate(
+        """(deck, incidentTime) => {
+      const lab = window.__jev.lab, play = deck.querySelector('.replay-buttons button');
+      play.click();
+      const start = lab.recorder.frames[Number(lab.slider.value)].state.drive.elapsed;
+      lab.update(lab.recorder, lab.lastTick + (incidentTime - start) * 1000);
+      play.click();
+      const elapsed = lab.recorder.frames[Number(lab.slider.value)].state.drive.elapsed + lab.replayElapsed;
+      return [elapsed, document.querySelector('.incident-model .published-replay-readout').textContent];
+    }""",
+        incident_time,
+    )
+    print("Paused manual time and model readout:", sync, flush=True)
+    assert abs(sync[0] - incident_time) < 0.01 and sync[1].startswith(f"{sync[0]:.1f} /"), sync
+    reset_guard, rewind, model_time = deck.evaluate("""deck => {
+      const {lab, world} = window.__jev;
+      const ego = () => [world.ego.x, world.ego.y, world.ego.psi, world.ego.v];
+      const before = ego();
+      window.dispatchEvent(new KeyboardEvent('keydown', {key: 'r'}));
+      window.dispatchEvent(new KeyboardEvent('keyup', {key: 'r'}));
+      const resetGuard = ego().every((value, i) => value === before[i]);
+      const slider = deck.querySelector('input[type="range"]');
+      slider.value = Math.max(0, Number(slider.value) - 2);
+      slider.dispatchEvent(new Event('input'));
+      lab.update(lab.recorder, performance.now());
+      const elapsed = lab.recorder.frames[Number(slider.value)].state.drive.elapsed;
+      return [resetGuard, elapsed, document.querySelector('.incident-model .published-replay-readout').textContent];
+    }""")
+    assert reset_guard
+    assert rewind < sync[0] and model_time.startswith(f"{rewind:.1f} /"), (rewind, model_time)
+    deck.get_by_role("button", name="Return to drive").click()
+    assert not model.is_visible()
+
+    page.evaluate("""async () => {
+      const {readHistory} = await import('./js/sim/drive-score.js');
+      const fetchReplay = window.fetch;
+      window.fetch = (url, options) => {
+        if (!String(url).endsWith('/jev-flagger.json')) return fetchReplay(url, options);
+        window.pendingIncidentReplay = options.signal;
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => {
+            window.fetch = fetchReplay;
+            reject(options.signal.reason);
+          }, {once: true});
+        });
+      };
+      window.__jev.driveReport.show(readHistory()[0]);
+    }""")
+    stop.locator("xpath=ancestor::details").evaluate("d => d.open = true")
+    compare = stop.locator("..").get_by_role("button", name="Compare with Jev")
+    pending_button = compare.element_handle()
+    compare.click()
+    page.wait_for_function("!!window.pendingIncidentReplay")
+    page.evaluate("window.__jev.driveReport.dialog.close()")
+    page.wait_for_function("window.pendingIncidentReplay.aborted")
+    page.wait_for_function("button => !button.disabled", arg=pending_button)
+    assert page.evaluate("!window.__jev.lab.reviewing") and not model.is_visible()
+
+    negatives = page.evaluate("""async () => {
+      const app = window.__jev, { readHistory } = await import('./js/sim/drive-score.js');
+      const report = readHistory()[0], outcomes = [];
+      const {challengeById, challengeConfig} = await import('./js/lab/challenges.js');
+      const unexported = challengeConfig(challengeById('pothole-season'));
+      for (const [name, config] of [['changed map data', {map_sha:'changed'}], ['old pack', {pack:'5'}], ['old author version', {version:2}], ['wrong map', {map:'toronto'}], ['different seed', {seed:0}], ['different weather', {weather:'rain'}], ['different time', {time:'night'}], ['no exported drive', unexported]]) {
+        app.driveReport.show({...report, config: {...report.config, ...config}});
+        outcomes.push([name, app.driveReport.dialog.querySelectorAll('.incident-replay').length,
+          app.driveReport.dialog.textContent.includes('Compare with Jev')]);
+      }
+      app.recorder.reset();
+      app.driveReport.show(report);
+      outcomes.push(['recording discarded', app.driveReport.dialog.querySelectorAll('.incident-replay').length,
+        app.driveReport.dialog.textContent.includes('Compare with Jev')]);
+      return outcomes;
+    }""")
+    print("Nonmatches (rewinds, compare offered):", negatives, flush=True)
+    assert all(n > 0 and not offered for _, n, offered in negatives[:-1])
+    assert negatives[-1][1:] == [0, False] and len(replay_requests) == 2
 
 
 GROUPS = ["pages", "practice", "parking"]
@@ -262,6 +401,10 @@ def check(url, chromium=None, groups=GROUPS):
             page.close()
 
         if "practice" in groups:
+            page = open_page("/?challenge=flagger&drive=manual&quality=low")
+            check_incident_comparison(page)
+            page.close()
+
             page = open_page("/?challenge=bus-lanes&drive=manual&quality=low&weekday=6")
             assert page.evaluate("window.__jev.world.clock.weekday") == 0
             assert page.evaluate("""() => {

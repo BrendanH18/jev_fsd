@@ -1,3 +1,6 @@
+// Score reports round incident times to tenths of a second.
+export const REPORT_INCIDENT_TIME_TOLERANCE_S = 0.05 + 1e-9;
+
 // Move along recorded simulation time, including short or duplicate final checkpoints.
 export function replayPosition(frames, index, elapsed) {
   if (!frames.length) return { index: 0, elapsed: 0, alpha: 0, ended: true };
@@ -32,8 +35,8 @@ export function reportIncidentTarget(recorder, report, incident) {
   if (incident === undefined) return Math.max(0, frames.length - 11);
   if (!Number.isFinite(incident?.at_s) || incident.at_s < 0) return null;
   const eventTime = first.t - drive.elapsed + incident.at_s;
-  // Incident timestamps are rounded to tenths of a second in the score report.
-  if (eventTime < first.t - 0.05 - 1e-9 || eventTime > last.t + 0.05 + 1e-9) return null;
+  if (eventTime < first.t - REPORT_INCIDENT_TIME_TOLERANCE_S || eventTime > last.t + REPORT_INCIDENT_TIME_TOLERANCE_S)
+    return null;
   const target = Math.max(first.t, eventTime - 3);
   return Math.max(
     0,
