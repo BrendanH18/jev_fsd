@@ -249,7 +249,8 @@ fi
 # them, or with a base tree only those changed since it, with $push/paths listing every changed
 # or deleted path (a small change comes in the arguments instead of a push). The index of the clone
 # is the tree last synced; `git write-tree` must give the base tree before a change is applied
-# and the wanted tree after, or the script asks for the whole tree (exit 75 and a marker file).
+# and the wanted tree after, or the script asks for the whole tree (exit 75 and a marker file);
+# a whole tree that does not match stops the run before any check.
 t_sync=$SECONDS
 mkdir -p /home/user/push
 find /home/user/push -mindepth 1 -maxdepth 1 -mmin +720 -exec rm -rf {} + 2>/dev/null || true
@@ -262,8 +263,13 @@ fi
 cd "$repo"
 untar() { tar -xzf "$push/files.tgz" --warning=no-unknown-keyword; }
 junk() { git clean -ffdqx -e /node_modules -e /.venv; }   # untracked and ignored files, empty directories
+watch_all() {   # no index entry may hide a working tree change from git
+    local flag
+    for flag in --no-assume-unchanged --no-skip-worktree; do git ls-files -z | git update-index "$flag" -z --stdin; done
+}
 if [ -n "$base" ]; then
     # Undo what earlier checks left: their files, and changes to tracked ones.
+    watch_all || true
     junk
     git diff-files -z --name-only | git checkout-index -f -u -z --stdin || true
     git update-index -q --refresh || true
@@ -289,7 +295,8 @@ if [ "$(git write-tree)" != "$tree" ]; then
         say "the changed files did not give the working tree here; pushing every file"
         touch "$HOME/.boat-check-resync"; exit 75
     fi
-    say "warning: git hashes the pushed tree differently here than on the computer that pushed it, so every check pushes the whole tree"
+    say "the files sent do not give the working tree here (an export-ignore or export-subst attribute, or a git setting such as core.autocrlf on the computer that sent them), so no check ran"
+    exit 2
 fi
 deps
 say "tree and dependencies ready in $((SECONDS - t_sync)) s"
@@ -489,6 +496,9 @@ tree_index=$state_dir/index-$slot
 pushed_file=$state_dir/pushed-$slot
 rm -f "$tree_index"
 cp "$(git rev-parse --path-format=absolute --git-path index)" "$tree_index" 2>/dev/null || true
+for flag in --no-assume-unchanged --no-skip-worktree; do   # the copy must see every change
+    GIT_INDEX_FILE=$tree_index git ls-files -z | GIT_INDEX_FILE=$tree_index git update-index "$flag" -z --stdin
+done
 GIT_INDEX_FILE=$tree_index git add -A
 tree=$(GIT_INDEX_FILE=$tree_index git write-tree)
 stage=$(mktemp -d)

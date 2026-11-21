@@ -79,7 +79,9 @@ their edits to tracked files are undone first, then `git write-tree` must give T
 change is applied and the new tree after. A new sandbox, a missing record or a mismatch sends
 every file instead, as `git archive` of the tree itself (everything but `.git`, `node_modules`
 and `.venv` is replaced and the index rebuilt); a mismatch found in the sandbox exits 75 and leaves a marker, and the script then
-sends every file and runs again. Measured 2026-11-21 on `default` from a Raspberry Pi 5:
+sends every file and runs again. A full send that still does not give the tree (an
+`export-ignore` attribute, or `core.autocrlf` on the sending computer) stops before any check.
+Index entries marked assume-unchanged or skip-worktree are cleared on both sides first. Measured 2026-11-21 on `default` from a Raspberry Pi 5:
 
 | Push | Before (`boat push` of the tree) | After |
 |---|---|---|
