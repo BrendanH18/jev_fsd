@@ -251,6 +251,16 @@ now the costliest place to drive: its median request is 43% larger than a challe
 - a Jev decision under **5,500 input tokens**, about $0.00023 (today's longest is 5,225);
 - the LLM system prompt under **6,000 tokens** (about 5,000 today).
 
+Audit input sizes from a saved Jev recording without running a server or replaying a drive:
+
+```sh
+node --experimental-default-type=module scripts/audit_jev_tokens.mjs data/recordings/jev-arena-2026-11-11.json.gz
+```
+
+The JSON gives each drive's recorded call count, the number with provider-reported usage,
+the recorded input token total and maximum, and the number above 5,500 tokens. Calls without
+usage are included in the call count only.
+
 ## Endpoints checked against real providers (ROADMAP 2.3)
 
 | Kind | Provider | Model | Result |
