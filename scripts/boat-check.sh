@@ -49,7 +49,7 @@ case "$slot" in *[!A-Za-z0-9_-]*|"") echo "boat-check: JEV_BOAT_SLOT may use let
 case "$cmd" in
     *verify_jev.py*)
         case "$cmd" in *--offline*) ;; *)
-            echo "boat-check: live verify_jev.py runs cost credits and need the owner's go-ahead; the check sandbox has no keys. Use --offline." >&2
+            echo "boat-check: live verify_jev.py runs cost credits; they run only when the owner asks, in their own jev-fsd-live sandbox (AGENTS.md), never here. Use --offline." >&2
             exit 2 ;;
         esac ;;
 esac
@@ -120,10 +120,26 @@ esac
 # Find this slot's sandbox and get it running, or make one. Each create or resume uses one of
 # the account's daily starts; reusing a running sandbox uses none.
 start_failed() {
+    case "$2" in *no_ready_machine*)
+        echo "boat-check: $1: Boat had no machine ready after a minute of tries; nothing started and no start was counted. Try again later." >&2
+        exit 3 ;;
+    esac
     echo "boat-check: $1 failed:" >&2
     printf '%s\n' "$2" | jq -r 'select(.event == "error") | .error' 2>/dev/null >&2 || printf '%s\n' "$2" >&2
     echo "boat-check: boat limits shows the starts left today; tell the owner rather than retrying" >&2
     exit 3
+}
+# With --fail-fast, a start that finds no ready machine creates nothing and isn't counted against
+# the start limits, so retry it a few times.
+fast_start() {   # fast_start WHAT boat ARGS...; leaves the output in $out
+    local what=$1 attempt
+    shift
+    for attempt in 1 2 3 4 5 6; do
+        if out=$("$@" --fail-fast --json 2>&1); then return 0; fi
+        case "$out" in *no_ready_machine*) ;; *) return 1 ;; esac
+        [ "$attempt" = 6 ] || { echo "boat-check: no machine ready for $what; trying again in 10 s" >&2; sleep 10; }
+    done
+    return 1
 }
 state=""
 [ -z "$id" ] || state=$(sandbox_state "$id")
@@ -135,7 +151,7 @@ case "$state" in
     stopping) echo "boat-check: $id is still stopping; try again in a minute" >&2; exit 2 ;;
     stopped)
         echo "boat-check: resuming $id" >&2
-        if ! out=$(boat resume "$id" --ttl "$budget" --json 2>&1); then
+        if ! fast_start "resuming $id" boat resume "$id" --no-env --ttl "$budget"; then
             case "$out" in
                 *snapshot_data_expired*) echo "boat-check: $id can't be resumed (its data expired); making a new one" >&2; state="" ;;
                 *) start_failed "resuming $id" "$out" ;;
@@ -156,7 +172,8 @@ if [ -z "$state" ]; then
         echo "boat-check: no ready $snapshot snapshot, so this sandbox starts bare and installs everything; --save makes one" >&2
     fi
     echo "boat-check: creating $name" >&2
-    out=$(boat new --no-env --type "$type" --ttl "$budget" --name "$name" ${from[@]+"${from[@]}"} --json 2>&1) \
+    # --no-env: no GitHub token, agent logins or model keys, so no check can spend credits.
+    fast_start "a new sandbox" boat new --no-env --type "$type" --ttl "$budget" --name "$name" ${from[@]+"${from[@]}"} \
         || start_failed "creating a sandbox" "$out"
     id=$(printf '%s\n' "$out" | jq -r 'select(.event == "ready") | .id' 2>/dev/null | head -n 1)
     [ -n "$id" ] || start_failed "creating a sandbox" "$out"

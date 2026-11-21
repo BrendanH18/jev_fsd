@@ -57,8 +57,10 @@ scripts/boat-check.sh --done     # delete it when the work ends (--stop keeps it
 The account's 200 daily sandbox starts are shared by every project, and each create or resume
 uses one, so the script keeps one long-lived sandbox per worktree. The first check creates it
 from the saved snapshot `jev-fsd-warm` (`JEV_BOAT_SNAPSHOT`), or bare when there is none, as a
-`default` machine (`JEV_BOAT_TYPE`) with `--no-env`, so none of the account's stored secrets
-or model keys go in. The sandbox id is kept in the worktree's git directory, and later checks
+`default` machine (`JEV_BOAT_TYPE`) with `--no-env`, so no GitHub token, agent logins or model
+keys go in and no check can spend credits. Creates and resumes pass `--fail-fast`: when Boat has
+no machine ready, nothing starts and no start is counted, and the script tries again every 10
+seconds for about a minute. The sandbox id is kept in the worktree's git directory, and later checks
 reuse that sandbox. Agents sharing a worktree each set their own `JEV_BOAT_SLOT`; one sandbox
 is never shared between agents.
 
@@ -80,8 +82,20 @@ exit code 3 and the message from Boat.
 `--save` runs the checks and, if they pass, resets the clone to `origin`'s default branch
 (keeping its dependencies), saves the sandbox as `jev-fsd-warm` and waits until Boat reports
 that save ready. Refresh it after changing the Node version, `uv.lock` or `package-lock.json`.
-The script refuses a live `scripts/verify_jev.py` run (it costs credits and needs the owner's
-go-ahead); `--offline` is fine.
+The script refuses a live `scripts/verify_jev.py` run; `--offline` is fine.
+
+Live, paid runs (recordings, and arena, benchmark or `verify_jev.py` runs that call a model)
+never use the check sandbox. When the owner asks for one, it gets its own sandbox from the Boat
+environment `jev-fsd-live`, which injects only `TYPESAFE_API_KEY` and `ANTHROPIC_API_KEY`
+(no GitHub, agent or Boat credentials), and the sandbox is deleted afterwards:
+
+```sh
+id=$(boat new --environment jev-fsd-live --json | jq -r 'select(.event=="ready") | .id')
+# ... the run, then copy results back ...
+boat delete "$id" --yes
+```
+
+Keys are never read from `.env` or passed on the command line.
 
 Open [/tests](http://127.0.0.1:8322/tests) for simulation and HUD checks. From the simulator's browser
 console, run the WebGL renderer checks:

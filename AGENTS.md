@@ -51,7 +51,8 @@ The account, shared by all the owner's projects, allows 200 sandbox starts a day
 - Stay on this Mac: `scripts/shot.swift` (WKWebView), WebKit/Safari benchmark runs and the WebKit baselines in `docs/rules-baseline.md`, and local Ollama models (Boat has no GPU). For WebKit runs against a server in Boat, `boat forward` it to the same port on this Mac, because the server checks the port in `Host` and `Origin`. Runs that use Ollama keep the server on this Mac next to it.
 - `server.py` binds 127.0.0.1, accepts only loopback Host names (`jev/security.py`) and holds paid API keys. Never expose it with `boat host` or the in-sandbox `host`. To see it, use the sandbox's desktop Chrome or `boat forward` the port to this Mac.
 - Use Node 22 in Boat, as CI does. `boat push` leaves out `.git` and gitignored files (`data/runs/`, `data/snapshots/`); `tests/test_results.py` needs git, which is why checks run in the clone.
-- Live model runs need keys from `.env`, and check sandboxes start with `--no-env` and hold none. Never run `scripts/verify_jev.py` without `--offline` unless the owner asks. For a live run, pass only the key it needs to its own sandbox, with `boat new -e` or `boat run -e`; never copy `.env` into a sandbox, and keep to the budget rules below.
+- Check sandboxes carry no credentials: the script creates them with `--no-env` (no GitHub token, agent logins or API keys), so an offline run can't spend credits, and with `--fail-fast`, so a start that finds no ready machine isn't counted and is retried briefly.
+- Live, paid runs (recordings, arena or benchmark runs that call a model, `scripts/verify_jev.py` without `--offline`) happen only when the owner asks. Each gets its own sandbox from the Boat environment `jev-fsd-live`, which injects only `TYPESAFE_API_KEY` and `ANTHROPIC_API_KEY`: `id=$(boat new --environment jev-fsd-live --json | jq -r 'select(.event=="ready") | .id')`, and `boat delete "$id" --yes` afterwards. Never use the check sandbox for one. Don't read key values from `.env` or pass them on the command line, never copy `.env` into a sandbox, and keep to the budget rules below.
 
 ## Architecture
 
@@ -184,6 +185,7 @@ Where features reach into shared code:
 - New maps are Canadian cities. LLM drivers use a generic OpenAI-compatible endpoint, or Anthropic's Messages API for Claude models (`"api": "anthropic"`, the Claude Platform preset in `jev/llm_setup.py`).
 - Hosted provider presets in Connect a model are the major labs' own APIs (OpenAI, Anthropic, Google, xAI, Mistral), through an OpenAI-compatible endpoint where the lab offers one, plus OpenRouter and Groq. Don't add presets for Chinese-hosted APIs.
 - Boat checks reuse one long-lived sandbox per agent or worktree through `scripts/boat-check.sh`, started from the warm snapshot `jev-fsd-warm`; `boat run` is for genuine one-offs (owner, 2026-11-21: the account's 200 daily starts, shared by every project, ran out that day).
+- Live, paid runs use their own sandbox from the Boat environment `jev-fsd-live` (only `TYPESAFE_API_KEY` and `ANTHROPIC_API_KEY`; no GitHub, agent or Boat credentials), created when the owner asks for such a run and deleted afterwards; check sandboxes start with `--no-env` and `--fail-fast` (owner, 2026-11-21). This replaces passing keys from `.env` with `boat new -e` or `boat run -e`.
 
 ## Context maintenance
 
