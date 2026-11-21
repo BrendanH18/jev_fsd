@@ -92,7 +92,10 @@ Rules: all identical after each of the three commits
 **Driveway reversers** were compared against `36efa57` in Boat with Node 22.23.2. The full
 arena results, including decision traces and events, matched in all 62 drives with Rules and
 all 62 with the cautious agent, apart from wall time, decision latency and the run start
-timestamp. Both runs of **Reverse lights** reported the reversing audit. The LLM system
+timestamp. The 12-route Kitsilano dry suites (bare and city) and the two-route Calgary city suite
+also matched field for field apart from timings, using seed 1 and one server with `PYTHONHASHSEED=0`.
+All 26 drives passed, with the reversing audit present on three Kitsilano and both Calgary city
+routes. Both runs of **Reverse lights** reported the reversing audit. The LLM system
 prompt was byte-identical, the Jev fixtures stayed current, and the committed stub replay passed.
 
 **Run before and after against one server process, or set `PYTHONHASHSEED`.** The first city comparison

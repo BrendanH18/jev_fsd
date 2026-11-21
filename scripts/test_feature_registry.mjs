@@ -173,6 +173,10 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.ok(on.potholes.list.length > 0);
   // (the registered features' obstacles join the others only while there are some)
   assert.equal(off.obstaclesNear(off.ego.x, off.ego.y, 50).length, on.obstaclesNear(on.ego.x, on.ego.y, 50).length);
+  assert.ok(map.driveways.find((driveway) => on.driveways.place(driveway)));
+  const [reverser] = on.driveways.cars;
+  assert.ok(on.obstaclesNear(reverser.x, reverser.y, 10).includes(reverser));
+  assert.ok(!off.obstaclesNear(reverser.x, reverser.y, 10).some((o) => o.reverser));
 });
 
 test("metrics and failures appear only once a feature has met the car, each at its old place", () => {

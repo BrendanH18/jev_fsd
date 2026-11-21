@@ -48,6 +48,13 @@ if (args["browser-replay"] && (!args.replay || !args.only || String(args.only).i
   fail("--browser-replay needs --replay and exactly one drive selected with --only.");
 const fs = await import("node:fs"),
   zlib = await import("node:zlib");
+const browserOutput = args["browser-replay"];
+if (browserOutput) {
+  const source = fs.statSync(args.replay, { throwIfNoEntry: false });
+  const destination = fs.statSync(browserOutput, { throwIfNoEntry: false });
+  if (source && destination && source.dev === destination.dev && source.ino === destination.ino)
+    fail("--browser-replay must write to a different file from --replay.");
+}
 let replayJson = null;
 if (args.replay) {
   try {
@@ -212,10 +219,16 @@ for (const challenge of drives) {
     if (r.model_recording.same_result !== true || !r.model_recording.exact) drifted.push(challenge.id);
     if (capture) {
       if (drifted.length) fail(`Cannot export ${challenge.id}: the replay differs from the recorded drive.`);
-      fs.writeFileSync(
-        args["browser-replay"],
-        `${JSON.stringify(capture.finish(challenge, args.replay, recording, r))}\n`,
-      );
+      const { dirname, join } = await import("node:path");
+      const text = `${JSON.stringify(capture.finish(challenge, args.replay, recording, r))}\n`;
+      const directory = fs.mkdtempSync(join(dirname(browserOutput), ".browser-replay-"));
+      const temporary = join(directory, "replay.json");
+      try {
+        fs.writeFileSync(temporary, text);
+        fs.renameSync(temporary, browserOutput);
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
     }
   }
   results.push(r);
