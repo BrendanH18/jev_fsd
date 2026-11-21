@@ -158,6 +158,7 @@ class ResultsTest(unittest.TestCase):
         recording = {
             "header": {
                 "manifest": dict(manifest),
+                "driver": "jev",
                 "model": "jev-test",
                 "engine": "node v22",
                 "maps": {"kitsilano": sha},
@@ -166,6 +167,35 @@ class ResultsTest(unittest.TestCase):
             "results": {"door-zone": dict(results[0], seed=1042)},
         }
         self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01", recording), manifest)
+        with patch.dict(recording["header"], driver="llm:other"):
+            with self.assertRaisesRegex(ValueError, "recording driver disagrees"):
+                build_results.checked_manifest(path, run, "2099-01-01", recording)
+        with patch.dict(recording["header"]["arena"], track="open"):
+            with self.assertRaisesRegex(ValueError, "arena recording track disagrees"):
+                build_results.checked_manifest(path, run, "2099-01-01", recording)
+        definition = {
+            "arena": {"drives": {"door-zone": {"map": "kitsilano", "seed": 1042, "version": 1}}},
+            "maps": {"kitsilano": sha},
+        }
+        numbered_manifest = dict(
+            manifest,
+            format=build_results.MANIFEST_FORMAT,
+            suite_version="v1",
+            suite=dict(manifest["suite"], drives=definition["arena"]["drives"]),
+        )
+        numbered_result = dict(results[0], suite_version="v1", seed=1042, version=1)
+        numbered_run = dict(run, suite_version="v1", manifest=numbered_manifest, results=[numbered_result])
+        numbered_tape = {
+            "header": dict(recording["header"], suite_version="v1", manifest=numbered_manifest),
+            "results": {"door-zone": dict(numbered_result)},
+        }
+        with patch.dict(build_results.CANONICAL, v1=definition):
+            self.assertEqual(
+                build_results.checked_manifest(path, numbered_run, "2099-01-01", numbered_tape), numbered_manifest
+            )
+            numbered_tape["results"]["door-zone"]["stopped"] = True
+            with self.assertRaisesRegex(ValueError, "canonical arena recording contains a stopped drive"):
+                build_results.checked_manifest(path, numbered_run, "2099-01-01", numbered_tape)
         results.append({"challenge": "undeclared", "map": None})
         with self.assertRaisesRegex(ValueError, "arena drives disagree"):
             build_results.checked_manifest(path, run, "2099-01-01", recording)
@@ -282,6 +312,7 @@ class ResultsTest(unittest.TestCase):
         }
         tape = {
             "header": {
+                "driver": "jev",
                 "suite_version": "v1",
                 "model": manifest["model"],
                 "engine": config["engine"],
@@ -295,6 +326,9 @@ class ResultsTest(unittest.TestCase):
         path = ROOT / "data/runs/20990101-000000-jev.json"
         with patch.dict(build_results.CANONICAL, v1=dict(definition, bench=dict(bench, route_sha=route_sha))):
             self.assertEqual(build_results.checked_manifest(path, run, "2099-01-01", tape), manifest)
+            with patch.dict(tape, scenarios=None):
+                with self.assertRaisesRegex(ValueError, "benchmark recording settings or scenarios disagree"):
+                    build_results.checked_manifest(path, run, "2099-01-01", tape)
             scenarios[ids[0]]["start"]["s"] += 1
             with self.assertRaisesRegex(ValueError, "benchmark recording routes disagree"):
                 build_results.checked_manifest(path, run, "2099-01-01", tape)

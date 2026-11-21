@@ -138,6 +138,7 @@ export class ModelRecording {
     const version = header?.suite_version;
     if (
       (version !== undefined && (typeof version !== "string" || !/^(legacy|custom|v[1-9]\d*)$/.test(version))) ||
+      (header?.manifest?.format === "jev-run-manifest/1" && version !== undefined) ||
       (header?.manifest?.format === "jev-run-manifest/2" && version === undefined) ||
       (header?.manifest && header.manifest.suite_version !== version) ||
       Object.values(results).some((result) => result.suite_version !== version)

@@ -125,7 +125,7 @@ function merge(paths, reportPath, recordingPath, suitePath) {
     cost_usd: summary.cost_usd,
   };
   merged.header.manifest = manifest;
-  let suite_version;
+  let suite_version = first.report.suite_version;
   if (suiteVersion(first.tape.header) !== LEGACY_SUITE) {
     suite_version = benchSuiteVersion({ ...manifest.suite, map_sha: merged.header.map_sha }, ordered);
     setRecordingSuiteVersion(merged, suite_version);

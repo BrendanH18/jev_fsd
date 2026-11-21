@@ -10,6 +10,16 @@ globalThis.localStorage = {
 };
 const { demoApi } = await import("../static/js/demo/api.js");
 
+await assert.rejects(
+  demoApi("/api/bench/save", {
+    suite_version: "v1",
+    config: { brain: "rules" },
+    summary: {},
+    results: [{ id: "s1-1", suite_version: "v1" }],
+  }),
+  /custom suite/,
+);
+
 const { saved } = await demoApi("/api/bench/save", {
   config: { brain: "rules" },
   summary: { pass_rate: 1 },
@@ -18,10 +28,12 @@ const { saved } = await demoApi("/api/bench/save", {
 const { runs } = await demoApi("/api/bench/runs");
 assert.equal(runs.length, 1);
 assert.equal(runs[0].name, saved);
+assert.equal(runs[0].suite_version, "custom");
 const one = await demoApi(`/api/bench/runs?name=${encodeURIComponent(saved)}`);
 assert.equal(one.name, saved);
 assert.equal(one.results?.length, 1);
 assert.equal(one.results[0].id, "s1-1");
+assert.equal(one.results[0].suite_version, "custom");
 const missing = await demoApi("/api/bench/runs?name=nope");
 assert.equal(missing.results, undefined);
 console.log("✓ the demo lists saved runs and returns one by name, results and all");

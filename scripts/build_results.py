@@ -346,6 +346,7 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         require(isinstance(model, str) and model and fingerprint(prompt), "invalid model id or prompt fingerprint")
         require(recording is not None, "model runs need a corresponding recording")
         require(header.get("manifest") == manifest, "recording and results disagree on their manifest")
+        require(header.get("driver") == driver, "recording driver disagrees with the manifest")
         require(header.get("model") == model and header.get("engine") == engine, "recording model or engine disagrees")
         if driver.startswith("llm:"):
             require(header.get("versions", {}).get("llm_prompt") == prompt, "recording prompt disagrees")
@@ -361,10 +362,18 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         if config is None:
             recorded_arena = header.get("arena") or {}
             require(
+                (recorded_arena.get("track") or "guarded") == track, "arena recording track disagrees with the manifest"
+            )
+            require(
                 recorded_arena.get("set") == suite["set"]
                 and set(recorded_arena.get("ids", [])) == suite["drives"].keys(),
                 "arena recording set or drive list disagrees with the manifest",
             )
+            if version in CANONICAL:
+                require(
+                    not any(result.get("stopped") for result in recorded.values()),
+                    "canonical arena recording contains a stopped drive",
+                )
             # The arena report exports only a subset of the fields kept in the tape.
             require(
                 all(
@@ -382,7 +391,7 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
             if version in CANONICAL:
                 scenarios = recording.get("scenarios", {})
                 require(
-                    header.get("bench") == config and list(scenarios) == suite["ids"],
+                    isinstance(scenarios, dict) and header.get("bench") == config and list(scenarios) == suite["ids"],
                     "benchmark recording settings or scenarios disagree with the manifest",
                 )
                 require(

@@ -10,7 +10,7 @@ import { runScenario, yieldNow, suiteOptions, benchmarkConfig } from "./runner.j
 import { aggregate } from "./metrics.js";
 import { driveScores, driverScores } from "./scores.js";
 import { buildHeldoutSuite, heldoutPlan } from "./heldout.js";
-import { CUSTOM_SUITE, replaySuiteVersion, suiteVersion } from "./suite-version.js";
+import { CUSTOM_SUITE, suiteVersion } from "./suite-version.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
@@ -296,7 +296,7 @@ export async function run({
       ? await buildHeldoutSuite(map, status.map.id, suiteOptions(features, options))
       : await buildSuite(map, { count, seed, ...suiteOptions(features, options) }));
   const state = {
-    suite_version: replaying ? replaySuiteVersion(replaying.header, false) : CUSTOM_SUITE,
+    suite_version: CUSTOM_SUITE,
     config,
     suite,
     results: [],
@@ -335,11 +335,6 @@ export async function run({
   const replayed = replaying
     ? state.results.every((r) => r.model_recording.exact && r.model_recording.same_result === true)
     : null;
-  if (replaying)
-    state.suite_version = replaySuiteVersion(
-      replaying.header,
-      replayed && !stopRequested && state.results.length === suite.length,
-    );
   for (const result of state.results) result.suite_version = state.suite_version;
   let saved = null,
     savedRecording = null,

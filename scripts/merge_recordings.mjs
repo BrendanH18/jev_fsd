@@ -66,11 +66,20 @@ const maps = {},
   ids = [],
   merged = new ModelRecording({ header: { ...first }, drives: {}, results: {}, scenarios: {} });
 recordings.forEach((r, i) => {
-  for (const [id, sha] of Object.entries(r.header.maps || {})) {
+  const fingerprints = Object.entries(r.header.maps || {});
+  const shardMaps = r.header.manifest?.maps;
+  if (r.header.manifest && (!shardMaps || Object.keys(shardMaps).length !== fingerprints.length))
+    fail(`${parts[i]} has different maps in the recording and its manifest.`);
+  for (const [id, sha] of fingerprints) {
     if (maps[id] && maps[id] !== sha) fail(`${parts[i]} was made on other map data for ${id}.`);
     maps[id] = sha;
+    if (shardMaps) {
+      const entry = shardMaps[id];
+      if (entry?.fingerprint !== sha || (manifestMaps[id] && canonicalJson(manifestMaps[id]) !== canonicalJson(entry)))
+        fail(`${parts[i]} has conflicting manifest map data for ${id}.`);
+      manifestMaps[id] = entry;
+    }
   }
-  if (r.header.manifest) Object.assign(manifestMaps, r.header.manifest.maps);
   for (const [id, result] of Object.entries(r.results)) {
     if (id in merged.results) fail(`${id} is recorded in more than one part (${parts[i]}).`);
     // (a finished drive keeps its answers, an empty set for one that asked nothing)

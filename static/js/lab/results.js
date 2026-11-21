@@ -99,7 +99,7 @@ export function challengeMatrix(data, suite = "challenges", version = LEGACY_SUI
 export function compatibleChallengeDrive(data, driver, config) {
   if (!config.map_sha) return null;
   for (const run of data.rows) {
-    if (run.suite !== "challenges" || run.driver !== driver) continue;
+    if (run.suite !== "challenges" || run.driver !== driver || suiteVersion(run) === CUSTOM_SUITE) continue;
     const drive = run.drives.find(
       (d) =>
         d.id === config.challenge &&

@@ -124,7 +124,8 @@ test("manual comparison finds the newest guarded drive with the same map data an
   const changedMap = { ...rules, drives: [{ ...match, map_sha: "changed", time_s: 0 }] };
   const changedVersion = { ...rules, drives: [{ ...match, version: match.version + 1, time_s: 0 }] };
   const open = { ...rules, suite: "open", drives: [{ ...match, time_s: 0 }] };
-  const history = { rows: [changedMap, changedVersion, open, rules] };
+  const custom = { ...rules, suite_version: "custom", drives: [{ ...match, time_s: 0 }] };
+  const history = { rows: [changedMap, changedVersion, open, custom, rules] };
   assert.deepEqual(compatibleChallengeDrive(history, "rules", config), { ...match, failures: [] });
   assert.equal(compatibleChallengeDrive(history, "rules", { ...config, map_sha: "unknown" }), null);
   assert.equal(compatibleChallengeDrive(history, "rules", { ...config, map_sha: undefined }), null);

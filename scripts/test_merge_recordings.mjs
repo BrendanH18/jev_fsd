@@ -123,6 +123,14 @@ assert.ok(Object.values(legacy.results).every((result) => result.suite_version =
 assert.deepEqual(Object.keys(provenance.suite.drives), ["seven", "eight"]);
 assert.deepEqual(Object.keys(provenance.maps), ["kitsilano", "toronto"]);
 refused([g, withManifest("nine", "toronto", "bbbb", "b".repeat(40))], /differs.*source/, "another source commit");
+const wrongMap = withManifest("ten", "kitsilano", "aaaa");
+const mapShard = ModelRecording.parse(fs.readFileSync(wrongMap, "utf8"));
+mapShard.header.manifest.maps.kitsilano.components = { roads: "other" };
+fs.writeFileSync(wrongMap, mapShard.serialize());
+refused([g, wrongMap], /conflicting manifest map data/, "manifests that disagree on a shared map");
+mapShard.header.manifest.maps.kitsilano.fingerprint = "other";
+fs.writeFileSync(wrongMap, mapShard.serialize());
+refused([h, wrongMap], /conflicting manifest map data/, "a manifest fingerprint that disagrees with its tape");
 
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
@@ -166,6 +174,9 @@ const firstId = authored[0][0];
 assert.equal(canonicalMerge.header.suite_version, canonical.version);
 assert.equal(canonicalMerge.results[firstId].result_sha, firstId);
 assert.equal(canonicalMerge.results[firstId].suite_version, canonical.version);
+canonicalMerge.header.manifest.format = "jev-run-manifest/1";
+assert.throws(() => ModelRecording.parse(canonicalMerge.serialize()), /disagree on suite_version/);
+canonicalMerge.header.manifest.format = "jev-run-manifest/2";
 delete canonicalMerge.results[firstId].suite_version;
 assert.throws(() => ModelRecording.parse(canonicalMerge.serialize()), /disagree on suite_version/);
 const swapped = ModelRecording.parse(fs.readFileSync(shardB, "utf8"));
@@ -179,7 +190,7 @@ assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "u
 
 const config = { map: "kitsilano", features: "city", count: 3, seed: 1, brain: "jev" };
 const benchScenarios = ["s1-1", "s1-2"].map((id) => ({ id, traffic_seed: 42 }));
-function benchPart(id, pass, traffic_seed = 42, name = id) {
+function benchPart(id, pass, traffic_seed = 42, name = id, version) {
   const manifest = {
     format: "jev-run-manifest/1",
     source_commit: "a".repeat(40),
@@ -195,14 +206,18 @@ function benchPart(id, pass, traffic_seed = 42, name = id) {
     },
     cost_usd: 0.01,
   };
-  const result = { id, arrived: pass, pass, cost_usd: 0.01, wall_ms: 10 };
+  const result = { id, arrived: pass, pass, cost_usd: 0.01, wall_ms: 10, suite_version: version };
   const tape = new ModelRecording({
     header: { driver: "jev", brain: "jev", bench: config, map_sha: "map-sha", manifest },
     drives: { [id]: {} },
   });
+  if (version !== undefined) setRecordingSuiteVersion(tape, version);
   tape.keepResult(id, result, { id, traffic_seed });
   const file = path.join(dir, `${name}.json`);
-  fs.writeFileSync(file, JSON.stringify({ manifest, config, results: [result], saved_at: "2026-11-21T08:00:00Z" }));
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ suite_version: version, manifest, config, results: [result], saved_at: "2026-11-21T08:00:00Z" }),
+  );
   fs.writeFileSync(`${file}.gz`, gzipSync(tape.serialize()));
   return file;
 }
@@ -249,6 +264,14 @@ assert.equal(combined.manifest.suite.only, undefined);
 assert.deepEqual(combined.manifest.suite.ids, ["s1-1", "s1-2"]);
 assert.equal(combined.name, "20261121-080000-jev");
 console.log("✓ city parts merge in suite order with failed verdicts kept and duplicate drives refused");
+
+fs.rmSync(report);
+fs.rmSync(`${report}.gz`);
+mergeBench(benchPart("s1-1", false, 42, "legacy-a", "legacy"), benchPart("s1-2", true, 42, "legacy-b", "legacy"));
+const explicitLegacy = JSON.parse(fs.readFileSync(report, "utf8"));
+assert.equal(explicitLegacy.suite_version, "legacy");
+assert.equal(explicitLegacy.manifest.suite_version, "legacy");
+assert.ok(explicitLegacy.results.every((result) => result.suite_version === "legacy"));
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log("\nmerge recordings checks passed");

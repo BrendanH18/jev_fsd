@@ -348,11 +348,10 @@ def api_bench_save(body, _query):
     if not isinstance(body["results"], list) or not isinstance(body["summary"], dict):
         raise BadRequest("results must be a list and summary an object")
     declared = body.get("suite_version")
-    if ("suite_version" in body and not valid_suite_version(declared)) or any(
-        not isinstance(result, dict) or result.get("suite_version") != declared for result in body["results"]
-    ):
+    if "suite_version" in body and declared != "custom":
+        raise BadRequest("browser benchmark runs must use the custom suite")
+    if any(not isinstance(result, dict) or result.get("suite_version") != declared for result in body["results"]):
         raise BadRequest("run and results must agree on suite_version")
-    suite_version = declared or "custom"
     config = body["config"] if isinstance(body["config"], dict) else {}
     brain = "".join(ch for ch in str(config.get("brain") or "run") if ch.isalnum())[:20] or "run"
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -361,12 +360,12 @@ def api_bench_save(body, _query):
     if path.exists():
         path = RUNS_DIR / ("%s-%s-%s.json" % (stamp, brain, secrets.token_hex(2)))
     payload = {
-        "suite_version": suite_version,
+        "suite_version": "custom",
         "name": path.stem,
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "config": config,
         "summary": body["summary"],
-        "results": [dict(result, suite_version=suite_version) for result in body["results"]],
+        "results": [dict(result, suite_version="custom") for result in body["results"]],
     }
     path.write_text(json.dumps(payload, indent=1))
     return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
@@ -432,6 +431,7 @@ def api_recording_save(body, _query):
             and (
                 not isinstance(manifest, dict)
                 or manifest.get("suite_version") != declared
+                or (manifest.get("format") == "jev-run-manifest/1" and declared is not None)
                 or (manifest.get("format") == "jev-run-manifest/2" and declared is None)
             )
         )
