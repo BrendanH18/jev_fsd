@@ -284,6 +284,20 @@ def check(url, chromium=None, groups=GROUPS):
             assert comparison.locator("tbody td").first.inner_text() == "Fail"
             for score in comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents():
                 assert 0 <= float(score) <= 100, score
+
+            for endpoint in ("**/api/results", "**/demo-data/results.json"):
+                page.route(endpoint, lambda route: route.fulfill(status=503))
+            page.evaluate("""async () => {
+              const { readHistory } = await import('/js/sim/drive-score.js');
+              window.__jev.driveReport.show(readHistory()[0]);
+            }""")
+            comparison.get_by_text("Published comparisons could not be loaded.", exact=True).wait_for(
+                timeout=TIMEOUT_MS
+            )
+            assert comparison.get_by_text(
+                "The examiner’s sheet determines road-test completion.", exact=True
+            ).is_visible()
+            assert comparison.locator("tbody th").all_text_contents() == ["You"]
             page.close()
 
         if "parking" in groups:

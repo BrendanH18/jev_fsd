@@ -192,6 +192,7 @@ export class DriveReport {
         ),
         body,
       ),
+      challenge.roadTest ? h("p", { class: "muted" }, "The examiner’s sheet determines road-test completion.") : null,
       status,
     );
     api("/api/results")
@@ -218,7 +219,6 @@ export class DriveReport {
           );
         }
         status.textContent =
-          (challenge.roadTest ? "The examiner’s sheet determines road-test completion. " : "") +
           "Published rows use guarded-track results. Your following measurements come from the car’s path. Published following measurements come from the planner’s snapshots.";
       })
       .catch(() => {
