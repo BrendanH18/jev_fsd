@@ -207,7 +207,7 @@ deps() {   # Biome when the lock file changed, and the Python environment
         cp package-lock.json node_modules/.boat-check-lock
     fi
     uv sync --locked --quiet
-    say "node $(node --version), $(uv run --locked python --version), $(nproc) vCPUs"
+    say "node $(node --version), $(uv run --locked python --version), $(nproc) vCPUs ($(lscpu | sed -n "s/^Model name:[[:space:]]*//p"))"
 }
 
 if [ "$mode" = build ]; then   # --save: the default branch and its dependencies, nothing else
