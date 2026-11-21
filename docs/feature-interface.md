@@ -156,7 +156,6 @@ A registered feature still has these integration points outside its own files:
 
 | Where | What | Hook needed |
 |---|---|---|
-| `sim/free-drive.js` | its free-drive option (`on("geese")`) | `freeDrive` (option and query parameter) |
 | `lab/challenges.js` | the challenge entry and its installer/step | ROADMAP 3.5 (one file per challenge) |
 | `brain/rules.js`, `agents/cautious.js`, `brain/safety.js` | the drivers' preferences: a stop flag, a cost for its candidate, the cautious agent's pick | `rules` (stop, cost), `cautious` |
 | `brain/brain.js`, `bench/runner.js`, `lab/evaluation.js`, `lab/recorder.js` | road closures' re-plan round a closure (`avoid`, `closureRouting`) and checkpoint fixes (geese' `world` back-reference, potholes shared between checkpoints) | `reroute`, `checkpoint` |
@@ -165,9 +164,13 @@ A registered feature still has these integration points outside its own files:
 | `lab/trace.js`, `lab/examiner.js` | the audit's label and road-test category | from `metric` (add `label`, `category`) |
 | `AGENTS.md` | its paragraph | ROADMAP 3.4 |
 
+Free drives and the city benchmark enable every registered feature by default. Use the record's
+option key with `--without` and its lowercase form in the URL. For example, disable road closures
+with `--without roadClosures` or `?roadclosures=0`. `scripts/test_free_drive.mjs` checks both paths.
+
 So today a new feature needs its own sim module, its record, its challenge, its test and the registration
-line, plus a line each in about eight presentation and driver files. The core simulation and decision
-pipeline need nothing.
+line, plus entries in the presentation and driver files above. The core simulation and decision pipeline
+need nothing.
 
 ## Moving the rest (3.2)
 

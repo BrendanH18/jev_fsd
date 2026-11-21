@@ -37,7 +37,11 @@ assert.deepEqual(
 for (const key of worldKeys.filter((k) => k !== "pedestrians"))
   assert.ok(free.world[key], `free drives turn on ${key}`);
 for (const key of fleetKeys) assert.ok(free.fleet[key], `free drives turn on the fleet's ${key}`);
-assert.equal(freeDriveOptions(new URLSearchParams("geese=0&plows=0&hazards=0")).world.geese, false);
+for (const key of FEATURE_OPTIONS) {
+  const flag = key.toLowerCase();
+  assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).world, { ...free.world, [key]: false });
+  assert.deepEqual(presetOptions("city", { without: [key] }).world, { ...free.world, park: false, [key]: false });
+}
 assert.equal(freeDriveOptions(new URLSearchParams("plows=0")).fleet.plows, 0);
 assert.equal(freeDriveOptions(new URLSearchParams("hazards=0")).world.stepOuts, 0);
 assert.equal(freeDriveOptions(new URLSearchParams(), { hour: 23 }).world.pedestrians, 18);
