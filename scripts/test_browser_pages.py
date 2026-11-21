@@ -159,6 +159,43 @@ def report(label, results):
     return not failed and len(results) > 0
 
 
+def check_published_replay(page, url):
+    writes = []
+    page.on("request", lambda request: writes.append(request.url) if request.method == "POST" else None)
+    page.goto(url + "#replay-heading", wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+    page.get_by_text("committed runs,", exact=False).wait_for()
+    heading_visible = page.locator("#replay-heading").evaluate(
+        "heading => heading.getBoundingClientRect().bottom > 0 && heading.getBoundingClientRect().top < innerHeight"
+    )
+    replay = page.locator("#published-replay")
+    canvas = replay.get_by_role("img")
+    play = replay.get_by_role("button", name="Play replay", exact=True)
+    play.wait_for()
+    first = canvas.evaluate("canvas => canvas.toDataURL()")
+    play.click()
+    page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
+    replay.get_by_role("button", name="Pause replay").click()
+    slider = replay.get_by_role("slider", name="Replay time")
+    slider.press("End")
+    ended = replay.get_by_role("status").inner_text() == "Reached the destination"
+    changed = first != canvas.evaluate("canvas => canvas.toDataURL()")
+    replay.get_by_role("button", name="Play again").click()
+    page.wait_for_function("Number(document.querySelector('#published-replay input').value) < 1")
+    slider.evaluate("slider => { slider.value = Number(slider.max) - 0.25; slider.dispatchEvent(new Event('input')); }")
+    play.click()
+    replay.get_by_role("button", name="Play again").wait_for()
+    reached_last_frame = slider.input_value() == slider.get_attribute("max")
+    return report(
+        "published browser replay",
+        [
+            {
+                "name": "Play, pause, seek, restart and finish the recorded drive without a POST",
+                "ok": heading_visible and ended and changed and reached_last_frame and not writes,
+            }
+        ],
+    )
+
+
 GROUPS = ["pages", "practice", "parking"]
 # Practice finish fixtures by the challenge they drive; the parking ones end in Squeeze in.
 PRACTICE_KINDS = ["early", "arrived", "rules", "modified", "branched", "resume"]
@@ -186,6 +223,7 @@ def check(url, chromium=None, groups=GROUPS):
 
         if "pages" in groups:
             page = open_page(None)
+            ok &= check_published_replay(page, url.rstrip("/") + "/results")
             page.goto(url.rstrip("/") + "/tests")
             page.wait_for_function("Array.isArray(window.__results)", timeout=TIMEOUT_MS)
             ok &= report("browser tests", page.evaluate("window.__results"))

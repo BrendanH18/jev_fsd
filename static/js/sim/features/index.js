@@ -12,9 +12,10 @@
 //   build(world, { enabled, seed, map })   the feature's World state
 //   metric    { at, name, failure }: the violation counted, and the failure text (at "driveways",
 //             "balls", "tailgaters" or "parkers" among the metrics and failures)
-//   obstacle  { test(o), likePedestrian?, fixed? }: what of `world.obstaclesNear` is the feature's (never
-//             followed or passed as traffic; `likePedestrian`: the car is at fault for driving into one;
-//             `fixed`: stands where it is, like scenery, in the forward sims)
+//   obstacle  { test(o), traffic?, likePedestrian?, fixed?, predict(o, t)?, visible(world, observer, o)? }:
+//             an obstacle supplied by the feature. `traffic` allows it in the traffic sensing pass.
+//             `likePedestrian` assigns fault to the ego car on impact. `fixed` treats it as scenery.
+//             `predict` and `visible` override its position in predictions and its local visibility.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   motion    (snap) => whether the model must be asked to stop or drive
 //   day       true: while it is on, the World's clock keeps the `day` of the year (World.setClock)
@@ -30,7 +31,8 @@
 //   obstacles(world, x, y, r)          World.obstaclesNear, after the others ("end")
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
 //                                       traffic moves ("end")
-//   stepAfterTraffic(world, fleet, dt)  sim/step.js, just before the people on foot move ("end")
+//   stepAfterTraffic(world, fleet, dt)  sim/step.js, before the ball and child ("beforeBalls") or
+//                                       just before the people on foot move ("end")
 //   audit(world)                        World.audit: "driveways", "balls", "tailgaters", "parkers"
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
@@ -55,7 +57,8 @@
 //                                       drops the lane's `detour` ("end")
 //   brakeDetour(ctx)                    the move `hard_brake` keeps to, or null ("end")
 //   sim(world, snap)                    the forward sims: null, or a checker { wheels, start(), afterLaw(car,
-//                                       wheelsBefore, t), along(s, front, car), reject(c), settle(candidates) }
+//                                       wheelsBefore, t), along(s, front, car), near(car, box, obstacle,
+//                                       predictedBox), reject(c), settle(candidates) }
 //                                       whose rejection comes at its slot: "first", "driveways", "balls", "end";
 //                                       `settle` runs once every candidate is judged (after the tailgater's
 //                                       ceiling), and may let a rejection stand down
@@ -88,6 +91,7 @@
 // Import a record through this registry (or a core module), never on its own: the snowbanks record's simulation
 // reaches sim/npc.js, which loads this registry while that record is still loading
 // (scripts/test_feature_registry.mjs checks each record loads after it).
+import driveways from "./driveways.js";
 import potholes from "./potholes.js";
 import geese from "./geese.js";
 import ice from "./black-ice.js";
@@ -95,14 +99,14 @@ import snowbanks from "./snowbanks.js";
 import puddles from "./puddles.js";
 import roadClosures from "./road-closures.js";
 
-export const FEATURES = [potholes, geese, ice, snowbanks, puddles, roadClosures];
+export const FEATURES = [driveways, potholes, geese, ice, snowbanks, puddles, roadClosures];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
 // run, so `hooks` refuses to load one (and scripts/test_feature_registry.mjs checks every record).
 export const SLOTS = {
   obstacles: ["end"],
   stepBeforeTraffic: ["first", "end"],
-  stepAfterTraffic: ["end"],
+  stepAfterTraffic: ["beforeBalls", "end"],
   audit: ["driveways", "balls", "tailgaters", "parkers"],
   sense: ["driveways", "balls", "parkers"],
   limit: ["driveways", "balls", "parking"],
@@ -184,6 +188,12 @@ const OBSTACLES = FEATURES.filter((f) => f.obstacle).map((f) => f.obstacle);
 export function featureObstacle(o) {
   for (const d of OBSTACLES) if (d.test(o)) return d;
   return null;
+}
+
+// Whether an obstacle can be followed or passed as traffic.
+export function isTrafficObstacle(o) {
+  const feature = featureObstacle(o);
+  return !feature || feature.traffic;
 }
 
 // Candidate ids kept ahead of lateral alternatives when the list is cut.

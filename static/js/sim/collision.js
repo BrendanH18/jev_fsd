@@ -31,6 +31,35 @@ export function obbOverlap(a, b, margin = 0) {
   return true;
 }
 
+// Distance from point p to box b (0 inside).
+export function pointBoxDist(p, b) {
+  const c = Math.cos(b.heading),
+    s = Math.sin(b.heading),
+    dx = p[0] - b.center[0],
+    dy = p[1] - b.center[1];
+  const lx = Math.abs(dx * c + dy * s) - b.halfLength,
+    ly = Math.abs(-dx * s + dy * c) - b.halfWidth;
+  return Math.hypot(Math.max(0, lx), Math.max(0, ly));
+}
+export const boxCorners = (b) => {
+  const c = Math.cos(b.heading),
+    s = Math.sin(b.heading);
+  return [
+    [1, 1],
+    [1, -1],
+    [-1, -1],
+    [-1, 1],
+  ].map(([u, v]) => [
+    b.center[0] + u * b.halfLength * c - v * b.halfWidth * s,
+    b.center[1] + u * b.halfLength * s + v * b.halfWidth * c,
+  ]);
+};
+// The gap between two boxes' bodies (0 when they touch or overlap).
+export function boxGap(a, b) {
+  if (obbOverlap(a, b)) return 0;
+  return Math.min(...boxCorners(a).map((p) => pointBoxDist(p, b)), ...boxCorners(b).map((p) => pointBoxDist(p, a)));
+}
+
 // Exact footprint overlap with a simple polygon, including concave buildings. Testing only
 // bounding boxes or vertices misses wall crossings and fills in concave recesses.
 export function obbPolygonOverlap(box, pts, margin = 0) {

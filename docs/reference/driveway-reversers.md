@@ -71,6 +71,9 @@ going at 32 km/h squeezes past or hits it (`reversing_conflicts`). Checks:
 `scripts/test_driveway_reversers.mjs` (its `--write-snapshots` writes the live-model case
 `data/snapshots/reverse_lights.json`) and `tests/test_driveways.py`.
 
+The hooks for world setup, sensing, planning, simulation, traffic and audit live in
+`sim/features/driveways.js` ([feature interface](../feature-interface.md)).
+
 ## Agent rules
 
 The project rule for this feature, moved here verbatim from `AGENTS.md`, which states the

@@ -36,7 +36,7 @@ const CORE = [
 test("every record is whole, its option and flags its own, and every hook at a slot the core runs", () => {
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
-    ["potholes", "geese", "ice", "snowbanks", "puddles", "roadClosures"],
+    ["driveways", "potholes", "geese", "ice", "snowbanks", "puddles", "roadClosures"],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
   for (const field of ["key", "seen", "calls"])
@@ -70,6 +70,8 @@ test("the core runs every slot, and names no registered feature", () => {
   for (const path of CORE) {
     const text = source(path);
     for (const name of [
+      'sim/driveway-reversers.js"',
+      './driveway-reversers.js"',
       'sim/potholes.js"',
       'sim/geese.js"',
       'sim/road-closures.js"',
@@ -89,6 +91,10 @@ test("the core runs every slot, and names no registered feature", () => {
       assert.equal(imports.length, 0, `${path} imports ${name}`);
     }
     for (const field of [
+      "snap.reversing_vehicle",
+      '"yield_to_reversing"',
+      "world.driveways",
+      "this.driveways",
       "snap.pothole",
       "snap.geese_crossing",
       "snap.road_closed",
@@ -133,12 +139,14 @@ test("the World builds each feature from its option, with its seen flag and its 
   const root = new URL("../data/maps/", import.meta.url);
   const pack = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.v6.pack.json", root)));
   pack.parks = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.parks.v1.json", root)));
+  pack.driveways = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.driveways.v1.json", root)));
   const map = new MapData(pack);
   const off = new World(map, { seed: 3, parked: 0, pedestrians: 0 });
   const on = new World(map, {
     seed: 3,
     parked: 0,
     pedestrians: 0,
+    driveways: true,
     potholes: true,
     geese: true,
     ice: true,
@@ -155,6 +163,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     }
   }
   // (off, nothing is placed and no random stream is made)
+  assert.equal(off.driveways.random, null);
   assert.equal(off.potholes.list.length, 0);
   assert.equal(off.puddles.list.length, 0);
   assert.ok(on.puddles.list.length > 0);

@@ -28,7 +28,8 @@ import { reserveSlot } from "./parking.js";
 import { Vehicle, CAR, comfort } from "./vehicle.js";
 import { pointAt, headingAt, cumulative, projectPoint } from "../map/mapdata.js";
 import { rng } from "../common.js";
-import { obbOverlap } from "./collision.js";
+import { boxCorners, boxGap, obbOverlap, pointBoxDist } from "./collision.js";
+export { boxGap } from "./collision.js";
 import { segmentHitsBox } from "./crosswalk.js";
 import { speedControl, stopSpeedFor } from "./controller.js";
 import { StopMemory } from "./signals.js";
@@ -183,35 +184,6 @@ export function reverserBoxAt(r, t) {
   if (r.phase === "out")
     return poseBox(g.path, Math.min(g.sEnd, r.ps + Math.max(Math.abs(r.v), 0.5 * REVERSE_MPS) * t), r.spec);
   return r.obb();
-}
-
-// Distance from point p to box b (0 inside).
-function pointBoxDist(p, b) {
-  const c = Math.cos(b.heading),
-    s = Math.sin(b.heading),
-    dx = p[0] - b.center[0],
-    dy = p[1] - b.center[1];
-  const lx = Math.abs(dx * c + dy * s) - b.halfLength,
-    ly = Math.abs(-dx * s + dy * c) - b.halfWidth;
-  return Math.hypot(Math.max(0, lx), Math.max(0, ly));
-}
-const boxCorners = (b) => {
-  const c = Math.cos(b.heading),
-    s = Math.sin(b.heading);
-  return [
-    [1, 1],
-    [1, -1],
-    [-1, -1],
-    [-1, 1],
-  ].map(([u, v]) => [
-    b.center[0] + u * b.halfLength * c - v * b.halfWidth * s,
-    b.center[1] + u * b.halfLength * s + v * b.halfWidth * c,
-  ]);
-};
-// The gap between two boxes' bodies (0 when they touch or overlap).
-export function boxGap(a, b) {
-  if (obbOverlap(a, b)) return 0;
-  return Math.min(...boxCorners(a).map((p) => pointBoxDist(p, b)), ...boxCorners(b).map((p) => pointBoxDist(p, a)));
 }
 
 // Whether parked cars at the kerb hide reversing car `r` from `observer` (or `observer` from it): every

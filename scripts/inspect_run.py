@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from run_insights import decisions, motion, outcomes, safety
+from run_insights import comparison, decisions, motion, outcomes, safety
 
 
 # Reserved by static/js/bench/heldout.js. Explicit single-seed runs may omit the heldout flag.
@@ -25,6 +25,22 @@ def reject_constant(value):
     raise ValueError(f"invalid JSON number: {value}")
 
 
+def load_run(path):
+    try:
+        run = json.loads(path.read_text(encoding="utf-8"), parse_constant=reject_constant)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{path}: {exc}") from exc
+    rows = run.get("results") if isinstance(run, dict) else None
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        raise ValueError(f"{path}: expected a benchmark object with a results array of route objects")
+    config = run.get("config", {})
+    if not isinstance(config, dict):
+        raise ValueError(f"{path}: expected a benchmark config object")
+    if heldout(config, rows):
+        raise ValueError(f"{path}: held-out suites must be reported separately using the benchmark summary")
+    return config, rows
+
+
 def main():
     catalog = {}
     for module in (decisions, motion, outcomes, safety):
@@ -34,8 +50,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", nargs="?", type=Path, help="saved benchmark JSON file")
     parser.add_argument("reports", nargs="*", help="report IDs (default: all)")
+    parser.add_argument("--compare", type=Path, help="second saved benchmark to compare with the baseline")
     parser.add_argument("--list", action="store_true", help="list report IDs and descriptions")
-    args = parser.parse_args()
+    args = parser.parse_intermixed_args()
     if args.list:
         for key, (description, _) in sorted(catalog.items()):
             print(f"{key:36} {description}")
@@ -45,22 +62,23 @@ def main():
     for key in args.reports:
         if key not in catalog:
             parser.error(f"unknown report {key!r}; see --list")
+    selected = {key: catalog[key][1] for key in args.reports or sorted(catalog)}
     try:
-        run = json.loads(args.run.read_text(encoding="utf-8"), parse_constant=reject_constant)
-    except (OSError, ValueError) as exc:
+        config, rows = load_run(args.run)
+        if args.compare is not None:
+            other_config, other_rows = load_run(args.compare)
+            baseline = args.run.name, config, rows
+            other = args.compare.name, other_config, other_rows
+            reports = comparison.compare(baseline, other, selected)
+        else:
+            reports = {key: report(rows) for key, report in selected.items()}
+    except ValueError as exc:
         parser.error(str(exc))
-    rows = run.get("results") if isinstance(run, dict) else None
-    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
-        parser.error("expected a benchmark object with a results array of route objects")
-    config = run.get("config", {})
-    if not isinstance(config, dict):
-        parser.error("expected a benchmark config object")
-    if heldout(config, rows):
-        parser.error("held-out suites must be reported separately using the benchmark summary")
+    except OverflowError as exc:
+        parser.error(f"invalid numeric measurement: {exc}")
     try:
-        reports = {key: catalog[key][1](rows) for key in args.reports or sorted(catalog)}
         print(json.dumps(reports, indent=2, allow_nan=False))
-    except (ValueError, OverflowError) as exc:
+    except ValueError as exc:
         parser.error(f"invalid numeric measurement: {exc}")
 
 

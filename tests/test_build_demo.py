@@ -1,4 +1,5 @@
 import contextlib
+import gzip
 import io
 import json
 import tempfile
@@ -40,6 +41,25 @@ class BrowserDemoBuildTests(unittest.TestCase):
             self.assertIn('href="./results.html"', (output / "arena.html").read_text())
             self.assertNotIn('href="/', results)
             self.assertEqual(json.loads((output / "demo-data/results.json").read_text())["format"], "jev-results/1")
+            replay_path = output / "replays/jev-right-on-red.json"
+            self.assertEqual(
+                replay_path.read_bytes(), (build_demo.ROOT / "static/replays" / replay_path.name).read_bytes()
+            )
             self.assertTrue((output / "LICENSE").is_file())
             self.assertEqual(list(output.rglob(".env*")), [])
             self.assertEqual(list(output.rglob("*.py")), [])
+
+    def test_browser_replay_matches_the_committed_challenge_result(self):
+        root = build_demo.ROOT
+        replay = json.loads((root / "static/replays/jev-right-on-red.json").read_text())
+        self.assertEqual(replay["format"], "jev-browser-replay/1")
+        with gzip.open(root / replay["source"], "rt") as source:
+            recording = json.load(source)
+        result = recording["results"][replay["challenge"]]
+        frames = replay["frames"]
+        self.assertEqual(replay["result_sha"], result["result_sha"])
+        self.assertEqual(replay["pass"], result["pass"])
+        self.assertEqual(frames[0]["t"], 0)
+        self.assertAlmostEqual(frames[-1]["t"], result["time_s"], places=1)
+        self.assertTrue(any(frame["traffic"] for frame in frames))
+        self.assertTrue(all(a["t"] < b["t"] for a, b in zip(frames, frames[1:])))
