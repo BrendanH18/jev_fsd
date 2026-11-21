@@ -64,11 +64,30 @@ seconds for about a minute. The sandbox id is kept in the worktree's git directo
 reuse that sandbox. Agents sharing a worktree each set their own `JEV_BOAT_SLOT`; one sandbox
 is never shared between agents.
 
-Each check pushes the working tree (tracked and untracked, non-ignored files) to a fresh
-directory and moves it into the clone at `/home/user/jev_fsd`. Everything there but `.git`,
-`node_modules` and `.venv` is replaced, so deleted files go too, and git's index is rebuilt from
-the pushed files, so `git ls-files` (which `tests/test_results.py` relies on) matches the
-computer the script ran on. `npm ci` runs only when `package-lock.json` changed, then
+Each check makes the clone at `/home/user/jev_fsd` match the working tree exactly: tracked and
+untracked, non-ignored files, as `boat push` takes them, so deleted files go and ignored ones
+such as `.env` never leave the computer. Git's index there lists exactly those files, so
+`git ls-files` (which `tests/test_results.py` relies on) matches the computer the script ran on.
+Only what changed since the last check is sent. The script indexes the working tree in a private
+index in the worktree's git directory (stat data keeps this to a few milliseconds, and the
+worktree's own index is untouched), and its git tree names the exact contents. When this
+sandbox got tree T last time (`pushed-<slot>` beside the sandbox id), the files that differ
+from T go as a gzipped tarball with the list of changed and deleted paths: inside `boat exec`'s
+arguments up to 72 KB, or pushed when bigger. In the sandbox, the clone's index is the tree last
+synced. Files earlier checks left (`git clean -x`, which keeps `node_modules` and `.venv`) and
+their edits to tracked files are undone first, then `git write-tree` must give T before the
+change is applied and the new tree after. A new sandbox, a missing record or a mismatch sends
+every file instead (everything but `.git`, `node_modules` and `.venv` is replaced and the index
+rebuilt); a mismatch found in the sandbox exits 75 and leaves a marker, and the script then
+sends every file and runs again. Measured 2026-11-21 on `default` from a Raspberry Pi 5:
+
+| Push | Before (`boat push` of the tree) | After |
+|---|---|---|
+| First check in a sandbox | 22 s | 8 s (25 MB tarball; 2 s of it to pack) |
+| One-line edit | 8 s | none: the whole `-- true` run took 2 s |
+| 300 KB of changes | 8 s | 3 s |
+
+`npm ci` runs only when `package-lock.json` changed, then
 `uv sync --locked`. The command runs with `boat exec --timeout 0`. A bare sandbox first installs
 Node 22 (checked against the release's SHA-256 sums), uv and the clone. Copy results such as
 `data/runs/` back before the next check replaces them.

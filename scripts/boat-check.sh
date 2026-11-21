@@ -12,10 +12,18 @@
 #
 # The first check creates a sandbox from jev-fsd-warm (Node 22, uv, Python, Biome and a clone
 # of the repository with its dependencies), or a bare one when there is no snapshot, and
-# records its id in this worktree's git directory. Later checks reuse it: each pushes the
-# working tree to a fresh directory, makes the clone at /home/user/jev_fsd match it exactly
-# (git's index included) and runs there with `boat exec --timeout 0`. One sandbox per worktree;
-# agents sharing a worktree each set JEV_BOAT_SLOT.
+# records its id in this worktree's git directory. Later checks reuse it: each makes the clone at
+# /home/user/jev_fsd match the working tree exactly (deleted files gone, untracked non-ignored
+# files in, ignored ones such as .env never sent, git's index included) and runs there with
+# `boat exec --timeout 0`. One sandbox per worktree; agents sharing a worktree each set
+# JEV_BOAT_SLOT.
+#
+# Only what changed since the last check goes (2026-11-21): the working tree's git tree, from a
+# private index, is compared with the tree last sent to this sandbox, and only the changed files
+# travel, in boat exec's arguments up to 72 KB or as one pushed tarball (a one-line edit: 2 s for
+# the whole run instead of 8 s for the push alone). The sandbox checks that its index gives the
+# old tree before applying the change and the new one after; a new sandbox, a missing record or
+# a mismatch sends every file (an 8 s tarball push; 8 to 22 s before).
 #
 # Sizes (owner decision, 2026-11-21, measured in docs/reference/development.md#boat-checks):
 # --full runs on xlarge (16 vCPUs) with one Node check per vCPU (JEV_BOAT_JOBS); the plain check
@@ -48,7 +56,7 @@ while [ $# -gt 0 ]; do
             [ -n "$cmd" ] || { echo "boat-check: -- needs a command" >&2; exit 2; }
             mode=cmd
             break ;;
-        -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "boat-check: unknown option $1 (try --help)" >&2; exit 2 ;;
     esac
     shift
@@ -80,7 +88,8 @@ lock=$state_dir/lock-$slot
 name="jev-fsd-check-$(basename "$PWD" | tr -c 'A-Za-z0-9_\n-' '-' | cut -c1-80)-$slot"
 
 id=$(cat "$id_file" 2>/dev/null || true)
-extended=0 keepalive="" build="" saving=0 locked=0
+extended=0 keepalive="" build="" saving=0 locked=0 stage=""
+base="" tree="" files_b64="" paths_b64=""   # what run_remote syncs; send sets them
 stop_keepalive() {   # the keepalive loop and its sleep
     [ -n "$keepalive" ] || return 0
     pkill -P "$keepalive" 2>/dev/null || true
@@ -110,6 +119,7 @@ cleanup() {
             boat delete "$build" --yes --json >/dev/null 2>&1 || echo "boat-check: delete the build sandbox: boat delete $build --yes" >&2
         fi
     fi
+    [ -z "$stage" ] || rm -rf "$stage"
     [ "$locked" = 0 ] || rm -rf "$lock"   # only a lock this run took
 }
 trap cleanup EXIT
@@ -184,11 +194,13 @@ new_sandbox() {   # new_sandbox NAME [boat new ARGS...]: prints the new sandbox'
     echo "$new_id"
 }
 
-# Runs in the sandbox as `bash -c`: $1 mode (checks, full, cmd or build), $2 push directory,
-# $3 command, $4 clone URL, $5 how many Node checks --full runs at once (empty: one per vCPU).
+# Runs in the sandbox as `bash -c`: $1 mode (checks, full, cmd or build), $2 push directory
+# (empty: the files come in $8 and $9), $3 command, $4 clone URL, $5 how many Node checks --full
+# runs at once (empty: one per vCPU), $6 base tree (empty: every file is sent), $7 the working
+# tree's git tree, $8 and $9 files.tgz and paths in base64.
 # shellcheck disable=SC2016
 remote='set -euo pipefail
-mode=$1 push=$2 cmd=$3 clone_url=$4 jobs=${5:-}
+mode=$1 push=$2 cmd=$3 clone_url=$4 jobs=${5:-} base=${6:-} tree=${7:-} files_b64=${8:-} paths_b64=${9:-}
 repo=/home/user/jev_fsd
 export PATH="$HOME/.local/node22/bin:$HOME/.local/bin:$PATH"
 say() { echo "boat-check: $*" >&2; }
@@ -232,18 +244,52 @@ if [ "$mode" = build ]; then   # --save: the default branch and its dependencies
     exit 0
 fi
 
-# Make the clone match the pushed tree exactly: replace everything but .git and the installed
-# dependencies (deleted files go too), and make git index exactly the pushed files, so
-# `git ls-files` lists the same files as on the computer that ran the script.
+# Make the clone match the working tree exactly, git index included, so `git ls-files` lists the
+# same files as on the computer that ran the script. $push/files.tgz holds the files: all of
+# them, or with a base tree only those changed since it, with $push/paths listing every changed
+# or deleted path (a small change comes in the arguments instead of a push). The index of the clone
+# is the tree last synced; `git write-tree` must give the base tree before a change is applied
+# and the wanted tree after, or the script asks for the whole tree (exit 75 and a marker file).
 t_sync=$SECONDS
-find "$repo" -mindepth 1 -maxdepth 1 ! -name .git ! -name node_modules ! -name .venv -exec rm -rf {} +
-find "$push" -mindepth 1 -maxdepth 1 -exec mv -t "$repo" {} +
-rmdir "$push"
+mkdir -p /home/user/push
 find /home/user/push -mindepth 1 -maxdepth 1 -mmin +720 -exec rm -rf {} + 2>/dev/null || true
+rm -f "$HOME/.boat-check-resync"
+if [ -z "$push" ]; then
+    push=$(mktemp -d /home/user/push/inline-XXXXXX)
+    printf %s "$files_b64" | base64 -d >"$push/files.tgz"
+    printf %s "$paths_b64" | base64 -d >"$push/paths"
+fi
 cd "$repo"
-git read-tree --empty
-find . \( -path ./.git -o -path ./node_modules -o -path ./.venv \) -prune -o \( -type f -o -type l \) -printf "%P\0" \
-    | git --literal-pathspecs add -f --pathspec-from-file=- --pathspec-file-nul
+untar() { tar -xzf "$push/files.tgz" --warning=no-unknown-keyword; }
+junk() { git clean -ffdqx -e node_modules -e .venv; }   # untracked and ignored files, empty directories
+if [ -n "$base" ]; then
+    # Undo what earlier checks left: their files, and changes to tracked ones.
+    junk
+    git diff-files -z --name-only | git checkout-index -f -u -z --stdin
+    if [ "$(git write-tree)" != "$base" ]; then
+        say "the tree here is not the one last pushed to this sandbox; pushing every file"
+        touch "$HOME/.boat-check-resync"; exit 75
+    fi
+    xargs -0r rm -rf -- <"$push/paths"
+    junk
+    untar
+    git update-index --add --remove --replace -z --stdin <"$push/paths"
+else
+    # Replace everything but .git and the installed dependencies.
+    find "$repo" -mindepth 1 -maxdepth 1 ! -name .git ! -name node_modules ! -name .venv -exec rm -rf {} +
+    untar
+    git read-tree --empty
+    find . \( -path ./.git -o -path ./node_modules -o -path ./.venv \) -prune -o \( -type f -o -type l \) -printf "%P\0" \
+        | git --literal-pathspecs add -f --pathspec-from-file=- --pathspec-file-nul
+fi
+rm -rf "$push"
+if [ "$(git write-tree)" != "$tree" ]; then
+    if [ -n "$base" ]; then
+        say "the changed files did not give the working tree here; pushing every file"
+        touch "$HOME/.boat-check-resync"; exit 75
+    fi
+    say "warning: git hashes the pushed tree differently here than on the computer that pushed it, so every check pushes the whole tree"
+fi
 deps
 say "tree and dependencies ready in $((SECONDS - t_sync)) s"
 
@@ -310,7 +356,8 @@ unframe() {
     [ -n "$rc" ] || return 255
     return "$rc"
 }
-# run_remote ID MODE PUSH CMD: run the remote script in sandbox ID and return its exit code.
+# run_remote ID MODE PUSH CMD: run the remote script in sandbox ID and return its exit code. The
+# files to sync come from send (base, tree, files_b64, paths_b64).
 # Auto-stop is pushed back every 30 minutes meanwhile, so a long check never reaches it.
 run_remote() {
     local codes rc
@@ -318,7 +365,8 @@ run_remote() {
     ( while sleep 1800; do boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1; done ) </dev/null >/dev/null 2>&1 &
     keepalive=$!
     set +e
-    boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" "$jobs" | frames | unframe
+    boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" "$jobs" \
+        "$base" "$tree" "$files_b64" "$paths_b64" | frames | unframe
     codes=("${PIPESTATUS[@]}")
     set -e
     stop_keepalive
@@ -431,13 +479,64 @@ boat extend "$id" --ttl "$budget" --json >/dev/null
 extended=1
 echo "boat-check: $type sandbox $id ($name), ready in $((SECONDS - t0)) s" >&2
 
-# Push into a fresh directory; the remote script moves it into the clone.
-push="/home/user/push/$(date +%Y%m%d-%H%M%S)-$$"
-t0=$SECONDS
-boat push "$id" . --to "$push" >/dev/null
-echo "boat-check: pushed the working tree in $((SECONDS - t0)) s" >&2
+# The working tree as git sees it (tracked files, and untracked ones git doesn't ignore, as
+# `boat push` takes them) is indexed in a private index in the git directory, which leaves the
+# worktree's own index alone and keeps stat data, so only changed files are read again. Its git
+# tree names the exact contents. A sandbox that got tree T last time needs only the files that
+# differ from T, so pushed-$slot keeps the sandbox id and T; any other sandbox gets every file.
+tree_index=$state_dir/index-$slot
+pushed_file=$state_dir/pushed-$slot
+[ -f "$tree_index" ] || cp "$(git rev-parse --path-format=absolute --git-path index)" "$tree_index" 2>/dev/null || true
+GIT_INDEX_FILE=$tree_index git add -A
+tree=$(GIT_INDEX_FILE=$tree_index git write-tree)
+stage=$(mktemp -d)
+base="" last_id="" last_tree=""
+read -r last_id last_tree <"$pushed_file" 2>/dev/null || true
+if [ -n "$last_id" ] && [ "$last_id" = "$id" ] && git cat-file -e "$last_tree^{tree}" 2>/dev/null; then base=$last_tree; fi
+# send BASE: package the files that changed since BASE, or all of them when BASE is empty. A
+# package of up to 72 KB goes in boat exec's arguments; a bigger one is pushed.
+send() {
+    base=$1 files_b64="" paths_b64="" push=""
+    local t0=$SECONDS
+    rm -rf "${stage:?}"/*
+    if [ -n "$base" ]; then
+        git diff-tree -r -z --no-renames --name-only "$base" "$tree" >"$stage/paths"
+        git diff-tree -r -z --no-renames --name-only --diff-filter=d "$base" "$tree" >"$stage/list"
+    else
+        : >"$stage/paths"
+        git ls-tree -r -z --name-only "$tree" >"$stage/list"
+    fi
+    COPYFILE_DISABLE=1 tar -czf "$stage/files.tgz" --null -T "$stage/list"
+    rm "$stage/list"
+    local count size
+    count=$(tr -cd '\0' <"$stage/paths" | wc -c | tr -d ' ')
+    size=$(($(wc -c <"$stage/files.tgz") + $(wc -c <"$stage/paths")))
+    if [ -n "$base" ] && [ "$size" -le 72000 ]; then
+        files_b64=$(base64 <"$stage/files.tgz" | tr -d '\n')
+        paths_b64=$(base64 <"$stage/paths" | tr -d '\n')
+        if [ "$count" = 0 ]; then echo "boat-check: no file changed since the last check" >&2
+        else echo "boat-check: sending the $count paths changed since the last check with the command" >&2; fi
+        return
+    fi
+    push="/home/user/push/$(date +%Y%m%d-%H%M%S)-$$"
+    boat push "$id" "$stage" --to "$push" >/dev/null
+    if [ -n "$base" ]; then
+        echo "boat-check: pushed the $count paths changed since the last check in $((SECONDS - t0)) s" >&2
+    else
+        echo "boat-check: pushed the working tree in $((SECONDS - t0)) s" >&2
+    fi
+}
+send "$base"
+echo "$id $tree" >"$pushed_file"
 status=0
 run_remote "$id" "$mode" "$push" "$cmd" || status=$?
+# The sandbox couldn't apply the change (its tree wasn't the one last pushed): push everything.
+if [ "$status" = 75 ] && [ -n "$base" ] \
+    && boat exec "$id" --json -- test -f /home/user/.boat-check-resync 2>/dev/null | jq -e 'select(.exitCode != null) | .exitCode == 0' >/dev/null; then
+    send ""
+    status=0
+    run_remote "$id" "$mode" "$push" "$cmd" || status=$?
+fi
 exit "$status"
 }
 main "$@"; exit
