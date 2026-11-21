@@ -144,19 +144,26 @@ start_failed() {
         exit 3 ;;
     esac
     echo "boat-check: $1 failed:" >&2
-    printf '%s\n' "$2" | jq -r 'select(.event == "error") | .error' 2>/dev/null >&2 || printf '%s\n' "$2" >&2
+    local why
+    why=$(printf '%s\n' "$2" | jq -r 'select(.event == "error") | .error' 2>/dev/null || true)
+    printf '%s\n' "${why:-$2}" >&2
     echo "boat-check: boat limits shows the starts left today; tell the owner rather than retrying" >&2
     exit 3
 }
 # With --fail-fast, a start that finds no ready machine creates nothing and isn't counted against
-# the start limits, so retry it a few times.
+# the start limits, so retry it a few times. A failed attempt can leave Boat finishing a resume for
+# a moment ("resume already in progress"), which a retry also waits out.
 fast_start() {   # fast_start WHAT boat ARGS...; leaves the output in $out
     local what=$1 attempt
     shift
     for attempt in 1 2 3 4 5 6; do
         if out=$("$@" --fail-fast --json 2>&1); then return 0; fi
-        case "$out" in *no_ready_machine*) ;; *) return 1 ;; esac
-        [ "$attempt" = 6 ] || { echo "boat-check: no machine ready for $what; trying again in 10 s" >&2; sleep 10; }
+        case "$out" in
+            *no_ready_machine*) [ "$attempt" = 6 ] || echo "boat-check: no machine ready for $what; trying again in 10 s" >&2 ;;
+            *"already in progress"*) [ "$attempt" = 6 ] || echo "boat-check: Boat is still busy with $what; trying again in 10 s" >&2 ;;
+            *) return 1 ;;
+        esac
+        [ "$attempt" = 6 ] || sleep 10
     done
     return 1
 }
