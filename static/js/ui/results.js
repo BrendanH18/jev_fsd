@@ -254,6 +254,13 @@ function cityTable(grid, data) {
                           ? cell.failed.map((f) => `${f.id}: ${f.failures.join(", ")}`).join("; ")
                           : cell.date,
                       ),
+                      cell.model
+                        ? h(
+                            "small",
+                            { title: cell.cost_basis },
+                            `${percentText(cell.model_share)} model decisions · ${moneyText(cell.cost_usd)}`,
+                          )
+                        : null,
                     ]
                   : h("span", { class: "muted" }, "not run"),
               ),

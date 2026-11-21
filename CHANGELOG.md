@@ -20,6 +20,7 @@
 - Compare an unchanged manual challenge or road-test attempt with published drivers and see measured
   benchmark scores from the challenge leaderboard.
 - Measure open-track flagged choices in replay and keep driving scores based on outcomes.
+- Publish complete Jev and Claude Haiku results for the dry Kitsilano city suite beside the local drivers.
 
 ## 0.3.0 (20 November 2026)
 

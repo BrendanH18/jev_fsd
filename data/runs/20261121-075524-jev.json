@@ -1,0 +1,3756 @@
+{
+ "name": "20261121-075524-jev",
+ "saved_at": "2026-11-21T07:55:24.277Z",
+ "config": {
+  "brain": "jev",
+  "count": 12,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "kitsilano",
+  "bbox": [
+   -123.17,
+   49.26,
+   -123.15,
+   49.27
+  ],
+  "pack": "6",
+  "engine": "node v22.23.4"
+ },
+ "summary": {
+  "scenarios": 12,
+  "pass_rate": 0.167,
+  "arrived_rate": 0.25,
+  "km": 10.29,
+  "collisions": 1,
+  "at_fault": 1,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 2,
+  "off_road_s": 0,
+  "safety_brakes": 9,
+  "deadlocks": 206,
+  "fallbacks": 0,
+  "violations_per_km": 0.29,
+  "avg_kmh": 9.22,
+  "min_gap_m": 1.8,
+  "min_ttc_s": 0.7,
+  "hard_brakes": 0,
+  "rms_jerk": 3.85,
+  "max_lat_accel": 5.08,
+  "lane_rms_m": 0.26,
+  "lane_changes": 3,
+  "speeding_s": 0,
+  "decisions": 16955,
+  "calls": 16838,
+  "tokens": 58270615,
+  "cost_usd": 2.447367,
+  "model_decisions": 16838,
+  "partial_decisions": 0,
+  "local_decisions": 117,
+  "fallback_decisions": 0,
+  "model_share": 0.993,
+  "local_share": 0.007,
+  "fallback_share": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 565,
+    "signals": 3,
+    "stops": 1,
+    "lefts": 0,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 111.9,
+   "distance_m": 566,
+   "progress": 1,
+   "avg_kmh": 18.2,
+   "collisions": 1,
+   "at_fault": 1,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": null,
+   "min_ttc_s": null,
+   "min_headway_s": null,
+   "max_accel": 2.5,
+   "max_decel": -9,
+   "hard_brakes": 0,
+   "rms_jerk": 5.86,
+   "max_jerk": 109.7,
+   "max_lat_accel": 4.26,
+   "lane_rms_m": 0.23,
+   "lane_max_m": 0.69,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 33.8,
+   "decisions": 416,
+   "calls": 389,
+   "tokens": 1312851,
+   "cost_usd": 0.05514,
+   "latency_p50_ms": 163,
+   "latency_p95_ms": 202,
+   "model_decisions": 389,
+   "partial_decisions": 0,
+   "local_decisions": 27,
+   "fallback_decisions": 0,
+   "model_share": 0.935,
+   "local_share": 0.065,
+   "fallback_share": 0,
+   "failures": [
+    "collision"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 389,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 72.3,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": -3.6715036210340295,
+      "closing": 0.8500532091780214
+     }
+    },
+    {
+     "type": "collision",
+     "with": "ped_30",
+     "kind": "pedestrian",
+     "fault": "ego",
+     "at_fault": true,
+     "t": 72.4,
+     "ego_v": 1,
+     "other_v": 1.8,
+     "other_ahead": -1.3,
+     "other_right": 1.2,
+     "relative_heading_deg": 90
+    },
+    {
+     "t": 111.9,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 85286
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 662,
+    "signals": 2,
+    "stops": 1,
+    "lefts": 3,
+    "rights": 1
+   },
+   "arrived": false,
+   "time_s": 362.3,
+   "distance_m": 751,
+   "progress": 0.651,
+   "avg_kmh": 7.5,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 1,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 10,
+   "fallbacks": 0,
+   "min_gap_m": null,
+   "min_ttc_s": null,
+   "min_headway_s": null,
+   "max_accel": 2.5,
+   "max_decel": -6.91,
+   "hard_brakes": 0,
+   "rms_jerk": 3.25,
+   "max_jerk": 52.4,
+   "max_lat_accel": 4.73,
+   "lane_rms_m": 0.18,
+   "lane_max_m": 0.41,
+   "lane_changes": 1,
+   "speeding_s": 0,
+   "stopped_s": 246.7,
+   "decisions": 1390,
+   "calls": 1376,
+   "tokens": 4475289,
+   "cost_usd": 0.187962,
+   "latency_p50_ms": 150,
+   "latency_p95_ms": 199,
+   "model_decisions": 1376,
+   "partial_decisions": 0,
+   "local_decisions": 14,
+   "fallback_decisions": 0,
+   "model_share": 0.99,
+   "local_share": 0.01,
+   "fallback_share": 0,
+   "failures": [
+    "stuck",
+    "failed to yield"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1376,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 88.9,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 156.1,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 5.412658916694323,
+      "closing": 5.424748578531327
+     }
+    },
+    {
+     "t": 199.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop153",
+     "line_m": -16.6
+    },
+    {
+     "t": 199.8,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop153",
+     "line_m": -16.7
+    },
+    {
+     "t": 200,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop153",
+     "line_m": -16.8
+    },
+    {
+     "t": 227.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop153",
+     "line_m": -17.4
+    },
+    {
+     "t": 227.3,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 7
+     },
+     "control": "stop stop153",
+     "line_m": -17.4
+    },
+    {
+     "t": 227.5,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 8
+     },
+     "control": "stop stop153",
+     "line_m": -17.4
+    },
+    {
+     "t": 227.8,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 8
+     },
+     "control": "stop stop153",
+     "line_m": -17.6
+    },
+    {
+     "t": 342.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop153",
+     "line_m": -18.3
+    },
+    {
+     "t": 342.4,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop153",
+     "line_m": -18.3
+    },
+    {
+     "t": 342.7,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop153",
+     "line_m": -18.4
+    }
+   ],
+   "wall_ms": 348112
+  },
+  {
+   "id": "s1-3",
+   "tags": {
+    "length_m": 520,
+    "signals": 0,
+    "stops": 2,
+    "lefts": 1,
+    "rights": 1
+   },
+   "arrived": false,
+   "time_s": 208,
+   "distance_m": 228,
+   "progress": 0.44,
+   "avg_kmh": 4,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 8,
+   "fallbacks": 0,
+   "min_gap_m": 11.7,
+   "min_ttc_s": 3.1,
+   "min_headway_s": 3.14,
+   "max_accel": 2.57,
+   "max_decel": -6.98,
+   "hard_brakes": 0,
+   "rms_jerk": 3.41,
+   "max_jerk": 60.6,
+   "max_lat_accel": 3.32,
+   "lane_rms_m": 0.15,
+   "lane_max_m": 0.39,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 159.9,
+   "decisions": 803,
+   "calls": 790,
+   "tokens": 2765638,
+   "cost_usd": 0.116157,
+   "latency_p50_ms": 144,
+   "latency_p95_ms": 180,
+   "model_decisions": 790,
+   "partial_decisions": 0,
+   "local_decisions": 13,
+   "fallback_decisions": 0,
+   "model_share": 0.984,
+   "local_share": 0.016,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 790,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 189.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop107",
+     "line_m": -17,
+     "next_turn": "roundabout",
+     "turn_in_m": 84
+    },
+    {
+     "t": 189.5,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop107",
+     "line_m": -17,
+     "next_turn": "roundabout",
+     "turn_in_m": 83.9
+    },
+    {
+     "t": 189.7,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop107",
+     "line_m": -17.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 83.9
+    },
+    {
+     "t": 202.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "passes_cyclist_without_room": 1
+     },
+     "control": "stop stop107",
+     "line_m": -17.7,
+     "next_turn": "roundabout",
+     "turn_in_m": 83.3
+    },
+    {
+     "t": 202.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "passes_cyclist_without_room": 2
+     },
+     "control": "stop stop107",
+     "line_m": -17.7,
+     "next_turn": "roundabout",
+     "turn_in_m": 83.3
+    },
+    {
+     "t": 202.5,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "passes_cyclist_without_room": 7
+     },
+     "control": "stop stop107",
+     "line_m": -17.7,
+     "next_turn": "roundabout",
+     "turn_in_m": 83.3
+    },
+    {
+     "t": 202.7,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "passes_cyclist_without_room": 4,
+      "collision": 1
+     },
+     "control": "stop stop107",
+     "line_m": -17.8,
+     "next_turn": "roundabout",
+     "turn_in_m": 83.2
+    },
+    {
+     "t": 203,
+     "type": "deadlock",
+     "stuck_s": 12.8,
+     "holding": "hard_brake",
+     "rejected": {
+      "passes_cyclist_without_room": 4,
+      "collision": 1
+     },
+     "control": "stop stop107",
+     "line_m": -18,
+     "next_turn": "roundabout",
+     "turn_in_m": 83
+    }
+   ],
+   "wall_ms": 191938
+  },
+  {
+   "id": "s1-4",
+   "tags": {
+    "length_m": 894,
+    "signals": 2,
+    "stops": 2,
+    "lefts": 4,
+    "rights": 0
+   },
+   "arrived": false,
+   "time_s": 573.3,
+   "distance_m": 1422,
+   "progress": 1,
+   "avg_kmh": 8.9,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 11,
+   "fallbacks": 0,
+   "min_gap_m": 3.5,
+   "min_ttc_s": 1.7,
+   "min_headway_s": 1.7,
+   "max_accel": 2.5,
+   "max_decel": -6.71,
+   "hard_brakes": 0,
+   "rms_jerk": 3.82,
+   "max_jerk": 65.5,
+   "max_lat_accel": 6.07,
+   "lane_rms_m": 0.24,
+   "lane_max_m": 0.68,
+   "lane_changes": 2,
+   "speeding_s": 0,
+   "stopped_s": 284.8,
+   "decisions": 2184,
+   "calls": 2179,
+   "tokens": 7737090,
+   "cost_usd": 0.324958,
+   "latency_p50_ms": 166,
+   "latency_p95_ms": 215,
+   "model_decisions": 2179,
+   "partial_decisions": 0,
+   "local_decisions": 5,
+   "fallback_decisions": 0,
+   "model_share": 0.998,
+   "local_share": 0.002,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 2179,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 96.7,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 394.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 1
+     },
+     "control": "stop stop103",
+     "line_m": -17.2,
+     "next_turn": "left",
+     "turn_in_m": 25.2
+    },
+    {
+     "t": 395.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 1
+     },
+     "control": "stop stop103",
+     "line_m": -17.3,
+     "next_turn": "left",
+     "turn_in_m": 25.2
+    },
+    {
+     "t": 395.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -17.4,
+     "next_turn": "left",
+     "turn_in_m": 25.1
+    },
+    {
+     "t": 439.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -18.1,
+     "next_turn": "left",
+     "turn_in_m": 24.4
+    },
+    {
+     "t": 439.7,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -18.1,
+     "next_turn": "left",
+     "turn_in_m": 24.4
+    },
+    {
+     "t": 439.9,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -18.1,
+     "next_turn": "left",
+     "turn_in_m": 24.3
+    },
+    {
+     "t": 440.2,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -18.2,
+     "next_turn": "left",
+     "turn_in_m": 24.2
+    },
+    {
+     "t": 455.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -19,
+     "next_turn": "left",
+     "turn_in_m": 23.4
+    },
+    {
+     "t": 455.7,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -19,
+     "next_turn": "left",
+     "turn_in_m": 23.4
+    },
+    {
+     "t": 455.9,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -19.1,
+     "next_turn": "left",
+     "turn_in_m": 23.3
+    },
+    {
+     "t": 456.2,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "visibility_stopping_distance": 2
+     },
+     "control": "stop stop103",
+     "line_m": -19.2,
+     "next_turn": "left",
+     "turn_in_m": 23.2
+    }
+   ],
+   "wall_ms": 581820
+  },
+  {
+   "id": "s1-5",
+   "tags": {
+    "length_m": 794,
+    "signals": 3,
+    "stops": 2,
+    "lefts": 2,
+    "rights": 0
+   },
+   "arrived": false,
+   "time_s": 317.6,
+   "distance_m": 403,
+   "progress": 0.315,
+   "avg_kmh": 4.6,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 22,
+   "fallbacks": 0,
+   "min_gap_m": 5.4,
+   "min_ttc_s": 2.8,
+   "min_headway_s": 2.84,
+   "max_accel": 2.5,
+   "max_decel": -6.61,
+   "hard_brakes": 0,
+   "rms_jerk": 3.29,
+   "max_jerk": 49.1,
+   "max_lat_accel": 5.67,
+   "lane_rms_m": 0.25,
+   "lane_max_m": 0.41,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 226.1,
+   "decisions": 1215,
+   "calls": 1215,
+   "tokens": 4327586,
+   "cost_usd": 0.181759,
+   "latency_p50_ms": 149,
+   "latency_p95_ms": 193,
+   "model_decisions": 1215,
+   "partial_decisions": 0,
+   "local_decisions": 0,
+   "fallback_decisions": 0,
+   "model_share": 1,
+   "local_share": 0,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1215,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 9.2,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 3.9946508283084783,
+      "closing": 4.0499980746277
+     }
+    },
+    {
+     "t": 54.1,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 98.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -15.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.8
+    },
+    {
+     "t": 99.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -15.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.8
+    },
+    {
+     "t": 99.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -15.6,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.6
+    },
+    {
+     "t": 201.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.9
+    },
+    {
+     "t": 201.5,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.9
+    },
+    {
+     "t": 201.7,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.9
+    },
+    {
+     "t": 202,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.8
+    },
+    {
+     "t": 247.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p11",
+     "gap_m": 38.5,
+     "control": "stop stop120",
+     "line_m": -17.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.1
+    },
+    {
+     "t": 248,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p11",
+     "gap_m": 39.6,
+     "control": "stop stop120",
+     "line_m": -17.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.1
+    },
+    {
+     "t": 248.2,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p11",
+     "gap_m": 41.2,
+     "control": "stop stop120",
+     "line_m": -17.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 122
+    },
+    {
+     "t": 248.5,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p11",
+     "gap_m": 42.7,
+     "control": "stop stop120",
+     "line_m": -17.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.8
+    },
+    {
+     "t": 268.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 121
+    },
+    {
+     "t": 268.2,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 121
+    },
+    {
+     "t": 268.5,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 121
+    },
+    {
+     "t": 268.8,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -18.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.8
+    },
+    {
+     "t": 291.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.1
+    },
+    {
+     "t": 291.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.1
+    },
+    {
+     "t": 291.7,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 120
+    },
+    {
+     "t": 292,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -19.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.9
+    },
+    {
+     "t": 304.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -20,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.2
+    },
+    {
+     "t": 304.8,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -20,
+     "next_turn": "roundabout",
+     "turn_in_m": 119.2
+    },
+    {
+     "t": 305,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -20.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 119
+    }
+   ],
+   "wall_ms": 312730
+  },
+  {
+   "id": "s1-6",
+   "tags": {
+    "length_m": 1157,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 3
+   },
+   "arrived": true,
+   "time_s": 241.6,
+   "distance_m": 1160,
+   "progress": 0.701,
+   "avg_kmh": 17.3,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 4.1,
+   "min_ttc_s": 1.9,
+   "min_headway_s": 1.96,
+   "max_accel": 2.5,
+   "max_decel": -6.67,
+   "hard_brakes": 0,
+   "rms_jerk": 4.26,
+   "max_jerk": 53.7,
+   "max_lat_accel": 5,
+   "lane_rms_m": 0.17,
+   "lane_max_m": 1.58,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 25.2,
+   "decisions": 920,
+   "calls": 920,
+   "tokens": 3367299,
+   "cost_usd": 0.141427,
+   "latency_p50_ms": 175,
+   "latency_p95_ms": 226,
+   "model_decisions": 920,
+   "partial_decisions": 0,
+   "local_decisions": 0,
+   "fallback_decisions": 0,
+   "model_share": 1,
+   "local_share": 0,
+   "fallback_share": 0,
+   "failures": [],
+   "pass": true,
+   "model_recording": {
+    "mode": "record",
+    "calls": 920,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 100,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 112.7,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 5.620034790186368,
+      "closing": 5.704271668742901
+     }
+    },
+    {
+     "t": 241.5,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 258881
+  },
+  {
+   "id": "s1-7",
+   "tags": {
+    "length_m": 1243,
+    "signals": 0,
+    "stops": 5,
+    "lefts": 1,
+    "rights": 5
+   },
+   "arrived": true,
+   "time_s": 289.7,
+   "distance_m": 1427,
+   "progress": 0.931,
+   "avg_kmh": 17.7,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 3.7,
+   "min_ttc_s": 0.7,
+   "min_headway_s": 0.4,
+   "max_accel": 2.5,
+   "max_decel": -6.88,
+   "hard_brakes": 0,
+   "rms_jerk": 3.75,
+   "max_jerk": 52.7,
+   "max_lat_accel": 5.56,
+   "lane_rms_m": 0.18,
+   "lane_max_m": 1.1,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 52,
+   "decisions": 1117,
+   "calls": 1116,
+   "tokens": 3927858,
+   "cost_usd": 0.16497,
+   "latency_p50_ms": 185,
+   "latency_p95_ms": 245,
+   "model_decisions": 1116,
+   "partial_decisions": 0,
+   "local_decisions": 1,
+   "fallback_decisions": 0,
+   "model_share": 0.999,
+   "local_share": 0.001,
+   "fallback_share": 0,
+   "failures": [],
+   "pass": true,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1116,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 67.7,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 0.8515366932070213,
+      "gap": 4.317162957040086
+     }
+    },
+    {
+     "t": 72,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 85.6,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.262868404572027,
+      "closing": 4.343225555130809
+     }
+    },
+    {
+     "t": 289.7,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 311932
+  },
+  {
+   "id": "s1-8",
+   "tags": {
+    "length_m": 945,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 2,
+    "rights": 2
+   },
+   "arrived": false,
+   "time_s": 378,
+   "distance_m": 464,
+   "progress": 0.407,
+   "avg_kmh": 4.4,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 1,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 25,
+   "fallbacks": 0,
+   "min_gap_m": 10.1,
+   "min_ttc_s": 4.3,
+   "min_headway_s": 4.28,
+   "max_accel": 2.57,
+   "max_decel": -6.37,
+   "hard_brakes": 0,
+   "rms_jerk": 3.6,
+   "max_jerk": 54.9,
+   "max_lat_accel": 4.73,
+   "lane_rms_m": 0.33,
+   "lane_max_m": 3.09,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 259.3,
+   "decisions": 1451,
+   "calls": 1450,
+   "tokens": 4876421,
+   "cost_usd": 0.20481,
+   "latency_p50_ms": 181,
+   "latency_p95_ms": 225,
+   "model_decisions": 1450,
+   "partial_decisions": 0,
+   "local_decisions": 1,
+   "fallback_decisions": 0,
+   "model_share": 0.999,
+   "local_share": 0.001,
+   "fallback_share": 0,
+   "failures": [
+    "stuck",
+    "failed to yield"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1450,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 100.9,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 215.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "passes_cyclist_without_room": 5,
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -13.6,
+     "next_turn": "left",
+     "turn_in_m": -2.1
+    },
+    {
+     "t": 215.9,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "passes_cyclist_without_room": 11,
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -13.6,
+     "next_turn": "left",
+     "turn_in_m": -2.1
+    },
+    {
+     "t": 216.1,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "passes_cyclist_without_room": 11,
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -13.7,
+     "next_turn": "left",
+     "turn_in_m": -2.2
+    },
+    {
+     "t": 240,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "passes_cyclist_without_room": 7,
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -14.3,
+     "next_turn": "left",
+     "turn_in_m": -2.8
+    },
+    {
+     "t": 240.1,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "passes_cyclist_without_room": 12,
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -14.3,
+     "next_turn": "left",
+     "turn_in_m": -2.8
+    },
+    {
+     "t": 240.4,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hard_brake",
+     "rejected": {
+      "passes_cyclist_without_room": 4,
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -14.4,
+     "next_turn": "left",
+     "turn_in_m": -2.9
+    },
+    {
+     "t": 240.6,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -14.6,
+     "next_turn": "roundabout",
+     "turn_in_m": 124.6
+    },
+    {
+     "t": 267,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.8
+    },
+    {
+     "t": 267.1,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.8
+    },
+    {
+     "t": 267.4,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.8
+    },
+    {
+     "t": 267.6,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -15.6,
+     "next_turn": "roundabout",
+     "turn_in_m": 123.6
+    },
+    {
+     "t": 312.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -16.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.8
+    },
+    {
+     "t": 330.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "following_distance": 1,
+      "collision": 2
+     },
+     "ahead": "car_p14",
+     "gap_m": 17.9,
+     "control": "stop stop120",
+     "line_m": -16.5,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.7
+    },
+    {
+     "t": 330.8,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "following_distance": 1,
+      "collision": 2
+     },
+     "ahead": "car_p14",
+     "gap_m": 18.4,
+     "control": "stop stop120",
+     "line_m": -16.5,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.7
+    },
+    {
+     "t": 331.1,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "following_distance": 1,
+      "collision": 2
+     },
+     "ahead": "car_p14",
+     "gap_m": 19,
+     "control": "stop stop120",
+     "line_m": -16.6,
+     "next_turn": "roundabout",
+     "turn_in_m": 122.6
+    },
+    {
+     "t": 343.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.9
+    },
+    {
+     "t": 343.6,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.9
+    },
+    {
+     "t": 343.9,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.9
+    },
+    {
+     "t": 344.2,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -17.4,
+     "next_turn": "roundabout",
+     "turn_in_m": 121.8
+    },
+    {
+     "t": 356.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.1,
+     "next_turn": "roundabout",
+     "turn_in_m": 121
+    },
+    {
+     "t": 357,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -18.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 121
+    },
+    {
+     "t": 357.2,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop120",
+     "line_m": -18.3,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.9
+    },
+    {
+     "t": 369.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.2
+    },
+    {
+     "t": 370,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop120",
+     "line_m": -19,
+     "next_turn": "roundabout",
+     "turn_in_m": 120.2
+    },
+    {
+     "t": 370.3,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop120",
+     "line_m": -19.2,
+     "next_turn": "roundabout",
+     "turn_in_m": 120
+    }
+   ],
+   "wall_ms": 390800
+  },
+  {
+   "id": "s1-9",
+   "tags": {
+    "length_m": 1161,
+    "signals": 4,
+    "stops": 2,
+    "lefts": 3,
+    "rights": 2
+   },
+   "arrived": false,
+   "time_s": 598.4,
+   "distance_m": 1326,
+   "progress": 0.689,
+   "avg_kmh": 8,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 42,
+   "fallbacks": 0,
+   "min_gap_m": 1.8,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.18,
+   "max_accel": 2.89,
+   "max_decel": -6.93,
+   "hard_brakes": 0,
+   "rms_jerk": 4.11,
+   "max_jerk": 60.3,
+   "max_lat_accel": 5.87,
+   "lane_rms_m": 0.73,
+   "lane_max_m": 3.54,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 313,
+   "decisions": 2234,
+   "calls": 2220,
+   "tokens": 7865462,
+   "cost_usd": 0.330349,
+   "latency_p50_ms": 161,
+   "latency_p95_ms": 214,
+   "model_decisions": 2220,
+   "partial_decisions": 0,
+   "local_decisions": 14,
+   "fallback_decisions": 0,
+   "model_share": 0.994,
+   "local_share": 0.006,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 2220,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 100.1,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -21.4,
+     "next_turn": "left",
+     "turn_in_m": 0.3
+    },
+    {
+     "t": 100.4,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop sig0@e354",
+     "line_m": -21.4,
+     "next_turn": "left",
+     "turn_in_m": 0.2
+    },
+    {
+     "t": 100.7,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop sig0@e354",
+     "line_m": -21.5,
+     "next_turn": "left",
+     "turn_in_m": 0.1
+    },
+    {
+     "t": 113.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -22.3,
+     "next_turn": "left",
+     "turn_in_m": -0.7
+    },
+    {
+     "t": 113.5,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -22.3,
+     "next_turn": "left",
+     "turn_in_m": -0.7
+    },
+    {
+     "t": 113.7,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -22.4,
+     "next_turn": "left",
+     "turn_in_m": -0.8
+    },
+    {
+     "t": 126.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -23.2,
+     "next_turn": "left",
+     "turn_in_m": -1.6
+    },
+    {
+     "t": 126.5,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -23.2,
+     "next_turn": "left",
+     "turn_in_m": -1.6
+    },
+    {
+     "t": 126.8,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -23.3,
+     "next_turn": "left",
+     "turn_in_m": -1.7
+    },
+    {
+     "t": 139.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -24,
+     "next_turn": "left",
+     "turn_in_m": -2.4
+    },
+    {
+     "t": 139.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -24,
+     "next_turn": "left",
+     "turn_in_m": -2.4
+    },
+    {
+     "t": 139.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -24.1,
+     "next_turn": "left",
+     "turn_in_m": -2.4
+    },
+    {
+     "t": 139.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -24.2,
+     "next_turn": "left",
+     "turn_in_m": -2.6
+    },
+    {
+     "t": 152.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -24.9,
+     "next_turn": "right",
+     "turn_in_m": 163.8
+    },
+    {
+     "t": 152.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -24.9,
+     "next_turn": "right",
+     "turn_in_m": 163.8
+    },
+    {
+     "t": 152.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -25,
+     "next_turn": "right",
+     "turn_in_m": 163.7
+    },
+    {
+     "t": 165.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -25.6,
+     "next_turn": "right",
+     "turn_in_m": 163
+    },
+    {
+     "t": 165.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -25.6,
+     "next_turn": "right",
+     "turn_in_m": 163
+    },
+    {
+     "t": 165.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -25.7,
+     "next_turn": "right",
+     "turn_in_m": 162.9
+    },
+    {
+     "t": 178.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -26.4,
+     "next_turn": "right",
+     "turn_in_m": 162.2
+    },
+    {
+     "t": 178.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -26.4,
+     "next_turn": "right",
+     "turn_in_m": 162.2
+    },
+    {
+     "t": 178.9,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop sig0@e354",
+     "line_m": -26.5,
+     "next_turn": "right",
+     "turn_in_m": 162.1
+    },
+    {
+     "t": 188.7,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 478.1,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1973161709473945,
+      "gap": 2.8020156593388497
+     }
+    },
+    {
+     "t": 478.6,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.6103599021071666,
+      "gap": 1.986671162213725
+     }
+    },
+    {
+     "t": 522.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop122",
+     "line_m": -15.8,
+     "next_turn": "left",
+     "turn_in_m": 14
+    },
+    {
+     "t": 522.8,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop122",
+     "line_m": -15.8,
+     "next_turn": "left",
+     "turn_in_m": 14
+    },
+    {
+     "t": 523.1,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop122",
+     "line_m": -15.8,
+     "next_turn": "left",
+     "turn_in_m": 14
+    },
+    {
+     "t": 523.4,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop122",
+     "line_m": -16,
+     "next_turn": "left",
+     "turn_in_m": 13.8
+    },
+    {
+     "t": 535.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -16.7,
+     "next_turn": "left",
+     "turn_in_m": 13
+    },
+    {
+     "t": 536.2,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -16.8,
+     "next_turn": "left",
+     "turn_in_m": 13
+    },
+    {
+     "t": 536.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -16.9,
+     "next_turn": "left",
+     "turn_in_m": 12.9
+    },
+    {
+     "t": 548.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -17.5,
+     "next_turn": "left",
+     "turn_in_m": 12.2
+    },
+    {
+     "t": 549,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -17.5,
+     "next_turn": "left",
+     "turn_in_m": 12.2
+    },
+    {
+     "t": 549.2,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -17.5,
+     "next_turn": "left",
+     "turn_in_m": 12.2
+    },
+    {
+     "t": 549.5,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -17.7,
+     "next_turn": "left",
+     "turn_in_m": 12.1
+    },
+    {
+     "t": 562,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -18.4,
+     "next_turn": "left",
+     "turn_in_m": 11.4
+    },
+    {
+     "t": 562.3,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -18.4,
+     "next_turn": "left",
+     "turn_in_m": 11.4
+    },
+    {
+     "t": 562.6,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -18.5,
+     "next_turn": "left",
+     "turn_in_m": 11.2
+    },
+    {
+     "t": 575.1,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -19.2,
+     "next_turn": "left",
+     "turn_in_m": 10.5
+    },
+    {
+     "t": 575.4,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -19.3,
+     "next_turn": "left",
+     "turn_in_m": 10.5
+    },
+    {
+     "t": 575.6,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -19.4,
+     "next_turn": "left",
+     "turn_in_m": 10.4
+    },
+    {
+     "t": 588.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -20.1,
+     "next_turn": "left",
+     "turn_in_m": 9.7
+    },
+    {
+     "t": 588.4,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -20.1,
+     "next_turn": "left",
+     "turn_in_m": 9.6
+    },
+    {
+     "t": 588.7,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 1
+     },
+     "control": "stop stop122",
+     "line_m": -20.2,
+     "next_turn": "left",
+     "turn_in_m": 9.5
+    }
+   ],
+   "wall_ms": 571651
+  },
+  {
+   "id": "s1-10",
+   "tags": {
+    "length_m": 908,
+    "signals": 3,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 2
+   },
+   "arrived": false,
+   "time_s": 473.3,
+   "distance_m": 774,
+   "progress": 0.769,
+   "avg_kmh": 5.9,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 30,
+   "fallbacks": 0,
+   "min_gap_m": null,
+   "min_ttc_s": null,
+   "min_headway_s": null,
+   "max_accel": 2.51,
+   "max_decel": -6.97,
+   "hard_brakes": 0,
+   "rms_jerk": 3.35,
+   "max_jerk": 54.9,
+   "max_lat_accel": 5.5,
+   "lane_rms_m": 0.13,
+   "lane_max_m": 0.71,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 348.1,
+   "decisions": 1810,
+   "calls": 1807,
+   "tokens": 5886595,
+   "cost_usd": 0.247237,
+   "latency_p50_ms": 152,
+   "latency_p95_ms": 202,
+   "model_decisions": 1807,
+   "partial_decisions": 0,
+   "local_decisions": 3,
+   "fallback_decisions": 0,
+   "model_share": 0.998,
+   "local_share": 0.002,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1807,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 48.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.1,
+     "next_turn": "left",
+     "turn_in_m": 1.2
+    },
+    {
+     "t": 49,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.1,
+     "next_turn": "left",
+     "turn_in_m": 1.2
+    },
+    {
+     "t": 49.3,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.2,
+     "next_turn": "left",
+     "turn_in_m": 1.1
+    },
+    {
+     "t": 61.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.9,
+     "next_turn": "left",
+     "turn_in_m": 0.4
+    },
+    {
+     "t": 61.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -23.9,
+     "next_turn": "left",
+     "turn_in_m": 0.4
+    },
+    {
+     "t": 62.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24,
+     "next_turn": "left",
+     "turn_in_m": 0.3
+    },
+    {
+     "t": 62.4,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24.1,
+     "next_turn": "left",
+     "turn_in_m": 0.2
+    },
+    {
+     "t": 74.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24.8,
+     "next_turn": "left",
+     "turn_in_m": -0.5
+    },
+    {
+     "t": 75.2,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -24.8,
+     "next_turn": "left",
+     "turn_in_m": -0.5
+    },
+    {
+     "t": 75.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25,
+     "next_turn": "left",
+     "turn_in_m": -0.7
+    },
+    {
+     "t": 88.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25.7,
+     "next_turn": "left",
+     "turn_in_m": -1.4
+    },
+    {
+     "t": 88.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25.7,
+     "next_turn": "left",
+     "turn_in_m": -1.4
+    },
+    {
+     "t": 89,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25.7,
+     "next_turn": "left",
+     "turn_in_m": -1.4
+    },
+    {
+     "t": 89.3,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -25.8,
+     "next_turn": "left",
+     "turn_in_m": -1.6
+    },
+    {
+     "t": 101.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -26.6,
+     "next_turn": "left",
+     "turn_in_m": -2.3
+    },
+    {
+     "t": 102.1,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -26.6,
+     "next_turn": "left",
+     "turn_in_m": -2.3
+    },
+    {
+     "t": 102.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -26.7,
+     "next_turn": "left",
+     "turn_in_m": -2.4
+    },
+    {
+     "t": 114.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -27.4,
+     "next_turn": "right",
+     "turn_in_m": 465.8
+    },
+    {
+     "t": 115.2,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {},
+     "control": "stop stop47",
+     "line_m": -27.4,
+     "next_turn": "right",
+     "turn_in_m": 465.8
+    },
+    {
+     "t": 115.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "ease_round_pothole",
+     "rejected": {},
+     "next_turn": "right",
+     "turn_in_m": 465.6
+    },
+    {
+     "t": 217.9,
+     "type": "reroute",
+     "count": 2
+    },
+    {
+     "t": 295.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -16.5,
+     "next_turn": "right",
+     "turn_in_m": 134.1
+    },
+    {
+     "t": 295.9,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -16.5,
+     "next_turn": "right",
+     "turn_in_m": 134.1
+    },
+    {
+     "t": 296.2,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -16.6,
+     "next_turn": "right",
+     "turn_in_m": 134
+    },
+    {
+     "t": 419.7,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop121",
+     "line_m": -17.3,
+     "next_turn": "right",
+     "turn_in_m": 133.3
+    },
+    {
+     "t": 419.9,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop121",
+     "line_m": -17.3,
+     "next_turn": "right",
+     "turn_in_m": 133.3
+    },
+    {
+     "t": 420.2,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop121",
+     "line_m": -17.4,
+     "next_turn": "right",
+     "turn_in_m": 133.3
+    },
+    {
+     "t": 420.4,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 5
+     },
+     "control": "stop stop121",
+     "line_m": -17.6,
+     "next_turn": "right",
+     "turn_in_m": 133.1
+    },
+    {
+     "t": 470.1,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -18.4,
+     "next_turn": "right",
+     "turn_in_m": 132.2
+    },
+    {
+     "t": 470.3,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -18.4,
+     "next_turn": "right",
+     "turn_in_m": 132.2
+    },
+    {
+     "t": 470.6,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop121",
+     "line_m": -18.5,
+     "next_turn": "right",
+     "turn_in_m": 132.1
+    }
+   ],
+   "wall_ms": 437542
+  },
+  {
+   "id": "s1-11",
+   "tags": {
+    "length_m": 619,
+    "signals": 1,
+    "stops": 0,
+    "lefts": 1,
+    "rights": 0
+   },
+   "arrived": false,
+   "time_s": 327.3,
+   "distance_m": 614,
+   "progress": 0.559,
+   "avg_kmh": 6.8,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "hump_hits": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 26,
+   "fallbacks": 0,
+   "min_gap_m": 5,
+   "min_ttc_s": 5.3,
+   "min_headway_s": 3.14,
+   "max_accel": 2.5,
+   "max_decel": -6.7,
+   "hard_brakes": 0,
+   "rms_jerk": 3.96,
+   "max_jerk": 61.3,
+   "max_lat_accel": 5.15,
+   "lane_rms_m": 0.36,
+   "lane_max_m": 1.36,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 204.2,
+   "decisions": 1252,
+   "calls": 1245,
+   "tokens": 4336387,
+   "cost_usd": 0.182128,
+   "latency_p50_ms": 153,
+   "latency_p95_ms": 199,
+   "model_decisions": 1245,
+   "partial_decisions": 0,
+   "local_decisions": 7,
+   "fallback_decisions": 0,
+   "model_share": 0.994,
+   "local_share": 0.006,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 1245,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 75.4,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 148.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -15.9,
+     "next_turn": "left",
+     "turn_in_m": 1.7
+    },
+    {
+     "t": 148.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -15.9,
+     "next_turn": "left",
+     "turn_in_m": 1.7
+    },
+    {
+     "t": 148.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -15.9,
+     "next_turn": "left",
+     "turn_in_m": 1.7
+    },
+    {
+     "t": 148.8,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -16,
+     "next_turn": "left",
+     "turn_in_m": 1.6
+    },
+    {
+     "t": 170.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p8",
+     "gap_m": 54.6,
+     "control": "stop stop155",
+     "line_m": -16.7,
+     "next_turn": "left",
+     "turn_in_m": 0.9
+    },
+    {
+     "t": 170.3,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "ahead": "car_p8",
+     "gap_m": 55,
+     "control": "stop stop155",
+     "line_m": -16.7,
+     "next_turn": "left",
+     "turn_in_m": 0.9
+    },
+    {
+     "t": 170.6,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -16.7,
+     "next_turn": "left",
+     "turn_in_m": 0.9
+    },
+    {
+     "t": 170.8,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -16.9,
+     "next_turn": "left",
+     "turn_in_m": 0.7
+    },
+    {
+     "t": 183.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -17.6,
+     "next_turn": "left",
+     "turn_in_m": 0
+    },
+    {
+     "t": 183.6,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -17.6,
+     "next_turn": "left",
+     "turn_in_m": 0
+    },
+    {
+     "t": 183.8,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -17.7,
+     "next_turn": "left",
+     "turn_in_m": -0.1
+    },
+    {
+     "t": 209.1,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -18.3,
+     "next_turn": "left",
+     "turn_in_m": -0.7
+    },
+    {
+     "t": 209.3,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -18.3,
+     "next_turn": "left",
+     "turn_in_m": -0.7
+    },
+    {
+     "t": 209.6,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -18.4,
+     "next_turn": "left",
+     "turn_in_m": -0.8
+    },
+    {
+     "t": 209.8,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 4
+     },
+     "control": "stop stop155",
+     "line_m": -18.6,
+     "next_turn": "left",
+     "turn_in_m": -1
+    },
+    {
+     "t": 222.4,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -19.4,
+     "next_turn": "left",
+     "turn_in_m": -1.8
+    },
+    {
+     "t": 222.6,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -19.4,
+     "next_turn": "left",
+     "turn_in_m": -1.8
+    },
+    {
+     "t": 222.8,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop155",
+     "line_m": -19.5,
+     "next_turn": "left",
+     "turn_in_m": -1.9
+    },
+    {
+     "t": 235.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -20.1,
+     "next_turn": "left",
+     "turn_in_m": -2.5
+    },
+    {
+     "t": 235.3,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -20.1,
+     "next_turn": "left",
+     "turn_in_m": -2.5
+    },
+    {
+     "t": 235.6,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop155",
+     "line_m": -20.1,
+     "next_turn": "left",
+     "turn_in_m": -2.5
+    },
+    {
+     "t": 235.8,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop155",
+     "line_m": -20.2,
+     "next_turn": "left",
+     "turn_in_m": -2.6
+    },
+    {
+     "t": 313.8,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop158",
+     "line_m": -16.2,
+     "next_turn": "left",
+     "turn_in_m": 2.1
+    },
+    {
+     "t": 313.9,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop158",
+     "line_m": -16.2,
+     "next_turn": "left",
+     "turn_in_m": 2.1
+    },
+    {
+     "t": 314.2,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop158",
+     "line_m": -16.3,
+     "next_turn": "left",
+     "turn_in_m": 2
+    },
+    {
+     "t": 314.5,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop158",
+     "line_m": -16.4,
+     "next_turn": "left",
+     "turn_in_m": 1.9
+    }
+   ],
+   "wall_ms": 305465
+  },
+  {
+   "id": "s1-12",
+   "tags": {
+    "length_m": 1087,
+    "signals": 2,
+    "stops": 3,
+    "lefts": 2,
+    "rights": 1
+   },
+   "arrived": false,
+   "time_s": 568.6,
+   "distance_m": 1152,
+   "progress": 0.705,
+   "avg_kmh": 7.3,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 32,
+   "fallbacks": 0,
+   "min_gap_m": 9.4,
+   "min_ttc_s": 2.4,
+   "min_headway_s": 2.23,
+   "max_accel": 2.5,
+   "max_decel": -6.71,
+   "hard_brakes": 0,
+   "rms_jerk": 3.55,
+   "max_jerk": 57.4,
+   "max_lat_accel": 5.07,
+   "lane_rms_m": 0.18,
+   "lane_max_m": 0.41,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 327.5,
+   "decisions": 2163,
+   "calls": 2131,
+   "tokens": 7392139,
+   "cost_usd": 0.31047,
+   "latency_p50_ms": 147,
+   "latency_p95_ms": 179,
+   "model_decisions": 2131,
+   "partial_decisions": 0,
+   "local_decisions": 32,
+   "fallback_decisions": 0,
+   "model_share": 0.985,
+   "local_share": 0.015,
+   "fallback_share": 0,
+   "failures": [
+    "stuck"
+   ],
+   "pass": false,
+   "model_recording": {
+    "mode": "record",
+    "calls": 2131,
+    "served": 0,
+    "missing": 0,
+    "drift": 0
+   },
+   "events": [
+    {
+     "t": 98.9,
+     "type": "reroute",
+     "count": 3
+    },
+    {
+     "t": 120.5,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.202873266195725,
+      "closing": 4.231356097515885
+     }
+    },
+    {
+     "t": 331.5,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -15.5,
+     "next_turn": "left",
+     "turn_in_m": 7.3
+    },
+    {
+     "t": 331.6,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -15.5,
+     "next_turn": "left",
+     "turn_in_m": 7.3
+    },
+    {
+     "t": 331.9,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -15.6,
+     "next_turn": "left",
+     "turn_in_m": 7.2
+    },
+    {
+     "t": 332.2,
+     "type": "deadlock",
+     "stuck_s": 12.7,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -15.7,
+     "next_turn": "left",
+     "turn_in_m": 7.1
+    },
+    {
+     "t": 376.1,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -16.6,
+     "next_turn": "left",
+     "turn_in_m": 6.2
+    },
+    {
+     "t": 376.2,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -16.6,
+     "next_turn": "left",
+     "turn_in_m": 6.2
+    },
+    {
+     "t": 376.4,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -16.6,
+     "next_turn": "left",
+     "turn_in_m": 6.2
+    },
+    {
+     "t": 376.7,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -16.8,
+     "next_turn": "left",
+     "turn_in_m": 6
+    },
+    {
+     "t": 403,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -17.6,
+     "next_turn": "left",
+     "turn_in_m": 5.2
+    },
+    {
+     "t": 403.1,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -17.6,
+     "next_turn": "left",
+     "turn_in_m": 5.2
+    },
+    {
+     "t": 403.4,
+     "type": "deadlock",
+     "stuck_s": 12.4,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -17.6,
+     "next_turn": "left",
+     "turn_in_m": 5.2
+    },
+    {
+     "t": 403.6,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -17.8,
+     "next_turn": "left",
+     "turn_in_m": 5
+    },
+    {
+     "t": 416.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -18.5,
+     "next_turn": "left",
+     "turn_in_m": 4.3
+    },
+    {
+     "t": 416.4,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -18.5,
+     "next_turn": "left",
+     "turn_in_m": 4.3
+    },
+    {
+     "t": 416.7,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -18.6,
+     "next_turn": "left",
+     "turn_in_m": 4.1
+    },
+    {
+     "t": 429.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -19.3,
+     "next_turn": "left",
+     "turn_in_m": 3.5
+    },
+    {
+     "t": 429.2,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -19.3,
+     "next_turn": "left",
+     "turn_in_m": 3.5
+    },
+    {
+     "t": 429.5,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -19.4,
+     "next_turn": "left",
+     "turn_in_m": 3.4
+    },
+    {
+     "t": 429.8,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -19.5,
+     "next_turn": "left",
+     "turn_in_m": 3.3
+    },
+    {
+     "t": 450.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -20.2,
+     "next_turn": "left",
+     "turn_in_m": 2.6
+    },
+    {
+     "t": 451.1,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -20.2,
+     "next_turn": "left",
+     "turn_in_m": 2.6
+    },
+    {
+     "t": 451.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -20.3,
+     "next_turn": "left",
+     "turn_in_m": 2.5
+    },
+    {
+     "t": 472,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -20.9,
+     "next_turn": "left",
+     "turn_in_m": 1.9
+    },
+    {
+     "t": 472.2,
+     "type": "deadlock",
+     "stuck_s": 12.2,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -20.9,
+     "next_turn": "left",
+     "turn_in_m": 1.9
+    },
+    {
+     "t": 472.4,
+     "type": "deadlock",
+     "stuck_s": 12.5,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop92",
+     "line_m": -21,
+     "next_turn": "left",
+     "turn_in_m": 1.8
+    },
+    {
+     "t": 484.9,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -21.6,
+     "next_turn": "left",
+     "turn_in_m": 1.2
+    },
+    {
+     "t": 485,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -21.6,
+     "next_turn": "left",
+     "turn_in_m": 1.2
+    },
+    {
+     "t": 485.2,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "hold",
+     "rejected": {
+      "collision": 2
+     },
+     "control": "stop stop92",
+     "line_m": -21.7,
+     "next_turn": "left",
+     "turn_in_m": 1.1
+    },
+    {
+     "t": 485.5,
+     "type": "deadlock",
+     "stuck_s": 12.6,
+     "holding": "hard_brake",
+     "rejected": {
+      "collision": 3
+     },
+     "control": "stop stop92",
+     "line_m": -21.8,
+     "next_turn": "left",
+     "turn_in_m": 1
+    },
+    {
+     "t": 559,
+     "type": "deadlock",
+     "stuck_s": 12,
+     "holding": "keep_lane_stop",
+     "rejected": {
+      "collision": 10
+     },
+     "control": "stop stop46",
+     "line_m": 18.4,
+     "next_turn": "left",
+     "turn_in_m": 44.8
+    },
+    {
+     "t": 559.1,
+     "type": "deadlock",
+     "stuck_s": 12.1,
+     "holding": "keep_lane_stop",
+     "rejected": {
+      "collision": 10
+     },
+     "control": "stop stop46",
+     "line_m": 18.3,
+     "next_turn": "left",
+     "turn_in_m": 44.8
+    },
+    {
+     "t": 559.4,
+     "type": "deadlock",
+     "stuck_s": 12.3,
+     "holding": "left_0.5_target",
+     "rejected": {
+      "collision": 11
+     },
+     "control": "stop stop46",
+     "line_m": 18.2,
+     "next_turn": "left",
+     "turn_in_m": 44.7
+    }
+   ],
+   "wall_ms": 542298
+  }
+ ],
+ "manifest": {
+  "format": "jev-run-manifest/1",
+  "source_commit": "9b53a074ba6e4e17001d904d32fcb67151260eb1",
+  "source_dirty": false,
+  "engine": "node v22.23.4",
+  "engine_version": "12.4.254.21-node.57",
+  "driver": "jev",
+  "model": "jev-latest",
+  "prompt_hash": "35e05ad967482b41",
+  "track": "guarded",
+  "suite": {
+   "kind": "bench",
+   "config": {
+    "brain": "jev",
+    "count": 12,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "kitsilano",
+    "bbox": [
+     -123.17,
+     49.26,
+     -123.15,
+     49.27
+    ],
+    "pack": "6",
+    "engine": "node v22.23.4"
+   },
+   "ids": [
+    "s1-1",
+    "s1-2",
+    "s1-3",
+    "s1-4",
+    "s1-5",
+    "s1-6",
+    "s1-7",
+    "s1-8",
+    "s1-9",
+    "s1-10",
+    "s1-11",
+    "s1-12"
+   ],
+   "generated_ids": [
+    "s1-1",
+    "s1-2",
+    "s1-3",
+    "s1-4",
+    "s1-5",
+    "s1-6",
+    "s1-7",
+    "s1-8",
+    "s1-9",
+    "s1-10",
+    "s1-11",
+    "s1-12"
+   ],
+   "route_sha": "1607d4bf5bdaaeec"
+  },
+  "maps": {
+   "kitsilano": {
+    "pack_version": "6",
+    "fingerprint": "585df0725632b07b",
+    "components": {
+     "bbox": "1c9202d14fca0fc4",
+     "bridges": "428ada657542c5ee",
+     "buildings": "4e33a3e18f699156",
+     "buslanes": "ebb5f0f40dbe01c0",
+     "calming": "f5479d9eb28cf66f",
+     "contraflow": "83a42785988f140d",
+     "crossings": "4f0f89712c0dd098",
+     "driveways": "b24a83c68735bf66",
+     "edges": "7a92c5b76a96651a",
+     "extent": "2eefa060e70f8ecd",
+     "intersections": "2aa60378e8a91cbe",
+     "lanes": "1897097b7c168e5a",
+     "name": "b1cddc5a1972bb56",
+     "nodes": "df9e23e9f16c5afe",
+     "origin": "fc0e672f8966d0c5",
+     "pack_version": "d561ed8d020d5c15",
+     "parks": "c1296cb82ec2c57c",
+     "rail": "7d4588e74b08392f",
+     "restrictions": "3977979aa1145f79",
+     "roundabouts": "7321e79fecfafa47",
+     "routing_bbox": "1c9202d14fca0fc4",
+     "scrambles": "9eba7e525dbd3353",
+     "stats": "beb125fca6c76059",
+     "stops": "3419512ea6f07307",
+     "transit": "66354afaf7b99b5b",
+     "utc_offset": "01f8b23212002df8",
+     "yields": "6ea3d0d7ff48e50f",
+     "zones": "67555ef7e6758357"
+    }
+   }
+  },
+  "cost_usd": 2.447367
+ }
+}

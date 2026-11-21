@@ -6052,7 +6052,7 @@
    "weather": "dry",
    "passed": 12,
    "total": 12,
-   "date": "2026-11-14",
+   "date": "2026-11-21",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
@@ -6068,9 +6068,92 @@
    "cost_basis": "none",
    "failed": [],
    "sources": [
-    "data/runs/20261114-210001-rules.json"
+    "data/runs/20261121-075044-rules.json"
    ],
-   "recording": null
+   "recording": null,
+   "manifest": {
+    "format": "jev-run-manifest/1",
+    "source_commit": "9b53a074ba6e4e17001d904d32fcb67151260eb1",
+    "source_dirty": false,
+    "engine": "node v22.23.4",
+    "engine_version": "12.4.254.21-node.57",
+    "driver": "rules",
+    "model": null,
+    "prompt_hash": null,
+    "track": "guarded",
+    "suite": {
+     "kind": "bench",
+     "config": {
+      "brain": "rules",
+      "count": 12,
+      "seed": 1,
+      "npcs": 40,
+      "mode": "lockstep",
+      "weather": "dry",
+      "features": "city",
+      "map": "kitsilano",
+      "bbox": [
+       -123.17,
+       49.26,
+       -123.15,
+       49.27
+      ],
+      "pack": "6",
+      "engine": "node v22.23.4"
+     },
+     "ids": [
+      "s1-1",
+      "s1-2",
+      "s1-3",
+      "s1-4",
+      "s1-5",
+      "s1-6",
+      "s1-7",
+      "s1-8",
+      "s1-9",
+      "s1-10",
+      "s1-11",
+      "s1-12"
+     ]
+    },
+    "maps": {
+     "kitsilano": {
+      "pack_version": "6",
+      "fingerprint": "585df0725632b07b",
+      "components": {
+       "bbox": "1c9202d14fca0fc4",
+       "bridges": "428ada657542c5ee",
+       "buildings": "4e33a3e18f699156",
+       "buslanes": "ebb5f0f40dbe01c0",
+       "calming": "f5479d9eb28cf66f",
+       "contraflow": "83a42785988f140d",
+       "crossings": "4f0f89712c0dd098",
+       "driveways": "b24a83c68735bf66",
+       "edges": "7a92c5b76a96651a",
+       "extent": "2eefa060e70f8ecd",
+       "intersections": "2aa60378e8a91cbe",
+       "lanes": "1897097b7c168e5a",
+       "name": "b1cddc5a1972bb56",
+       "nodes": "df9e23e9f16c5afe",
+       "origin": "fc0e672f8966d0c5",
+       "pack_version": "d561ed8d020d5c15",
+       "parks": "c1296cb82ec2c57c",
+       "rail": "7d4588e74b08392f",
+       "restrictions": "3977979aa1145f79",
+       "roundabouts": "7321e79fecfafa47",
+       "routing_bbox": "1c9202d14fca0fc4",
+       "scrambles": "9eba7e525dbd3353",
+       "stats": "beb125fca6c76059",
+       "stops": "3419512ea6f07307",
+       "transit": "66354afaf7b99b5b",
+       "utc_offset": "01f8b23212002df8",
+       "yields": "6ea3d0d7ff48e50f",
+       "zones": "67555ef7e6758357"
+      }
+     }
+    },
+    "cost_usd": 0
+   }
   },
   {
    "driver": "rules",
@@ -12522,49 +12605,139 @@
    "map": "kitsilano",
    "preset": "city",
    "weather": "dry",
-   "passed": 10,
+   "passed": 9,
    "total": 12,
-   "date": "2026-11-11",
+   "date": "2026-11-21",
    "seed": 1,
    "mode": "lockstep",
    "traffic": 40,
    "engine": "node v22.23.4",
    "model": null,
    "model_requested": null,
-   "decisions": 11884,
-   "model_decisions": 11793,
-   "model_share": 0.9923,
-   "local_decisions": 91,
-   "local_share": 0.0077,
+   "decisions": 11814,
+   "model_decisions": 11715,
+   "model_share": 0.9916,
+   "local_decisions": 99,
+   "local_share": 0.0084,
    "fallback_decisions": 0,
    "fallback_share": 0.0,
    "fallbacks": 0,
    "hard_brakes": 0,
-   "safety_brakes": 3,
-   "driving_s": 3112.5,
-   "km": 12.62,
+   "safety_brakes": 0,
+   "driving_s": 3089.5,
+   "km": 12.22,
    "cost_usd": 0,
    "cost_basis": "none",
    "failed": [
     {
-     "id": "s1-1",
+     "id": "s1-2",
      "map": "kitsilano",
      "failures": [
-      "collision"
+      "stuck"
      ]
     },
     {
-     "id": "s1-12",
+     "id": "s1-8",
      "map": "kitsilano",
      "failures": [
-      "braked hard with a tailgater close behind"
+      "red light"
+     ]
+    },
+    {
+     "id": "s1-10",
+     "map": "kitsilano",
+     "failures": [
+      "red light"
      ]
     }
    ],
    "sources": [
-    "data/runs/20261111-172000-cautious.json"
+    "data/runs/20261121-075157-cautious.json"
    ],
-   "recording": null
+   "recording": null,
+   "manifest": {
+    "format": "jev-run-manifest/1",
+    "source_commit": "9b53a074ba6e4e17001d904d32fcb67151260eb1",
+    "source_dirty": false,
+    "engine": "node v22.23.4",
+    "engine_version": "12.4.254.21-node.57",
+    "driver": "cautious",
+    "model": null,
+    "prompt_hash": null,
+    "track": "guarded",
+    "suite": {
+     "kind": "bench",
+     "config": {
+      "brain": "cautious",
+      "count": 12,
+      "seed": 1,
+      "npcs": 40,
+      "mode": "lockstep",
+      "weather": "dry",
+      "features": "city",
+      "map": "kitsilano",
+      "bbox": [
+       -123.17,
+       49.26,
+       -123.15,
+       49.27
+      ],
+      "pack": "6",
+      "engine": "node v22.23.4"
+     },
+     "ids": [
+      "s1-1",
+      "s1-2",
+      "s1-3",
+      "s1-4",
+      "s1-5",
+      "s1-6",
+      "s1-7",
+      "s1-8",
+      "s1-9",
+      "s1-10",
+      "s1-11",
+      "s1-12"
+     ]
+    },
+    "maps": {
+     "kitsilano": {
+      "pack_version": "6",
+      "fingerprint": "585df0725632b07b",
+      "components": {
+       "bbox": "1c9202d14fca0fc4",
+       "bridges": "428ada657542c5ee",
+       "buildings": "4e33a3e18f699156",
+       "buslanes": "ebb5f0f40dbe01c0",
+       "calming": "f5479d9eb28cf66f",
+       "contraflow": "83a42785988f140d",
+       "crossings": "4f0f89712c0dd098",
+       "driveways": "b24a83c68735bf66",
+       "edges": "7a92c5b76a96651a",
+       "extent": "2eefa060e70f8ecd",
+       "intersections": "2aa60378e8a91cbe",
+       "lanes": "1897097b7c168e5a",
+       "name": "b1cddc5a1972bb56",
+       "nodes": "df9e23e9f16c5afe",
+       "origin": "fc0e672f8966d0c5",
+       "pack_version": "d561ed8d020d5c15",
+       "parks": "c1296cb82ec2c57c",
+       "rail": "7d4588e74b08392f",
+       "restrictions": "3977979aa1145f79",
+       "roundabouts": "7321e79fecfafa47",
+       "routing_bbox": "1c9202d14fca0fc4",
+       "scrambles": "9eba7e525dbd3353",
+       "stats": "beb125fca6c76059",
+       "stops": "3419512ea6f07307",
+       "transit": "66354afaf7b99b5b",
+       "utc_offset": "01f8b23212002df8",
+       "yields": "6ea3d0d7ff48e50f",
+       "zones": "67555ef7e6758357"
+      }
+     }
+    },
+    "cost_usd": 0
+   }
   },
   {
    "driver": "cautious",
@@ -16488,6 +16661,215 @@
    "recording": "data/recordings/jev-open-2026-11-20.json.gz"
   },
   {
+   "driver": "jev",
+   "suite": "city",
+   "track": "guarded",
+   "label": "Kitsilano, city preset, dry",
+   "map": "kitsilano",
+   "preset": "city",
+   "weather": "dry",
+   "passed": 2,
+   "total": 12,
+   "date": "2026-11-21",
+   "seed": 1,
+   "mode": "lockstep",
+   "traffic": 40,
+   "engine": "node v22.23.4",
+   "model": "jev-1.14.0",
+   "model_requested": "jev-latest",
+   "decisions": 16955,
+   "model_decisions": 16838,
+   "model_share": 0.9931,
+   "local_decisions": 117,
+   "local_share": 0.0069,
+   "fallback_decisions": 0,
+   "fallback_share": 0.0,
+   "fallbacks": 0,
+   "hard_brakes": 0,
+   "safety_brakes": 9,
+   "driving_s": 4450.0,
+   "km": 10.29,
+   "cost_usd": 2.447367,
+   "cost_basis": "as the server counted it",
+   "failed": [
+    {
+     "id": "s1-1",
+     "map": "kitsilano",
+     "failures": [
+      "collision"
+     ]
+    },
+    {
+     "id": "s1-2",
+     "map": "kitsilano",
+     "failures": [
+      "stuck",
+      "failed to yield"
+     ]
+    },
+    {
+     "id": "s1-3",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-4",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-5",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-8",
+     "map": "kitsilano",
+     "failures": [
+      "stuck",
+      "failed to yield"
+     ]
+    },
+    {
+     "id": "s1-9",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-10",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-11",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-12",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    }
+   ],
+   "sources": [
+    "data/runs/20261121-075524-jev.json",
+    "data/recordings/20261121-075524-jev.json.gz"
+   ],
+   "recording": "data/recordings/20261121-075524-jev.json.gz",
+   "manifest": {
+    "format": "jev-run-manifest/1",
+    "source_commit": "9b53a074ba6e4e17001d904d32fcb67151260eb1",
+    "source_dirty": false,
+    "engine": "node v22.23.4",
+    "engine_version": "12.4.254.21-node.57",
+    "driver": "jev",
+    "model": "jev-latest",
+    "prompt_hash": "35e05ad967482b41",
+    "track": "guarded",
+    "suite": {
+     "kind": "bench",
+     "config": {
+      "brain": "jev",
+      "count": 12,
+      "seed": 1,
+      "npcs": 40,
+      "mode": "lockstep",
+      "weather": "dry",
+      "features": "city",
+      "map": "kitsilano",
+      "bbox": [
+       -123.17,
+       49.26,
+       -123.15,
+       49.27
+      ],
+      "pack": "6",
+      "engine": "node v22.23.4"
+     },
+     "ids": [
+      "s1-1",
+      "s1-2",
+      "s1-3",
+      "s1-4",
+      "s1-5",
+      "s1-6",
+      "s1-7",
+      "s1-8",
+      "s1-9",
+      "s1-10",
+      "s1-11",
+      "s1-12"
+     ],
+     "generated_ids": [
+      "s1-1",
+      "s1-2",
+      "s1-3",
+      "s1-4",
+      "s1-5",
+      "s1-6",
+      "s1-7",
+      "s1-8",
+      "s1-9",
+      "s1-10",
+      "s1-11",
+      "s1-12"
+     ],
+     "route_sha": "1607d4bf5bdaaeec"
+    },
+    "maps": {
+     "kitsilano": {
+      "pack_version": "6",
+      "fingerprint": "585df0725632b07b",
+      "components": {
+       "bbox": "1c9202d14fca0fc4",
+       "bridges": "428ada657542c5ee",
+       "buildings": "4e33a3e18f699156",
+       "buslanes": "ebb5f0f40dbe01c0",
+       "calming": "f5479d9eb28cf66f",
+       "contraflow": "83a42785988f140d",
+       "crossings": "4f0f89712c0dd098",
+       "driveways": "b24a83c68735bf66",
+       "edges": "7a92c5b76a96651a",
+       "extent": "2eefa060e70f8ecd",
+       "intersections": "2aa60378e8a91cbe",
+       "lanes": "1897097b7c168e5a",
+       "name": "b1cddc5a1972bb56",
+       "nodes": "df9e23e9f16c5afe",
+       "origin": "fc0e672f8966d0c5",
+       "pack_version": "d561ed8d020d5c15",
+       "parks": "c1296cb82ec2c57c",
+       "rail": "7d4588e74b08392f",
+       "restrictions": "3977979aa1145f79",
+       "roundabouts": "7321e79fecfafa47",
+       "routing_bbox": "1c9202d14fca0fc4",
+       "scrambles": "9eba7e525dbd3353",
+       "stats": "beb125fca6c76059",
+       "stops": "3419512ea6f07307",
+       "transit": "66354afaf7b99b5b",
+       "utc_offset": "01f8b23212002df8",
+       "yields": "6ea3d0d7ff48e50f",
+       "zones": "67555ef7e6758357"
+      }
+     }
+    },
+    "cost_usd": 2.447367
+   }
+  },
+  {
    "driver": "llm:claude-haiku-5-5",
    "suite": "challenges",
    "track": "guarded",
@@ -19803,6 +20185,206 @@
     "data/recordings/claude-haiku-open-2026-11-20.json.gz"
    ],
    "recording": "data/recordings/claude-haiku-open-2026-11-20.json.gz"
+  },
+  {
+   "driver": "llm:claude-haiku-5-5",
+   "suite": "city",
+   "track": "guarded",
+   "label": "Kitsilano, city preset, dry",
+   "map": "kitsilano",
+   "preset": "city",
+   "weather": "dry",
+   "passed": 3,
+   "total": 12,
+   "date": "2026-11-21",
+   "seed": 1,
+   "mode": "lockstep",
+   "traffic": 40,
+   "engine": "node v22.23.4",
+   "model": "claude-haiku-5-5",
+   "model_requested": null,
+   "decisions": 17290,
+   "model_decisions": 16587,
+   "model_share": 0.9593,
+   "local_decisions": 685,
+   "local_share": 0.0396,
+   "fallback_decisions": 18,
+   "fallback_share": 0.001,
+   "fallbacks": 18,
+   "hard_brakes": 0,
+   "safety_brakes": 14,
+   "driving_s": 4534.9,
+   "km": 11.27,
+   "cost_usd": 7.812091,
+   "cost_basis": "as the server counted it",
+   "failed": [
+    {
+     "id": "s1-1",
+     "map": "kitsilano",
+     "failures": [
+      "timeout"
+     ]
+    },
+    {
+     "id": "s1-2",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-3",
+     "map": "kitsilano",
+     "failures": [
+      "collision"
+     ]
+    },
+    {
+     "id": "s1-4",
+     "map": "kitsilano",
+     "failures": [
+      "timeout"
+     ]
+    },
+    {
+     "id": "s1-5",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-8",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-9",
+     "map": "kitsilano",
+     "failures": [
+      "timeout"
+     ]
+    },
+    {
+     "id": "s1-10",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    },
+    {
+     "id": "s1-11",
+     "map": "kitsilano",
+     "failures": [
+      "stuck"
+     ]
+    }
+   ],
+   "sources": [
+    "data/runs/20261121-092730-llmclaudehaiku55.json",
+    "data/recordings/20261121-092730-llmclaudehaiku55.json.gz"
+   ],
+   "recording": "data/recordings/20261121-092730-llmclaudehaiku55.json.gz",
+   "manifest": {
+    "format": "jev-run-manifest/1",
+    "source_commit": "9b53a074ba6e4e17001d904d32fcb67151260eb1",
+    "source_dirty": false,
+    "engine": "node v22.23.4",
+    "engine_version": "12.4.254.21-node.57",
+    "driver": "llm:claude-haiku-5-5",
+    "model": "claude-haiku-5-5",
+    "prompt_hash": "971452a84ca8b571",
+    "track": "guarded",
+    "suite": {
+     "kind": "bench",
+     "config": {
+      "brain": "llm:claude-haiku-5-5",
+      "count": 12,
+      "seed": 1,
+      "npcs": 40,
+      "mode": "lockstep",
+      "weather": "dry",
+      "features": "city",
+      "map": "kitsilano",
+      "bbox": [
+       -123.17,
+       49.26,
+       -123.15,
+       49.27
+      ],
+      "pack": "6",
+      "engine": "node v22.23.4"
+     },
+     "ids": [
+      "s1-1",
+      "s1-2",
+      "s1-3",
+      "s1-4",
+      "s1-5",
+      "s1-6",
+      "s1-7",
+      "s1-8",
+      "s1-9",
+      "s1-10",
+      "s1-11",
+      "s1-12"
+     ],
+     "generated_ids": [
+      "s1-1",
+      "s1-2",
+      "s1-3",
+      "s1-4",
+      "s1-5",
+      "s1-6",
+      "s1-7",
+      "s1-8",
+      "s1-9",
+      "s1-10",
+      "s1-11",
+      "s1-12"
+     ],
+     "route_sha": "1607d4bf5bdaaeec"
+    },
+    "maps": {
+     "kitsilano": {
+      "pack_version": "6",
+      "fingerprint": "585df0725632b07b",
+      "components": {
+       "bbox": "1c9202d14fca0fc4",
+       "bridges": "428ada657542c5ee",
+       "buildings": "4e33a3e18f699156",
+       "buslanes": "ebb5f0f40dbe01c0",
+       "calming": "f5479d9eb28cf66f",
+       "contraflow": "83a42785988f140d",
+       "crossings": "4f0f89712c0dd098",
+       "driveways": "b24a83c68735bf66",
+       "edges": "7a92c5b76a96651a",
+       "extent": "2eefa060e70f8ecd",
+       "intersections": "2aa60378e8a91cbe",
+       "lanes": "1897097b7c168e5a",
+       "name": "b1cddc5a1972bb56",
+       "nodes": "df9e23e9f16c5afe",
+       "origin": "fc0e672f8966d0c5",
+       "pack_version": "d561ed8d020d5c15",
+       "parks": "c1296cb82ec2c57c",
+       "rail": "7d4588e74b08392f",
+       "restrictions": "3977979aa1145f79",
+       "roundabouts": "7321e79fecfafa47",
+       "routing_bbox": "1c9202d14fca0fc4",
+       "scrambles": "9eba7e525dbd3353",
+       "stats": "beb125fca6c76059",
+       "stops": "3419512ea6f07307",
+       "transit": "66354afaf7b99b5b",
+       "utc_offset": "01f8b23212002df8",
+       "yields": "6ea3d0d7ff48e50f",
+       "zones": "67555ef7e6758357"
+      }
+     }
+    },
+    "cost_usd": 7.812091
+   }
   },
   {
    "driver": "llm:deepseek",
