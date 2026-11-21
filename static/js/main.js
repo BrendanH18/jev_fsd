@@ -986,6 +986,7 @@ export async function boot() {
       if (drive.metrics?.jerkN)
         report.benchmarkMetrics = {
           ...drive.metrics.summary(world, autopilot, report.status === "arrived"),
+          // Arena results also publish the DriveScore count from the drive report.
           hard_brakes: report.hard_brakes,
         };
     }
@@ -1396,16 +1397,9 @@ export async function boot() {
           previousCars.set(bike.id, capturePose(bike, previousCars.get(bike.id)));
         for (const car of world.driveways.cars) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
         for (const p of world.crowd.list) previousPeople.set(p.id, capturePose(p, previousPeople.get(p.id)));
+        let road;
         try {
-          const road = stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
-          if (
-            drive?.metrics &&
-            !drive.finished &&
-            drive.driver === "manual" &&
-            !challengeModified &&
-            !recorder.branched
-          )
-            drive.metrics.record(world, manualMetricSnapshot(world), road, FIXED_DT);
+          road = stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
         } catch (error) {
           simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
           console.error("Simulation stopped", error);
@@ -1425,6 +1419,20 @@ export async function boot() {
             ),
           );
           break;
+        }
+        if (
+          drive?.metrics &&
+          !drive.finished &&
+          drive.driver === "manual" &&
+          !challengeModified &&
+          !recorder.branched
+        ) {
+          try {
+            drive.metrics.record(world, manualMetricSnapshot(world), road, FIXED_DT);
+          } catch (error) {
+            drive.metrics = null;
+            console.warn("Benchmark score unavailable", error);
+          }
         }
         if (drive && !drive.finished && !autopilot.enabled && world.route && Math.abs(world.ego.v) < 0.5) {
           const projection = world.route.project(world.ego.x, world.ego.y);

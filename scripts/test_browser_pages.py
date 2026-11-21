@@ -264,6 +264,15 @@ def check(url, chromium=None, groups=GROUPS):
         if "practice" in groups:
             page = open_page("/?challenge=bus-lanes&drive=manual&quality=low&weekday=6")
             assert page.evaluate("window.__jev.world.clock.weekday") == 0
+            assert page.evaluate("""() => {
+              const app = window.__jev, before = app.world.t;
+              app.drive.metrics.record = () => { throw new Error('Injected benchmark sampling failure'); };
+              app.world.paused = false;
+              app.advance(0.2);
+              return app.world.t > before && app.drive.metrics === null && app.simulationError === null;
+            }""")
+            page.evaluate("window.__jev.finishDrive('finished')")
+            assert page.locator(".drive-comparison tbody tr").first.locator("td").nth(2).inner_text() == "Unmeasured"
             page.close()
 
             page = open_page("/?challenge=road-test-kitsilano&drive=manual&quality=low")

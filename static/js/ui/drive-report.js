@@ -174,7 +174,7 @@ export class DriveReport {
     const status = h("p", { class: "muted", role: "status" }, "Loading published drives…");
     const section = h(
       "section",
-      { class: "challenge-debrief drive-comparison", "aria-label": "Same-drive comparison" },
+      { class: "drive-comparison", "aria-label": "Same-drive comparison" },
       h("h3", {}, "Your drive beside theirs"),
       h(
         "table",

@@ -337,13 +337,14 @@ const EV_OVERSHOOT_M = 1.5; // how far a short stop overshoots
 // current lane without asking the planner to update any of its yield or manoeuvre state.
 function followingInLane(ego, route, p, lane, vehicles, frame, snap) {
   const FRONT = ego.spec.length - ego.spec.rearOverhang;
+  const center = snap ? lane.center : p.lateral;
   const clearS = lane.from_center !== null ? laneClearS(lane.shift, lane.from_center, lane.center) : -Infinity;
   const inOrigin = (a) =>
     lane.from_center !== null &&
     Math.abs(p.lateral - lane.from_center) < LANE_CLEAR_M &&
     Math.abs(a.lateral - lane.from_center) <= 1.7 &&
     a.s - (a.vehicle.spec || CAR).rearOverhang < clearS + FRONT + 2;
-  const vanStop = snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
+  const vanStop = snap?.double_parked?.wait && snap.double_parked.bumper_to_stop_m > -1;
   const ahead = corridorQuery(
     route,
     p.s + FRONT - 1,
@@ -351,22 +352,23 @@ function followingInLane(ego, route, p, lane, vehicles, frame, snap) {
     3.2 + (lane.from_center !== null ? Math.abs(lane.center - lane.from_center) : 0),
     vehicles,
     p.index,
-    lane.center,
+    center,
     frame,
   )
-    .filter(
-      (a) =>
-        Math.abs(a.lateral - lane.center) <= 1.7 ||
-        inOrigin(a) ||
-        (a.vehicle.pull && a.vehicle.v > 0.2) ||
-        isParkingTraffic(a.vehicle),
+    .filter((a) =>
+      snap
+        ? Math.abs(a.lateral - center) <= 1.7 ||
+          inOrigin(a) ||
+          (a.vehicle.pull && a.vehicle.v > 0.2) ||
+          isParkingTraffic(a.vehicle)
+        : Math.abs(a.lateral - center) < (ego.spec.width + (a.vehicle.spec || CAR).width) / 2,
     )
     .filter((a) => !(Math.abs(a.vehicle.v) > 1 && Math.abs(wrap(a.vehicle.psi - ego.psi)) > (Math.PI * 5) / 6))
     // (a double-parked van the car waits behind, short of where it waits, is a stop, not a car to
     // follow: see doubleParked)
     .filter((a) => !(vanStop && a.vehicle.id === snap.double_parked.van_id))
     // (nor is a cyclist the car is going round, or about to: see cyclistPass)
-    .filter((a) => !(snap.cyclist_pass?.go && a.vehicle.id === snap.cyclist_pass.cyclist_id));
+    .filter((a) => !(snap?.cyclist_pass?.go && a.vehicle.id === snap.cyclist_pass.cyclist_id));
   if (ahead.length) {
     const lead = ahead[0];
     const gap = lead.s - p.s - FRONT - (lead.vehicle.spec || CAR).rearOverhang;
@@ -411,7 +413,8 @@ export function manualMetricSnapshot(world) {
     routeProj: p,
     lane,
     onRoute: p.distance < 25 && Math.abs(wrap(ego.psi - p.heading)) < (Math.PI * 100) / 180,
-    following: followingInLane(ego, route, p, lane, vehicles, (s) => route.frameMove(p.s, s), {}),
+    // Manual following measurements use the car's actual lateral position and body width.
+    following: followingInLane(ego, route, p, lane, vehicles, (s) => route.frameMove(p.s, s), null),
   };
 }
 
