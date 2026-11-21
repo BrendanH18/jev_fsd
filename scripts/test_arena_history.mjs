@@ -173,6 +173,16 @@ test("comparison can use a different driver on identical conditions", () => {
   assert.deepEqual(match.before, result);
   assert.deepEqual(match.reasons, []);
 });
+test("a custom browser run can compare with a versionless baseline on the same conditions", () => {
+  const custom = { ...result, suite_version: "custom" };
+  assert.deepEqual(compareResult(custom, run, "rules"), { before: result, reasons: [] });
+  const numbered = { ...result, suite_version: "v1" };
+  assert.deepEqual(compareResult(custom, { ...run, results: [numbered] }, "rules").reasons, ["suite version"]);
+  assert.deepEqual(
+    compareResult({ ...numbered, suite_version: "v2" }, { ...run, results: [numbered] }, "rules").reasons,
+    ["suite version"],
+  );
+});
 test("every experiment condition mismatch prevents a delta", () => {
   for (const [key, value] of Object.entries({
     version: 2,

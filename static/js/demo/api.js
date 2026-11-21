@@ -73,15 +73,11 @@ export async function demoApi(path, body, { signal } = {}) {
   if (url.pathname === "/api/bench/save") {
     if (body.suite_version !== undefined && body.suite_version !== CUSTOM_SUITE)
       throw new Error("browser benchmark runs must use the custom suite");
+    if (body.results.some((result) => result?.suite_version !== body.suite_version))
+      throw new Error("run and results must agree on suite_version");
     const name = `demo-${Date.now()}`,
       { runs } = await demoApi("/api/bench/runs");
-    const run = {
-      ...body,
-      name,
-      suite_version: CUSTOM_SUITE,
-      results: body.results.map((result) => ({ ...result, suite_version: CUSTOM_SUITE })),
-    };
-    localStorage.setItem("jev-demo-runs", JSON.stringify([run, ...runs].slice(0, 10)));
+    localStorage.setItem("jev-demo-runs", JSON.stringify([{ ...body, name }, ...runs].slice(0, 10)));
     return { saved: name };
   }
   const { item, pack, map } = await selection(url.searchParams, body, signal);

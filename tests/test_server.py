@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
 
 class BenchRunStoreTests(unittest.TestCase):
-    def test_browser_save_only_accepts_custom_runs(self):
+    def test_browser_save_accepts_custom_and_versionless_runs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             runs = root / "runs"
@@ -147,8 +147,10 @@ class BenchRunStoreTests(unittest.TestCase):
                 ):
                     saved = server.api_bench_save(payload, {})
                     full = server.api_bench_runs({}, {"name": [saved["name"]]})
-                    self.assertEqual(full["suite_version"], "custom")
-                    self.assertEqual(full["results"], [{"id": "s1-1", "suite_version": "custom"}])
+                    self.assertEqual(full.get("suite_version"), payload.get("suite_version"))
+                    self.assertEqual(full["results"], payload["results"])
+                    listed = next(r for r in server.api_bench_runs({}, {})["runs"] if r["name"] == saved["name"])
+                    self.assertEqual(listed["suite_version"], payload.get("suite_version", "legacy"))
 
 
 class RecordingStoreTests(unittest.TestCase):

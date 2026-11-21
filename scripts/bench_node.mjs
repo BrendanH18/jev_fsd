@@ -363,12 +363,24 @@ for (const sc of selected) {
   );
 }
 const summary = aggregate(results);
-const suite_version = replaying
-  ? replaySuiteVersion(
-      replaying.header,
-      !only && !drifted.length && results.length === Object.keys(replaying.results).length,
-    )
-  : completedVersion();
+const replayProvenance = replaying?.header.manifest;
+const replayDate = replaying?.header.recorded_at;
+const replayManifest =
+  replaying &&
+  !only &&
+  !drifted.length &&
+  results.length === Object.keys(replaying.results).length &&
+  replayProvenance?.source_dirty === false &&
+  replayProvenance.engine === config.engine &&
+  replayProvenance.engine_version === process.versions.v8 &&
+  replayProvenance.cost_usd === summary.cost_usd &&
+  replayProvenance.suite?.kind === "bench" &&
+  recordingModule.canonicalJson(replayProvenance.suite.config) === recordingModule.canonicalJson(config) &&
+  recordingModule.canonicalJson(replayProvenance.suite.ids) === recordingModule.canonicalJson(suiteMetadata.ids) &&
+  Number.isFinite(Date.parse(replayDate))
+    ? replayProvenance
+    : null;
+const suite_version = replaying ? replaySuiteVersion(replaying.header, replayManifest !== null) : completedVersion();
 for (const result of results) result.suite_version = suite_version;
 // (computed for display only: bench/scores.js)
 console.log(`${heldout ? "held-out " : ""}scores ${JSON.stringify(driverScores(results))}`);
@@ -382,9 +394,12 @@ if (args.json) {
   if (manifest) {
     manifest.suite_version = suite_version;
     manifest.cost_usd = summary.cost_usd;
-    const savedAt = new Date().toISOString();
+  }
+  const reportManifest = manifest || replayManifest;
+  if (reportManifest) {
+    const savedAt = replayManifest ? new Date(replayDate).toISOString() : new Date().toISOString();
     const name = manifestModule.benchRunName(savedAt, driver);
-    Object.assign(saved, { name, saved_at: savedAt, manifest });
+    Object.assign(saved, { name, saved_at: savedAt, manifest: reportManifest });
   }
   (await import("node:fs")).writeFileSync(args.json, JSON.stringify(saved, null, 1));
 }

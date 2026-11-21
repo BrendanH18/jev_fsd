@@ -562,18 +562,18 @@ def run_rows(drivers: dict) -> list[dict]:
             for k in VARIANT_KEYS
         )
         version = run.get("suite_version", LEGACY_SUITE)
-        if variant and version == LEGACY_SUITE:
-            continue
         manifest_data = run.get("manifest")
         partial = isinstance(manifest_data, dict) and (
             run.get("stopped") or (manifest_data.get("suite") or {}).get("only") is True
         )
-        if (partial and version in (LEGACY_SUITE, CUSTOM_SUITE)) or (variant and version == CUSTOM_SUITE):
+        if (version == LEGACY_SUITE and (partial or variant)) or (
+            version == CUSTOM_SUITE and (config.get("heldout") or run.get("stopped"))
+        ):
             continue
         recording_path = RECORDINGS / f"{path.stem}.json.gz"
         recording = read_recording(recording_path) if recording_path.is_file() else None
         manifest = checked_manifest(path, run, run["saved_at"][:10], recording)
-        if variant:  # Held-out results have their own reports and never fill the tuned city cells.
+        if variant and version != CUSTOM_SUITE:  # Numbered held-out results are reported apart.
             continue
         if recording is not None:
             header = recording["header"]
@@ -594,11 +594,12 @@ def run_rows(drivers: dict) -> list[dict]:
             config.get("weather") or "dry",
             config.get("count"),
             config.get("seed"),
+            path if version == CUSTOM_SUITE else None,
         )
         if group not in newest or run["name"] > newest[group][0]["name"]:
             newest[group] = (run, path, manifest, recording, recording_path)
     rows = []
-    for (driver, version, preset, key, weather, count, seed), (
+    for (driver, version, preset, key, weather, count, seed, _custom_path), (
         run,
         path,
         manifest,
@@ -606,6 +607,9 @@ def run_rows(drivers: dict) -> list[dict]:
         recording_path,
     ) in newest.items():
         results, summary = run["results"], run.get("summary") or {}
+        label = f"{MAP_NAMES.get(key, key)}, {preset} preset, {weather}"
+        if version == CUSTOM_SUITE:
+            label += f" · {run['name']}"
         sources, model, requested = [rel(path)], None, None
         if recording is not None:
             sources.append(rel(recording_path))
@@ -619,8 +623,8 @@ def run_rows(drivers: dict) -> list[dict]:
                 "driver": driver,
                 "suite_version": version,
                 "suite": "city" if preset == "city" else preset,
-                "track": "guarded",
-                "label": f"{MAP_NAMES.get(key, key)}, {preset} preset, {weather}",
+                "track": run["config"].get("track") or "guarded",
+                "label": label,
                 "map": key,
                 "preset": preset,
                 "weather": weather,

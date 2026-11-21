@@ -4,6 +4,17 @@ export const LEGACY_SUITE = "legacy";
 export const CUSTOM_SUITE = "custom";
 export const suiteVersion = (artifact) => artifact?.suite_version ?? LEGACY_SUITE;
 
+// Local history predates suite labels. Only numbered suites carry a frozen input definition.
+export function compatibleSuiteVersions(a, b) {
+  const left = suiteVersion(a);
+  const right = suiteVersion(b);
+  return (
+    left === right ||
+    (left === LEGACY_SUITE && right === CUSTOM_SUITE) ||
+    (left === CUSTOM_SUITE && right === LEGACY_SUITE)
+  );
+}
+
 export function setRecordingSuiteVersion(recording, version) {
   recording.header.suite_version = version;
   if (recording.header.manifest) {

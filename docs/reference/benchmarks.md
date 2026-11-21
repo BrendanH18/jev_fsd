@@ -153,6 +153,10 @@ Suite [v1](../../data/suites/v1.json) defines the 1.0 test in three parts.
 
 A numbered run completes one of these members. Failed drives count as completed attempts. Incomplete runs, pilots, other presets and browser-local evaluations are labeled `custom`. The merge tools can qualify a complete run from version-aware shards only after checking the inputs and coverage. Unversioned publications and tapes remain `legacy`, including when they replay exactly. The leaderboard and README show each numbered version separately from legacy history. Custom runs are listed individually on the leaderboard.
 
+The browser can compare new local runs with versionless saved baselines under matching conditions. Comparisons involving a numbered suite require the same version.
+
 New Node publication manifests use `jev-run-manifest/2`. The report, manifest, tape header and per-drive results declare the same `suite_version`. Replay checks simulation data against the recorded answers and drive hashes. Suite membership is verified separately, so labeling reports and merging shards do not change existing drive hashes.
+
+Use `bench_node.mjs --replay TAPE.json.gz --check replay --json RUN.json` to export a complete exact benchmark replay for publication. The report retains the tape's manifest and recording date when the recorded engine and suite match.
 
 When a change alters any canonical result, add a new definition and switch the Node writers to it. Keep earlier definitions and recordings so publication and replay can verify older results on their declared source and engine.

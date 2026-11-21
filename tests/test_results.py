@@ -112,6 +112,55 @@ class ResultsTest(unittest.TestCase):
             finally:
                 build_results.committed_runs = original
 
+    def test_custom_selected_and_variant_benchmarks_are_individual_rows(self):
+        original = json.loads((build_results.RUNS / "20261121-075044-rules.json").read_text())
+        with tempfile.TemporaryDirectory(dir=ROOT / "data") as tmp:
+            paths = []
+            cases = ("selected", "hour-zero", "open", "held-out")
+            for case in cases:
+                config = dict(
+                    original["config"],
+                    **{"hour-zero": {"hour": 0}, "open": {"track": "open"}, "held-out": {"heldout": True}}.get(
+                        case, {}
+                    ),
+                )
+                results = [dict(result, suite_version="custom") for result in original["results"]]
+                if case == "selected":
+                    results = results[:1]
+                suite = dict(
+                    original["manifest"]["suite"],
+                    config=config,
+                    ids=[result["id"] for result in results],
+                    **({"only": True} if case == "selected" else {}),
+                )
+                manifest = dict(
+                    original["manifest"],
+                    format=build_results.MANIFEST_FORMAT,
+                    suite_version="custom",
+                    suite=suite,
+                    track=config.get("track", "guarded"),
+                )
+                path = Path(tmp) / f"{case}.json"
+                path.write_text(
+                    json.dumps(
+                        dict(
+                            original,
+                            name=case,
+                            suite_version="custom",
+                            config=config,
+                            results=results,
+                            manifest=manifest,
+                        )
+                    )
+                )
+                paths.append(path)
+            with patch.object(build_results, "committed_runs", return_value=paths):
+                rows = build_results.run_rows({})
+            self.assertEqual([row["label"].split(" · ")[-1] for row in rows], list(cases[:3]))
+            self.assertEqual([row["total"] for row in rows], [1, 12, 12])
+            self.assertEqual([row["track"] for row in rows], ["guarded", "guarded", "open"])
+            self.assertTrue(all(row["suite_version"] == "custom" for row in rows))
+
     def test_a_partial_run_of_the_whole_set_is_a_pilot(self):
         # `--set all --only door-zone`, or a run stopped part way, keeps set "all": it never takes the full
         # set's row, on either track (inside the repository, as published results are)

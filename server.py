@@ -360,12 +360,12 @@ def api_bench_save(body, _query):
     if path.exists():
         path = RUNS_DIR / ("%s-%s-%s.json" % (stamp, brain, secrets.token_hex(2)))
     payload = {
-        "suite_version": "custom",
+        **({"suite_version": declared} if declared is not None else {}),
         "name": path.stem,
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "config": config,
         "summary": body["summary"],
-        "results": [dict(result, suite_version="custom") for result in body["results"]],
+        "results": body["results"],
     }
     path.write_text(json.dumps(payload, indent=1))
     return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}

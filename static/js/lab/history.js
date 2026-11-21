@@ -1,5 +1,5 @@
 import { failures, DECIDED_BY, decidedByTotals, decidedByCounts } from "../bench/metrics.js";
-import { CUSTOM_SUITE, LEGACY_SUITE, suiteVersion } from "../bench/suite-version.js";
+import { compatibleSuiteVersions, CUSTOM_SUITE, LEGACY_SUITE } from "../bench/suite-version.js";
 
 // (v3: decisions no event links to are compact, and repeats are folded together: lab/trace.js)
 export const EVALUATION_SCHEMA = "jev-agent-evaluation-v3";
@@ -518,7 +518,7 @@ export function conditionDifferences(a, b) {
   const differences = Object.entries(CONDITIONS)
     .filter(([k]) => a[k] == null || b[k] == null || a[k] !== b[k])
     .map(([, label]) => label);
-  if (suiteVersion(a) !== suiteVersion(b)) differences.push("suite version");
+  if (!compatibleSuiteVersions(a, b)) differences.push("suite version");
   if (!a.engine_version || !b.engine_version || a.engine_version !== b.engine_version)
     differences.push("simulation version");
   // (the guarded and open tracks are different conditions: brain/tracks.js)

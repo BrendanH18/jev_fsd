@@ -10,7 +10,7 @@ import { runScenario, yieldNow, suiteOptions, benchmarkConfig } from "./runner.j
 import { aggregate } from "./metrics.js";
 import { driveScores, driverScores } from "./scores.js";
 import { buildHeldoutSuite, heldoutPlan } from "./heldout.js";
-import { CUSTOM_SUITE, suiteVersion } from "./suite-version.js";
+import { compatibleSuiteVersions, CUSTOM_SUITE, suiteVersion } from "./suite-version.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
@@ -381,13 +381,6 @@ export async function run({
   };
 }
 
-function compareSummary(state) {
-  const name = $("#compare").value;
-  const runs = $("#compare")._runs || [];
-  const run = runs.find((r) => r.name === name);
-  return run && suiteVersion(run) === suiteVersion(state) ? { ...run.summary, ...compareScores.get(name) } : null;
-}
-
 // The run list carries summaries only, so a compared run's scores come from its results, once.
 async function loadCompareScores() {
   const name = $("#compare").value;
@@ -406,7 +399,15 @@ function delta(cur, prev, better, f) {
 }
 
 function render(state) {
-  const prev = compareSummary(state);
+  const compare = $("#compare");
+  const before = compare._runs?.find((run) => run.name === compare.value);
+  const note = $("#comparison-note");
+  const differentSuite = before && !compatibleSuiteVersions(state, before);
+  note.hidden = !differentSuite;
+  note.textContent = differentSuite
+    ? `The selected run uses suite ${suiteVersion(before)}. Deltas require compatible suite versions.`
+    : "";
+  const prev = before && !differentSuite ? { ...before.summary, ...compareScores.get(before.name) } : null;
   const s = state.summary && { ...state.summary, ...pickScores(state.results) };
   $("#summary").replaceChildren(
     ...(s
