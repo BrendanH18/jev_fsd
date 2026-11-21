@@ -93,7 +93,7 @@ environment `jev-fsd-live`, which injects only `TYPESAFE_API_KEY` and `ANTHROPIC
 (no GitHub, agent or Boat credentials), and the sandbox is deleted afterwards:
 
 ```sh
-id=$(boat new --environment jev-fsd-live --json | jq -r 'select(.event=="ready") | .id')
+id=$(boat new --environment jev-fsd-live --name jev-fsd-live-<purpose> --json | jq -r 'select(.event=="ready") | .id')
 # ... the run, then copy results back ...
 boat delete "$id" --yes
 ```
