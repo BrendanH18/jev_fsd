@@ -64,22 +64,8 @@ id_file=$state_dir/sandbox-$slot
 lock=$state_dir/lock-$slot
 name="jev-fsd-check-$(basename "$PWD" | tr -c 'A-Za-z0-9_\n-' '-' | cut -c1-80)-$slot"
 
-# One run at a time per slot, so two checks never race to create the slot's sandbox. Only
-# `mkdir` takes the lock, and the exit trap releases it; a lock left behind (a killed run, or one
-# stopped before its trap was set) is reported with its path, never taken over, so no run can
-# remove a lock another run holds.
-if ! mkdir "$lock" 2>/dev/null; then
-    holder=$(cat "$lock/pid" 2>/dev/null || true)
-    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
-        echo "boat-check: a boat-check that has ended (pid $holder) left its lock; remove $lock and run again" >&2
-    else
-        echo "boat-check: another boat-check (pid ${holder:-starting}) holds this worktree's sandbox lock; wait for it, or give this agent its own JEV_BOAT_SLOT. If no boat-check is running, remove $lock" >&2
-    fi
-    exit 2
-fi
-echo $$ > "$lock/pid"
 id=$(cat "$id_file" 2>/dev/null || true)
-extended=0 keepalive="" build="" saving=0
+extended=0 keepalive="" build="" saving=0 locked=0
 stop_keepalive() {   # the keepalive loop and its sleep
     [ -n "$keepalive" ] || return 0
     pkill -P "$keepalive" 2>/dev/null || true
@@ -104,10 +90,25 @@ cleanup() {
             boat delete "$build" --yes --json >/dev/null 2>&1 || echo "boat-check: delete the build sandbox: boat delete $build --yes" >&2
         fi
     fi
-    [ "$(cat "$lock/pid" 2>/dev/null)" != $$ ] || rm -rf "$lock"
+    [ "$locked" = 0 ] || rm -rf "$lock"   # only a lock this run took
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
+# One run at a time per slot, so two checks never race to create the slot's sandbox. Only
+# `mkdir` takes the lock, and the exit trap (set above, before the lock is taken) releases it
+# only when this run took it. A lock a killed run left behind is reported with its path, never
+# taken over, so no run can remove a lock another run holds.
+if ! mkdir "$lock" 2>/dev/null; then
+    holder=$(cat "$lock/pid" 2>/dev/null || true)
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+        echo "boat-check: a boat-check that has ended (pid $holder) left its lock; remove $lock and run again" >&2
+    else
+        echo "boat-check: another boat-check (pid ${holder:-starting}) holds this worktree's sandbox lock; wait for it, or give this agent its own JEV_BOAT_SLOT. If no boat-check is running, remove $lock" >&2
+    fi
+    exit 2
+fi
+locked=1
+echo $$ > "$lock/pid"
 
 # The sandbox's state, or "gone" when Boat no longer knows it. Any other failure (network, auth,
 # rate limit) is an error, so a passing hiccup never orphans a sandbox or spends a start.
