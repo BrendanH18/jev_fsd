@@ -37,7 +37,68 @@ uv run scripts/verify_jev.py --offline
 With a running app, `uv run --with playwright python scripts/test_browser_pages.py` runs the `/tests`
 page, the renderer assertions, a check that the pilot controls fit the HUD panel, and the practice finish, debrief replay and error recovery cases in headless Chromium (`--group pages`, `practice` or `parking` runs one part, as CI does), and `scripts/test_arena_browser.py` runs the
 arena workflow (install the browser once with `uv run --with playwright python -m playwright install chromium`).
-CI runs all of the above on every pull request.
+CI runs all of the above on every pull request. Agents run them through
+[Boat checks](#boat-checks).
+
+## Boat checks
+
+Agents run these checks in a [Boat](https://boat.dev) sandbox, not on the owner's computers.
+`scripts/boat-check.sh` needs the signed-in `boat` CLI, `jq` and git.
+
+```sh
+scripts/boat-check.sh            # lint, Python tests, offline Jev requests, fixture check
+scripts/boat-check.sh --full     # also every scripts/test_*.mjs, one at a time, 360 s each as in CI
+scripts/boat-check.sh -- uv run --locked python -m unittest discover -s tests -k test_route_never_backs_up
+scripts/boat-check.sh --save     # rebuild the warm snapshot jev-fsd-warm from origin's default branch
+scripts/boat-check.sh --status   # this worktree's sandbox
+scripts/boat-check.sh --done     # delete it when the work ends (--stop keeps it)
+```
+
+The account's 200 daily sandbox starts are shared by every project, and each create or resume
+uses one, so the script keeps one long-lived sandbox per worktree. The first check creates it
+from the saved snapshot `jev-fsd-warm` (`JEV_BOAT_SNAPSHOT`), or bare when there is none, as a
+`default` machine (`JEV_BOAT_TYPE`) with `--no-env`, so no GitHub token, agent logins or model
+keys go in and no check can spend credits. Creates and resumes pass `--fail-fast`: when Boat has
+no machine ready, nothing starts and no start is counted, and the script tries again every 10
+seconds for about a minute. The sandbox id is kept in the worktree's git directory, and later checks
+reuse that sandbox. Agents sharing a worktree each set their own `JEV_BOAT_SLOT`; one sandbox
+is never shared between agents.
+
+Each check pushes the working tree (tracked and untracked, non-ignored files) to a fresh
+directory and moves it into the clone at `/home/user/jev_fsd`. Everything there but `.git`,
+`node_modules` and `.venv` is replaced, so deleted files go too, and git's index is rebuilt from
+the pushed files, so `git ls-files` (which `tests/test_results.py` relies on) matches the
+computer the script ran on. `npm ci` runs only when `package-lock.json` changed, then
+`uv sync --locked`. The command runs with `boat exec --timeout 0`. A bare sandbox first installs
+Node 22 (checked against the release's SHA-256 sums), uv and the clone. Copy results such as
+`data/runs/` back before the next check replaces them.
+
+Boat's auto-stop is a deadline, not an idle timer. While a check runs, the script keeps it two
+hours ahead (renewed every 30 minutes, so a long check is never cut off), and when the check
+ends it sets it to `JEV_BOAT_IDLE` seconds (default 2700), so a forgotten sandbox
+stops itself and the next check resumes it. Starts only happen on a create or a resume; a
+check against a running sandbox uses none. When no starts are left, the script stops with
+exit code 3 and the message from Boat.
+
+`--save` builds `jev-fsd-warm` in a fresh bare sandbox that runs no worktree code: it installs
+the toolchain, checks out `origin`'s default branch, installs its dependencies, saves the
+sandbox, waits until Boat reports that save ready and deletes the sandbox. Nothing a check or a
+custom command changed on a check sandbox reaches the snapshot. It uses one start. Refresh it
+after a change to the Node version, `uv.lock` or `package-lock.json` reaches the default branch.
+The script refuses a live `scripts/verify_jev.py` run; `--offline` is fine.
+
+Live, paid runs (recordings, and arena, benchmark or `verify_jev.py` runs that call a model)
+never use the check sandbox. When the owner asks for one, it gets its own sandbox from the Boat
+environment `jev-fsd-live`, which injects only `TYPESAFE_API_KEY` and `ANTHROPIC_API_KEY`
+(no GitHub, agent or Boat credentials), and the sandbox is deleted afterwards:
+
+```sh
+id=$(boat new --environment jev-fsd-live --name jev-fsd-live-city-pilot --json | jq -r 'select(.event=="ready") | .id')
+# ... the run, then copy results back ...
+boat delete "$id" --yes
+```
+
+Keys are never read from `.env` or passed on the command line.
 
 Open [/tests](http://127.0.0.1:8322/tests) for simulation and HUD checks. From the simulator's browser
 console, run the WebGL renderer checks:
