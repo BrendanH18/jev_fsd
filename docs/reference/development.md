@@ -47,18 +47,18 @@ Agents run these checks in a [Boat](https://boat.dev) sandbox, not on the owner'
 
 ```sh
 scripts/boat-check.sh            # lint, Python tests, offline Jev requests, fixture check
-scripts/boat-check.sh --full     # also every scripts/test_*.mjs, one at a time, 360 s each as in CI
+scripts/boat-check.sh --full     # also every scripts/test_*.mjs, in parallel, 360 s each as in CI
 scripts/boat-check.sh -- uv run --locked python -m unittest discover -s tests -k test_route_never_backs_up
 scripts/boat-check.sh --save     # rebuild the warm snapshot jev-fsd-warm from origin's default branch
 scripts/boat-check.sh --status   # this worktree's sandbox
 scripts/boat-check.sh --done     # delete it when the work ends (--stop keeps it)
 ```
 
-The account's 200 daily sandbox starts are shared by every project, and each create or resume
-uses one, so the script keeps one long-lived sandbox per worktree. The first check creates it
-from the saved snapshot `jev-fsd-warm` (`JEV_BOAT_SNAPSHOT`), or bare when there is none, as a
-`default` machine (`JEV_BOAT_TYPE`) with `--no-env`, so no GitHub token, agent logins or model
-keys go in and no check can spend credits. Creates and resumes pass `--fail-fast`: when Boat has
+The account's daily sandbox starts (840 on the $100 plan) are shared by every project, and each
+create or resume uses one, so the script keeps one long-lived sandbox per worktree. The first
+check creates it from the saved snapshot `jev-fsd-warm` (`JEV_BOAT_SNAPSHOT`), or bare when
+there is none, with `--no-env`, so no GitHub token, agent logins or model keys go in and no check
+can spend credits. Creates and resumes pass `--fail-fast`: when Boat has
 no machine ready, nothing starts and no start is counted, and the script tries again every 10
 seconds for about a minute. The sandbox id is kept in the worktree's git directory, and later checks
 reuse that sandbox. Agents sharing a worktree each set their own `JEV_BOAT_SLOT`; one sandbox
@@ -74,11 +74,63 @@ Node 22 (checked against the release's SHA-256 sums), uv and the clone. Copy res
 `data/runs/` back before the next check replaces them.
 
 Boat's auto-stop is a deadline, not an idle timer. While a check runs, the script keeps it two
-hours ahead (renewed every 30 minutes, so a long check is never cut off), and when the check
-ends it sets it to `JEV_BOAT_IDLE` seconds (default 2700), so a forgotten sandbox
-stops itself and the next check resumes it. Starts only happen on a create or a resume; a
-check against a running sandbox uses none. When no starts are left, the script stops with
+hours ahead (renewed every 30 minutes, so a long check is never cut off). When the check ends,
+an `xlarge` sandbox is stopped at once and a smaller one gets an auto-stop 15 minutes ahead
+(`JEV_BOAT_IDLE` seconds; 0 stops at once), so a forgotten sandbox stops itself and the next
+check resumes it. Starts only happen on a create or a resume; a check against a running sandbox
+uses none. A resume that finds no machine ready can leave Boat finishing it for a while, so the
+script also retries "resume already in progress". When no starts are left, the script stops with
 exit code 3 and the message from Boat.
+
+### Sizes and parallel checks
+
+Owner decision (2026-11-21): `--full` runs on `xlarge` (16 vCPUs, 32 GB) with one Node check per
+vCPU, and the plain check and `-- CMD` run on `default` (4 vCPUs, 8 GB). The size is chosen per
+run (`JEV_BOAT_TYPE` overrides it for every mode): a sandbox of the other size is stopped and
+resumed at this run's size, which uses one start. Idle time follows the size, because an idle
+`xlarge` bills about 5.6 times `default`: `xlarge` stops as soon as its check ends, and `default`
+and `large` stay up 15 minutes for back-to-back checks.
+
+`--full` runs the lint, offline Jev requests and fixture check first, then the Python tests
+alongside `scripts/node_checks.mjs`: a pool of `JEV_BOAT_JOBS` workers (default `nproc`) that
+takes the `scripts/test_*.mjs` files longest first by `scripts/ci_test_times.json`, runs each in
+its own Node process with CI's 360 s limit (killing its process group on a timeout), prints a
+line per file and the output of each failing one, and ends with a summary and the failed files.
+It exits 1 when any file fails. `scripts/test_node_checks.mjs` checks it. CI's sharding is
+unchanged.
+
+No check needed to run alone: none listens on a port, shares a temporary file or reads wall time,
+and every file passed in all eleven parallel runs (those below and the sizing experiments,
+three to five at each size), as it did in the sequential run. Running together does slow each file 1.3 to 2.2 times (memory and cache, not CPU
+quota: a pure CPU loop scales to 16 jobs). Boat places a size on different hardware from run to
+run; on an AMD EPYC 8224P host an `xlarge` core ran the checks at half the speed of the others.
+
+`scripts/test_drive_lab.mjs` was the critical path (96 s alone, up to 235 s in a full pool), so
+its arena drives (every challenge with Rules and the cautious agent) now run on four worker
+threads (`scripts/drive_lab_arena.mjs`): 102 s down to 32 s alone, with the same drives (every
+result field but the wall-clock `wall_ms` and `report.started_at`). The Python tests went from
+72 s to 25 s once `scripts/build_results.py` cached what it reads from the model recordings
+(`tests/test_results.py` builds the results many times).
+
+Measured 2026-11-21 with no other load; cost from `boat usage` for the run's window:
+
+| Run | Size (CPU) | Whole run | Node checks | Cost |
+|---|---|---|---|---|
+| Plain, before | `default` (Ryzen 9 9950X) | 105 s (25 s push, 72 s Python) | — | — |
+| Plain, after | `default` (Ryzen 7 9700X) | 54 s reusing, 93 s with a resume (25 s Python) | — | — |
+| `--full`, one at a time | `default` (Ryzen 9 9950X) | 743 s | about 650 s | — |
+| `--full`, before the drive lab split | `default` (Ryzen 9 9950X), 4 jobs | 297 s, 278 s | 280 s, 266 s | — |
+| | `large` (EPYC 9455), 8 jobs | 193 s | 158 s | — |
+| | `xlarge` (EPYC 8224P), 16 jobs | 264 s | 236 s (210 s with 8 jobs) | — |
+| `--full`, after | `default` (Ryzen 7 9700X), 4 jobs | 356 s | 301 s | $0.003 |
+| | `large` (EPYC 9455), 8 jobs | 155 s, 153 s | 144 s, 143 s | $0.004 |
+| | `xlarge` (EPYC 9455), 16 jobs | 101 s, 117 s | 72 s, 92 s | $0.005–0.006 |
+
+`xlarge` gives the shortest wait at about a cent per `--full` and stops straight afterwards,
+while 15 idle minutes on `large` would cost $0.018. The plain check is single-threaded Python and
+gains nothing from cores, so it stays on `default`. The `--full` runs above include about 10 to 25
+s of pushing the working tree, and a size change adds the resume (12 to 56 s, longer when Boat has
+no machine ready).
 
 `--save` builds `jev-fsd-warm` in a fresh bare sandbox that runs no worktree code: it installs
 the toolchain, checks out `origin`'s default branch, installs its dependencies, saves the

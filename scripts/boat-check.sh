@@ -2,7 +2,7 @@
 # Run checks in this worktree's own long-lived Boat sandbox.
 #
 #   scripts/boat-check.sh            lint, Python tests, offline Jev requests, fixture check
-#   scripts/boat-check.sh --full     also every scripts/test_*.mjs, one at a time (CI's limit)
+#   scripts/boat-check.sh --full     also every scripts/test_*.mjs, in parallel (scripts/node_checks.mjs)
 #   scripts/boat-check.sh -- CMD...  run CMD in the checkout instead
 #   scripts/boat-check.sh --save     rebuild the warm snapshot jev-fsd-warm from origin's default
 #                                    branch, in a fresh sandbox that runs no worktree code
@@ -14,12 +14,18 @@
 # of the repository with its dependencies), or a bare one when there is no snapshot, and
 # records its id in this worktree's git directory. Later checks reuse it: each pushes the
 # working tree to a fresh directory, makes the clone at /home/user/jev_fsd match it exactly
-# (git's index included) and runs there with `boat exec --timeout 0`. Boat's auto-stop is a
-# deadline, not an idle timer, so it is kept two hours ahead while a check runs and set to
-# JEV_BOAT_IDLE seconds after it ends (default 2700): a forgotten sandbox stops by itself, and
-# the next check resumes it. One sandbox per worktree; agents sharing a worktree each set
-# JEV_BOAT_SLOT. Overrides: JEV_BOAT_TYPE (default), JEV_BOAT_SNAPSHOT. See
-# docs/reference/development.md#boat-checks.
+# (git's index included) and runs there with `boat exec --timeout 0`. One sandbox per worktree;
+# agents sharing a worktree each set JEV_BOAT_SLOT.
+#
+# Sizes (owner decision, 2026-11-21, measured in docs/reference/development.md#boat-checks):
+# --full runs on xlarge (16 vCPUs) with one Node check per vCPU (JEV_BOAT_JOBS); the plain check
+# and -- CMD run on default (4 vCPUs), which they gain nothing over. A sandbox of the other size
+# is stopped and resumed at this run's size (one start). Boat's auto-stop is a deadline, not an
+# idle timer, so it is kept two hours ahead while a check runs; when the check ends, xlarge stops
+# at once (idle time there costs 5.6 times default's) and smaller sizes stop 15 minutes later, so
+# back-to-back checks reuse them. The next check resumes a stopped sandbox. Overrides:
+# JEV_BOAT_TYPE (the size, for every mode), JEV_BOAT_JOBS, JEV_BOAT_IDLE (seconds; 0 stops at
+# once), JEV_BOAT_SNAPSHOT.
 main() {
 set -euo pipefail
 export BOAT_NO_UPDATE=1
@@ -42,7 +48,7 @@ while [ $# -gt 0 ]; do
             [ -n "$cmd" ] || { echo "boat-check: -- needs a command" >&2; exit 2; }
             mode=cmd
             break ;;
-        -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "boat-check: unknown option $1 (try --help)" >&2; exit 2 ;;
     esac
     shift
