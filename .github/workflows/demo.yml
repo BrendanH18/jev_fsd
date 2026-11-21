@@ -51,8 +51,8 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3, 4, 5]
     env:
-      # Seconds each scripts/test_*.mjs may run. The slowest (test_drive_lab.mjs) takes about
-      # two minutes; a failing assert on a sim object can grow without bound (see AGENTS.md).
+      # Seconds each scripts/test_*.mjs may run. The slowest (test_scenery_collision.mjs) takes about
+      # a minute or two; a failing assert on a sim object can grow without bound (see AGENTS.md).
       NODE_TEST_TIMEOUT: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -24,6 +24,7 @@ function parseArgs(argv) {
     jobs: os.availableParallelism(),
     timeout: Number(process.env.NODE_TEST_TIMEOUT || 360),
     files: [],
+    nodeArgs: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -31,18 +32,19 @@ function parseArgs(argv) {
       const n = Number(argv[++i]);
       if (!Number.isInteger(n) || n < 1) throw new Error(`${a} needs a positive whole number`);
       opts[a.slice(2)] = n;
-    } else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
+    } else if (a === "--node-arg") opts.nodeArgs.push(argv[++i]);
+    else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else opts.files.push(a);
   }
   return opts;
 }
 
 // Runs one file; resolves { file, ok, code, signal, timedOut, seconds, output }.
-function runFile(file, timeoutS) {
+function runFile(file, timeoutS, nodeArgs = []) {
   return new Promise((resolve) => {
     const started = performance.now();
     // Its own process group, so a timeout also stops anything the check started.
-    const child = spawn(process.execPath, ["--experimental-default-type=module", file], {
+    const child = spawn(process.execPath, ["--experimental-default-type=module", ...nodeArgs, file], {
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });
@@ -97,7 +99,7 @@ function verdict(r, timeoutS) {
   return `failed with exit code ${r.code}`;
 }
 
-export async function runChecks({ jobs, timeout, files }, log = console.log) {
+export async function runChecks({ jobs, timeout, files, nodeArgs = [] }, log = console.log) {
   // bare name -> path; named files may live anywhere (scripts/test_node_checks.mjs uses its own)
   const paths = new Map(
     files.length
@@ -117,7 +119,7 @@ export async function runChecks({ jobs, timeout, files }, log = console.log) {
     while (queue.length) {
       const name = queue.shift();
       const { file, label } = paths.get(name);
-      const r = await runFile(file, timeout);
+      const r = await runFile(file, timeout, nodeArgs);
       r.label = label;
       results.push(r);
       const line = `${r.ok ? "ok  " : "FAIL"} ${r.seconds.toFixed(1).padStart(6)} s  ${label}`;
