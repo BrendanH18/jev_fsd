@@ -273,10 +273,39 @@ if [ "$save" = 1 ] && [ "$status" = 0 ]; then
 fi
 exit "$status"'
 
+# `boat exec` prints JSON frames whenever its output isn't a terminal, so ask for them always and
+# turn them back into the command's stdout, stderr and exit code. Each frame's text travels as
+# one base64 line, so partial lines and control characters survive.
+frames() {
+    jq -rR --unbuffered '(fromjson? // {type: "text", data: (. + "\n")})
+        | if .type == "stdout" then "O" + (.data | @base64)
+          elif .type == "stderr" or .type == "text" then "E" + (.data | @base64)
+          elif .type == "exit" then "X\(.exitCode // 1)"
+          elif .event == "error" then "E" + ("boat: \(.error)\n" | @base64)
+          else empty end'
+}
+unframe() {
+    local line rc=""
+    while IFS= read -r line; do
+        case "$line" in
+            O*) printf '%s' "${line#O}" | base64 -d ;;
+            E*) printf '%s' "${line#E}" | base64 -d >&2 ;;
+            X*) rc=${line#X} ;;
+        esac
+    done
+    [ -n "$rc" ] || return 255
+    return "$rc"
+}
 set +e
-boat exec "$id" --timeout 0 -- bash -c "$remote" boat-check "$mode" "$push" "$cmd" "$save" "$clone_url"
-status=$?
+boat exec "$id" --timeout 0 --json -- bash -c "$remote" boat-check "$mode" "$push" "$cmd" "$save" "$clone_url" | frames | unframe
+codes=("${PIPESTATUS[@]}")
 set -e
+status=${codes[2]}
+if [ "$status" = 255 ]; then   # no exit frame: the CLI failed before or while running the command
+    status=${codes[0]}
+    [ "$status" != 0 ] || status=1
+    echo "boat-check: boat exec ended without the command's exit code (exit ${codes[0]})" >&2
+fi
 if [ "$save" = 0 ] || [ "$status" != 0 ]; then
     [ "$save" = 0 ] || echo "boat-check: the checks failed, so $snapshot was not saved" >&2
     exit "$status"
