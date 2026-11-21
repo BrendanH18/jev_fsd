@@ -138,6 +138,8 @@ test("every recording offered for replay is committed", () => {
     const row = data.rows.find((row) => row.recording === r.recording);
     const runner = row.map ? "bench_node" : "arena_node";
     assert.ok(r.command.includes(`scripts/${runner}.mjs --port 8322 --replay ${r.recording} --check replay`));
+    assert.equal(r.sourceCommit, row.map ? row.manifest?.source_commit : null);
+    assert.equal(r.engine, row.manifest?.engine || row.engine);
   }
 });
 

@@ -102,6 +102,8 @@ The token counts can be reproduced from the published Jev tape without a server:
 node --experimental-default-type=module scripts/audit_jev_tokens.mjs data/recordings/20261121-075524-jev.json.gz
 ```
 
+### Replay the city recordings
+
 The `replay/kitsilano-city-2026-11-21` Git tag preserves the recorded source revision.
 Both full recordings replayed all 12 routes exactly with `--check replay` in Boat on that
 revision with Node 22.23.4, with zero live model calls. The replays reproduced the failed verdicts

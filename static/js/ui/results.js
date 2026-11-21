@@ -20,9 +20,11 @@ import {
 } from "../lab/results.js";
 
 const REPO = "https://github.com/BrendanH18/jev_fsd/blob/main/";
+const KITSILANO_REPLAY_SOURCE = "9b53a074ba6e4e17001d904d32fcb67151260eb1";
+const KITSILANO_REPLAY_TAG = "replay/kitsilano-city-2026-11-21";
 const demo = !!document.querySelector('meta[name="jev-demo"]');
 const challenge = (id) => CHALLENGES.find((c) => c.id === id) || ROAD_TESTS.find((t) => t.id === id) || null;
-const source = (path) => h("a", { href: REPO + path, target: "_blank", rel: "noopener" }, path);
+const source = (path, label = path) => h("a", { href: REPO + path, target: "_blank", rel: "noopener" }, label);
 const sources = (row) =>
   row
     ? row.sources.concat(row.recording && !row.sources.includes(row.recording) ? [row.recording] : []).join(", ")
@@ -280,23 +282,42 @@ function replayList(list, data) {
       "p",
       {},
       "Replay other published drives in the terminal using the saved answers, with no model calls. ",
-      demo ? "Clone the repository, start its server (" : "With this server running (",
+      demo ? "Clone the repository. " : "",
+      "Start the server from the recorded checkout when specified (",
       h("code", {}, "uv run server.py"),
-      demo ? ") and run in another terminal:" : "), run in another terminal:",
+      ") and run the replay in another terminal.",
     ),
     h(
       "ul",
       {},
-      list.map((r) =>
-        h(
+      list.map((r) => {
+        const kitsilano = r.sourceCommit === KITSILANO_REPLAY_SOURCE;
+        return h(
           "li",
           {},
           h("strong", {}, data.drivers[r.driver]?.label || r.driver),
           ` · ${r.label} · `,
           source(r.recording),
+          r.sourceCommit
+            ? h(
+                "p",
+                { class: "results-note" },
+                "For exact replay, use ",
+                h("code", {}, r.engine),
+                " and check out ",
+                h("code", {}, kitsilano ? KITSILANO_REPLAY_TAG : r.sourceCommit),
+                ". Replace the recording path below with its absolute path. ",
+                kitsilano
+                  ? source(
+                      "docs/validation/city-model-pilots.md#replay-the-city-recordings",
+                      "Replay worktree instructions",
+                    )
+                  : null,
+              )
+            : null,
           h("pre", {}, r.command),
-        ),
-      ),
+        );
+      }),
     ),
     h(
       "p",
