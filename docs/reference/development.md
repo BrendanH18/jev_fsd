@@ -94,23 +94,44 @@ Index entries marked assume-unchanged or skip-worktree are cleared on both sides
 Node 22 (checked against the release's SHA-256 sums), uv and the clone. Copy results such as
 `data/runs/` back before the next check replaces them.
 
-Boat's auto-stop is a deadline, not an idle timer. While a check runs, the script keeps it two
-hours ahead (renewed every 30 minutes, so a long check is never cut off). When the check ends,
-an `xlarge` sandbox is stopped at once and a smaller one gets an auto-stop 15 minutes ahead
-(`JEV_BOAT_IDLE` seconds; 0 stops at once), so a forgotten sandbox stops itself and the next
-check resumes it. Starts only happen on a create or a resume; a check against a running sandbox
-uses none. A resume that finds no machine ready can leave Boat finishing it for a while, so the
-script also retries "resume already in progress". When no starts are left, the script stops with
-exit code 3 and the message from Boat.
+Owner decision (2026-11-22, replacing the 15 idle minutes of 2026-11-21): every size stops as
+soon as its check ends, whatever happened to the check. A stopped sandbox bills nothing, and
+Boat keeps its machine for 10 minutes after it reads `stopped`, unbilled. A plain resume in
+that time, or while the sandbox is still `stopping`, takes that machine back with no restore,
+and Boat [doesn't count it as a start](https://docs.boat.dev/limits.md), so idling to save a
+start only spends plan hours. The script resumes a `stopping` sandbox straight away; when Boat
+can't take the machine back mid-stop (`sandbox_stopping`), it waits up to two minutes for
+`stopped` and resumes then. A resume at a new size always starts a new machine, so it waits for
+`stopped` first and uses a start. `JEV_BOAT_IDLE` (seconds) leaves the auto-stop that far ahead
+instead of stopping.
+
+Boat's auto-stop is a deadline, not an idle timer. While a check runs, the script keeps it 30
+minutes ahead, renewed every 10 minutes so a long check is never cut off. The renewal loop
+checks that the script is still alive before each renewal, so a run killed outright (no exit
+trap) leaves a sandbox that stops itself within 30 minutes. The exit trap is armed before the
+create or resume, so an interrupted run still stops the sandbox; a sandbox this run was creating
+and hadn't recorded yet is deleted instead, its id taken from the create's output. Starts only
+happen on a create or on a resume that can't take the kept machine back; a check against a
+running sandbox uses none. A resume that finds no machine ready can leave Boat finishing it for
+a while, so the script also retries "resume already in progress". When no starts are left, the
+script stops with exit code 3 and the message from Boat.
+
+Measured 2026-11-22 from a Raspberry Pi 5 (`default`): the first plain check created the sandbox
+(69 s in all) and left it `stopping`, then `stopped` 9 s later. Checks sent 7 and 30 seconds
+after it read `stopped`, and one sent while it was still `stopping`, each resumed it (2 s where
+timed), and the account's daily start count (`boat limits --json`, `.starts.day.used`) didn't
+change. A run
+killed with `SIGKILL` (with the renewal shortened to 5 s for the test) lost its renewal loop
+within 8 s, and its sandbox stopped at the auto-stop deadline. A `SIGTERM` during a create
+deleted the new sandbox, and one during `--save` deleted the build sandbox.
 
 ### Sizes and parallel checks
 
 Owner decision (2026-11-21): `--full` runs on `xlarge` (16 vCPUs, 32 GB) with one Node check per
 vCPU, and the plain check and `-- CMD` run on `default` (4 vCPUs, 8 GB). The size is chosen per
 run (`JEV_BOAT_TYPE` overrides it for every mode): a sandbox of the other size is stopped and
-resumed at this run's size, which uses one start. Idle time follows the size, because an idle
-`xlarge` bills about 5.6 times `default`: `xlarge` stops as soon as its check ends, and `default`
-and `large` stay up 15 minutes for back-to-back checks.
+resumed at this run's size, which uses one start. Every size stops as soon as its check ends
+(above).
 
 `--full` runs the lint, offline Jev requests and fixture check first, then the Python tests
 alongside `scripts/node_checks.mjs`: a pool of `JEV_BOAT_JOBS` workers (default `nproc`) that
@@ -150,14 +171,16 @@ Measured 2026-11-21 with no other load; cost from `boat usage` for the run's win
 | | `xlarge` (EPYC 4585PX), 16 jobs | 202 s | 169 s | $0.011 |
 
 `xlarge` gives the shortest wait (from 72 to 169 s of Node checks, depending on the host) at
-about a cent per `--full` and stops straight afterwards, while 15 idle minutes on `large` would cost $0.018. The plain check is single-threaded Python and
+about a cent per `--full` and stops straight afterwards. The plain check is single-threaded Python and
 gains nothing from cores, so it stays on `default`. The `--full` runs above include about 10 to 25
 s of pushing the working tree, and a size change adds the resume (12 to 56 s, longer when Boat has
 no machine ready).
 
 `--save` builds `jev-fsd-warm` in a fresh bare sandbox that runs no worktree code: it installs
 the toolchain, checks out `origin`'s default branch, installs its dependencies, saves the
-sandbox, waits until Boat reports that save ready and deletes the sandbox. Nothing a check or a
+sandbox, waits until Boat reports that save ready and deletes the sandbox. An interrupted save
+deletes the build sandbox too, or stops it once the save has begun (the save needs its source)
+and prints the delete to run when the save reads ready. Nothing a check or a
 custom command changed on a check sandbox reaches the snapshot. It uses one start. Refresh it
 after a change to the Node version, `uv.lock` or `package-lock.json` reaches the default branch.
 The script refuses a live `scripts/verify_jev.py` run; `--offline` is fine.
