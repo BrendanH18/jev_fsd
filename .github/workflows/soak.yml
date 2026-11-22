@@ -15,8 +15,9 @@ permissions:
 jobs:
   soak:
     name: City maps/seeds and feature pairs, shard ${{ matrix.shard }}
-    runs-on: namespace-profile-gitrunner
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    # (the slowest leg took 15½ min on Namespace's runners; GitHub's standard runner is about twice as slow)
+    timeout-minutes: 60
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -58,8 +59,8 @@ jobs:
 
   park-night:
     name: City ${{ matrix.label }}
-    runs-on: namespace-profile-gitrunner
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -105,7 +106,7 @@ jobs:
     name: Soak summary
     needs: [soak, park-night]
     if: always()
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

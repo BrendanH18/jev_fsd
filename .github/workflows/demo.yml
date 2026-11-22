@@ -17,7 +17,7 @@ concurrency:
 jobs:
   python:
     name: Python checks and Jev fixtures
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,7 +44,7 @@ jobs:
     # (scripts/ci_test_times.json); scripts/test_ci_shard.mjs checks every file lands in exactly one
     # and that this matrix lists every shard.
     name: Node checks, shard ${{ matrix.shard }}
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -90,7 +90,7 @@ jobs:
 
   browser:
     name: Browser suite, ${{ matrix.title }}
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -134,7 +134,7 @@ jobs:
 
   build:
     needs: [python, node, browser]
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -154,7 +154,7 @@ jobs:
     name: Demo checks passed
     needs: [python, node, browser, build]
     if: always()
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every job passed
@@ -167,7 +167,7 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Pages accepts one deployment at a time. A deploy that starts while another
     # runs waits instead of failing, and a running deploy is never cancelled.

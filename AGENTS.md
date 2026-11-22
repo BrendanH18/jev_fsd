@@ -22,7 +22,7 @@ node --experimental-default-type=module scripts/arena_node.mjs --replay out.json
 
 The main ruleset requires three checks: `Lint and format`, `Demo checks passed` (`demo.yml`) and `Benchmark passed` (`bench.yml`). The last two pass only when every job they `need` passed, so include each new check job in the corresponding gate's `needs`. The demo deployment runs separately on main.
 
-Workflows (`.github/workflows/`) run on Namespace runners and pin every action to a full commit SHA with a `# vX.Y.Z` comment, which Dependabot keeps up to date. CodeQL is an advanced setup (`codeql.yml`), not GitHub's default setup. The weekly city soak (`soak.yml`) is report-only: a failing leg leaves the run green, and its `Soak summary` job lists the failed routes in the run summary and as warnings (`scripts/soak_summary.py`).
+Workflows (`.github/workflows/`) run on GitHub-hosted standard runners (`ubuntu-24.04`) and pin every action to a full commit SHA with a `# vX.Y.Z` comment, which Dependabot keeps up to date. CodeQL is an advanced setup (`codeql.yml`), not GitHub's default setup. The weekly city soak (`soak.yml`) is report-only: a failing leg leaves the run green, and its `Soak summary` job lists the failed routes in the run summary and as warnings (`scripts/soak_summary.py`).
 
 Use `discover -s tests` for Python tests. It makes the tests' top-level `helpers` import work. `tests/helpers.py` then puts the project root on `sys.path`.
 

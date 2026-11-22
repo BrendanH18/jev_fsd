@@ -27,8 +27,7 @@ such as `/jev_fsd/`; the simulator, benchmark replay, arena and share links all 
 the repository's **Settings → Pages → Source** to **GitHub Actions**. See GitHub's
 [custom Pages workflow guide](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 The workflow requests Pages deployment permission only for its deployment job. Every job runs
-on a Namespace runner (`namespace-profile-gitrunner`); `actions/deploy-pages` deploys from it the
-same way it does from a GitHub-hosted runner. A new push to a pull request cancels that pull
+on a GitHub-hosted runner (`ubuntu-24.04`). A new push to a pull request cancels that pull
 request's older run, but runs on `main`, and so the deploy, are never cancelled.
 `.github/dependabot.yml` opens monthly, grouped updates for the workflow's actions and the
 uv-locked Python dependencies; the Playwright version CI installs is pinned by hand in the
