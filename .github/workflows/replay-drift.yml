@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   tapes:
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.tapes.outputs.matrix }}
@@ -26,8 +26,9 @@ jobs:
   replay:
     name: ${{ matrix.tape }}
     needs: tapes
-    runs-on: namespace-profile-gitrunner
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    # (45 min on Namespace's runners; GitHub's standard runner is about twice as slow)
+    timeout-minutes: 90
     continue-on-error: true
     strategy:
       fail-fast: false

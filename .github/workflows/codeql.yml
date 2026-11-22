@@ -1,7 +1,8 @@
 name: CodeQL
-# Advanced setup, so the analysis runs on a Namespace runner (default setup only offers GitHub-hosted
-# runners or labels that Namespace's ephemeral runners do not match). Same languages, query suite
-# (default) and categories (/language:<language>) as the default setup it replaces.
+# Advanced setup, so the analysis can leave out the vendored Three.js and the generated data/ (default
+# setup takes no configuration) and its actions stay pinned and updated like the other workflows'.
+# Same languages, query suite (default) and categories (/language:<language>) as the default setup it
+# replaces.
 on:
   push:
     branches: [main]
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: namespace-profile-gitrunner
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       actions: read
