@@ -28,6 +28,7 @@
 - Version the benchmark suite and keep rankings within each suite version.
 - Watch four published model drives and replay a retained manual incident beside Jev.
 - Run CI on GitHub-hosted standard runners, free for this public repository, instead of Namespace.
+- Trace where the same tuned Rules drive first differs across JavaScript engines.
 
 ## 0.3.0 (20 November 2026)
 

@@ -10,6 +10,7 @@
 // --diagnostics 1 (incident positions and actors), --only s1-1,s1-2 (run just these scenarios), --json out.json (write the full results) and --check 1
 // (exit with status 1 if any route fails, as CI does).
 // --prompt-audit out.json with --record or --replay reports request sizes without storing prompts.
+// --trace out.json samples one tuned Rules drive; --trace-from reuses a capture's scenario.
 // --reserve 0.5 stops a recording between drives when the server's remaining budget is less than $0.50.
 // --heldout 1 runs the map's held-out routes (bench/heldout.js; never debug against them,
 // docs/rules-baseline.md) instead of --seed/--count, and reports them as a held-out suite.
@@ -52,6 +53,8 @@ const OPTIONS = [
   "cover",
   "diagnostics",
   "prompt-audit",
+  "trace",
+  "trace-from",
   "reserve",
   "record",
   "replay",
@@ -63,6 +66,12 @@ for (const [name, value] of Object.entries(args)) {
   if (value === true) fail(`--${name} needs a value.`);
 }
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
+if (args["trace-from"] && !args.trace) fail("--trace-from needs --trace.");
+if (
+  args.trace &&
+  ((args.brain || "rules") !== "rules" || args.heldout === "1" || args.record || args.replay || args.json)
+)
+  fail("--trace needs a tuned Rules drive and writes its own JSON. Drop --record, --replay and --json.");
 const reserve = args.reserve === undefined ? null : Number(args.reserve);
 if (reserve !== null && (!args.record || !Number.isFinite(reserve) || reserve <= 0))
   fail("--reserve needs --record and a positive number of dollars.");
@@ -135,7 +144,7 @@ const { buildSuite } = await import("../static/js/bench/scenarios.js");
 const { runScenario, suiteOptions, FEATURE_PRESETS, benchmarkConfig } = await import("../static/js/bench/runner.js");
 const { aggregate } = await import("../static/js/bench/metrics.js");
 const { driveScores, driverScores } = await import("../static/js/bench/scores.js");
-const { heldoutPlan, buildHeldoutSuite } = await import("../static/js/bench/heldout.js");
+const { HELDOUT_SEEDS, heldoutPlan, buildHeldoutSuite } = await import("../static/js/bench/heldout.js");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { agentDefinitions } = await import("../static/js/brain/registry.js");
 const recordingModule = await import("../static/js/brain/recording.js");
@@ -221,8 +230,9 @@ const config = {
   map: preset,
   bbox: map.routingBbox,
   pack: map.pack.pack_version,
-  engine: `node ${process.version}`,
+  engine: args.trace && process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.version}`,
 };
+if (args.trace && HELDOUT_SEEDS.includes(config.seed)) fail("--trace cannot use a held-out seed.");
 const features = config.features || "bare";
 const driver = config.brain;
 if (args.record && !recordingModule.driverKind(driver))
@@ -235,16 +245,28 @@ if (replaying)
     fail(error.message);
   }
 // (a replay drives the recorded scenarios, so a router changed since cannot move them)
-const suite =
-  replaying?.suite() ||
-  (heldout
-    ? await buildHeldoutSuite(map, preset, suiteOptions(features, options))
-    : await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features, options) }));
+const mapSha = recordingModule.mapFingerprint(map);
+const traceModule = args.trace ? await import("./bench_trace.mjs") : null;
+let suite;
+if (args["trace-from"]) {
+  try {
+    suite = [traceModule.readTraceScenario(args["trace-from"], args.trace, config, mapSha)];
+  } catch (error) {
+    fail(error.message);
+  }
+} else {
+  suite =
+    replaying?.suite() ||
+    (heldout
+      ? await buildHeldoutSuite(map, preset, suiteOptions(features, options))
+      : await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features, options) }));
+}
 if (!suite.length) fail(`No routable scenarios on "${preset}".`);
 const only = args.only ? String(args.only).split(",") : null;
 const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
 if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);
 const selected = only ? suite.filter((sc) => only.includes(sc.id)) : suite;
+if (args.trace && selected.length !== 1) fail("--trace needs exactly one scenario; select it with --only.");
 const suiteMetadata = {
   kind: "bench",
   config,
@@ -253,7 +275,7 @@ const suiteMetadata = {
   route_sha: manifestModule.benchRouteFingerprint(suite),
   ...(only ? { only: true } : {}),
 };
-const mapSha = recordingModule.mapFingerprint(map);
+const trace = traceModule?.captureTrace(config, mapSha, selected[0]);
 let manifest = null;
 if (!replaying && (args.json || args.record)) {
   const definition = agentDefinitions().find((d) => d.id === driver);
@@ -289,7 +311,7 @@ const results = [],
 const promptSizes = {};
 let budgetStop = null;
 const completedVersion = () =>
-  !only && !budgetStop ? benchSuiteVersion({ ...suiteMetadata, map_sha: mapSha }, results) : CUSTOM_SUITE;
+  !only && !budgetStop && !trace ? benchSuiteVersion({ ...suiteMetadata, map_sha: mapSha }, results) : CUSTOM_SUITE;
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
 const saveRecording = async () => {
   const fs = await import("node:fs"),
@@ -332,7 +354,12 @@ for (const sc of selected) {
     ...options,
     diagnostics: args.diagnostics === "1",
     tape,
+    onStep: trace?.sample,
   });
+  if (trace) {
+    if (r.simulation_error) fail(`Cannot capture a complete trace: ${r.simulation_error}`);
+    trace.write(args.trace, r);
+  }
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
   results.push(r);
   if (args.record) {

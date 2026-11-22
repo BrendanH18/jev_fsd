@@ -566,8 +566,11 @@ past an agreed amount.
 - [x] **7.3 Check replays apart from verdicts.** (S) Both Node runners accept `--check replay`, which
   passes an exactly reproduced failure. The weekly replay drift job checks published tapes on their
   declared revision and on main and reports both results in its job summary.
-- [ ] **7.4 Trace the engine difference.** (M) Was 3.9. Find the first step where V8 and WebKit part
-  on a tuned seed, and fix it or document which engine each published result needs.
+- [x] **7.4 Trace the engine difference.** (M) Was 3.9. The tuned Kitsilano drive shows
+  V8 and JavaScriptCore traffic positions already differing at tick 0. The
+  [validation record](docs/validation/benchmark-engine-drift-2026-11-21.md) specifies the
+  runtimes, and the [benchmark reference](docs/reference/benchmarks.md#trace-a-tuned-rules-drive-across-engines)
+  documents trace comparison and the engine each published recording needs for exact replay.
 - [ ] **7.5 Repeat runs and their spread.** (M) Declare the drives and the number of repeats before
   running (suggested: three runs of Jev and of Claude Haiku over the 62 drives on the open track, within
   [D7](#open-decisions)), then report each score with its range and which differences recur. Report
