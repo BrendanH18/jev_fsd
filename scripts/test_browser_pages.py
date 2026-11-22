@@ -229,15 +229,12 @@ def check_incident_comparison(page):
     replay_requests = []
     page.on("request", lambda req: replay_requests.append(req.url) if "/replays/" in req.url else None)
     page.evaluate("""() => {
-      const app = window.__jev, render = app.view.render;
-      app.view.render = () => {};
-      try {
-        app.world.paused = false;
-        window.dispatchEvent(new KeyboardEvent('keydown', {key: 'w'}));
-        app.advance(9);
-        window.dispatchEvent(new KeyboardEvent('keyup', {key: 'w'}));
-        app.finishDrive('finished');
-      } finally { app.view.render = render; }
+      const app = window.__jev;
+      app.world.paused = false;
+      window.dispatchEvent(new KeyboardEvent('keydown', {key: 'w'}));
+      app.advance(9);
+      window.dispatchEvent(new KeyboardEvent('keyup', {key: 'w'}));
+      app.finishDrive('finished');
     }""")
     dialog = page.get_by_role("dialog", name="Drive report")
     print("Recorded events:", dialog.locator(".incident-replay").all_text_contents(), flush=True)
@@ -357,13 +354,18 @@ def check(url, chromium=None, groups=GROUPS):
         )
         errors = []
 
-        def open_page(path):
+        def open_page(path, render=True):
             # The app's CSP forbids eval, which Playwright's wait/evaluate helpers rely on.
             page = browser.new_page(viewport={"width": 1440, "height": 900}, bypass_csp=True)
             page.on("pageerror", lambda error: errors.append(str(error)))
             if path is not None:
                 page.goto(url.rstrip("/") + path, wait_until="domcontentloaded", timeout=TIMEOUT_MS)
                 page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+                # Report and replay wiring needs no 3D view. Each software-WebGL frame queued here
+                # (advance() draws one per step) holds up the next page until the GPU process has
+                # drawn it: up to 6 minutes after a 2 s advance.
+                if not render:
+                    page.evaluate("() => { window.__jev.view.render = () => {}; }")
             return page
 
         if "pages" in groups:
@@ -385,7 +387,7 @@ def check(url, chromium=None, groups=GROUPS):
         for kind in kinds:
             driver = "rules" if kind == "rules" else "manual"
             challenge = "parallel-park" if kind in PARKING_KINDS else "pothole-season"
-            page = open_page(f"/?challenge={challenge}&drive={driver}&quality=low")
+            page = open_page(f"/?challenge={challenge}&drive={driver}&quality=low", render=False)
             page.evaluate("window.__jev.world.paused = true")
             ok &= report("practice integration", page.evaluate(PRACTICE_FINISH, kind))
             comparison = page.locator(".drive-comparison")
@@ -401,11 +403,11 @@ def check(url, chromium=None, groups=GROUPS):
             page.close()
 
         if "practice" in groups:
-            page = open_page("/?challenge=flagger&drive=manual&quality=low")
+            page = open_page("/?challenge=flagger&drive=manual&quality=low", render=False)
             check_incident_comparison(page)
             page.close()
 
-            page = open_page("/?challenge=bus-lanes&drive=manual&quality=low&weekday=6")
+            page = open_page("/?challenge=bus-lanes&drive=manual&quality=low&weekday=6", render=False)
             assert page.evaluate("window.__jev.world.clock.weekday") == 0
             assert page.evaluate("""() => {
               const app = window.__jev, before = app.world.t;
@@ -418,7 +420,7 @@ def check(url, chromium=None, groups=GROUPS):
             assert page.locator(".drive-comparison tbody tr").first.locator("td").nth(2).inner_text() == "Unmeasured"
             page.close()
 
-            page = open_page("/?challenge=road-test-kitsilano&drive=manual&quality=low")
+            page = open_page("/?challenge=road-test-kitsilano&drive=manual&quality=low", render=False)
             page.evaluate("window.__jev.finishDrive('finished')")
             comparison = page.locator(".drive-comparison")
             comparison.locator("tbody tr").nth(3).wait_for(timeout=TIMEOUT_MS)
