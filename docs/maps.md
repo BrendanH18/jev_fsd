@@ -159,7 +159,9 @@ cached OSM, including turn restrictions. Use `--refresh-osm` to download fresh r
 building. For compatibility, `--force` also refreshes raw OSM when combined with `--bridges`,
 `--crossings`, `--contraflow`, `--driveways` or `--parks`. Layer flags can be combined.
 For example, `--parks --bridges --refresh-osm` fetches
-once and rebuilds those two layers against the existing map pack. Use `--maps-dir PATH` to keep
+once and rebuilds those two layers against the existing map pack. If the pack is missing or
+invalid, the command replaces it and rebuilds all layers against the replacement.
+Use `--maps-dir PATH` to keep
 the pack, layers and raw cache in a separate directory while testing an import. The v5-to-v6
 migration script accepts the same directory option, and `--check` previews the migration.
 For a custom drive area, use `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.

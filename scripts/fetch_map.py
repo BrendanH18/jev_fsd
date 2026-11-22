@@ -116,7 +116,9 @@ def main(argv: list[str]) -> int:
         before = path.stat().st_ino if path.is_file() else None
         pack = build_pack(bbox, maps_dir, force=(args.force or refresh) and not layer_only, log=print)
         # The pack writer replaces the file atomically. A replacement can change cached edge IDs.
-        rebuilt = not layer_only and path.stat().st_ino != before
+        rebuilt = path.stat().st_ino != before
+        if layer_only and rebuilt:
+            print("map: rebuilding all layers for the replacement pack")
         # A prepared pack can omit rail when it has no level crossings. Crossings can use v1.
         has_raw = fetch.cache_path(maps_dir, bbox).is_file()
         missing_layer = any(
@@ -128,7 +130,7 @@ def main(argv: list[str]) -> int:
         if not refresh and not rebuilt and (layer_only or missing_layer):
             fetch.fetch_osm_xml(bbox, maps_dir, log=print)
         for layer, (builder, layer_path, counts) in LAYERS.items():
-            if not layer_only or layer in selected:
+            if rebuilt or not layer_only or layer in selected:
                 data = builder(bbox, maps_dir, pack, force=layer_only or rebuilt, log=print)
                 if data is None:
                     continue

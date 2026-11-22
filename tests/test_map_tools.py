@@ -176,14 +176,16 @@ class FetchMapCliTests(unittest.TestCase):
                 self.assertEqual(raw_path.read_bytes(), OSM)
                 self.assertEqual(len(list(self.maps.glob("*.restrictions.*.json"))), 1)
 
-    def test_recovering_a_pack_rebuilds_existing_layers(self):
+    def test_recovering_a_pack_rebuilds_existing_layers_even_with_layer_flags(self):
         fetch.cache_path(self.maps, BBOX).write_bytes(OSM)
         self.assertEqual(self.command("kitsilano"), 0)
         restrictions = next(self.maps.glob("*.restrictions.*.json"))
-        restrictions.write_text('{"restrictions":[{"edge":"obsolete"}]}')
-        pack_path(self.maps, BBOX).write_text("{")
-        self.assertEqual(self.command("kitsilano"), 0)
-        self.assertEqual(json.loads(restrictions.read_text())["restrictions"], [])
+        for options in ((), ("--calming",)):
+            with self.subTest(options=options):
+                restrictions.write_text('{"restrictions":[{"edge":"obsolete"}]}')
+                pack_path(self.maps, BBOX).write_text("{")
+                self.assertEqual(self.command("kitsilano", *options), 0)
+                self.assertEqual(json.loads(restrictions.read_text())["restrictions"], [])
 
     def test_transit_composes_with_other_layers_and_refreshes_once(self):
         fetch.cache_path(self.maps, BBOX).write_bytes(OSM)
