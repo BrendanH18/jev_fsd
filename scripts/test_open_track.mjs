@@ -7,10 +7,11 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
-const { MapData } = await import("../static/js/map/mapdata.js");
+const { MapData, pointAt, headingAt } = await import("../static/js/map/mapdata.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
+const { Vehicle } = await import("../static/js/sim/vehicle.js");
 const { registerAgent } = await import("../static/js/brain/registry.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { openTrack, unflagged, FLAG_TEXT, flagText, TRACKS } = await import("../static/js/brain/tracks.js");
@@ -89,9 +90,23 @@ registerAgent({
   }),
 });
 
-// The first decision, Rules driving the open track, at which going on would run the car's red.
+// The first decision, Rules driving the open track, at which going on would run the car's red. A stalled car
+// stands at the car's stop line across the lane line on its left, STALLED_LEFT_M from its lane's centre, so
+// the forward sims of the manoeuvres that edge left must record a collision with it, while those that keep
+// to the lane or edge right pass it with room and go on, flagged, through the red.
+const STALLED_LEFT_M = 2.6;
 function redDecision() {
   const ctx = setupChallenge(WINNIPEG, CHALLENGE, { track: "open" });
+  const map = ctx.world.map,
+    edge = map.edges.get(ctx.world.challenge.arrowEdge),
+    lane = map.lane(edge.id, edge.lanes - 1),
+    s = (edge.control.s_line * lane.length) / edge.length,
+    [x, y] = pointAt(lane.pts, lane.cum, s),
+    h = headingAt(lane.pts, lane.cum, s);
+  const stalled = new Vehicle(x - STALLED_LEFT_M * Math.sin(h), y + STALLED_LEFT_M * Math.cos(h), h, 0);
+  // (frozen: the fleet leaves it standing where it is)
+  Object.assign(stalled, { id: "stalled_test", frozen: Infinity });
+  ctx.fleet.vehicles.push(stalled);
   let found = null;
   ctx.autopilot.onDecision = (d) => {
     if (!found && d.candidates.some((c) => c.flagged && c.reject === "runs_red")) found = d;
@@ -130,9 +145,18 @@ await test("open track: a red-light manoeuvre stays on offer, flagged, a collisi
   assert.ok(decision, "a decision with going on through the red flagged");
   const flagged = decision.candidates.filter((c) => c.flagged);
   assert.ok(flagged.every((c) => c.eligible && c.reject && c.reject !== "collision"));
+  // (the forward sims recorded a collision with the stalled car, and no manoeuvre that hits it is on offer)
+  const hits = decision.candidates.filter((c) => c.sim?.collision);
+  assert.ok(
+    hits.some((c) => c.sim.collision.id === "stalled_test"),
+    "a forward sim records a collision with the stalled car",
+  );
+  assert.ok(hits.every((c) => !c.eligible && !c.flagged));
   assert.ok(decision.candidates.filter((c) => c.reject === "collision").every((c) => !c.eligible && !c.flagged));
   const chosen = decision.candidates.find((c) => c.id === decision.chosenId);
-  assert.equal(!!chosen?.flagged, false, `Rules chose ${decision.chosenId}`);
+  assert.ok(!!chosen, `Rules chose ${decision.chosenId}, which is not among the candidates`);
+  assert.equal(chosen.eligible, true, `Rules chose ${decision.chosenId}`);
+  assert.equal(!!chosen.flagged, false, `Rules chose ${decision.chosenId}`);
   // (and the state counts as rejected only what is still removed)
   assert.equal(decision.state.rejected?.runs_red, undefined);
   // (openTrack itself: flags everything but collisions, and recounts)
