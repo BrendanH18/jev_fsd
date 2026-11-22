@@ -365,6 +365,20 @@ await test("a fallback save made during migration is available on the next openi
   assert.deepEqual(times(await second.list()), minutes(2), "migration does not bring back a deleted run");
 });
 
+await test("migration retains the newest runs within both IndexedDB limits", async () => {
+  const maxSize = new Blob([JSON.stringify(at(4))]).size;
+  for (const limits of [{ maxRuns: 2 }, { maxBytes: 2 * maxSize }]) {
+    const idb = new FakeIndexedDB();
+    const before = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+    await before.save(at(1));
+    await before.save(at(2));
+    const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(4), at(3)])]]);
+    const after = await openEvaluationHistory({ indexedDB: idb, storage, ...limits });
+    assert.deepEqual(times(await after.list()), minutes(4, 3));
+    assert.equal(storage.getItem(EVALUATION_HISTORY_KEY), null);
+  }
+});
+
 await test("migration waits for a fallback tab that has read but has not yet saved history", async () => {
   const idb = new FakeIndexedDB(),
     storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(1)])]]);

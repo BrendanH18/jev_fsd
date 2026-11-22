@@ -112,7 +112,11 @@ def main(argv: list[str]) -> int:
     try:
         if refresh:
             fetch.fetch_osm_xml(bbox, maps_dir, force=True, log=print)
+        path = pack_path(maps_dir, bbox)
+        before = path.stat().st_ino if path.is_file() else None
         pack = build_pack(bbox, maps_dir, force=(args.force or refresh) and not layer_only, log=print)
+        # The pack writer replaces the file atomically. A replacement can change cached edge IDs.
+        rebuilt = not layer_only and path.stat().st_ino != before
         # A prepared pack can omit rail when it has no level crossings. Crossings can use v1.
         has_raw = fetch.cache_path(maps_dir, bbox).is_file()
         missing_layer = any(
@@ -121,11 +125,11 @@ def main(argv: list[str]) -> int:
             and (layer != "crossings" or not crossings_path(maps_dir, bbox, version="1").is_file())
             for layer, (_, path, _) in LAYERS.items()
         )
-        if not refresh and (layer_only or missing_layer):
+        if not refresh and not rebuilt and (layer_only or missing_layer):
             fetch.fetch_osm_xml(bbox, maps_dir, log=print)
         for layer, (builder, layer_path, counts) in LAYERS.items():
             if not layer_only or layer in selected:
-                data = builder(bbox, maps_dir, pack, force=layer_only or args.force or refresh, log=print)
+                data = builder(bbox, maps_dir, pack, force=layer_only or rebuilt, log=print)
                 if data is None:
                     continue
                 path_args = {"version": data["crossings_version"]} if layer == "crossings" else {}

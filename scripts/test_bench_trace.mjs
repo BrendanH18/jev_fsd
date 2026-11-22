@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { linkSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { captureTrace, compareTraces, readTraceScenario } from "./bench_trace.mjs";
 
 const left = {
@@ -73,7 +74,7 @@ try {
   });
 
   const checkTraces = () =>
-    spawnSync(process.execPath, [new URL("bench_trace.mjs", import.meta.url).pathname, "--check", v8, jsc], {
+    spawnSync(process.execPath, [fileURLToPath(new URL("bench_trace.mjs", import.meta.url)), "--check", v8, jsc], {
       encoding: "utf8",
     });
   assert.equal(checkTraces().status, 1);

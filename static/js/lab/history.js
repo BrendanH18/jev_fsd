@@ -473,7 +473,7 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
 
 // Moves the localStorage history into the database, oldest first so the newest keeps the highest id,
 // leaving out runs already there (a move interrupted before the key was removed), then removes the key.
-async function migrate(db, storage) {
+async function migrate(db, storage, { maxRuns, maxBytes }) {
   let raw;
   try {
     storage ||= globalThis.localStorage;
@@ -513,6 +513,8 @@ async function migrate(db, storage) {
       const previous = old.reduce((max, i) => Math.max(max, i.id), lastId ?? 0);
       let id = previous;
       const occurrences = new Map();
+      const incoming = new Map();
+      const combined = old.sort((a, b) => a.id - b.id);
       for (const { run, key, entry } of pending) {
         occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
         const count = copies.get(key) ?? 0;
@@ -521,8 +523,23 @@ async function migrate(db, storage) {
           continue;
         }
         id++;
-        store.put(run, id);
-        index.put({ id, ...entry });
+        incoming.set(id, run);
+        combined.push({ id, ...entry });
+      }
+      let bytes = combined.reduce((total, entry) => total + entry.bytes, 0);
+      let first = 0;
+      while (first < combined.length && (combined.length - first > maxRuns || bytes > maxBytes)) {
+        const entry = combined[first++];
+        bytes -= entry.bytes;
+        if (!incoming.delete(entry.id)) {
+          store.delete(entry.id);
+          index.delete(entry.id);
+        }
+      }
+      for (const entry of combined.slice(first)) {
+        if (!incoming.has(entry.id)) continue;
+        store.put(incoming.get(entry.id), entry.id);
+        index.put(entry);
       }
       if (id > previous) metadata.put(id, LAST_ID);
       metadata.put([...occurrences], MIGRATED);
@@ -565,7 +582,7 @@ export async function openEvaluationHistory({
     indexedDB ??= globalThis.indexedDB;
     if (!indexedDB) return localHistory(storage);
     db = await openDatabase(indexedDB);
-    await withFallbackLock(() => migrate(db, storage));
+    await withFallbackLock(() => migrate(db, storage, { maxRuns, maxBytes }));
     return databaseHistory(db, { maxRuns, maxBytes });
   } catch {
     try {
