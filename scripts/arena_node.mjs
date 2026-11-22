@@ -62,6 +62,8 @@ const fs = await import("node:fs"),
 const browserOutput = args["browser-replay"];
 const comparisonOutput = args["comparison-json"];
 if (comparisonOutput && !args.replay) fail("--comparison-json requires --replay.");
+if (comparisonOutput && fs.lstatSync(comparisonOutput, { throwIfNoEntry: false }))
+  fail("--comparison-json must name a new file.");
 if (browserOutput) {
   const source = fs.statSync(args.replay, { throwIfNoEntry: false });
   const destination = fs.statSync(browserOutput, { throwIfNoEntry: false });
@@ -364,7 +366,14 @@ if (args.json)
       1,
     ),
   );
-if (comparisonOutput) fs.writeFileSync(comparisonOutput, `${JSON.stringify(comparisons, null, 1)}\n`, { flag: "wx" });
+if (comparisonOutput) {
+  try {
+    fs.writeFileSync(comparisonOutput, `${JSON.stringify(comparisons, null, 1)}\n`, { flag: "wx" });
+  } catch (error) {
+    if (error.code === "EEXIST") fail("--comparison-json must name a new file.");
+    throw error;
+  }
+}
 if (args.record) console.log(`recorded ${results.length} drives to ${args.record}`);
 if (replayJson)
   console.log(
