@@ -14,8 +14,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
+from http.client import HTTPException
 from pathlib import Path
 from typing import Callable, Optional, Tuple
+
+from .cache import write_bytes
+from .parse import parse_records
 
 Bbox = Tuple[float, float, float, float]  # W, S, E, N
 
@@ -68,6 +73,24 @@ def _http(url: str, data: Optional[bytes], timeout: float) -> bytes:
         return resp.read()
 
 
+def _validate_xml(source: Path | bytes) -> None:
+    try:
+        root = ET.parse(source).getroot() if isinstance(source, Path) else ET.fromstring(source)
+    except (ET.ParseError, LookupError, ValueError) as err:
+        raise FetchError("Invalid OSM XML: %s" % err) from err
+    if root.tag != "osm":
+        raise FetchError("Expected an OSM XML document, got <%s>" % root.tag)
+    for element in ("error", "remark"):
+        notice = root.find(element)
+        if notice is not None:
+            message = " ".join("".join(notice.itertext()).split())[:200]
+            raise FetchError("OSM reported an error: %s" % (message or element))
+    try:
+        parse_records(root)
+    except (KeyError, TypeError, ValueError) as err:
+        raise FetchError("Invalid OSM records: %s" % err) from err
+
+
 def fetch_osm_xml(
     bbox: Bbox,
     cache_dir: Path,
@@ -83,9 +106,14 @@ def fetch_osm_xml(
         raise FetchError("Bounding box is larger than 0.25 square degrees; pick a smaller area.")
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = cache_path(cache_dir, bbox)
-    if path.exists() and not force:
-        log("map: using cached %s" % path.name)
-        return path
+    if path.is_file() and not force:
+        try:
+            _validate_xml(path)
+        except FetchError as err:
+            log("map: replacing invalid cache %s (%s)" % (path.name, err))
+        else:
+            log("map: using cached %s" % path.name)
+            return path
 
     attempts = []
     attempts.append(("osm main api", OSM_MAP_URL.format(w=w, s=s, e=e, n=n), None))
@@ -99,19 +127,20 @@ def fetch_osm_xml(
             try:
                 log("map: fetching %s (attempt %d)" % (name, attempt + 1))
                 raw = http(url, data, timeout)
-                if not raw.lstrip().startswith(b"<?xml") and b"<osm" not in raw[:400]:
-                    raise FetchError("%s returned something that is not OSM XML" % name)
-                tmp = path.with_suffix(".tmp")
-                tmp.write_bytes(raw)
-                tmp.replace(path)
-                log("map: saved %s (%d KB)" % (path.name, len(raw) // 1024))
-                return path
+                _validate_xml(raw)
             except urllib.error.HTTPError as err:
                 errors.append("%s: HTTP %s" % (name, err.code))
                 if err.code in (400, 404):  # our fault, no point retrying this source
                     break
-            except (urllib.error.URLError, OSError, FetchError) as err:
+            except (OSError, HTTPException, FetchError) as err:
                 errors.append("%s: %s" % (name, err))
+            else:
+                try:
+                    write_bytes(path, raw)
+                except OSError as err:
+                    raise FetchError("Could not save %s: %s" % (path.name, err)) from err
+                log("map: saved %s (%d KB)" % (path.name, len(raw) // 1024))
+                return path
             if attempt < len(BACKOFF_S) - 1:
                 sleep(delay + random.random() * 0.5)
     raise FetchError("Could not download map data. " + "; ".join(errors[-4:]))

@@ -5,6 +5,7 @@ or school and playground areas (jev/osm/zones.py), or parks and water (jev/osm/p
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from math import isfinite
 from pathlib import Path
 from typing import Dict, List, Union
 
@@ -52,17 +53,24 @@ def parse_xml(source: Union[Path, str, bytes]) -> OsmData:
         root = ET.fromstring(source)
     else:
         root = ET.parse(str(source)).getroot()
+    return parse_records(root)
+
+
+def parse_records(root: ET.Element) -> OsmData:
     data = OsmData()
     for el in root:
+        if el.tag not in ("node", "way", "relation"):
+            continue
+        tags = {t.attrib["k"]: t.attrib["v"] for t in el.findall("tag")}
         if el.tag == "node":
-            tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
-            data.add_node(int(el.get("id")), float(el.get("lat")), float(el.get("lon")), tags)
+            lat, lon = float(el.get("lat")), float(el.get("lon"))
+            if not (isfinite(lat) and isfinite(lon)):
+                raise ValueError("node coordinates must be finite")
+            data.add_node(int(el.get("id")), lat, lon, tags)
         elif el.tag == "way":
-            tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
             refs = [int(nd.get("ref")) for nd in el.findall("nd")]
             data.add_way(int(el.get("id")), refs, tags)
-        elif el.tag == "relation":
-            tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
+        else:
             if (
                 tags.get("type") in ("restriction", "restriction:on_red")
                 or (tags.get("type") == "route" and tags.get("route") in TRANSIT_ROUTES)

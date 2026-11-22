@@ -31,6 +31,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 
 from .. import geometry as g
 from . import fetch
+from .cache import write_json
 from .parse import OsmData, parse_xml
 from .project import Projection
 
@@ -68,7 +69,7 @@ def build_zones(
         return None
     zones = zones_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d school and playground zones)" % (path.name, len(zones["zones"])))
-    path.write_text(json.dumps(zones, separators=(",", ":")))
+    write_json(path, zones)
     return zones
 
 

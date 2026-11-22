@@ -28,6 +28,7 @@ from typing import Callable, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
+from .cache import write_json
 from .crossings import _snap
 from .graph import is_drivable
 from .parse import OsmData, parse_xml
@@ -64,7 +65,7 @@ def build_calming(
         return None
     calming = calming_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d speed humps, tables, cushions and bumps)" % (path.name, len(calming["devices"])))
-    path.write_text(json.dumps(calming, separators=(",", ":")))
+    write_json(path, calming)
     return calming
 
 

@@ -14,8 +14,19 @@ const mismatched = (file, detail) => new Error(`${file}: ${detail}`);
 
 function readPart(path) {
   if (!path.endsWith(".json")) throw mismatched(path, "expected a benchmark JSON report");
-  const report = JSON.parse(readFileSync(path, "utf8"));
-  const tape = ModelRecording.parse(gunzipSync(readFileSync(path.replace(/\.json$/, ".json.gz"))).toString("utf8"));
+  const tapePath = `${path}.gz`;
+  let report;
+  let tape;
+  try {
+    report = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw mismatched(path, `cannot read report: ${error.message}`);
+  }
+  try {
+    tape = ModelRecording.parse(gunzipSync(readFileSync(tapePath)).toString("utf8"));
+  } catch (error) {
+    throw mismatched(tapePath, `cannot read recording: ${error.message}`);
+  }
   const { header } = tape;
   const { manifest, config } = report;
   if (
@@ -23,9 +34,12 @@ function readPart(path) {
     !/^[a-f0-9]{40}$/.test(manifest.source_commit) ||
     manifest.suite?.kind !== "bench" ||
     manifest.suite.only !== true ||
-    config?.heldout ||
+    typeof config?.map !== "string" ||
+    config.heldout ||
     report.stopped ||
-    !report.results?.length
+    !Array.isArray(report.results) ||
+    !report.results.length ||
+    report.results.some((result) => result?.stopped)
   )
     throw mismatched(path, "expected a finished seeded --only recording from a clean checkout");
   if (
@@ -96,7 +110,7 @@ function merge(paths, reportPath, recordingPath, suitePath) {
     const partIds = report.results.map((result) => result.id);
     if (
       canonicalJson(partIds) !== canonicalJson(report.manifest.suite.ids) ||
-      partIds.length !== Object.keys(tape.results).length
+      [tape.results, tape.drives, tape.scenarios].some((entries) => Object.keys(entries).length !== partIds.length)
     )
       throw new Error("A part's report, tape and selected drives disagree.");
     for (const result of report.results) {

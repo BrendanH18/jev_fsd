@@ -1,11 +1,13 @@
 import { failures, DECIDED_BY, decidedByTotals, decidedByCounts } from "../bench/metrics.js";
 import { compatibleSuiteVersions, CUSTOM_SUITE, LEGACY_SUITE } from "../bench/suite-version.js";
+import { hashText } from "../brain/recording.js";
 
 // (v3: decisions no event links to are compact, and repeats are folded together: lab/trace.js)
 export const EVALUATION_SCHEMA = "jev-agent-evaluation-v3";
 const SCHEMAS = ["jev-agent-evaluation-v1", "jev-agent-evaluation-v2", EVALUATION_SCHEMA];
 export const EVALUATION_HISTORY_KEY = "jev-fsd-evaluations-v2";
-export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+// Bound the cost of decoding and parsing a single chosen file separately from saved history.
+export const MAX_IMPORT_BYTES = 32 * 1024 * 1024;
 // Saved history, counted as UTF-16 (two bytes a character, see saveEvaluation): about 4.7 million
 // characters of JSON, room for a baseline and a new run of every challenge (some 0.98 million each with
 // 26 challenges and two drivers, now that compact decisions are folded together), inside the 5 million
@@ -221,12 +223,15 @@ export function readEvaluations(storage) {
 export function saveEvaluation(run, storage, keep = null) {
   const validated = validateEvaluation(run);
   storage ||= globalThis.localStorage;
-  const runs = [validated, ...readEvaluations(storage)].slice(0, 10);
-  const kept = keep ? JSON.stringify(keep) : null;
+  const old = readEvaluations(storage),
+    runs = [validated, ...old],
+    keepJson = keep ? JSON.stringify(keep) : null,
+    kept = old.find((r) => keepJson !== null && JSON.stringify(r) === keepJson);
   const drop = () => {
-    const i = runs.findLastIndex((r, k) => k > 0 && JSON.stringify(r) !== kept);
+    const i = runs.findLastIndex((r, k) => k > 0 && r !== kept);
     runs.splice(i > 0 ? i : runs.length - 1, 1);
   };
+  if (runs.length > 10) drop();
   let json = JSON.stringify(runs);
   const bytes = () => Math.max(json.length * 2, new Blob([json]).size); // localStorage can account for UTF-16 strings.
   while (runs.length > 1 && bytes() > MAX_HISTORY_BYTES) {
@@ -258,7 +263,10 @@ export const EVALUATION_DB = "jev-fsd-arena";
 export const MAX_SAVED_RUNS = 20;
 export const MAX_SAVED_BYTES = 200 * 1024 * 1024;
 const RUNS = "evaluations",
-  INDEX = "evaluation-index"; // (the index holds { id, created_at, bytes, ... }, cheap to list)
+  INDEX = "evaluation-index", // (the index holds { id, created_at, bytes, ... }, cheap to list)
+  META = "metadata",
+  LAST_ID = "last-id",
+  MIGRATED = "migrated-fallback-copies";
 const OPEN_TIMEOUT_MS = 5000;
 const request = (r) =>
   new Promise((resolve, reject) => {
@@ -268,14 +276,16 @@ const request = (r) =>
 const finished = (tx) =>
   new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
-    tx.onerror = tx.onabort = () => reject(tx.error || new DOMException("The transaction was aborted.", "AbortError"));
+    // A request error bubbles before the transaction aborts and sets tx.error.
+    tx.onabort = () => reject(tx.error || new DOMException("The transaction was aborted.", "AbortError"));
   });
-const same = (a, b) => a.created_at === b.created_at && a.status === b.status && a.count === b.count;
+const sameSummary = (a, b) =>
+  a.created_at === b.created_at && a.status === b.status && a.count === b.count && a.bytes === b.bytes;
 const summary = (run, bytes) => ({ created_at: run.created_at, status: run.status, count: run.results.length, bytes });
 
 function openDatabase(indexedDB) {
   return new Promise((resolve, reject) => {
-    const open = indexedDB.open(EVALUATION_DB, 1);
+    const open = indexedDB.open(EVALUATION_DB, 2);
     let late = false;
     const timer = setTimeout(() => {
       late = true;
@@ -285,6 +295,7 @@ function openDatabase(indexedDB) {
       const db = open.result;
       if (!db.objectStoreNames.contains(RUNS)) db.createObjectStore(RUNS);
       if (!db.objectStoreNames.contains(INDEX)) db.createObjectStore(INDEX, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
     };
     open.onsuccess = () => {
       clearTimeout(timer);
@@ -308,6 +319,12 @@ function openDatabase(indexedDB) {
   });
 }
 
+// An origin-wide lock keeps a fallback tab's read and write together during migration.
+function withFallbackLock(operation) {
+  const locks = globalThis.navigator?.locks;
+  return locks ? locks.request(EVALUATION_HISTORY_KEY, operation) : operation();
+}
+
 // The pre-IndexedDB history, newest first, as a store with the same interface.
 function localHistory(storage) {
   const local = () => storage || globalThis.localStorage;
@@ -318,15 +335,17 @@ function localHistory(storage) {
       return readEvaluations(storage);
     },
     async save(run, keep = null) {
-      return saveEvaluation(run, storage, keep);
+      return withFallbackLock(() => saveEvaluation(run, storage, keep));
     },
     async remove(run) {
-      const runs = readEvaluations(storage),
-        json = JSON.stringify(run),
-        at = runs.findIndex((r) => JSON.stringify(r) === json);
-      const remaining = runs.filter((_, k) => k !== at);
-      local().setItem(EVALUATION_HISTORY_KEY, JSON.stringify(remaining));
-      return remaining;
+      return withFallbackLock(() => {
+        const runs = readEvaluations(storage),
+          json = JSON.stringify(run),
+          at = runs.findIndex((r) => JSON.stringify(r) === json);
+        const remaining = runs.filter((_, k) => k !== at);
+        local().setItem(EVALUATION_HISTORY_KEY, JSON.stringify(remaining));
+        return remaining;
+      });
     },
   };
 }
@@ -384,9 +403,10 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
         throw new Error("This evaluation is too large for browser history. Export it to keep a copy.");
       const kept = keepId(keep);
       for (let extra = 0; ; extra++) {
-        const tx = db.transaction([RUNS, INDEX], "readwrite"),
+        const tx = db.transaction([RUNS, INDEX, META], "readwrite"),
           store = tx.objectStore(RUNS),
           index = tx.objectStore(INDEX),
+          metadata = tx.objectStore(META),
           done = finished(tx);
         done.catch(() => {
           /* reported below */
@@ -394,10 +414,11 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
         let after,
           left = 0;
         try {
-          const old = sorted(await request(index.getAll()));
+          const [stored, lastId] = await Promise.all([request(index.getAll()), request(metadata.get(LAST_ID))]);
+          const old = sorted(stored);
           // (never an id used before, even after the newest run is deleted: another tab may still map the
           // old id to the run it named, and would delete the new one in its place)
-          const id = Math.max((old[0]?.id || 0) + 1, Date.now()),
+          const id = Math.max(old[0]?.id ?? 0, lastId ?? 0) + 1,
             drop = new Set();
           const droppable = () =>
             old.findLast((i) => !drop.has(i.id) && i.id !== kept) || old.findLast((i) => !drop.has(i.id));
@@ -413,6 +434,7 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
           }
           store.put(validated, id);
           index.put({ id, ...summary(validated, bytes) });
+          metadata.put(id, LAST_ID);
           after = [{ id, ...summary(validated, bytes) }, ...old.filter((i) => !drop.has(i.id))];
           await done;
         } catch (error) {
@@ -431,11 +453,18 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
     async remove(run) {
       const id = keepId(run);
       if (id != null) {
-        const tx = db.transaction([RUNS, INDEX], "readwrite"),
+        const tx = db.transaction([RUNS, INDEX, META], "readwrite"),
+          metadata = tx.objectStore(META),
           done = finished(tx);
-        tx.objectStore(RUNS).delete(id);
-        tx.objectStore(INDEX).delete(id);
-        await done;
+        await Promise.all([
+          request(metadata.get(LAST_ID)).then((lastId) => {
+            tx.objectStore(RUNS).delete(id);
+            tx.objectStore(INDEX).delete(id);
+            // Version 1 histories may still contain ids that predate the counter.
+            if (id > (lastId ?? 0)) metadata.put(id, LAST_ID);
+          }),
+          done,
+        ]);
       }
       return refresh(await readIndex());
     },
@@ -447,31 +476,56 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
 async function migrate(db, storage) {
   let raw;
   try {
-    raw = (storage || globalThis.localStorage).getItem(EVALUATION_HISTORY_KEY);
+    storage ||= globalThis.localStorage;
+    raw = storage.getItem(EVALUATION_HISTORY_KEY);
   } catch {
     return;
   }
   if (raw == null) return;
   const legacy = readEvaluations({ getItem: () => raw });
   if (legacy.length) {
-    const tx = db.transaction([RUNS, INDEX], "readwrite"),
+    const tx = db.transaction([RUNS, INDEX, META], "readwrite"),
       store = tx.objectStore(RUNS),
       index = tx.objectStore(INDEX),
+      metadata = tx.objectStore(META),
       done = finished(tx);
     done.catch(() => {
       /* reported below */
     });
     try {
-      const old = await request(index.getAll());
-      let id = old.reduce((max, i) => Math.max(max, i.id), 0);
-      for (const run of [...legacy].reverse()) {
-        const json = JSON.stringify(run),
-          entry = summary(run, new Blob([json]).size);
-        if (old.some((i) => same(i, entry))) continue;
+      const [old, lastId, migrated] = await Promise.all([
+        request(index.getAll()),
+        request(metadata.get(LAST_ID)),
+        request(metadata.get(MIGRATED)),
+      ]);
+      const pending = [...legacy].reverse().map((run) => {
+        const json = JSON.stringify(run);
+        return { run, key: hashText(json), entry: summary(run, new Blob([json]).size) };
+      });
+      const matching = old.filter((entry) => pending.some((p) => sameSummary(p.entry, entry)));
+      const copies = new Map();
+      for (const saved of await Promise.all(matching.map((entry) => request(store.get(entry.id))))) {
+        const key = hashText(JSON.stringify(saved));
+        copies.set(key, (copies.get(key) ?? 0) + 1);
+      }
+      // A fallback tab may still hold copies that were deleted or evicted in IndexedDB.
+      for (const [key, count] of migrated ?? []) copies.set(key, Math.max(copies.get(key) ?? 0, count));
+      const previous = old.reduce((max, i) => Math.max(max, i.id), lastId ?? 0);
+      let id = previous;
+      const occurrences = new Map();
+      for (const { run, key, entry } of pending) {
+        occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+        const count = copies.get(key) ?? 0;
+        if (count) {
+          copies.set(key, count - 1);
+          continue;
+        }
         id++;
         store.put(run, id);
         index.put({ id, ...entry });
       }
+      if (id > previous) metadata.put(id, LAST_ID);
+      metadata.put([...occurrences], MIGRATED);
       await done;
     } catch (error) {
       try {
@@ -483,7 +537,16 @@ async function migrate(db, storage) {
     }
   }
   try {
-    (storage || globalThis.localStorage).removeItem(EVALUATION_HISTORY_KEY);
+    // A tab that fell back to localStorage may have saved another run during the move.
+    if (storage.getItem(EVALUATION_HISTORY_KEY) === raw) {
+      storage.removeItem(EVALUATION_HISTORY_KEY);
+      if (storage.getItem(EVALUATION_HISTORY_KEY) === null) {
+        const tx = db.transaction(META, "readwrite");
+        const done = finished(tx);
+        tx.objectStore(META).delete(MIGRATED);
+        await done;
+      }
+    }
   } catch {
     /* moved; the next open skips what is there */
   }
@@ -502,7 +565,7 @@ export async function openEvaluationHistory({
     indexedDB ??= globalThis.indexedDB;
     if (!indexedDB) return localHistory(storage);
     db = await openDatabase(indexedDB);
-    await migrate(db, storage);
+    await withFallbackLock(() => migrate(db, storage));
     return databaseHistory(db, { maxRuns, maxBytes });
   } catch {
     try {

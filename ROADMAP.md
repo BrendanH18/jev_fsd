@@ -585,6 +585,9 @@ past an agreed amount.
   tests, and Kitsilano's tuned and held-out city routes across four weathers. New reports, manifests
   and tapes declare their suite version. The leaderboard ranks each version separately. A change
   that alters a canonical result needs a new suite definition.
+- [x] **7.9 Investigate differences across routes.** Offline profiles group saved measurements by
+  route geometry, verdict, parking and recorded behavior. Trace comparisons identify missing
+  ticks and changed verdict fields. Repeated-run reports include each attempt's results and cost.
 
 Exit: a clean checkout verifies every published row on its declared tree, failed drives included, and
 a repeated comparison reports its spread.

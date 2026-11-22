@@ -30,6 +30,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
+from .cache import write_json
 from .graph import is_drivable
 from .parse import OsmData, parse_xml
 from .project import Projection
@@ -47,14 +48,14 @@ LINES = ("lines", "dots", "dashes", "surface")
 Bbox = Tuple[float, float, float, float]
 
 
-def crossings_path(maps_dir: Path, bbox: Bbox) -> Path:
-    return maps_dir / ("%s.crossings.v%s.json" % (fetch.cache_key(bbox), CROSSINGS_VERSION))
+def crossings_path(maps_dir: Path, bbox: Bbox, version: str = CROSSINGS_VERSION) -> Path:
+    return maps_dir / ("%s.crossings.v%s.json" % (fetch.cache_key(bbox), version))
 
 
 def load_crossings(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
     path = crossings_path(maps_dir, bbox)
     if not path.is_file():
-        path = maps_dir / ("%s.crossings.v1.json" % fetch.cache_key(bbox))
+        path = crossings_path(maps_dir, bbox, version="1")
     return json.loads(path.read_text()) if path.is_file() else None
 
 
@@ -73,7 +74,7 @@ def build_crossings(
         return None
     crossings = crossings_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d crosswalks)" % (path.name, len(crossings["crossings"])))
-    path.write_text(json.dumps(crossings, separators=(",", ":")))
+    write_json(path, crossings)
     return crossings
 
 

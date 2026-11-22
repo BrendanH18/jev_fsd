@@ -2,7 +2,7 @@
 // localStorage history into it, the newest-runs and byte limits, a browser quota, and the fallback to
 // localStorage when IndexedDB is missing or fails. Node has no IndexedDB, so a small fake one stands
 // in: asynchronous requests, transactions that commit once idle and roll back on abort, and a quota
-// checked at commit, as browsers do.
+// checked at a write request or at commit.
 import assert from "node:assert/strict";
 import {
   EVALUATION_SCHEMA,
@@ -21,8 +21,8 @@ class Request {
   error = null;
 }
 class FakeIndexedDB {
-  constructor({ quota = Infinity, failOpen = false, throwOpen = false } = {}) {
-    Object.assign(this, { quota, failOpen, throwOpen, dbs: new Map(), failWrites: false });
+  constructor({ quota = Infinity, quotaOnWrite = false, failOpen = false, throwOpen = false } = {}) {
+    Object.assign(this, { quota, quotaOnWrite, failOpen, throwOpen, dbs: new Map(), failWrites: false });
   }
   open(name, version) {
     if (this.throwOpen) throw fail("SecurityError");
@@ -34,10 +34,12 @@ class FakeIndexedDB {
         return;
       }
       let data = this.dbs.get(name);
-      const fresh = !data;
-      if (fresh) this.dbs.set(name, (data = { version, stores: new Map() }));
+      if (!data) this.dbs.set(name, (data = { version: 0, stores: new Map() }));
       req.result = new FakeDatabase(this, data);
-      if (fresh) req.onupgradeneeded?.();
+      if (data.version < version) {
+        req.onupgradeneeded?.();
+        data.version = version;
+      }
       req.onsuccess?.();
     });
     return req;
@@ -83,8 +85,11 @@ class Transaction {
     const write = (fn) => {
       if (this.mode !== "readwrite") throw fail("ReadOnlyError");
       return this.request(() => {
-        if (this.db.idb.failWrites) throw fail("UnknownError", "disk failed");
-        return fn();
+        const idb = this.db.idb;
+        if (idb.failWrites) throw fail("UnknownError", "disk failed");
+        const result = fn();
+        if (idb.quotaOnWrite && idb.bytes() > idb.quota) throw fail("QuotaExceededError");
+        return result;
       });
     };
     return {
@@ -118,6 +123,7 @@ class Transaction {
       } catch (error) {
         req.error = error;
         req.onerror?.();
+        this.onerror?.({ target: req });
         this.end(error);
         return;
       }
@@ -326,6 +332,79 @@ await test("a move that fails keeps the old history in localStorage and uses it"
   assert.equal(idb.bytes(), 0, "nothing half-moved");
 });
 
+await test("migration distinguishes runs that have the same summary and keeps duplicate copies", async () => {
+  const idb = new FakeIndexedDB(),
+    original = at(1),
+    stopped = at(1, { results: [{ ...result, time_s: 31 }] }),
+    storage = { ...local([[EVALUATION_HISTORY_KEY, JSON.stringify([stopped, original, original])]]), removeItem() {} };
+  const before = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await before.save(original);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const history = await openEvaluationHistory({ indexedDB: idb, storage });
+    assert.deepEqual(
+      (await history.list()).map((run) => run.results[0].time_s),
+      [31, 30, 30],
+    );
+  }
+});
+
+await test("a fallback save made during migration is available on the next opening", async () => {
+  const idb = new FakeIndexedDB(),
+    start = JSON.stringify([at(1)]),
+    storage = local([[EVALUATION_HISTORY_KEY, start]]);
+  const read = storage.getItem;
+  storage.getItem = (key) => {
+    const value = read(key);
+    if (value === start) storage.setItem(key, JSON.stringify([at(2), at(1)]));
+    return value;
+  };
+  const first = await openEvaluationHistory({ indexedDB: idb, storage });
+  assert.deepEqual(times(await first.list()), minutes(1));
+  await first.remove((await first.list())[0]);
+  const second = await openEvaluationHistory({ indexedDB: idb, storage });
+  assert.deepEqual(times(await second.list()), minutes(2), "migration does not bring back a deleted run");
+});
+
+await test("migration waits for a fallback tab that has read but has not yet saved history", async () => {
+  const idb = new FakeIndexedDB(),
+    storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(1)])]]);
+  const queued = Promise.withResolvers();
+  let tail = Promise.resolve();
+  let requests = 0;
+  const locks = {
+    request(name, operation) {
+      assert.equal(name, EVALUATION_HISTORY_KEY);
+      if (++requests === 2) queued.resolve("queued");
+      const next = tail.then(operation);
+      tail = next.catch(() => {});
+      return next;
+    },
+  };
+  Object.defineProperty(navigator, "locks", { value: locks, configurable: true });
+  const release = Promise.withResolvers();
+  try {
+    const write = locks.request(EVALUATION_HISTORY_KEY, async () => {
+      const records = readEvaluations(storage);
+      await release.promise;
+      storage.setItem(EVALUATION_HISTORY_KEY, JSON.stringify([at(2), ...records]));
+    });
+    const opening = openEvaluationHistory({ indexedDB: idb, storage });
+    assert.equal(await Promise.race([opening, queued.promise]), "queued");
+    release.resolve();
+    await write;
+    const history = await opening;
+    const records = await history.list();
+    assert.deepEqual(times(records), minutes(2, 1));
+    assert.equal(storage.getItem(EVALUATION_HISTORY_KEY), null);
+    await history.remove(records[1]);
+    const reopened = await openEvaluationHistory({ indexedDB: idb, storage });
+    assert.deepEqual(times(await reopened.list()), minutes(2));
+  } finally {
+    release.resolve();
+    delete navigator.locks;
+  }
+});
+
 await test("saved runs survive reopening; far more than the localStorage cap fits", async () => {
   const idb = new FakeIndexedDB(),
     history = await openEvaluationHistory({ indexedDB: idb, storage: local() });
@@ -393,6 +472,15 @@ await test("a browser quota drops the oldest runs until the new one fits, keepin
   );
 });
 
+await test("a quota error raised by the record write is retried after the transaction rolls back", async () => {
+  const size = JSON.stringify(at(1)).length;
+  const idb = new FakeIndexedDB({ quota: 2.5 * size, quotaOnWrite: true });
+  const history = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await history.save(at(1));
+  await history.save(at(2));
+  assert.deepEqual(times(await history.save(at(3), (await history.list()).at(-1))), minutes(3, 1));
+});
+
 await test("other write failures are reported without destroying prior history", async () => {
   const idb = new FakeIndexedDB(),
     history = await openEvaluationHistory({ indexedDB: idb, storage: local(), maxRuns: 2 });
@@ -431,6 +519,52 @@ await test("a deleted run's id is never used again, so another tab cannot delete
   assert.deepEqual(times(await b.remove(newest)), minutes(3, 1)); // tab b deletes its stale newest: nothing else goes
   assert.deepEqual(times(await b.remove(oldest)), minutes(3));
   assert.deepEqual(times(await a.list()), minutes(3));
+});
+
+await test("an IndexedDB id is never reused after deleting all runs and turning back the clock", async () => {
+  const idb = new FakeIndexedDB(),
+    storage = local(),
+    a = await openEvaluationHistory({ indexedDB: idb, storage }),
+    b = await openEvaluationHistory({ indexedDB: idb, storage });
+  const clock = Date.now;
+  try {
+    Date.now = () => 1000;
+    await a.save(at(1));
+    const [stale] = await b.list();
+    await a.remove((await a.list())[0]);
+    Date.now = () => 999;
+    const reopened = await openEvaluationHistory({ indexedDB: idb, storage });
+    await reopened.save(at(2));
+    await reopened.save(at(3));
+    assert.deepEqual(times(await b.remove(stale)), minutes(3, 2));
+  } finally {
+    Date.now = clock;
+  }
+});
+
+await test("a version 1 IndexedDB history still prevents stale deletions after upgrading", async () => {
+  const idb = new FakeIndexedDB();
+  idb.dbs.set(EVALUATION_DB, {
+    version: 1,
+    stores: new Map([
+      ["evaluations", { records: new Map([[1, at(1)]]) }],
+      [
+        "evaluation-index",
+        {
+          keyPath: "id",
+          records: new Map([[1, { id: 1, created_at: at(1).created_at, status: "complete", count: 1, bytes: 100 }]]),
+        },
+      ],
+    ]),
+  });
+  const a = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  const b = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  const [first] = await a.list();
+  const [stale] = await b.list();
+  assert.equal(first.created_at, at(1).created_at);
+  await a.remove(first);
+  await a.save(at(2));
+  assert.deepEqual(times(await b.remove(stale)), minutes(2));
 });
 
 await test("a damaged record is left out, and runs saved in another tab are picked up", async () => {

@@ -95,7 +95,9 @@ Tick 0 is the initial state. Each following tick is one 1/60 s simulation step. 
 ego and fleet position, heading and speed, plus the count, motion, candidate ID and applicable
 headlight choice of the latest applied decision. The report gives the first state difference at full
 precision, the first exceeding `1e-9` in the field's units or changing a non-numeric field,
-and the first sampled decision difference. Compare the two tick counts and verdicts as well.
+and the first sampled decision difference. It also identifies the first missing tick and the first
+result field that differs. Add `--check` to exit nonzero on any of these differences, with a
+`1e-9` tolerance for numeric state fields.
 Use tuned seeds for diagnosis.
 
 Bun provides a headless JavaScriptCore comparison on Linux. Safari's WKWebView results remain in
@@ -128,6 +130,33 @@ uv run python scripts/inspect_run.py data/runs/20261112-190015-rules.json \
 ```
 
 The first file is the baseline. Both files need the same map, pack version, seed, requested suite size and route restriction settings. Drivers, tracks, weather, traffic counts and other run conditions may differ. Read the settings beside the reports when interpreting differences. The comparison uses the route ID and saved lengths and counts of lights, stops and turns as a proxy for route identity. It lists routes exclusive to either file and routes with changed or missing tags. Each report uses the matched routes in baseline order. The output shows the run settings and any changes in saved verdicts, arrivals or known failure reasons.
+
+### Benchmark profiles by route cohort
+
+`--list-profiles` lists 973 additional reports. Select them by ID, mix them with the original
+reports, or use `--profiles` to run the entire profile catalog.
+
+```sh
+uv run python scripts/inspect_run.py --list-profiles
+uv run python scripts/inspect_run.py data/runs/20261121-075524-jev.json \
+  profile-latency-p95-ms-by-signals profile-off-road-s-by-verdict
+uv run python scripts/inspect_run.py data/results/2026-11-20/claude-haiku-open.json \
+  profile-safety-brakes-by-flags
+```
+
+Each group gives its route count, measured and unavailable counts, measured zeros, and its
+minimum, lower quartile, median, upper quartile and maximum. Quartiles interpolate within the
+observed range and give each measured route equal weight. Use the counts to interpret small groups.
+The latency example distributes the saved per-route p95 values across groups. A missing audit or
+flag counter goes down as unavailable. Missing grouping fields go to an unknown group. When all 50
+retained events are present and none is a reroute, the rerouting group is unknown because the log
+may be truncated. Arrival counts as complete progress, and saved progress on unfinished detours
+can understate distance covered.
+
+Profiles also work with `--compare` for matched seeded benchmarks. Geometry groups contain the
+same routes on both sides. Groups defined by behavior or outcomes can change membership, so use the
+group counts and route changes alongside the distributions. The reports describe associations
+within the saved runs.
 
 ## Publish a Node run
 
@@ -190,7 +219,8 @@ engine, track, maps and authored drives for every repeat, and keep the model
 version, prompt and provider settings fixed for each driver. The report gives each driver's
 minimum, mean and maximum driving score and pass count. It also reports
 open-track flags per decision, audit totals, drive failures by reason and by drive,
-emergency brake interventions and fallbacks.
+emergency brake interventions, fallbacks and recorded cost. The `runs` list exposes the
+individual measurements and failed drives behind each driver's summary.
 
 For the first repeated comparison in [7.5](../../ROADMAP.md#phase-7-results-that-hold-up),
 use three complete open-track recordings each of Jev and Claude Haiku 5.5

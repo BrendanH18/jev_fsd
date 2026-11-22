@@ -17,6 +17,7 @@ from typing import Callable, Tuple
 from .. import geometry as g
 from . import fetch
 from .buildings import extract_buildings
+from .cache import write_json
 from .controls import attach_controls
 from .graph import RoadGraph, build_graph
 from .parse import OsmData, parse_xml
@@ -39,8 +40,15 @@ def build_pack(
 ) -> dict:
     """Cached pack for a bbox. Raises fetch.FetchError when the map cannot be downloaded."""
     path = pack_path(maps_dir, bbox)
-    if path.exists() and not force:
-        return json.loads(path.read_text())
+    if path.is_file() and not force:
+        try:
+            cached = json.loads(path.read_text())
+        except (json.JSONDecodeError, UnicodeError) as err:
+            log("map: rebuilding unreadable pack %s (%s)" % (path.name, err))
+        else:
+            if isinstance(cached, dict) and cached.get("pack_version") == PACK_VERSION:
+                return cached
+            log("map: rebuilding %s because it is not a v%s pack" % (path.name, PACK_VERSION))
     xml_path = fetch.fetch_osm_xml(bbox, maps_dir, log=log)
     started = time.perf_counter()
     osm = parse_xml(xml_path)
@@ -58,7 +66,7 @@ def build_pack(
         )
     )
     maps_dir.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(pack, separators=(",", ":")))
+    write_json(path, pack)
     return pack
 
 

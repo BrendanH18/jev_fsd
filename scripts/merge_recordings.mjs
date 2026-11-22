@@ -5,9 +5,10 @@
 //   node --experimental-default-type=module scripts/merge_recordings.mjs --out jev-arena.json.gz part1.json.gz part2.json.gz
 // The parts must share the driver, model, endpoint, set, track, engine and prompt version, agree on every
 // map they share, and record different drives. The merged recording replays like one made in a single
-// run (`arena_node.mjs --replay`); its header keeps the earliest recording time. Seeded benchmark
-// recordings are not merged: a bench run's drives depend on one suite.
+// run (`arena_node.mjs --replay`); its header keeps the earliest recording time. Use
+// merge_bench_recordings.mjs for seeded benchmark recordings.
 import fs from "node:fs";
+import { dirname, join } from "node:path";
 import zlib from "node:zlib";
 
 const argv = process.argv.slice(2);
@@ -20,6 +21,7 @@ if (outAt < 0 || !argv[outAt + 1]) fail("Usage: merge_recordings.mjs --out merge
 const out = argv[outAt + 1];
 const parts = argv.filter((_, i) => i !== outAt && i !== outAt + 1);
 if (parts.length < 2) fail("Give at least two recordings to merge.");
+const destination = fs.statSync(out, { throwIfNoEntry: false });
 
 const { ModelRecording, canonicalJson } = await import("../static/js/brain/recording.js");
 const { runCost } = await import("./run_manifest.mjs");
@@ -27,6 +29,9 @@ const { arenaSuiteVersion } = await import("./canonical_suite.mjs");
 const { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } = await import("../static/js/bench/suite-version.js");
 const read = (file) => {
   try {
+    const source = fs.statSync(file);
+    if (destination?.dev === source.dev && destination.ino === source.ino)
+      fail(`The merged output must differ from its input recordings (${file}).`);
     const raw = fs.readFileSync(file);
     return ModelRecording.parse(file.endsWith(".gz") ? zlib.gunzipSync(raw).toString("utf8") : raw.toString("utf8"));
   } catch (error) {
@@ -58,6 +63,8 @@ recordings.forEach((r, i) => {
   if (!r.header.arena) fail(`${parts[i]} is not an arena recording: only arena recordings merge.`);
   if (identity(r.header) !== identity(first))
     fail(`${parts[i]} differs from ${parts[0]} in its source, driver, model, endpoint, engine, prompt, set or track.`);
+  if (!Object.keys(r.results).length || Object.keys(r.drives).some((id) => !Object.hasOwn(r.results, id)))
+    fail(`${parts[i]} must contain finished drives and keep a result for every set of answers.`);
 });
 
 const maps = {},
@@ -82,6 +89,7 @@ recordings.forEach((r, i) => {
   }
   for (const [id, result] of Object.entries(r.results)) {
     if (id in merged.results) fail(`${id} is recorded in more than one part (${parts[i]}).`);
+    if (result.stopped) fail(`${parts[i]} has a stopped attempt for ${id}.`);
     // (a finished drive keeps its answers, an empty set for one that asked nothing)
     if (!Object.hasOwn(r.drives, id)) fail(`${parts[i]} has a result for ${id} but no answers for it.`);
     const authored = r.header.manifest?.suite.drives[id];
@@ -120,8 +128,12 @@ if (suiteVersion(first) !== LEGACY_SUITE)
     arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
   );
 const text = merged.serialize();
-// (written beside the destination and renamed over it, so a failed write leaves an existing file as it was)
-const tmp = `${out}.tmp`;
-fs.writeFileSync(tmp, out.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
-fs.renameSync(tmp, out);
+const directory = fs.mkdtempSync(join(dirname(out), ".arena-merge-"));
+const temporary = join(directory, "recording");
+try {
+  fs.writeFileSync(temporary, out.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
+  fs.renameSync(temporary, out);
+} finally {
+  fs.rmSync(directory, { recursive: true, force: true });
+}
 console.log(`merged ${ids.length} drives from ${parts.length} recordings into ${out}`);

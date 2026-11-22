@@ -35,18 +35,20 @@ const write = (name, h, drives) => {
   fs.writeFileSync(file, r.serialize());
   return file;
 };
-const merge = (...files) =>
+const arenaOutput = path.join(dir, "out.json");
+const mergeTo = (destination, ...files) =>
   execFileSync(
     process.execPath,
     [
       "--experimental-default-type=module",
       new URL("merge_recordings.mjs", import.meta.url).pathname,
       "--out",
-      path.join(dir, "out.json"),
+      destination,
       ...files,
     ],
     { stdio: "pipe" },
   ).toString();
+const merge = (...files) => mergeTo(arenaOutput, ...files);
 
 const a = write("a.json", header(["one", "two"], { track: "open" }), ["one", "two"]);
 const b = write(
@@ -67,6 +69,16 @@ assert.equal(merged.header.recorded_at, "2026-11-20T09:00:00.000Z");
 assert.deepEqual(merged.header.maps, { kitsilano: "aaaa", toronto: "bbbb" });
 assert.equal(merged.drives.three["k-three"][0].response.id, "three");
 console.log("✓ parts merge into one recording with every drive, the earliest time and every map");
+
+const source = fs.readFileSync(a, "utf8");
+assert.throws(() => mergeTo(a, a, b), /output must differ from its input recordings/);
+assert.equal(fs.readFileSync(a, "utf8"), source);
+const inputAlias = path.join(dir, "arena-alias.json");
+fs.linkSync(a, inputAlias);
+assert.throws(() => mergeTo(inputAlias, a, b), /output must differ from its input recordings/);
+fs.writeFileSync(`${arenaOutput}.tmp`, "another process's file");
+assert.match(merge(a, b), /merged 3 drives/);
+assert.equal(fs.readFileSync(`${arenaOutput}.tmp`, "utf8"), "another process's file");
 
 const refused = (files, pattern, what) => {
   assert.throws(
@@ -95,6 +107,17 @@ const torn = new ModelRecording({
 });
 fs.writeFileSync(path.join(dir, "f.json"), torn.serialize());
 refused([a, path.join(dir, "f.json")], /no answers/, "a result without its answers");
+const extraAnswers = ModelRecording.parse(source);
+extraAnswers.drives.unfinished = {};
+const unfinished = path.join(dir, "unfinished-arena.json");
+fs.writeFileSync(unfinished, extraAnswers.serialize());
+refused([unfinished, b], /keep a result for every set of answers/, "answers without a result");
+const partial = write("partial-arena.json", header(["four", "five"], { track: "open" }), ["four"]);
+assert.match(merge(a, partial), /merged 3 drives/, "a resumed merge can use a shard stopped between drives");
+const stopped = ModelRecording.parse(fs.readFileSync(partial, "utf8"));
+stopped.results.four.stopped = true;
+fs.writeFileSync(partial, stopped.serialize());
+refused([a, partial], /stopped attempt for four/, "a stopped attempt cannot enter the replay plan");
 
 const withManifest = (id, map, fingerprint, source_commit = "a".repeat(40)) =>
   write(
@@ -242,6 +265,17 @@ assert.throws(
   () => mergeBench(first, benchPart("s1-2", true, 43, "shifted")),
   /recorded routes do not match the complete seeded suite/,
 );
+const brokenReport = path.join(dir, "broken-report.json");
+fs.writeFileSync(brokenReport, "{");
+assert.throws(() => mergeBench(first, brokenReport), /broken-report\.json: cannot read report/);
+const brokenTape = benchPart("s1-2", true, 42, "broken-tape");
+fs.writeFileSync(`${brokenTape}.gz`, "not a gzip recording");
+assert.throws(() => mergeBench(first, brokenTape), /broken-tape\.json\.gz: cannot read recording/);
+const extraBenchmarkTape = benchPart("s1-2", true, 42, "extra-answers");
+const extraPart = ModelRecording.parse(gunzipSync(fs.readFileSync(`${extraBenchmarkTape}.gz`)).toString("utf8"));
+extraPart.drives.unfinished = {};
+fs.writeFileSync(`${extraBenchmarkTape}.gz`, gzipSync(extraPart.serialize()));
+assert.throws(() => mergeBench(first, extraBenchmarkTape), /report, tape and selected drives disagree/);
 assert.equal(fs.existsSync(report), false);
 assert.match(mergeBench(second, first), /Merged 2 drives from 2 parts/);
 const combined = JSON.parse(fs.readFileSync(report, "utf8"));
@@ -272,6 +306,46 @@ const explicitLegacy = JSON.parse(fs.readFileSync(report, "utf8"));
 assert.equal(explicitLegacy.suite_version, "legacy");
 assert.equal(explicitLegacy.manifest.suite_version, "legacy");
 assert.ok(explicitLegacy.results.every((result) => result.suite_version === "legacy"));
+
+function repeat(name, { pass, recorded_at, cost_usd, source_dirty = false }) {
+  const challenge = "one";
+  const recording = new ModelRecording({
+    header: header([challenge], { recorded_at, manifest: { source_commit: "a".repeat(40), source_dirty } }),
+    results: { [challenge]: { challenge, pass, failures: pass ? [] : ["timeout"], cost_usd } },
+    drives: { [challenge]: { key: [{ response: { meta: { model: "jev-test" } } }] } },
+  });
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, recording.serialize());
+  return file;
+}
+const compare = (...files) =>
+  execFileSync(process.execPath, [new URL("compare_repeats.mjs", import.meta.url).pathname, ...files], {
+    stdio: "pipe",
+  });
+const repeatOne = repeat("repeat-one.json", { pass: true, recorded_at: "2026-11-21T08:00:00Z", cost_usd: 0.01 });
+const repeatTwo = repeat("repeat-two.json", { pass: false, recorded_at: "2026-11-21T08:30:00Z", cost_usd: 0.03 });
+const reportRepeat = JSON.parse(compare(repeatOne, repeatTwo)).drivers[0];
+assert.deepEqual(reportRepeat.cost_usd, { min: 0.01, mean: 0.02, max: 0.03 });
+assert.deepEqual(
+  reportRepeat.runs.map(({ file, cost_usd, failed_drives }) => [file, cost_usd, failed_drives]),
+  [
+    [repeatOne, 0.01, []],
+    [repeatTwo, 0.03, ["one"]],
+  ],
+);
+const duplicate = path.join(dir, "repeat-copy.json.gz");
+fs.writeFileSync(duplicate, gzipSync(fs.readFileSync(repeatOne)));
+assert.throws(() => compare(repeatOne, duplicate), /copies of the same recording/);
+const reformatted = path.join(dir, "repeat-reformatted.json");
+fs.writeFileSync(reformatted, JSON.stringify(JSON.parse(fs.readFileSync(repeatOne, "utf8")), null, 2));
+assert.throws(() => compare(repeatOne, reformatted), /copies of the same recording/);
+const dirty = repeat("repeat-dirty.json", { pass: true, cost_usd: 0, source_dirty: true });
+assert.throws(() => compare(repeatOne, dirty), /same clean source/);
+const missingAnswers = ModelRecording.parse(fs.readFileSync(repeatTwo, "utf8"));
+missingAnswers.drives = {};
+fs.writeFileSync(repeatTwo, missingAnswers.serialize());
+assert.throws(() => compare(repeatOne, repeatTwo), /complete arena recording/);
+console.log("✓ repeat comparison preserves per-run outcomes and costs and rejects duplicate and incomplete tapes");
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log("\nmerge recordings checks passed");

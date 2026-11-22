@@ -31,6 +31,7 @@ from typing import Callable, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
+from .cache import write_json
 from .parse import OsmData, parse_xml
 from .project import Projection
 
@@ -65,7 +66,7 @@ def build_driveways(
     if not xml_path.is_file():
         return None
     layer = driveways_from_osm(parse_xml(xml_path), pack)
-    path.write_text(json.dumps(layer, separators=(",", ":")))
+    write_json(path, layer)
     log("map: built %s (%d driveways)" % (path.name, len(layer["driveways"])))
     return layer
 

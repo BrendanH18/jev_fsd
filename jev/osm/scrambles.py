@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 from . import fetch
+from .cache import write_json
 from .parse import OsmData, parse_xml
 from .project import Projection
 
@@ -62,7 +63,7 @@ def build_scrambles(
         return None
     scrambles = scrambles_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d scramble crossings)" % (path.name, len(scrambles["scrambles"])))
-    path.write_text(json.dumps(scrambles, separators=(",", ":")))
+    write_json(path, scrambles)
     return scrambles
 
 

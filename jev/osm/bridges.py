@@ -30,6 +30,7 @@ from typing import Callable, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
+from .cache import write_json
 from .graph import DRIVABLE
 from .parse import OsmData, parse_xml
 from .project import Projection
@@ -67,7 +68,7 @@ def build_bridges(
     if not xml_path.is_file():
         return None
     layer = bridges_from_osm(parse_xml(xml_path), pack)
-    path.write_text(json.dumps(layer, separators=(",", ":")))
+    write_json(path, layer)
     log("map: built %s (%d street spans on bridges)" % (path.name, len(layer["spans"])))
     return layer
 

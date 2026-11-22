@@ -1,6 +1,7 @@
 // Compare two captures from bench_node.mjs --trace.
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { parseArgs } from "node:util";
 
 const VERSION = 1;
 const STATE_TOLERANCE = 1e-9;
@@ -73,7 +74,15 @@ export function readTraceScenario(path, destination, config, mapSha) {
 
 export function compareTraces(left, right) {
   for (const trace of [left, right]) {
-    if (trace?.version !== VERSION || !trace.inputs || !Array.isArray(trace.steps) || !trace.steps.length)
+    if (
+      trace?.version !== VERSION ||
+      typeof trace.inputs?.scenario?.id !== "string" ||
+      !Array.isArray(trace.steps) ||
+      !trace.steps.length ||
+      typeof trace.result?.pass !== "boolean" ||
+      typeof trace.result.arrived !== "boolean" ||
+      !Number.isFinite(trace.result.time_s)
+    )
       throw new Error("Invalid benchmark trace.");
   }
   const mismatch = difference(left.inputs, right.inputs, 0);
@@ -99,6 +108,11 @@ export function compareTraces(left, right) {
     runtimes: [left.runtime, right.runtime],
     steps: [left.steps.length - 1, right.steps.length - 1],
     results: [left.result, right.result],
+    lengthDifference:
+      left.steps.length === right.steps.length
+        ? null
+        : { tick: shared, ended: left.steps.length === shared ? "left" : "right" },
+    resultDifference: difference(left.result, right.result, 0, "result"),
     exactState,
     stateTolerance: STATE_TOLERANCE,
     stateOverTolerance,
@@ -108,10 +122,19 @@ export function compareTraces(left, right) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const files = process.argv.slice(2);
-    if (files.length !== 2) throw new Error("Usage: node scripts/bench_trace.mjs LEFT.json RIGHT.json");
-    const [left, right] = files.map((file) => JSON.parse(readFileSync(file, "utf8")));
-    console.log(JSON.stringify(compareTraces(left, right), null, 2));
+    const { values, positionals } = parseArgs({ options: { check: { type: "boolean" } }, allowPositionals: true });
+    if (positionals.length !== 2) throw new Error("Usage: node scripts/bench_trace.mjs [--check] LEFT.json RIGHT.json");
+    const [left, right] = positionals.map((file) => JSON.parse(readFileSync(file, "utf8")));
+    const comparison = compareTraces(left, right);
+    console.log(JSON.stringify(comparison, null, 2));
+    if (
+      values.check &&
+      (comparison.stateOverTolerance ||
+        comparison.decision ||
+        comparison.lengthDifference ||
+        comparison.resultDifference)
+    )
+      process.exitCode = 1;
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

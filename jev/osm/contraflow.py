@@ -16,6 +16,7 @@ import json
 import math
 
 from . import fetch
+from .cache import write_json
 from .parse import parse_xml
 
 LANE_VALUES = {"lane", "track", "opposite_lane", "opposite_track"}
@@ -40,7 +41,7 @@ def build_contraflow(bbox, maps_dir, pack, force=False, log=lambda m: None):
     if not raw.is_file():
         return None
     layer = contraflow_from_osm(parse_xml(raw), pack)
-    path.write_text(json.dumps(layer, separators=(",", ":")))
+    write_json(path, layer)
     log("map: built %s (%d contraflow edges)" % (path.name, len(layer["edges"])))
     return layer
 
