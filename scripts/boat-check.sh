@@ -28,22 +28,28 @@
 # Sizes (owner decision, 2026-11-21, measured in docs/reference/development.md#boat-checks):
 # --full runs on xlarge (16 vCPUs) with one Node check per vCPU (JEV_BOAT_JOBS); the plain check
 # and -- CMD run on default (4 vCPUs), which they gain nothing over. A sandbox of the other size
-# is stopped and resumed at this run's size (one start). Boat's auto-stop is a deadline, not an
-# idle timer, so it is kept two hours ahead while a check runs; when the check ends, xlarge stops
-# at once (idle time there costs 5.6 times default's) and smaller sizes stop 15 minutes later, so
-# back-to-back checks reuse them. The next check resumes a stopped sandbox. Overrides:
-# JEV_BOAT_TYPE (the size, for every mode), JEV_BOAT_JOBS, JEV_BOAT_IDLE (seconds; 0 stops at
-# once), JEV_BOAT_SNAPSHOT.
+# is stopped and resumed at this run's size (one start).
+#
+# Stopping (owner decision, 2026-11-22): every size stops as soon as its check ends, whatever
+# happened to it. A stopped sandbox bills nothing, and Boat keeps its machine for 10 minutes
+# after it reads stopped, unbilled: a resume in that time, or while it is still stopping, usually
+# takes the machine back with no restore and no start. Boat can release the machine early; the
+# resume then restores from the snapshot on a new machine and counts as a start. Boat's auto-stop is a deadline, not an idle
+# timer, so while a check runs it is kept 30 minutes ahead, renewed every 10 minutes by a loop
+# that ends with this script; a run killed outright leaves a sandbox that stops itself within
+# 30 minutes. Overrides: JEV_BOAT_TYPE (the size, for every mode), JEV_BOAT_JOBS, JEV_BOAT_IDLE
+# (seconds of auto-stop left when the check ends; default 0, stop at once), JEV_BOAT_SNAPSHOT.
 main() {
 set -euo pipefail
 export BOAT_NO_UPDATE=1
 snapshot=${JEV_BOAT_SNAPSHOT:-jev-fsd-warm}
 type=${JEV_BOAT_TYPE:-}   # empty: full_type for --full, default for everything else
 full_type=xlarge
-idle=${JEV_BOAT_IDLE:-}   # empty: by size, below
+idle=${JEV_BOAT_IDLE:-0}   # 0: stop the sandbox when the check ends
 slot=${JEV_BOAT_SLOT:-main}
 jobs=${JEV_BOAT_JOBS:-}   # --full's parallel Node checks; empty means one per vCPU
-budget=7200   # auto-stop is kept this far ahead while a check runs
+budget=1800   # auto-stop is kept this far ahead while a check runs,
+renew=600     # renewed this often, so a killed run's sandbox stops within $budget seconds
 clone_url=${JEV_BOAT_CLONE_URL:-https://github.com/BrendanH18/jev_fsd.git}
 mode=checks action=run cmd=""
 while [ $# -gt 0 ]; do
@@ -56,7 +62,7 @@ while [ $# -gt 0 ]; do
             [ -n "$cmd" ] || { echo "boat-check: -- needs a command" >&2; exit 2; }
             mode=cmd
             break ;;
-        -h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,/^main()/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
         *) echo "boat-check: unknown option $1 (try --help)" >&2; exit 2 ;;
     esac
     shift
@@ -64,9 +70,6 @@ done
 [ "$action" = run ] || [ "$mode" = checks ] || { echo "boat-check: --$action takes no --full or command" >&2; exit 2; }
 [ -n "$type" ] || { if [ "$mode" = full ]; then type=$full_type; else type=default; fi; }
 case "$type" in small|default|large|xlarge) ;; *) echo "boat-check: JEV_BOAT_TYPE is small, default, large or xlarge" >&2; exit 2 ;; esac
-# Idle time on a big machine eats the included hours, so xlarge stops as soon as its check ends
-# (the next one resumes it) and the others stop after 15 minutes without a check.
-if [ -z "$idle" ]; then case "$type" in xlarge) idle=0 ;; *) idle=900 ;; esac; fi
 case "$idle" in *[!0-9]*|"") echo "boat-check: JEV_BOAT_IDLE is a number of seconds (0 stops the sandbox when the check ends)" >&2; exit 2 ;; esac
 case "$slot" in *[!A-Za-z0-9_-]*|"") echo "boat-check: JEV_BOAT_SLOT may use letters, digits, - and _" >&2; exit 2 ;; esac
 case "$jobs" in ""|[1-9]|[1-9][0-9]) ;; *) echo "boat-check: JEV_BOAT_JOBS is a whole number from 1 to 99" >&2; exit 2 ;; esac
@@ -88,38 +91,70 @@ lock=$state_dir/lock-$slot
 name="jev-fsd-check-$(basename "$PWD" | tr -c 'A-Za-z0-9_\n-' '-' | cut -c1-80)-$slot"
 
 id=$(cat "$id_file" 2>/dev/null || true)
-extended=0 keepalive="" build="" saving=0 locked=0 stage=""
+armed=0 keepalive="" build="" saving=0 locked=0 stage="" start_log=""
 base="" tree="" files_b64="" paths_b64=""   # what run_remote syncs; send sets them
+# shellcheck disable=SC2317  # this and the functions below run from the exit trap
 stop_keepalive() {   # the keepalive loop and its sleep
     [ -n "$keepalive" ] || return 0
     pkill -P "$keepalive" 2>/dev/null || true
     kill "$keepalive" 2>/dev/null || true
     keepalive=""
 }
+# The sandbox a create this run started was making, from the create's JSON Lines (fast_start
+# writes them to $start_log as they come), when the run ended before it recorded the id.
+# shellcheck disable=SC2317
+started_id() {
+    [ -n "$start_log" ] && [ -s "$start_log" ] || return 0
+    jq -rR 'fromjson? | objects | select(.event != "error") | (.id // .sandboxId // .sandbox.id // empty) | strings' \
+        "$start_log" 2>/dev/null | head -n 1
+}
+# Stop sandbox $1, or with JEV_BOAT_IDLE leave its auto-stop that many seconds ahead. Quiet when
+# it is already stopping, stopped or gone (an id Boat no longer knows).
+# shellcheck disable=SC2317
+wind_down() {
+    local now
+    if [ "$idle" = 0 ]; then
+        boat stop "$1" --json >/dev/null 2>&1 && return 0
+    else
+        boat extend "$1" --ttl "$idle" --json >/dev/null 2>&1 && return 0
+    fi
+    now=$(sandbox_state "$1" 2>/dev/null) || now=unknown
+    case "$now" in stopping|stopped|gone) return 0 ;; esac
+    echo "boat-check: couldn't stop $1 ($now): boat stop $1" >&2
+}
+# shellcheck disable=SC2317
 cleanup() {
     set +e
     stop_keepalive
-    # Leave auto-stop $idle seconds from now, or stop now when that is 0, whatever happened to the check.
-    if [ "$extended" = 1 ] && [ -n "$id" ]; then
-        if [ "$idle" = 0 ]; then
-            boat stop "$id" --json >/dev/null 2>&1 \
-                || echo "boat-check: couldn't stop $id: boat stop $id" >&2
-        else
-            boat extend "$id" --ttl "$idle" --json >/dev/null 2>&1 \
-                || echo "boat-check: couldn't reset auto-stop on $id: boat extend $id --ttl $idle" >&2
+    # The check sandbox stops (or keeps $idle seconds of auto-stop) whatever happened to the check;
+    # this is armed before any create or resume. A sandbox this run created but never recorded (the
+    # run ended during the create) is deleted: nothing on it is worth a resume.
+    if [ "$armed" = 1 ]; then
+        [ -n "$id" ] || id=$(started_id)
+        if [ -n "$id" ] && [ "$id" != "$(cat "$id_file" 2>/dev/null)" ]; then
+            boat delete "$id" --yes --json >/dev/null 2>&1 \
+                || echo "boat-check: couldn't delete $id, which this run was creating: boat delete $id --yes" >&2
+            id=""
         fi
+        [ -z "$id" ] || wind_down "$id"
     fi
-    # The --save build sandbox is deleted, or only stopped while a save from it may still be
-    # running (an unfinished save needs its source; a stopped sandbox costs nothing).
+    # The --save build sandbox is deleted, even when the run ended while creating it, or only
+    # stopped while a save from it may still be running (an unfinished save needs its source; a
+    # stopped sandbox costs nothing).
+    if [ "$action" = save ] && [ -z "$build" ]; then build=$(started_id); fi
     if [ -n "$build" ]; then
         if [ "$saving" = 1 ]; then
-            boat stop "$build" --json >/dev/null 2>&1
-            echo "boat-check: stopped the build sandbox $build; once boat snapshots shows $snapshot ready from it: boat delete $build --yes" >&2
+            if boat stop "$build" --json >/dev/null 2>&1; then
+                echo "boat-check: stopped the build sandbox $build; once boat snapshots shows $snapshot ready from it: boat delete $build --yes" >&2
+            else
+                echo "boat-check: couldn't stop the build sandbox $build: boat stop $build; once boat snapshots shows $snapshot ready from it: boat delete $build --yes" >&2
+            fi
         else
             boat delete "$build" --yes --json >/dev/null 2>&1 || echo "boat-check: delete the build sandbox: boat delete $build --yes" >&2
         fi
     fi
     [ -z "$stage" ] || rm -rf "$stage"
+    [ -z "$start_log" ] || rm -f "$start_log"
     [ "$locked" = 0 ] || rm -rf "$lock"   # only a lock this run took
 }
 trap cleanup EXIT
@@ -139,19 +174,29 @@ if ! mkdir "$lock" 2>/dev/null; then
 fi
 locked=1
 echo $$ > "$lock/pid"
+start_log=$(mktemp)
 
-# The sandbox's state, or "gone" when Boat no longer knows it. Any other failure (network, auth,
-# rate limit) is an error, so a passing hiccup never orphans a sandbox or spends a start.
-sandbox_state() {
+# look ID sets state to the sandbox's state, or "gone" when Boat no longer knows it, and size to
+# its machine size. Any other failure (network, auth, rate limit) is an error, so a passing hiccup
+# never orphans a sandbox or spends a start.
+look() {
     local out
+    state="" size=""
     if out=$(boat info "$1" --json 2>&1); then
-        printf '%s\n' "$out" | jq -r '.sandbox.state // "unknown"'
-        return
+        # An answer jq can't read is an error too, never an empty state that would make a new sandbox.
+        if state=$(printf '%s\n' "$out" | jq -er '.sandbox.state // "unknown"') \
+            && size=$(printf '%s\n' "$out" | jq -r '.sandbox.type // ""'); then
+            return 0
+        fi
+        state="" size=""
+        echo "boat-check: couldn't read sandbox $1 from Boat's answer: $out" >&2
+        return 1
     fi
-    case "$out" in *'"not_found"'*) echo gone; return 0 ;; esac
+    case "$out" in *'"not_found"'*) state=gone; return 0 ;; esac
     echo "boat-check: couldn't read sandbox $1 from Boat: $out" >&2
     return 1
 }
+sandbox_state() { look "$1" || return 1; echo "$state"; }   # in a subshell, so the caller's state stays
 
 # Each create or resume uses one of the account's daily starts; reusing a running sandbox uses none.
 start_failed() {
@@ -168,20 +213,31 @@ start_failed() {
 }
 # With --fail-fast, a start that finds no ready machine creates nothing and isn't counted against
 # the start limits, so retry it a few times. A failed attempt can leave Boat finishing a resume for
-# a moment ("resume already in progress"), which a retry also waits out.
+# a moment ("resume already in progress"), which a retry also waits out. A resume while the
+# sandbox is stopping takes its machine back; when Boat can't (sandbox_stopping), the stop is
+# waited out for up to two minutes and the resume then takes back the machine Boat keeps.
+# The output goes to $start_log as it comes, so the exit trap can find a sandbox a cut-short
+# create was making.
 fast_start() {   # fast_start WHAT boat ARGS...; leaves the output in $out
-    local what=$1 attempt
+    local what=$1 attempt=1 waits=0
     shift
-    for attempt in 1 2 3 4 5 6; do
-        if out=$("$@" --fail-fast --json 2>&1); then return 0; fi
+    while :; do
+        if "$@" --fail-fast --json >"$start_log" 2>&1; then out=$(cat "$start_log"); return 0; fi
+        out=$(cat "$start_log")
         case "$out" in
+            *sandbox_stopping*)
+                waits=$((waits + 1))
+                [ "$waits" -le 24 ] || return 1
+                [ "$waits" != 1 ] || echo "boat-check: Boat couldn't take $what back while it stops; trying again once it has stopped" >&2
+                sleep 5; continue ;;
             *no_ready_machine*) [ "$attempt" = 6 ] || echo "boat-check: no machine ready for $what; trying again in 10 s" >&2 ;;
             *"already in progress"*) [ "$attempt" = 6 ] || echo "boat-check: Boat is still busy with $what; trying again in 10 s" >&2 ;;
             *) return 1 ;;
         esac
-        [ "$attempt" = 6 ] || sleep 10
+        [ "$attempt" -lt 6 ] || return 1
+        attempt=$((attempt + 1))
+        sleep 10
     done
-    return 1
 }
 new_sandbox() {   # new_sandbox NAME [boat new ARGS...]: prints the new sandbox's id
     local sandbox_name=$1 new_id
@@ -367,20 +423,29 @@ unframe() {
     [ -n "$rc" ] || return 255
     return "$rc"
 }
+# keep_alive ID: from now until the exit trap, push sandbox ID's auto-stop back to $budget seconds
+# every $renew seconds, so a long check (its push, run and any resync) never reaches it. The loop
+# checks that this script ($$, also in the subshell) is still alive before each renewal, so a run
+# killed outright (no exit trap) leaves at most $budget seconds of auto-stop.
+keep_alive() {
+    stop_keepalive
+    # Its own stdio, so its sleep never holds the caller's output pipe open after the script ends.
+    ( while sleep "$renew"; do
+          kill -0 $$ 2>/dev/null || exit 0
+          # set -e carries into the subshell: one failed renewal (a network blip) must not end the loop.
+          boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1 || true
+      done ) </dev/null >/dev/null 2>&1 &
+    keepalive=$!
+}
 # run_remote ID MODE PUSH CMD: run the remote script in sandbox ID and return its exit code. The
 # files to sync come from send (base, tree, files_b64, paths_b64).
-# Auto-stop is pushed back every 30 minutes meanwhile, so a long check never reaches it.
 run_remote() {
     local codes rc
-    # Its own stdio, so its sleep never holds the caller's output pipe open after the script ends.
-    ( while sleep 1800; do boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1; done ) </dev/null >/dev/null 2>&1 &
-    keepalive=$!
     set +e
     boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" "$jobs" \
         "$base" "$tree" "$files_b64" "$paths_b64" | frames | unframe
     codes=("${PIPESTATUS[@]}")
     set -e
-    stop_keepalive
     rc=${codes[2]}
     if [ "$rc" = 255 ]; then   # no exit frame: the CLI failed before or while running the command
         rc=${codes[0]}
@@ -396,6 +461,7 @@ case "$action" in
         # changed on a check sandbox's disk reaches later sandboxes. Uses one start.
         echo "boat-check: building $snapshot from origin's default branch in a fresh sandbox" >&2
         build=$(new_sandbox "$snapshot-build")
+        keep_alive "$build"
         run_remote "$build" build "" "" || { echo "boat-check: the build failed, so $snapshot was not saved" >&2; exit 1; }
         # The save runs in the background. Wait for this sandbox's save of the name
         # (sourceSandboxId) to read ready; an older save of the name doesn't count.
@@ -436,31 +502,42 @@ case "$action" in
         exit 1 ;;
 esac
 
-# Find this slot's sandbox and get it running, or make one.
+# Find this slot's sandbox and get it running, or make one. From here on the exit trap stops it
+# (or deletes one this run was still creating), however the run ends.
+armed=1
 t0=$SECONDS
-state=""
+state="" size=""
 if [ -n "$id" ]; then
-    state=$(sandbox_state "$id") || { echo "boat-check: try again once Boat answers" >&2; exit 1; }
+    look "$id" || { echo "boat-check: try again once Boat answers" >&2; exit 1; }
 fi
 # A sandbox of another size is stopped and resumed at this run's size (one start, as any resume).
-case "$state" in provisioned|cloning|ready|idle|running)
-    size=$(boat info "$id" --json 2>/dev/null | jq -r '.sandbox.type // ""') && [ -n "$size" ] \
-        || { echo "boat-check: couldn't read the size of $id from Boat; try again once Boat answers" >&2; exit 1; }
+# Such a resume always starts a new machine and must wait until the sandbox reads stopped.
+case "$state" in provisioned|cloning|ready|idle|running|stopping|stopped)
+    [ -n "$size" ] || { echo "boat-check: couldn't read the size of $id from Boat; try again once Boat answers" >&2; exit 1; }
     if [ "$size" != "$type" ]; then
-        echo "boat-check: $id is $size; stopping it to resume as $type" >&2
-        boat stop "$id" --json >/dev/null || { echo "boat-check: couldn't stop $id: boat stop $id" >&2; exit 1; }
-        state=$(sandbox_state "$id") || exit 1
+        if [ "$state" != stopped ]; then echo "boat-check: $id is $size; stopping it to resume as $type" >&2; fi
+        if [ "$state" != stopped ] && [ "$state" != stopping ]; then
+            boat stop "$id" --json >/dev/null || { echo "boat-check: couldn't stop $id: boat stop $id" >&2; exit 1; }
+        fi
+        for _ in $(seq 1 24); do
+            state=$(sandbox_state "$id") || exit 1
+            [ "$state" = stopping ] || break
+            sleep 5
+        done
     fi ;;
 esac
-if [ "$state" = stopping ]; then
-    for _ in $(seq 1 24); do sleep 5; state=$(sandbox_state "$id") || exit 1; [ "$state" = stopping ] || break; done
-fi
 case "$state" in
     provisioned|cloning|ready|idle|running) ;;
-    stopping) echo "boat-check: $id is still stopping; try again in a minute" >&2; exit 2 ;;
-    stopped)
-        echo "boat-check: resuming $id as $type" >&2
-        if ! fast_start "resuming $id" boat resume "$id" --no-env --type "$type" --ttl "$budget"; then
+    stopping|stopped)
+        # A plain resume (no new size) while it is stopping, or within 10 minutes of stopped,
+        # takes back the machine Boat keeps: no restore and no start.
+        resize=()
+        [ "$size" = "$type" ] || resize=(--type "$type")
+        if [ "$state" = stopping ] && [ "${#resize[@]}" -gt 0 ]; then
+            echo "boat-check: $id is still stopping; try again in a minute" >&2; exit 2
+        fi
+        echo "boat-check: resuming $id ($state) as $type" >&2
+        if ! fast_start "$id" boat resume "$id" --no-env --ttl "$budget" ${resize[@]+"${resize[@]}"}; then
             case "$out" in
                 *snapshot_data_expired*) echo "boat-check: $id can't be resumed (its data expired); making a new one" >&2; state="" ;;
                 *) start_failed "resuming $id" "$out" ;;
@@ -483,11 +560,12 @@ if [ -z "$state" ]; then
         echo "boat-check: no ready $snapshot snapshot, so this sandbox starts bare and installs everything; --save makes one" >&2
     fi
     echo "boat-check: creating $name" >&2
+    id=""   # the trap reads a cut-short create's id from $start_log
     id=$(new_sandbox "$name" ${from[@]+"${from[@]}"})
     echo "$id" > "$id_file"
 fi
 boat extend "$id" --ttl "$budget" --json >/dev/null
-extended=1
+keep_alive "$id"
 echo "boat-check: $type sandbox $id ($name), ready in $((SECONDS - t0)) s" >&2
 
 # The working tree as git sees it (tracked files, and untracked ones git doesn't ignore, as
@@ -555,4 +633,5 @@ if [ "$status" = 75 ] && [ -n "$base" ] \
 fi
 exit "$status"
 }
-main "$@"; exit
+# shellcheck disable=SC2317  # the exit stops bash reading on if this file changes while it runs
+{ main "$@"; exit; }
