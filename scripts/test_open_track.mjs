@@ -154,7 +154,7 @@ await test("open track: a red-light manoeuvre stays on offer, flagged, a collisi
   assert.ok(hits.every((c) => !c.eligible && !c.flagged));
   assert.ok(decision.candidates.filter((c) => c.reject === "collision").every((c) => !c.eligible && !c.flagged));
   const chosen = decision.candidates.find((c) => c.id === decision.chosenId);
-  assert.ok(chosen, `Rules chose ${decision.chosenId}, which is not among the candidates`);
+  assert.ok(!!chosen, `Rules chose ${decision.chosenId}, which is not among the candidates`);
   assert.equal(chosen.eligible, true, `Rules chose ${decision.chosenId}`);
   assert.equal(!!chosen.flagged, false, `Rules chose ${decision.chosenId}`);
   // (and the state counts as rejected only what is still removed)
