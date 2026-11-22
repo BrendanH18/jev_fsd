@@ -117,6 +117,16 @@ test("trimming history keeps the chosen baseline, dropping other older evaluatio
     [at(4).created_at, at(3).created_at],
   );
 });
+test("the local history run cap still leaves room for the chosen baseline", () => {
+  const at = (m) => ({ ...run, created_at: new Date(Date.UTC(2026, 9, 3, 12, m)).toISOString() });
+  const old = Array.from({ length: 10 }, (_, i) => at(10 - i));
+  const store = { getItem: () => JSON.stringify(old), setItem() {} };
+  const saved = saveEvaluation(at(11), store, old.at(-1));
+  assert.deepEqual(
+    saved.map((entry) => entry.created_at),
+    [at(11), ...old.slice(0, 8), old.at(-1)].map((entry) => entry.created_at),
+  );
+});
 test("a full-size new evaluation is saved beside a full-size baseline", () => {
   // (a run of every challenge with two drivers: some 1.1 million characters, mostly decision traces)
   const decisions = Array.from({ length: 600 }, (_, i) => ({

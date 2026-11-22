@@ -33,6 +33,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
+from .cache import write_json
 from .graph import is_drivable
 from .parse import OsmData, parse_xml
 from .project import Projection
@@ -71,7 +72,7 @@ def build_rail(
         return None
     rail = rail_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d tracks, %d level crossings)" % (path.name, len(rail["tracks"]), len(rail["crossings"])))
-    path.write_text(json.dumps(rail, separators=(",", ":")))
+    write_json(path, rail)
     return rail
 
 

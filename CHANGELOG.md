@@ -30,6 +30,8 @@
 - Run CI on GitHub-hosted standard runners, free for this public repository, instead of Namespace.
 - Trace where the same tuned Rules drive first differs across JavaScript engines.
 - Compare manual challenge scores with model scores measured from the same driven corridor.
+- Inspect 973 route-cohort profiles for saved drives and use 27 fixes across map imports,
+  benchmark replay tooling and Arena history. See the [change inventory](docs/validation/drive-lab-improvements.md).
 
 ## 0.3.0 (20 November 2026)
 

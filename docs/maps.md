@@ -154,9 +154,18 @@ bundled map has a level crossing on its streets (checked against Overpass that d
 unchanged; the server and the browser demo add the file to the map as `rail`, `--transit` rebuilds it
 with the bus routes, and `uv run scripts/fetch_map.py <preset> --rail` rebuilds only it.
 
-To refresh an extract, run `uv run scripts/fetch_map.py <preset> --force`. To fetch fresh raw
-data as well, remove only that city's local `.osm.xml` cache first. For a custom area, keep
-using `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.
+Use `uv run scripts/fetch_map.py <preset> --force` to rebuild the map and all layers from
+cached OSM, including turn restrictions. Use `--refresh-osm` to download fresh raw OSM before
+building. For compatibility, `--force` also refreshes raw OSM when combined with `--bridges`,
+`--crossings`, `--contraflow`, `--driveways` or `--parks`. Layer flags can be combined.
+For example, `--parks --bridges --refresh-osm` fetches
+once and rebuilds those two layers against the existing map pack. If the pack is missing or
+invalid, the command replaces it and rebuilds all layers against the replacement.
+Retry the import if a layer write fails. The retry rebuilds the pack and all layers together.
+Use `--maps-dir PATH` to keep
+the pack, layers and raw cache in a separate directory while testing an import. The v5-to-v6
+migration script accepts the same directory option, and `--check` previews the migration.
+For a custom drive area, use `JEV_FSD_BBOX` or `?bbox=W,S,E,N`.
 
 Bus-only lanes are a separate `<key>.buslanes.v1.json` layer, built with
 `uv run scripts/fetch_map.py <preset> --buslanes`. Raw OSM is downloaded if absent;

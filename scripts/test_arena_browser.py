@@ -59,7 +59,19 @@ def check(url, chromium=None, output=None):
         page.locator("#arena-history").select_option("0")
         expect(page.locator("#arena-results tr")).to_have_count(n)
         page.locator("#arena-baseline").select_option("0")
+        page.locator("#arena-baseline-agent").select_option("cautious")
+        page.evaluate("""() => {
+            const text = File.prototype.text;
+            File.prototype.text = async function () {
+                File.prototype.text = text;
+                await new Promise((resolve) => { window.finishArenaImport = resolve; });
+                return text.call(this);
+            };
+        }""")
         page.locator("#arena-import").set_input_files(export)
+        expect(page.locator("#arena-run")).to_be_disabled()
+        expect(page.locator("#arena-delete")).to_be_disabled()
+        page.evaluate("window.finishArenaImport()")
         expect(page.locator("#arena-status")).to_contain_text(f"Imported {n} attempts")
         expect(page.locator("#comparison-status")).to_contain_text(f"{n}/{n} attempts match")
         changed = json.loads(export.read_text())
@@ -89,9 +101,21 @@ def check(url, chromium=None, output=None):
         expect(page.locator("#details-content")).to_contain_text("no decision context")
         page.locator("#arena-history").select_option("0")
         before = page.locator("#arena-history option").count()
+        baseline = int(page.locator("#arena-baseline").input_value())
         page.locator("#arena-delete").click()
         expect(page.locator("#arena-history option")).to_have_count(before - 1)
         expect(page.locator("#history-status")).to_contain_text("deleted")
+        expect(page.locator("#arena-baseline")).to_have_value(str(baseline - 1))
+        expect(page.locator("#arena-baseline-agent")).to_have_value("cautious")
+        large = Path(directory) / "large-evaluation.json"
+        large_run = json.loads(export.read_text())
+        large_run["results"] = large_run["results"][:1]
+        decision = next(d for d in large_run["results"][0]["decisions_trace"] if d.get("context_recorded"))
+        decision["state"]["observations"] = "x" * (5 * 1024 * 1024)
+        large.write_text(json.dumps(large_run))
+        page.locator("#arena-import").set_input_files(large)
+        expect(page.locator("#arena-status")).to_contain_text("Imported 1 attempts")
+        expect(page.locator("#history-status")).to_contain_text("Saved on this browser")
         page.locator("#arena-mode").select_option("realtime")
         page.locator("#arena-run").click()
         expect(page.locator("#arena-status")).to_contain_text(f"1/{n}")
@@ -107,8 +131,10 @@ def check(url, chromium=None, output=None):
         # history saved in localStorage before IndexedDB moves into IndexedDB, and the old key goes
         moved = browser.new_context()
         moved.add_init_script(
-            "if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('jev-fsd-evaluations-v2', JSON.stringify([%s])); }"
-            % json.dumps(legacy)
+            "if (location.origin === new URL(%s).origin && !sessionStorage.getItem('seeded')) {"
+            " sessionStorage.setItem('seeded', '1');"
+            " localStorage.setItem('jev-fsd-evaluations-v2', JSON.stringify([%s])); }"
+            % (json.dumps(url), json.dumps(legacy))
         )
         page = moved.new_page()
         page.on("pageerror", lambda error: errors.append(str(error)))

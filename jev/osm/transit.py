@@ -33,6 +33,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
+from .cache import write_json
 from .parse import OsmData, parse_xml
 from .project import Projection
 
@@ -73,7 +74,7 @@ def build_transit(
         return None
     transit = transit_from_osm(parse_xml(xml_path), pack)
     log("map: built %s (%d routes, %d stops)" % (path.name, len(transit["routes"]), len(transit["stops"])))
-    path.write_text(json.dumps(transit, separators=(",", ":")))
+    write_json(path, transit)
     return transit
 
 

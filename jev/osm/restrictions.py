@@ -8,6 +8,7 @@ Red-only bans are kept in `red_turns`, never in the router's `restrictions` list
 import json
 import re
 from . import fetch
+from .cache import write_json
 from .parse import parse_xml
 
 KINDS = {
@@ -79,7 +80,7 @@ def build_restrictions(bbox, maps_dir, pack, force=False, log=lambda _: None):
     if not raw.exists():
         return None
     layer = restrictions_from_osm(parse_xml(raw), pack)
-    p.write_text(json.dumps(layer, separators=(",", ":")))
+    write_json(p, layer)
     log(
         "map: built %s (%d restrictions, %d red-turn bans)"
         % (p.name, len(layer["restrictions"]), len(layer.get("red_turns", [])))

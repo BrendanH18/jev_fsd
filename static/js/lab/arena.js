@@ -22,6 +22,7 @@ import { CUSTOM_SUITE, suiteVersion } from "../bench/suite-version.js";
 import { examine } from "./examiner.js";
 
 let running = false,
+  editingHistory = false,
   stop = false,
   results = [],
   current = null,
@@ -65,16 +66,15 @@ function agents() {
           value: a.id,
           checked:
             (selection.size ? selection.has(a.id) : a.id === "rules" || a.id === "cautious") && a.available !== false,
-          disabled: a.available === false || running,
+          disabled: a.available === false || running || editingHistory,
         }),
         agentOptionLabel(a),
       ),
     ),
   );
 }
-function historyControls() {
-  const view = $("#arena-history").value,
-    baseline = $("#arena-baseline").value;
+function historyControls(baseline = null) {
+  const view = $("#arena-history").value;
   $("#arena-history").replaceChildren(
     h("option", { value: "current" }, "Current evaluation"),
     ...saved.map((run, i) => h("option", { value: i }, runLabel(run))),
@@ -84,7 +84,13 @@ function historyControls() {
     ...saved.map((run, i) => h("option", { value: i }, runLabel(run))),
   );
   $("#arena-history").value = view === "current" || !saved[Number(view)] ? "current" : view;
-  $("#arena-baseline").value = baseline !== "" && saved[Number(baseline)] ? baseline : "";
+  // IndexedDB keeps the saved run objects. The localStorage fallback reads fresh copies.
+  let baselineIndex = baseline ? saved.indexOf(baseline) : -1;
+  if (baseline && baselineIndex < 0) {
+    const json = JSON.stringify(baseline);
+    baselineIndex = saved.findIndex((r) => JSON.stringify(r) === json);
+  }
+  $("#arena-baseline").value = baselineIndex >= 0 ? String(baselineIndex) : "";
   baselineAgents();
 }
 function baselineAgents() {
@@ -94,7 +100,7 @@ function baselineAgents() {
   const ids = [...new Set(baseline?.results.map((r) => r.brain) || [])];
   select.replaceChildren(...ids.map((id) => h("option", { value: id }, agentLabel(id))));
   if (ids.includes(previous)) select.value = previous;
-  select.disabled = !ids.length || running;
+  select.disabled = !ids.length || running || editingHistory;
 }
 function delta(result, before, metric, format = (n) => signed(n)) {
   if (!before || !Number.isFinite(result[metric]) || !Number.isFinite(before[metric])) return null;
@@ -187,8 +193,8 @@ function render() {
         })
       : [h("tr", {}, h("td", { colspan: 9 }, "Run an evaluation or import a saved export to see results."))]),
   );
-  $("#arena-export").disabled = !shown.length || running;
-  $("#arena-delete").disabled = $("#arena-history").value === "current" || running;
+  $("#arena-export").disabled = !shown.length || running || editingHistory;
+  $("#arena-delete").disabled = $("#arena-history").value === "current" || running || editingHistory;
   const matched = comparisons.filter((c) => c.before).length;
   $("#comparison-status").textContent = baseline
     ? `${matched}/${shown.length} attempts match ${agentLabel(brain)} in the baseline. Deltas use matching conditions only; negative incidents, braking, latency and cost mean less. Imported results are self-reported.`
@@ -356,6 +362,9 @@ function details(result) {
   $("#arena-details").scrollIntoView({ behavior: "instant", block: "start" });
 }
 function busy(value) {
+  $("#arena-run").disabled = editingHistory;
+  $("#arena-export").disabled = value || !visibleRun()?.results.length;
+  $("#arena-delete").disabled = value || $("#arena-history").value === "current";
   for (const id of [
     "arena-history",
     "arena-baseline",
@@ -363,6 +372,7 @@ function busy(value) {
     "arena-import",
     "arena-load",
     "arena-mode",
+    "arena-track",
     "arena-road-tests",
   ])
     if ($(`#${id}`)) $(`#${id}`).disabled = value;
@@ -379,18 +389,13 @@ async function persist(run) {
     saved = await history.save(run, previousBaseline);
     $("#history-status").textContent =
       `Saved on this browser. Up to ${history.limit} recent evaluations are retained within the storage limit; export a permanent copy.`;
-    historyControls();
-    // (IndexedDB keeps the saved run objects; the localStorage fallback reads fresh copies)
-    let baselineIndex = previousBaseline ? saved.indexOf(previousBaseline) : -1;
-    if (previousBaseline && baselineIndex < 0)
-      baselineIndex = saved.findIndex((r) => JSON.stringify(r) === JSON.stringify(previousBaseline));
-    $("#arena-baseline").value = baselineIndex >= 0 ? String(baselineIndex) : "";
-    baselineAgents();
+    historyControls(previousBaseline);
   } catch (error) {
     $("#history-status").textContent = `Could not save locally: ${error.message}. Export is still available.`;
   }
 }
 async function run() {
+  if (editingHistory) return;
   if (running) {
     stop = true;
     $("#arena-status").textContent = "Stopping after the current decision…";
@@ -441,29 +446,40 @@ async function run() {
     current.status = "error";
     $("#arena-status").textContent = `Evaluation failed: ${error.message}. Completed attempts are retained.`;
   } finally {
+    if (results.length) {
+      editingHistory = true;
+      busy(true);
+      $("#arena-run").textContent = "Saving evaluation…";
+      await persist(current);
+      editingHistory = false;
+    }
     running = false;
     busy(false);
     $("#arena-run").textContent = "Run evaluation";
-    if (results.length) await persist(current);
     render();
   }
 }
 async function importRun(file) {
-  if (!file) return;
+  if (!file || running || editingHistory) return;
+  editingHistory = true;
+  busy(true);
   try {
-    if (file.size > MAX_IMPORT_BYTES) throw new Error("Choose an export smaller than 5 MB.");
+    if (file.size > MAX_IMPORT_BYTES)
+      throw new Error(`Choose an export no larger than ${MAX_IMPORT_BYTES / (1024 * 1024)} MiB.`);
     const imported = validateEvaluation(JSON.parse(await file.text()));
     current = imported;
     results = imported.results;
     $("#arena-history").value = "current";
     $("#arena-details").hidden = true;
     await persist(imported);
-    render();
     $("#arena-status").textContent = `Imported ${results.length} attempts. No agents were executed.`;
   } catch (error) {
     $("#history-status").textContent = `Import failed: ${error.message}`;
   } finally {
     $("#arena-import").value = "";
+    editingHistory = false;
+    busy(false);
+    render();
   }
 }
 async function boot() {
@@ -482,17 +498,23 @@ async function boot() {
   $("#arena-baseline-agent").addEventListener("change", render);
   $("#arena-import").addEventListener("change", (event) => importRun(event.target.files[0]));
   $("#arena-delete").addEventListener("click", async () => {
+    const doomed = saved[Number($("#arena-history").value)];
+    if (!doomed || running || editingHistory) return;
+    const baseline = baselineRun();
+    editingHistory = true;
+    busy(true);
     try {
-      const doomed = saved[Number($("#arena-history").value)];
-      if (doomed) saved = await history.remove(doomed);
+      saved = await history.remove(doomed);
       $("#arena-history").value = "current";
-      $("#arena-baseline").value = "";
       $("#arena-details").hidden = true;
-      historyControls();
-      render();
+      historyControls(baseline === doomed ? null : baseline);
       $("#history-status").textContent = "Saved evaluation deleted from this browser.";
     } catch {
       $("#history-status").textContent = "Could not delete: browser storage is unavailable.";
+    } finally {
+      editingHistory = false;
+      busy(false);
+      render();
     }
   });
   $("#arena-export").addEventListener("click", () => {

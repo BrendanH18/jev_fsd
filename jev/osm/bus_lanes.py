@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from . import fetch
+from .cache import write_json
 from .parse import parse_xml
 
 DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
@@ -53,7 +54,7 @@ def build_buslanes(bbox, maps_dir, pack, force=False, log=lambda m: None):
     if not raw.is_file():
         return None
     layer = buslanes_from_osm(parse_xml(raw), pack)
-    path.write_text(json.dumps(layer, separators=(",", ":")))
+    write_json(path, layer)
     log("map: built %s (%d reserved lanes)" % (path.name, len(layer["lanes"])))
     return layer
 

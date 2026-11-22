@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from run_insights import comparison, decisions, motion, outcomes, safety
+from run_insights import comparison, decisions, motion, outcomes, profiles, safety
 
 
 # Reserved by static/js/bench/heldout.js. Explicit single-seed runs may omit the heldout flag.
@@ -47,22 +47,31 @@ def main():
         if catalog.keys() & module.REPORTS.keys():
             raise RuntimeError("Duplicate report ID")
         catalog.update(module.REPORTS)
+    available = {**catalog, **profiles.REPORTS}
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", nargs="?", type=Path, help="saved benchmark JSON file")
-    parser.add_argument("reports", nargs="*", help="report IDs (default: all)")
+    parser.add_argument("reports", nargs="*", help="report IDs (default: all original reports)")
     parser.add_argument("--compare", type=Path, help="second saved benchmark to compare with the baseline")
-    parser.add_argument("--list", action="store_true", help="list report IDs and descriptions")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--list", action="store_true", help="list original report IDs and descriptions")
+    mode.add_argument("--list-profiles", action="store_true", help="list cohort profile IDs and descriptions")
+    mode.add_argument("--profiles", action="store_true", help="run all cohort profiles")
     args = parser.parse_intermixed_args()
-    if args.list:
-        for key, (description, _) in sorted(catalog.items()):
-            print(f"{key:36} {description}")
+    if args.list or args.list_profiles:
+        listed = catalog if args.list else profiles.REPORTS
+        width = 36 if args.list else max(map(len, listed))
+        for key, (description, _) in sorted(listed.items()):
+            print(f"{key:{width}} {description}")
         return
     if args.run is None:
-        parser.error("provide a saved run or use --list")
+        parser.error("provide a saved run or use --list or --list-profiles")
+    if args.profiles and args.reports:
+        parser.error("--profiles runs the whole profile catalog. Use report IDs to select individual reports.")
     for key in args.reports:
-        if key not in catalog:
-            parser.error(f"unknown report {key!r}; see --list")
-    selected = {key: catalog[key][1] for key in args.reports or sorted(catalog)}
+        if key not in available:
+            parser.error(f"unknown report {key!r}. See --list and --list-profiles.")
+    default = profiles.REPORTS if args.profiles else catalog
+    selected = {key: available[key][1] for key in args.reports or sorted(default)}
     try:
         config, rows = load_run(args.run)
         if args.compare is not None:

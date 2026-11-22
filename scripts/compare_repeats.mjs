@@ -1,10 +1,12 @@
 // Summarise repeated arena recordings without calling a model.
 // node --experimental-default-type=module scripts/compare_repeats.mjs tape1.json.gz tape2.json.gz [...]
+import { hash } from "node:crypto";
 import { readFileSync, realpathSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { driverScores, SCORES_VERSION } from "../static/js/bench/scores.js";
 import { suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording } from "../static/js/brain/recording.js";
+import { runCost } from "./run_manifest.mjs";
 
 // Audit counters and sampled durations from DriveMetrics.summary. Keep each metric in its saved unit.
 const AUDIT_FIELDS = [
@@ -54,16 +56,26 @@ function providerOptions(request) {
 
 function readRepeat(path) {
   const raw = readFileSync(path);
-  const recording = ModelRecording.parse((path.endsWith(".gz") ? gunzipSync(raw) : raw).toString());
+  const text = path.endsWith(".gz") ? gunzipSync(raw) : raw;
+  const recording = ModelRecording.parse(text.toString("utf8"));
   const { header, results } = recording;
   const track = header.arena?.track || "guarded";
   if (!header.arena) throw new Error(`${path} is a benchmark recording. Use arena recordings for this report.`);
   const drives = Object.values(results).sort((a, b) => a.challenge.localeCompare(b.challenge));
-  const planned = new Set(header.arena?.ids);
+  const plan = header.arena.ids;
+  const planned = new Set(Array.isArray(plan) ? plan : []);
   if (
     !drives.length ||
+    planned.size !== plan?.length ||
     planned.size !== drives.length ||
-    drives.some((drive) => !planned.delete(drive.challenge) || drive.stopped)
+    Object.keys(recording.drives).length !== drives.length ||
+    drives.some(
+      (drive) =>
+        !planned.delete(drive.challenge) ||
+        drive.stopped ||
+        results[drive.challenge] !== drive ||
+        !Object.hasOwn(recording.drives, drive.challenge),
+    )
   )
     throw new Error(`${path} needs a complete arena recording.`);
   const sum = (field) => drives.reduce((total, drive) => total + (drive[field] || 0), 0);
@@ -85,6 +97,7 @@ function readRepeat(path) {
   if (header.kind === "llm" && providerSettings.size !== 1)
     throw new Error(`${path} needs matching provider settings in its request traces.`);
   return {
+    content_sha: hash("sha256", canonicalJson(recording)),
     suite_version: suiteVersion(header),
     signature: canonicalJson({
       suite_version: suiteVersion(header),
@@ -123,6 +136,7 @@ function readRepeat(path) {
     failed_drives: drives.filter((drive) => !drive.pass).map((drive) => drive.challenge),
     safety_brakes: sum("safety_brakes"),
     fallbacks: sum("fallbacks"),
+    cost_usd: runCost(drives),
     drives: drives.length,
     path,
   };
@@ -142,10 +156,12 @@ function compare(paths) {
   if (new Set(paths.map((path) => realpathSync(path))).size !== paths.length)
     throw new Error("List each recording once.");
   const runs = paths.map(readRepeat);
+  if (new Set(runs.map((run) => run.content_sha)).size !== runs.length)
+    throw new Error("List each recording once, including copies of the same recording.");
   const first = runs[0];
   if (
-    !first.source ||
-    runs.some((run) => run.signature !== first.signature || run.dirty || run.source !== first.source)
+    !/^[a-f0-9]{40}$/.test(first.source) ||
+    runs.some((run) => run.signature !== first.signature || run.dirty !== false || run.source !== first.source)
   )
     throw new Error(
       "Record each repeat on the same clean source, suite version, engine, track, maps and authored drives.",
@@ -168,7 +184,7 @@ function compare(paths) {
         throw new Error(`Repeats for ${driver} need the same model, prompt and provider settings.`);
       const reasons = new Set(repeats.flatMap((run) => Object.keys(run.audited_failures)));
       const failedDrives = new Set(repeats.flatMap((run) => run.failed_drives));
-      const fields = ["score", "passed", "flags_per_decision", "safety_brakes", "fallbacks"];
+      const fields = ["score", "passed", "flags_per_decision", "safety_brakes", "fallbacks", "cost_usd"];
       return {
         driver,
         model,
@@ -189,6 +205,11 @@ function compare(paths) {
           [...failedDrives].sort().map((id) => [id, repeats.filter((run) => run.failed_drives.includes(id)).length]),
         ),
         files: repeats.map((run) => run.path),
+        runs: repeats.map((run) => ({
+          file: run.path,
+          ...Object.fromEntries(fields.map((field) => [field, run[field]])),
+          failed_drives: run.failed_drives,
+        })),
       };
     }),
   };

@@ -52,17 +52,20 @@ def replay_matrix(rows: list[dict]) -> dict:
         node = re.fullmatch(r"node v(\d+\.\d+\.\d+)", engine or "")
         if not re.fullmatch(r"[0-9a-f]{40}", tree or "") or not node:
             raise ValueError(f"{tape} needs a source revision and a Node version for replay CI")
-        if not isinstance(row["total"], int) or row["total"] < 1:
+        count = row.get("total")
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
             raise ValueError(f"{tape} needs a positive drive count for replay CI")
         if manifest.get("source_dirty"):
             raise ValueError(f"{tape} was recorded with uncommitted changes")
-        jobs[tape] = {
+        job = {
             "tape": tape,
             "tree": tree,
             "node": node[1],
             "runner": "bench_node.mjs" if row.get("map") else "arena_node.mjs",
-            "count": row["total"],
+            "count": count,
         }
+        if jobs.setdefault(tape, job) != job:
+            raise ValueError(f"{tape} has conflicting replay settings in published rows")
     return {"include": list(jobs.values())}
 
 
@@ -77,7 +80,9 @@ def replay_status(stdout: str, returncode: int, count: int) -> tuple[str, str]:
         return "Exact", f"{count} {'drive' if count == 1 else 'drives'} matched"
     drifted = re.fullmatch(r"replay: ([\w-]+(?:, [\w-]+)*) did not play out as recorded", lines[0])
     if drifted:
-        return "Drift", drifted[1]
+        ids = drifted[1].split(", ")
+        if len(ids) <= count and len(ids) == len(set(ids)):
+            return "Drift", drifted[1]
     return "Error", f"Expected {count} drives. {lines[0]}"
 
 
@@ -125,7 +130,9 @@ def run_replay(checkout: Path, tape: Path, runner: str, count: int) -> tuple[str
             print(result.stdout, end="")
             print(result.stderr, end="")
             return replay_status(result.stdout, result.returncode, count)
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as error:
+            for stream in (error.stdout, error.stderr):
+                print(stream.decode(errors="replace") if isinstance(stream, bytes) else stream or "", end="")
             return "Error", "The replay exceeded 20 minutes"
         finally:
             if server.poll() is None:

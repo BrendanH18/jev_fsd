@@ -11,10 +11,10 @@ Select **Realtime** when comparing model latency or manual attempts; **Lockstep*
 decision and measures the resulting choices. Changing clocks changes the experiment.
 
 Saved evaluations stay in this browser's IndexedDB (`lab/history.js`): the newest 20 runs, within
-200 MB, dropping the oldest first (never the chosen baseline while another can go) and more if the
+200 MiB, dropping the oldest first (never the chosen baseline while another can go) and more if the
 browser's quota refuses a save. History saved in localStorage by earlier versions moves there the
 first time the arena opens. Where IndexedDB is unavailable (some private windows, blocked storage)
-the arena keeps up to 10 runs in localStorage within 9 MB. Export a run to keep a permanent copy.
+the arena keeps up to 10 runs in localStorage within 9 MiB. Export a run to keep a permanent copy.
 
 Copy `static/js/agents/cautious.js` to `static/js/agents/my-agent.js`. Change its default
 definition's id and label, then open **Settings → Local agent module** and load
@@ -482,11 +482,10 @@ scripts/test_model_recording.mjs --write`.
 
 Evaluations save automatically to this browser, including completed attempts from a stopped
 or failed suite. **View** reopens a saved run; **Export results** downloads the selected run
-with its original timestamp. **Import JSON** validates a v1 or v2 export as data and saves it
-locally without executing any agent. Up to ten runs fit within a 6 MB history budget (counted
-as two bytes a character: room for a baseline and a new run of every challenge); older runs are
-dropped first, the chosen baseline last. Storage failures leave the current run available for export. Imports
-are limited to 5 MB. **Delete saved run** removes only the selected saved evaluation.
+with its original timestamp. **Import JSON** validates a v1, v2 or v3 export up to 32 MiB and saves
+it locally without executing any agent. The browser history limits above apply to imports.
+Storage failures leave the current run available for export. **Delete saved run** removes the
+selected evaluation and preserves the comparison baseline if it points to another run.
 
 Choose **Compare against**, then a **Baseline driver**. Each current driver is compared with
 that driver on matching challenges only. Versions, map, seed, weather, time, vehicle, clock
