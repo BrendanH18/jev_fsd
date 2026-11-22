@@ -156,7 +156,9 @@ with the bus routes, and `uv run scripts/fetch_map.py <preset> --rail` rebuilds 
 
 Use `uv run scripts/fetch_map.py <preset> --force` to rebuild the map and all layers from
 cached OSM, including turn restrictions. Use `--refresh-osm` to download fresh raw OSM before
-building. Layer flags can be combined. For example, `--parks --bridges --refresh-osm` fetches
+building. For compatibility, `--force` also refreshes raw OSM when combined with `--bridges`,
+`--crossings`, `--contraflow`, `--driveways` or `--parks`. Layer flags can be combined.
+For example, `--parks --bridges --refresh-osm` fetches
 once and rebuilds those two layers against the existing map pack. Use `--maps-dir PATH` to keep
 the pack, layers and raw cache in a separate directory while testing an import. The v5-to-v6
 migration script accepts the same directory option, and `--check` previews the migration.

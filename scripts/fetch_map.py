@@ -69,7 +69,14 @@ def main(argv: list[str]) -> int:
     )
     parser.add_argument("area", metavar="AREA", nargs="?", help="preset or W,S,E,N (default: configured area)")
     parser.add_argument("--maps-dir", type=Path, default=MAPS_DIR, help="directory for all map files and raw OSM cache")
-    parser.add_argument("--force", action="store_true", help="rebuild the requested files from cached OSM")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "rebuild the requested files; with --bridges, --crossings, --contraflow, "
+            "--driveways or --parks, also refresh raw OSM"
+        ),
+    )
     parser.add_argument("--refresh-osm", action="store_true", help="download fresh raw OSM before rebuilding")
     for option, (description, _) in LAYER_OPTIONS.items():
         help_text = "rebuild only " + description
