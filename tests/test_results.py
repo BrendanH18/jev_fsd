@@ -69,6 +69,21 @@ class ResultsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_results.render({"driving_s": float("inf")})
 
+    def test_driven_corridor_measurements_belong_to_the_exact_recorded_result(self):
+        tape = build_results.recording_facts(next(build_results.RECORDINGS.glob("jev-arena-*.json.gz")))
+        result = next(iter(tape["results"].values()))
+        original = build_results.published_drive(result)
+        inputs = dict(original["score_inputs"], method="driven-corridor-v1", time_s=result["time_s"], min_ttc_s=None)
+        comparison = {"result_sha": result["result_sha"], "score_inputs": inputs}
+        drive = build_results.published_drive(result, comparison=comparison)
+        self.assertEqual(drive["score_inputs"], original["score_inputs"])
+        self.assertEqual(drive["comparison_score_inputs"], inputs)
+        self.assertNotIn("comparison_score_inputs", original)
+        with self.assertRaisesRegex(ValueError, "disagree with the recording"):
+            build_results.published_drive(result, comparison=dict(comparison, result_sha="different"))
+        with self.assertRaisesRegex(ValueError, "invalid driven-corridor"):
+            build_results.published_drive(result, comparison=dict(comparison, score_inputs=dict(inputs, time_s=-1)))
+
     def test_check_fails_when_the_file_is_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
             stale = Path(tmp) / "results.json"

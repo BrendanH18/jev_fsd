@@ -159,6 +159,29 @@ For a merged arena recording, replay the whole tape with `arena_node.mjs --repla
 --check replay --json RUN.json` on its recorded Node version. When the replay is exact, the
 report carries the merged tape's manifest for publication.
 
+## Compare scores with a manual drive
+
+The manual challenge report compares scores only when both drives have `driven-corridor-v1`
+measurements. The sampler measures progress, time headway and time to collision after each
+physics step, using the car's actual route position and lateral corridor. Verdicts, durations
+and incidents are still shown when comparable measurements are unavailable. The leaderboard's
+original arena scores use the measurements saved with each published result.
+
+New arena reports and recordings include the shared measurements. To measure an older
+recording, run the local server and export the drives that replay exactly:
+
+```sh
+node --experimental-default-type=module scripts/arena_node.mjs --port 8322 \
+  --replay data/recordings/jev-arena-2026-11-11.json.gz \
+  --comparison-json /tmp/jev-arena-2026-11-11.json
+```
+
+The export pairs each measurement with the drive's original result hash. Put a verified export
+under `data/score-comparisons/` with the recording's base name and regenerate the leaderboard
+with `uv run scripts/build_results.py`. The guarded backfill covers 54 Jev drives and all 62
+Claude Haiku drives. Rules' older report has no model tape; its scores remain unavailable in
+the manual comparison until a run with the shared measurements is published.
+
 ## Compare repeated model runs
 
 Use `node --experimental-default-type=module scripts/compare_repeats.mjs`

@@ -63,6 +63,25 @@ test("agent validation rejects ineligible manoeuvres and malformed motions", () 
   assert.throws(() => registerAgent({ id: "rules", label: "Overwrite", create: () => ({}) }));
 });
 
+const { comparableResult } = await import("../static/js/brain/recording.js");
+const { CHALLENGE_SCORE_METHOD } = await import("../static/js/lab/score-inputs.js");
+const brakingChallenge = CHALLENGES.find((c) => c.id === "brakes-ahead");
+const brakingMap = load(brakingChallenge.map);
+let comparisonInputs;
+const measured = await evaluateChallenge(brakingMap, brakingChallenge, {
+  onScoreInputs: (inputs) => {
+    comparisonInputs = inputs;
+  },
+});
+const baseline = await evaluateChallenge(brakingMap, brakingChallenge);
+test("driven-corridor score sampling preserves the original arena result", () => {
+  assert.deepEqual(comparableResult(measured), comparableResult(baseline));
+  assert.equal(comparisonInputs.method, CHALLENGE_SCORE_METHOD);
+  assert.equal(comparisonInputs.arrived, measured.arrived);
+  assert.equal(comparisonInputs.time_s, measured.time_s);
+  assert.ok(comparisonInputs.min_headway_s > 0);
+});
+
 // Every challenge with Rules and the cautious agent: the slowest part of this check, so a few worker
 // threads (scripts/drive_lab_arena.mjs) drive the challenges in parallel, each taking the next as
 // it finishes one. The checks below run here, in challenge order.

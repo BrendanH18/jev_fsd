@@ -404,7 +404,7 @@ function followingInLane(ego, route, p, lane, vehicles, frame, snap) {
   return null;
 }
 
-export function manualMetricSnapshot(world) {
+export function drivenMetricSnapshot(world) {
   const { ego, route } = world;
   if (!route) return null;
   const p = route.project(ego.x, ego.y, route.hint);
@@ -417,7 +417,7 @@ export function manualMetricSnapshot(world) {
     routeProj: p,
     lane,
     onRoute: true,
-    // Manual following measurements use the car's actual lateral position and body width.
+    // Measure following from the car's actual lateral position and body width.
     following: followingInLane(ego, route, p, lane, vehicles, (s) => route.frameMove(p.s, s), null),
   };
 }

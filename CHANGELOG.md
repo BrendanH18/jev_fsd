@@ -29,6 +29,7 @@
 - Watch four published model drives and replay a retained manual incident beside Jev.
 - Run CI on GitHub-hosted standard runners, free for this public repository, instead of Namespace.
 - Trace where the same tuned Rules drive first differs across JavaScript engines.
+- Compare manual challenge scores with model scores measured from the same driven corridor.
 
 ## 0.3.0 (20 November 2026)
 

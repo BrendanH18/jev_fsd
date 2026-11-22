@@ -13480,6 +13480,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 80.1,
+      "progress": 1,
+      "distance_m": 393,
+      "rms_jerk": 1.76,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -13497,6 +13511,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 402,
+      "rms_jerk": 3.01,
+      "hard_brakes": 4,
+      "max_lat_accel": 1.53,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 67.9,
       "progress": 1,
       "distance_m": 402,
       "rms_jerk": 3.01,
@@ -13532,6 +13560,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 76.5,
+      "progress": 0.999,
+      "distance_m": 315,
+      "rms_jerk": 1.55,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -13549,6 +13591,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 307,
+      "rms_jerk": 3.87,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 40.9,
       "progress": 1,
       "distance_m": 307,
       "rms_jerk": 3.87,
@@ -13584,6 +13640,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 99.7,
+      "progress": 1,
+      "distance_m": 1152,
+      "rms_jerk": 2.04,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -13601,6 +13671,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 147,
+      "rms_jerk": 4.3,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.86,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 29.6,
       "progress": 1,
       "distance_m": 147,
       "rms_jerk": 4.3,
@@ -13636,6 +13720,20 @@
       "safety_brakes": 2,
       "min_ttc_s": 1.2,
       "min_headway_s": 1.08
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 65.3,
+      "progress": 1,
+      "distance_m": 419,
+      "rms_jerk": 3.85,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.33,
+      "collisions": 0,
+      "safety_brakes": 2,
+      "min_ttc_s": 1.2,
+      "min_headway_s": 1.07
      }
     },
     {
@@ -13653,6 +13751,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 251,
+      "rms_jerk": 3.59,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.5,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 87,
       "progress": 1,
       "distance_m": 251,
       "rms_jerk": 3.59,
@@ -13688,6 +13800,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 59.8,
+      "progress": 1,
+      "distance_m": 275,
+      "rms_jerk": 4.09,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -13705,6 +13831,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 288,
+      "rms_jerk": 3.59,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.39,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 56.2,
       "progress": 1,
       "distance_m": 288,
       "rms_jerk": 3.59,
@@ -13740,6 +13880,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 51.2,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 2.94,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -13766,6 +13920,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 2.9,
       "min_headway_s": 1.65
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 49.5,
+      "progress": 1,
+      "distance_m": 413,
+      "rms_jerk": 3.36,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.36,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.9,
+      "min_headway_s": 1.02
      }
     },
     {
@@ -13783,6 +13951,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 1112,
+      "rms_jerk": 2.02,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 96.4,
       "progress": 1,
       "distance_m": 1112,
       "rms_jerk": 2.02,
@@ -13818,6 +14000,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 55.5,
+      "progress": 1,
+      "distance_m": 299,
+      "rms_jerk": 4.01,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -13835,6 +14031,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 161,
+      "rms_jerk": 4.85,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 31.4,
       "progress": 1,
       "distance_m": 161,
       "rms_jerk": 4.85,
@@ -13870,6 +14080,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 37,
+      "progress": 1,
+      "distance_m": 364,
+      "rms_jerk": 2.29,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -13887,6 +14111,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 381,
+      "rms_jerk": 3.51,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 76.9,
       "progress": 1,
       "distance_m": 381,
       "rms_jerk": 3.51,
@@ -13922,6 +14160,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 2.2,
       "min_headway_s": 0.92
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 78.3,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 2.88,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.2,
+      "min_headway_s": 0.91
      }
     },
     {
@@ -13948,6 +14200,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 6.4,
       "min_headway_s": 2.36
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 88.8,
+      "progress": 1,
+      "distance_m": 194,
+      "rms_jerk": 2.76,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.22,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.4,
+      "min_headway_s": 2.35
      }
     },
     {
@@ -13965,6 +14231,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 225,
+      "rms_jerk": 3,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.59,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 57.7,
       "progress": 1,
       "distance_m": 225,
       "rms_jerk": 3,
@@ -14000,6 +14280,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 55.4,
+      "progress": 1,
+      "distance_m": 212,
+      "rms_jerk": 4.74,
+      "hard_brakes": 4,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.8,
+      "min_headway_s": 1.8
      }
     },
     {
@@ -14017,6 +14311,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 281,
+      "rms_jerk": 3.28,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 46.6,
       "progress": 1,
       "distance_m": 281,
       "rms_jerk": 3.28,
@@ -14052,6 +14360,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 58,
+      "progress": 1,
+      "distance_m": 358,
+      "rms_jerk": 2.5,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14078,6 +14400,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 35.3,
+      "progress": 1,
+      "distance_m": 118,
+      "rms_jerk": 4.15,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.28,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 0.8,
+      "min_headway_s": 0.78
      }
     },
     {
@@ -14103,6 +14439,20 @@
       "collisions": 0,
       "safety_brakes": 0,
       "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 33.8,
+      "progress": 0.81,
+      "distance_m": 111,
+      "rms_jerk": 2.02,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.73,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
       "min_headway_s": null
      }
     },
@@ -14130,6 +14480,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 24.7,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.13,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14147,6 +14511,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 263,
+      "rms_jerk": 4.23,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 53.1,
       "progress": 1,
       "distance_m": 263,
       "rms_jerk": 4.23,
@@ -14234,6 +14612,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 6.6,
       "min_headway_s": 2.01
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 35,
+      "progress": 1,
+      "distance_m": 236,
+      "rms_jerk": 1.69,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.3,
+      "min_headway_s": 1.1
      }
     },
     {
@@ -14251,6 +14643,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 328,
+      "rms_jerk": 3.99,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.07,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 43.2,
       "progress": 1,
       "distance_m": 328,
       "rms_jerk": 3.99,
@@ -14286,6 +14692,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 98.7,
+      "progress": 1,
+      "distance_m": 269,
+      "rms_jerk": 2.69,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14312,6 +14732,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 36.8,
+      "progress": 1,
+      "distance_m": 119,
+      "rms_jerk": 5.12,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.34,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 0.8,
+      "min_headway_s": 0.82
      }
     },
     {
@@ -14329,6 +14763,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 149,
+      "rms_jerk": 5.1,
+      "hard_brakes": 4,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 34.1,
       "progress": 1,
       "distance_m": 149,
       "rms_jerk": 5.1,
@@ -14364,6 +14812,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 27.2,
+      "progress": 1,
+      "distance_m": 117,
+      "rms_jerk": 4.06,
+      "hard_brakes": 3,
+      "max_lat_accel": 3.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14381,6 +14843,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 128,
+      "rms_jerk": 2.28,
+      "hard_brakes": 0,
+      "max_lat_accel": 4.84,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 20.7,
       "progress": 1,
       "distance_m": 128,
       "rms_jerk": 2.28,
@@ -14416,6 +14892,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 116.2,
+      "progress": 1,
+      "distance_m": 558,
+      "rms_jerk": 3.55,
+      "hard_brakes": 7,
+      "max_lat_accel": 4.61,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14442,6 +14932,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 59.6,
       "min_headway_s": 5.06
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 36.1,
+      "progress": 1,
+      "distance_m": 145,
+      "rms_jerk": 5.17,
+      "hard_brakes": 2,
+      "max_lat_accel": 5.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 59.6,
+      "min_headway_s": 5.03
      }
     },
     {
@@ -14459,6 +14963,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 570,
+      "rms_jerk": 1.44,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5,
+      "min_headway_s": 1.46
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 74.9,
       "progress": 1,
       "distance_m": 570,
       "rms_jerk": 1.44,
@@ -14494,6 +15012,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": 5.15
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 37,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 4.83,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.52,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 5.16
      }
     },
     {
@@ -14546,6 +15078,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 55.5,
+      "progress": 1,
+      "distance_m": 134,
+      "rms_jerk": 3.37,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.65,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14563,6 +15109,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 180,
+      "rms_jerk": 2.9,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 45.7,
       "progress": 1,
       "distance_m": 180,
       "rms_jerk": 2.9,
@@ -14598,6 +15158,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 15.7,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 2.51,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14615,6 +15189,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 200,
+      "rms_jerk": 2.34,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5.2,
+      "min_headway_s": 4.12
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 38.8,
       "progress": 1,
       "distance_m": 200,
       "rms_jerk": 2.34,
@@ -14676,6 +15264,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 24.9,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 1.75,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.39,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14693,6 +15295,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 430,
+      "rms_jerk": 3.35,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 100,
       "progress": 1,
       "distance_m": 430,
       "rms_jerk": 3.35,
@@ -14728,6 +15344,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 1.6,
       "min_headway_s": 1.23
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 32.6,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.3,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.23
      }
     },
     {
@@ -14745,6 +15375,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 1.56,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 28.4,
       "progress": 1,
       "distance_m": 160,
       "rms_jerk": 1.56,
@@ -14780,6 +15424,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 30.9,
+      "progress": 1,
+      "distance_m": 164,
+      "rms_jerk": 3.82,
+      "hard_brakes": 2,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14797,6 +15455,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 130,
+      "rms_jerk": 3.59,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 68.9,
       "progress": 1,
       "distance_m": 130,
       "rms_jerk": 3.59,
@@ -14858,6 +15530,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 15,
       "min_headway_s": 2.72
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 41.3,
+      "progress": 1,
+      "distance_m": 293,
+      "rms_jerk": 2.26,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 15,
+      "min_headway_s": 2.72
      }
     },
     {
@@ -14875,6 +15561,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 0.999,
+      "distance_m": 233,
+      "rms_jerk": 1.19,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.21,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 82.7,
       "progress": 0.999,
       "distance_m": 233,
       "rms_jerk": 1.19,
@@ -14910,6 +15610,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 28.6,
+      "progress": 1,
+      "distance_m": 184,
+      "rms_jerk": 1.46,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.8,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14935,6 +15649,20 @@
       "collisions": 0,
       "safety_brakes": 0,
       "min_ttc_s": 2.7,
+      "min_headway_s": 2.2
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 44.9,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 4.11,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.03,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.6,
       "min_headway_s": 2.2
      }
     },
@@ -14962,6 +15690,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 150.8,
+      "progress": 0.798,
+      "distance_m": 431,
+      "rms_jerk": 4.16,
+      "hard_brakes": 8,
+      "max_lat_accel": 4.89,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -14979,6 +15721,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 209,
+      "rms_jerk": 2.79,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 51.7,
       "progress": 1,
       "distance_m": 209,
       "rms_jerk": 2.79,
@@ -15045,7 +15801,8 @@
    ],
    "sources": [
     "data/results/2026-11-11/jev-arena.json",
-    "data/recordings/jev-arena-2026-11-11.json.gz"
+    "data/recordings/jev-arena-2026-11-11.json.gz",
+    "data/score-comparisons/jev-arena-2026-11-11.json"
    ],
    "recording": "data/recordings/jev-arena-2026-11-11.json.gz"
   },
@@ -16975,6 +17732,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 74.4,
+      "progress": 0.999,
+      "distance_m": 315,
+      "rms_jerk": 1.28,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.49,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17001,6 +17772,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 3.2,
       "min_headway_s": 1.44
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 59.2,
+      "progress": 1,
+      "distance_m": 318,
+      "rms_jerk": 3.76,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.04,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.2,
+      "min_headway_s": 1.43
      }
     },
     {
@@ -17018,6 +17803,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 147,
+      "rms_jerk": 4.14,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.23,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 29.3,
       "progress": 1,
       "distance_m": 147,
       "rms_jerk": 4.14,
@@ -17053,6 +17852,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 66.1,
+      "progress": 1,
+      "distance_m": 402,
+      "rms_jerk": 2.37,
+      "hard_brakes": 2,
+      "max_lat_accel": 1.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17070,6 +17883,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 307,
+      "rms_jerk": 3.27,
+      "hard_brakes": 1,
+      "max_lat_accel": 2.5,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 36.9,
       "progress": 1,
       "distance_m": 307,
       "rms_jerk": 3.27,
@@ -17105,6 +17932,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 73.1,
+      "progress": 1,
+      "distance_m": 393,
+      "rms_jerk": 1.88,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17122,6 +17963,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 1152,
+      "rms_jerk": 2.04,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 99.5,
       "progress": 1,
       "distance_m": 1152,
       "rms_jerk": 2.04,
@@ -17157,6 +18012,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 52.4,
+      "progress": 1,
+      "distance_m": 299,
+      "rms_jerk": 4.37,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17174,6 +18043,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 251,
+      "rms_jerk": 4,
+      "hard_brakes": 5,
+      "max_lat_accel": 0.49,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 86.7,
       "progress": 1,
       "distance_m": 251,
       "rms_jerk": 4,
@@ -17209,6 +18092,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 3.5,
       "min_headway_s": 1.18
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 48.5,
+      "progress": 1,
+      "distance_m": 412,
+      "rms_jerk": 2.81,
+      "hard_brakes": 4,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.5,
+      "min_headway_s": 1.18
      }
     },
     {
@@ -17226,6 +18123,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 364,
+      "rms_jerk": 1.54,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.18,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 35.3,
       "progress": 1,
       "distance_m": 364,
       "rms_jerk": 1.54,
@@ -17261,6 +18172,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 57,
+      "progress": 1,
+      "distance_m": 225,
+      "rms_jerk": 2.4,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.58,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17287,6 +18212,20 @@
       "safety_brakes": 1,
       "min_ttc_s": 0.9,
       "min_headway_s": 0.38
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 47,
+      "progress": 1,
+      "distance_m": 236,
+      "rms_jerk": 2.89,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.81,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": 2.3,
+      "min_headway_s": 1.1
      }
     },
     {
@@ -17304,6 +18243,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.29,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.19,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 1.07
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 32.4,
       "progress": 1,
       "distance_m": 144,
       "rms_jerk": 4.29,
@@ -17339,6 +18292,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 8.9,
       "min_headway_s": 2.36
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 40.2,
+      "progress": 1,
+      "distance_m": 292,
+      "rms_jerk": 1.65,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 8.9,
+      "min_headway_s": 2.36
      }
     },
     {
@@ -17356,6 +18323,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 0.999,
+      "distance_m": 233,
+      "rms_jerk": 1.23,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.71,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 82.7,
       "progress": 0.999,
       "distance_m": 233,
       "rms_jerk": 1.23,
@@ -17391,6 +18372,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 253.8,
+      "progress": 0.975,
+      "distance_m": 1637,
+      "rms_jerk": 3.46,
+      "hard_brakes": 11,
+      "max_lat_accel": 4.87,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": null
      }
     },
     {
@@ -17417,6 +18412,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 1.9,
       "min_headway_s": 1.21
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 65.1,
+      "progress": 1,
+      "distance_m": 418,
+      "rms_jerk": 3.6,
+      "hard_brakes": 3,
+      "max_lat_accel": 5.47,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.9,
+      "min_headway_s": 1.2
      }
     },
     {
@@ -17434,6 +18443,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 1112,
+      "rms_jerk": 1.63,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.13,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 94.6,
       "progress": 1,
       "distance_m": 1112,
       "rms_jerk": 1.63,
@@ -17469,6 +18492,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 26.7,
+      "progress": 1,
+      "distance_m": 117,
+      "rms_jerk": 3.68,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.84,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17495,6 +18532,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": 8.92
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 34,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 4.67,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.22,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": 8.96
      }
     },
     {
@@ -17521,6 +18572,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 4.8,
       "min_headway_s": 0.97
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 38.4,
+      "progress": 1,
+      "distance_m": 123,
+      "rms_jerk": 3.49,
+      "hard_brakes": 0,
+      "max_lat_accel": 3.64,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.8,
+      "min_headway_s": 0.95
      }
     },
     {
@@ -17538,6 +18603,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 200,
+      "rms_jerk": 1.45,
+      "hard_brakes": 1,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 5.2,
+      "min_headway_s": 4.12
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 38.8,
       "progress": 1,
       "distance_m": 200,
       "rms_jerk": 1.45,
@@ -17573,6 +18652,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 68.9,
+      "progress": 1,
+      "distance_m": 131,
+      "rms_jerk": 3.13,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17590,6 +18683,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 184,
+      "rms_jerk": 1.74,
+      "hard_brakes": 0,
+      "max_lat_accel": 2.48,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 28.5,
       "progress": 1,
       "distance_m": 184,
       "rms_jerk": 1.74,
@@ -17625,6 +18732,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 3.6,
       "min_headway_s": 2.2
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 45.3,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 3.87,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.03,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 3.6,
+      "min_headway_s": 2.2
      }
     },
     {
@@ -17642,6 +18763,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 275,
+      "rms_jerk": 4.13,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 56,
       "progress": 1,
       "distance_m": 275,
       "rms_jerk": 4.13,
@@ -17677,6 +18812,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 33.8,
+      "progress": 1,
+      "distance_m": 118,
+      "rms_jerk": 4.53,
+      "hard_brakes": 3,
+      "max_lat_accel": 4.76,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 0.4,
+      "min_headway_s": 0.44
      }
     },
     {
@@ -17694,6 +18843,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 263,
+      "rms_jerk": 3.95,
+      "hard_brakes": 4,
+      "max_lat_accel": 4.52,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 52.9,
       "progress": 1,
       "distance_m": 263,
       "rms_jerk": 3.95,
@@ -17729,6 +18892,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 21.6,
+      "progress": 1,
+      "distance_m": 128,
+      "rms_jerk": 3.29,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.64,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17746,6 +18923,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 558,
+      "rms_jerk": 2.96,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.67,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 116.7,
       "progress": 1,
       "distance_m": 558,
       "rms_jerk": 2.96,
@@ -17781,6 +18972,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 38.2,
       "min_headway_s": 5.7
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 31,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.71,
+      "hard_brakes": 2,
+      "max_lat_accel": 5.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 38.2,
+      "min_headway_s": 5.67
      }
     },
     {
@@ -17798,6 +19003,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 134,
+      "rms_jerk": 2.55,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.66,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 55.3,
       "progress": 1,
       "distance_m": 134,
       "rms_jerk": 2.55,
@@ -17833,6 +19052,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 27.9,
+      "progress": 1,
+      "distance_m": 160,
+      "rms_jerk": 1.49,
+      "hard_brakes": 0,
+      "max_lat_accel": 1.91,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17859,6 +19092,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": 5.43
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 203.4,
+      "progress": 0.965,
+      "distance_m": 1143,
+      "rms_jerk": 2.63,
+      "hard_brakes": 7,
+      "max_lat_accel": 7.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": 5.21
      }
     },
     {
@@ -17876,6 +19123,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 358,
+      "rms_jerk": 4.84,
+      "hard_brakes": 6,
+      "max_lat_accel": 0.3,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 65.4,
       "progress": 1,
       "distance_m": 358,
       "rms_jerk": 4.84,
@@ -17911,6 +19172,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 25.4,
+      "progress": 1,
+      "distance_m": 144,
+      "rms_jerk": 4.84,
+      "hard_brakes": 1,
+      "max_lat_accel": 4.14,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -17928,6 +19203,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 0.999,
+      "distance_m": 330,
+      "rms_jerk": 0.81,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 72.4,
       "progress": 0.999,
       "distance_m": 330,
       "rms_jerk": 0.81,
@@ -17963,6 +19252,20 @@
       "safety_brakes": 1,
       "min_ttc_s": 1.6,
       "min_headway_s": 1.12
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 42.5,
+      "progress": 1,
+      "distance_m": 177,
+      "rms_jerk": 3.54,
+      "hard_brakes": 2,
+      "max_lat_accel": 1.02,
+      "collisions": 0,
+      "safety_brakes": 1,
+      "min_ttc_s": 1,
+      "min_headway_s": 1.03
      }
     },
     {
@@ -17980,6 +19283,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 328,
+      "rms_jerk": 2.4,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 41,
       "progress": 1,
       "distance_m": 328,
       "rms_jerk": 2.4,
@@ -18015,6 +19332,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 98.1,
+      "progress": 1,
+      "distance_m": 269,
+      "rms_jerk": 2.85,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.73,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -18032,6 +19363,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 430,
+      "rms_jerk": 3.51,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.1,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 70.6,
       "progress": 1,
       "distance_m": 430,
       "rms_jerk": 3.51,
@@ -18067,6 +19412,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 31.4,
+      "progress": 1,
+      "distance_m": 164,
+      "rms_jerk": 3.82,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -18084,6 +19443,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 209,
+      "rms_jerk": 3.37,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 50.7,
       "progress": 1,
       "distance_m": 209,
       "rms_jerk": 3.37,
@@ -18119,6 +19492,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 48.7,
+      "progress": 1,
+      "distance_m": 287,
+      "rms_jerk": 2.97,
+      "hard_brakes": 1,
+      "max_lat_accel": 3.15,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -18136,6 +19523,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 161,
+      "rms_jerk": 4.75,
+      "hard_brakes": 2,
+      "max_lat_accel": 3.69,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 29.9,
       "progress": 1,
       "distance_m": 161,
       "rms_jerk": 4.75,
@@ -18171,6 +19572,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 76.5,
+      "progress": 1,
+      "distance_m": 381,
+      "rms_jerk": 2.74,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -18188,6 +19603,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 194,
+      "rms_jerk": 2.59,
+      "hard_brakes": 4,
+      "max_lat_accel": 0.19,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 6.4,
+      "min_headway_s": 2.78
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 89.1,
       "progress": 1,
       "distance_m": 194,
       "rms_jerk": 2.59,
@@ -18223,6 +19652,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 52.5,
+      "progress": 1,
+      "distance_m": 213,
+      "rms_jerk": 4.35,
+      "hard_brakes": 4,
+      "max_lat_accel": 3.82,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.2,
+      "min_headway_s": 1.19
      }
     },
     {
@@ -18240,6 +19683,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 281,
+      "rms_jerk": 2.17,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.38,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 46,
       "progress": 1,
       "distance_m": 281,
       "rms_jerk": 2.17,
@@ -18275,6 +19732,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 45.4,
+      "progress": 1,
+      "distance_m": 180,
+      "rms_jerk": 2.91,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.05,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -18292,6 +19763,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 138,
+      "rms_jerk": 2.31,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.06,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 15.5,
       "progress": 1,
       "distance_m": 138,
       "rms_jerk": 2.31,
@@ -18327,6 +19812,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 25.6,
+      "progress": 1,
+      "distance_m": 120,
+      "rms_jerk": 2.86,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.45,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -18353,6 +19852,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": 5.45
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 51.7,
+      "progress": 1,
+      "distance_m": 288,
+      "rms_jerk": 4.13,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.6,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     },
     {
@@ -18370,6 +19883,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 317,
+      "rms_jerk": 2.8,
+      "hard_brakes": 3,
+      "max_lat_accel": 0.09,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 2.1,
+      "min_headway_s": 0.88
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 77.3,
       "progress": 1,
       "distance_m": 317,
       "rms_jerk": 2.8,
@@ -18405,6 +19932,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 33.1,
+      "progress": 0.81,
+      "distance_m": 111,
+      "rms_jerk": 1.94,
+      "hard_brakes": 0,
+      "max_lat_accel": 0.54,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 1.6,
+      "min_headway_s": null
      }
     },
     {
@@ -18431,6 +19972,20 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 34.4,
+      "progress": 1,
+      "distance_m": 119,
+      "rms_jerk": 3.95,
+      "hard_brakes": 2,
+      "max_lat_accel": 4.74,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 0.7,
+      "min_headway_s": 0.7
      }
     },
     {
@@ -18448,6 +20003,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 149,
+      "rms_jerk": 4.77,
+      "hard_brakes": 3,
+      "max_lat_accel": 0,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 34.1,
       "progress": 1,
       "distance_m": 149,
       "rms_jerk": 4.77,
@@ -18483,6 +20052,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 4.9,
       "min_headway_s": 0.97
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 74.7,
+      "progress": 1,
+      "distance_m": 570,
+      "rms_jerk": 2,
+      "hard_brakes": 2,
+      "max_lat_accel": 0.11,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.9,
+      "min_headway_s": 0.95
      }
     },
     {
@@ -18509,6 +20092,20 @@
       "safety_brakes": 0,
       "min_ttc_s": 4.9,
       "min_headway_s": 1.31
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 25,
+      "progress": 1,
+      "distance_m": 210,
+      "rms_jerk": 2.58,
+      "hard_brakes": 1,
+      "max_lat_accel": 0.08,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": 4.8,
+      "min_headway_s": 1.31
      }
     },
     {
@@ -18526,6 +20123,20 @@
      },
      "score_inputs": {
       "arrived": true,
+      "progress": 1,
+      "distance_m": 525,
+      "rms_jerk": 2.27,
+      "hard_brakes": 3,
+      "max_lat_accel": 2.83,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 88.3,
       "progress": 1,
       "distance_m": 525,
       "rms_jerk": 2.27,
@@ -18561,12 +20172,27 @@
       "safety_brakes": 0,
       "min_ttc_s": null,
       "min_headway_s": null
+     },
+     "comparison_score_inputs": {
+      "method": "driven-corridor-v1",
+      "arrived": true,
+      "time_s": 96.4,
+      "progress": 0.798,
+      "distance_m": 431,
+      "rms_jerk": 5.08,
+      "hard_brakes": 5,
+      "max_lat_accel": 4.97,
+      "collisions": 0,
+      "safety_brakes": 0,
+      "min_ttc_s": null,
+      "min_headway_s": null
      }
     }
    ],
    "sources": [
     "data/results/2026-11-20/claude-haiku-arena.json",
-    "data/recordings/claude-haiku-arena-2026-11-20.json.gz"
+    "data/recordings/claude-haiku-arena-2026-11-20.json.gz",
+    "data/score-comparisons/claude-haiku-arena-2026-11-20.json"
    ],
    "recording": "data/recordings/claude-haiku-arena-2026-11-20.json.gz"
   },

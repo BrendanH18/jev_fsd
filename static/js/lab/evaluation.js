@@ -6,6 +6,8 @@ import { Autopilot } from "../brain/brain.js";
 import { stepWorld } from "../sim/step.js";
 import { DriveScore } from "../sim/drive-score.js";
 import { DriveMetrics, failures } from "../bench/metrics.js";
+import { drivenMetricSnapshot } from "../brain/sensors.js";
+import { challengeScoreInputs } from "./score-inputs.js";
 import { getVehicleModel } from "../sim/vehicle-models.js";
 import { challengeScenario, installChallenge } from "./challenges.js";
 import { yieldNow } from "../bench/runner.js";
@@ -100,6 +102,7 @@ export async function evaluateChallenge(
     tape = null,
     track = "guarded",
     onStep = null,
+    onScoreInputs = null,
   } = {},
 ) {
   if (!["lockstep", "realtime"].includes(mode) || !Number.isFinite(limit) || limit <= 0)
@@ -144,12 +147,21 @@ export async function evaluateChallenge(
   const metrics = new DriveMetrics(world.route.length),
     start = performance.now();
   metrics.latencies = latencies;
+  let comparison = onScoreInputs ? new DriveMetrics(world.route.length) : null;
   let hazardRecorded = false,
     simulationError = null;
   onStep?.(ctx);
   try {
     while (world.t < limit && autopilot.enabled && !shouldStop()) {
       const road = stepWorld({ world, fleet, autopilot }, 1 / 60, world.t * 1000);
+      if (comparison) {
+        try {
+          comparison.record(world, drivenMetricSnapshot(world), road, 1 / 60);
+        } catch (error) {
+          comparison = null;
+          console.warn("Benchmark score unavailable", error);
+        }
+      }
       score.record(world, road, 1 / 60);
       metrics.record(world, autopilot.snap, road, 1 / 60);
       if (!hazardRecorded && world.challenge.triggered) {
@@ -193,6 +205,8 @@ export async function evaluateChallenge(
   }
   const report = score.finish(status);
   if (simulationError) report.simulation_error = simulationError;
+  if (comparison?.jerkN && !simulationError && !stopped)
+    onScoreInputs(challengeScoreInputs(comparison.summary(world, autopilot, arrived), report.hard_brakes));
   return {
     challenge: challenge.id,
     version: challenge.version || 1,

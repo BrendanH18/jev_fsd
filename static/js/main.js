@@ -116,6 +116,7 @@ import { NpcFleet } from "./sim/npc.js";
 import { stepWorld } from "./sim/step.js";
 import { setupScenario } from "./bench/runner.js";
 import { DriveMetrics, decidedByCounts } from "./bench/metrics.js";
+import { challengeScoreInputs } from "./lab/score-inputs.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
 import { advanceNotice, approachPhase, pedPhase, scrambleNotice } from "./sim/signals.js";
@@ -144,7 +145,7 @@ import { DriveLab } from "./ui/lab.js";
 import { PerceptionView } from "./render/perception.js";
 import { setupChallenge } from "./lab/evaluation.js";
 import { CITY_STYLES, buildCityIdentity } from "./render/city-identity.js";
-import { buildSnapshot, manualMetricSnapshot } from "./brain/sensors.js";
+import { buildSnapshot, drivenMetricSnapshot } from "./brain/sensors.js";
 import { sampleCandidates, simulateAll } from "./brain/candidates.js";
 import { mapFingerprint } from "./brain/recording.js";
 
@@ -984,11 +985,10 @@ export async function boot() {
     if (challenge && practiceEligible(challenge, report)) {
       report.config.map_sha = mapFingerprint(map);
       if (drive.metrics?.jerkN)
-        report.benchmarkMetrics = {
-          ...drive.metrics.summary(world, autopilot, report.status === "arrived"),
-          // Arena results also publish the DriveScore count from the drive report.
-          hard_brakes: report.hard_brakes,
-        };
+        report.benchmarkMetrics = challengeScoreInputs(
+          drive.metrics.summary(world, autopilot, report.status === "arrived"),
+          report.hard_brakes,
+        );
     }
     withDecidedBy(report);
     if (challenge) {
@@ -1428,7 +1428,7 @@ export async function boot() {
           !recorder.branched
         ) {
           try {
-            drive.metrics.record(world, manualMetricSnapshot(world), road, FIXED_DT);
+            drive.metrics.record(world, drivenMetricSnapshot(world), road, FIXED_DT);
           } catch (error) {
             drive.metrics = null;
             console.warn("Benchmark score unavailable", error);
