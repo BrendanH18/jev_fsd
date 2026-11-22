@@ -398,6 +398,9 @@ def check(url, chromium=None, groups=GROUPS):
                 if kind == "early":
                     score = comparison.locator("tbody tr").first.locator("td").nth(2).inner_text()
                     assert float(score) > 0, score
+                    published = comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents()
+                    assert published[0] == "Unavailable", published
+                    assert all(0 <= float(value) <= 100 for value in published[1:]), published
             elif kind in ("rules", "branched", "modified"):
                 assert comparison.count() == 0
             page.close()
@@ -427,8 +430,11 @@ def check(url, chromium=None, groups=GROUPS):
             assert comparison.get_by_role("columnheader", name="Benchmark verdict").is_visible()
             assert "The examiner’s sheet determines road-test completion." in comparison.inner_text()
             assert comparison.locator("tbody td").first.inner_text() == "Fail"
-            for score in comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents():
-                assert 0 <= float(score) <= 100, score
+            assert comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents() == [
+                "Unavailable",
+                "Unavailable",
+                "Unavailable",
+            ]
 
             for endpoint in ("**/api/results", "**/demo-data/results.json"):
                 page.route(endpoint, lambda route: route.fulfill(status=503))

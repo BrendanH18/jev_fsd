@@ -7,6 +7,7 @@ import { examinerSheet, roadTestNote } from "./road-test.js";
 import { decidedByText } from "../bench/metrics.js";
 
 import { driveScores } from "../bench/scores.js";
+import { CHALLENGE_SCORE_METHOD } from "../lab/score-inputs.js";
 import { checkResults, compatibleChallengeDrive } from "../lab/results.js";
 import { incidentDrive, loadPublishedDrive } from "./published-replay.js";
 
@@ -168,11 +169,13 @@ export class DriveReport {
           h("td", {}, value),
         ),
       );
+    const manualInputs = report.benchmarkMetrics;
+    const method = manualInputs?.method === CHALLENGE_SCORE_METHOD ? manualInputs.method : null;
     const manual = row(
       "You",
       reasons.length ? "Fail" : "Pass",
       report.elapsed_s,
-      report.benchmarkMetrics ? driveScores(report.benchmarkMetrics).score : "Unmeasured",
+      method ? driveScores(manualInputs).score : "Unmeasured",
       [...new Set([...reasons, ...report.incidents.map((i) => i.message)])].join(" · ") || "None recorded",
     );
     const body = h("tbody", {}, manual);
@@ -218,13 +221,15 @@ export class DriveReport {
               label,
               cell.pass ? "Pass" : "Fail",
               cell.time_s,
-              cell.score_inputs ? driveScores({ ...cell.score_inputs, time_s: cell.time_s }).score : "Unmeasured",
+              method && cell.comparison_score_inputs?.method === method
+                ? driveScores(cell.comparison_score_inputs).score
+                : "Unavailable",
               [...cell.failures, ...counts].join(" · ") || "No incident data",
             ),
           );
         }
         status.textContent =
-          "Published rows use guarded-track results. Your following measurements come from the car’s path. Published following measurements come from the planner’s snapshots.";
+          "Published rows use the guarded track. A score is available for comparison when both drives were measured from the car’s path.";
       })
       .catch(() => {
         status.textContent = "Published comparisons could not be loaded.";

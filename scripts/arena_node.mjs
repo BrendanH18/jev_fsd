@@ -12,12 +12,13 @@
 // open (the open track: road-rule checks flag manoeuvres instead of removing them, brain/tracks.js; a
 // recording keeps its track), --agent local-path (load a trusted driver module),
 // --browser-replay out.json (export a playable street view of one
-// exact replay selected with --only).
+// exact replay selected with --only), --comparison-json out.json (export driven-corridor
+// measurements for exact guarded replays that do not already have them).
 //
 // A recording here covers several maps, so its header keeps one map fingerprint per map
 // (`header.maps`), and each drive's recorded result leaves out the decision trace and timeline,
 // which are large, keeping `result_sha`, the hash of the whole comparable result, so a replay is
-// still compared field for field (timings aside).
+// still compared field for field (timings and optional comparison measurements aside).
 import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
 
 const args = Object.fromEntries(
@@ -43,6 +44,7 @@ const OPTIONS = [
   "track",
   "agent",
   "browser-replay",
+  "comparison-json",
 ];
 for (const [name, value] of Object.entries(args)) {
   if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
@@ -58,6 +60,10 @@ if (args["browser-replay"] && (!args.replay || !args.only || String(args.only).i
 const fs = await import("node:fs"),
   zlib = await import("node:zlib");
 const browserOutput = args["browser-replay"];
+const comparisonOutput = args["comparison-json"];
+if (comparisonOutput && !args.replay) fail("--comparison-json requires --replay.");
+if (comparisonOutput && fs.lstatSync(comparisonOutput, { throwIfNoEntry: false }))
+  fail("--comparison-json must name a new file.");
 if (browserOutput) {
   const source = fs.statSync(args.replay, { throwIfNoEntry: false });
   const destination = fs.statSync(browserOutput, { throwIfNoEntry: false });
@@ -82,6 +88,8 @@ if (args.replay) {
 }
 const track = String(args.track || "guarded");
 if (!["guarded", "open"].includes(track)) fail(`Unknown track "${track}": use guarded or open.`);
+
+if (comparisonOutput && track !== "guarded") fail("--comparison-json requires a guarded recording.");
 
 const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
 const page = await (await fetch(`${base}/bench`)).text();
@@ -201,7 +209,9 @@ const save = (recording) => {
 const BULKY = ["decisions_trace", "events", "report"];
 const trimmed = (result) =>
   Object.fromEntries(Object.entries(rec.comparableResult(result)).filter(([k]) => !BULKY.includes(k)));
-const resultSha = (result) => rec.hashText(rec.canonicalJson(rec.comparableResult(result)));
+// Comparison inputs are display measurements. Their availability does not determine replay fidelity.
+const resultSha = ({ comparison_score_inputs: _comparison, ...result }) =>
+  rec.hashText(rec.canonicalJson(rec.comparableResult(result)));
 const SUMMARY = [
   "challenge",
   "suite_version",
@@ -219,6 +229,7 @@ const SUMMARY = [
   "max_lat_accel",
   "min_ttc_s",
   "min_headway_s",
+  "comparison_score_inputs",
   "collisions",
   "at_fault",
   "hard_brakes",
@@ -244,7 +255,8 @@ const SUMMARY = [
 const reserve = args.reserve === undefined ? null : Number(args.reserve);
 if (reserve !== null && !(reserve >= 0)) fail("--reserve must be a number of dollars.");
 const results = [],
-  drifted = [];
+  drifted = [],
+  comparisons = {};
 let budgetStop = null;
 for (const challenge of drives) {
   if (reserve !== null) {
@@ -256,7 +268,21 @@ for (const challenge of drives) {
     }
   }
   const tape = recording ? recording.tape(challenge.id, args.record ? "record" : "replay") : null;
-  const r = await evaluateChallenge(maps[challenge.map], challenge, { brain, tape, track, onStep: capture?.onStep });
+  const recorded = replayJson?.results[challenge.id];
+  const measureInputs = replayJson ? comparisonOutput && !recorded.comparison_score_inputs : args.json || args.record;
+  let scoreInputs;
+  const r = await evaluateChallenge(maps[challenge.map], challenge, {
+    brain,
+    tape,
+    track,
+    onStep: capture?.onStep,
+    onScoreInputs: measureInputs
+      ? (inputs) => {
+          scoreInputs = inputs;
+        }
+      : null,
+  });
+  if (!recorded && scoreInputs) r.comparison_score_inputs = scoreInputs;
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
   results.push(r);
   if (args.record) {
@@ -266,9 +292,10 @@ for (const challenge of drives) {
     save(recording);
   }
   if (replayJson) {
-    const recorded = recording.results[challenge.id];
-    r.model_recording.same_result = recorded ? recorded.result_sha === resultSha(r) : null;
-    if (r.model_recording.same_result !== true || !r.model_recording.exact) drifted.push(challenge.id);
+    r.model_recording.same_result = recorded.result_sha === resultSha(r);
+    if (!r.model_recording.same_result || !r.model_recording.exact) drifted.push(challenge.id);
+    else if (recorded.comparison_score_inputs) r.comparison_score_inputs = recorded.comparison_score_inputs;
+    else if (scoreInputs) comparisons[challenge.id] = { result_sha: recorded.result_sha, score_inputs: scoreInputs };
     if (capture) {
       if (drifted.length) fail(`Cannot export ${challenge.id}: the replay differs from the recorded drive.`);
       const { dirname, join } = await import("node:path");
@@ -339,6 +366,14 @@ if (args.json)
       1,
     ),
   );
+if (comparisonOutput) {
+  try {
+    fs.writeFileSync(comparisonOutput, `${JSON.stringify(comparisons, null, 1)}\n`, { flag: "wx" });
+  } catch (error) {
+    if (error.code === "EEXIST") fail("--comparison-json must name a new file.");
+    throw error;
+  }
+}
 if (args.record) console.log(`recorded ${results.length} drives to ${args.record}`);
 if (replayJson)
   console.log(

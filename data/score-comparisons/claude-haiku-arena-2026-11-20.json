@@ -1,0 +1,1056 @@
+{
+ "door-zone": {
+  "result_sha": "9e687428b26f3cd2",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 59.2,
+   "progress": 1,
+   "distance_m": 318,
+   "rms_jerk": 3.76,
+   "hard_brakes": 4,
+   "max_lat_accel": 0.04,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 3.2,
+   "min_headway_s": 1.43
+  }
+ },
+ "fog-junction": {
+  "result_sha": "f5ed5da566859a8d",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 73.1,
+   "progress": 1,
+   "distance_m": 393,
+   "rms_jerk": 1.88,
+   "hard_brakes": 1,
+   "max_lat_accel": 0.15,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "rain-crossing": {
+  "result_sha": "4da3d88efd9213f7",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 66.1,
+   "progress": 1,
+   "distance_m": 402,
+   "rms_jerk": 2.37,
+   "hard_brakes": 2,
+   "max_lat_accel": 1.48,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "snow-stop": {
+  "result_sha": "0bc360eb4dfeeb02",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 74.4,
+   "progress": 0.999,
+   "distance_m": 315,
+   "rms_jerk": 1.28,
+   "hard_brakes": 0,
+   "max_lat_accel": 1.49,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "curb-merge": {
+  "result_sha": "f5e67958893332f7",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 36.9,
+   "progress": 1,
+   "distance_m": 307,
+   "rms_jerk": 3.27,
+   "hard_brakes": 1,
+   "max_lat_accel": 2.5,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "blind-crossing": {
+  "result_sha": "459d71107cefe834",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 99.5,
+   "progress": 1,
+   "distance_m": 1152,
+   "rms_jerk": 2.04,
+   "hard_brakes": 2,
+   "max_lat_accel": 0.14,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "unprotected-left": {
+  "result_sha": "3728af34dec57676",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 29.3,
+   "progress": 1,
+   "distance_m": 147,
+   "rms_jerk": 4.14,
+   "hard_brakes": 1,
+   "max_lat_accel": 4.23,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "right-on-red": {
+  "result_sha": "3e5e53df0362a2bf",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 65.1,
+   "progress": 1,
+   "distance_m": 418,
+   "rms_jerk": 3.6,
+   "hard_brakes": 3,
+   "max_lat_accel": 5.47,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 1.9,
+   "min_headway_s": 1.2
+  }
+ },
+ "four-way-stop": {
+  "result_sha": "5020cb322611283d",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 86.7,
+   "progress": 1,
+   "distance_m": 251,
+   "rms_jerk": 4,
+   "hard_brakes": 5,
+   "max_lat_accel": 0.49,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "blind-corner": {
+  "result_sha": "0c7c58d2bc2b26de",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 56,
+   "progress": 1,
+   "distance_m": 275,
+   "rms_jerk": 4.13,
+   "hard_brakes": 4,
+   "max_lat_accel": 0.1,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "right-hook": {
+  "result_sha": "96d31dcce54b10d5",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 51.7,
+   "progress": 1,
+   "distance_m": 288,
+   "rms_jerk": 4.13,
+   "hard_brakes": 5,
+   "max_lat_accel": 4.6,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "lights-and-sirens": {
+  "result_sha": "afdf8311b3226cff",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 48.7,
+   "progress": 1,
+   "distance_m": 287,
+   "rms_jerk": 2.97,
+   "hard_brakes": 1,
+   "max_lat_accel": 3.15,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "bus-pulling-out": {
+  "result_sha": "e49e1d0b8657fd75",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 48.5,
+   "progress": 1,
+   "distance_m": 412,
+   "rms_jerk": 2.81,
+   "hard_brakes": 4,
+   "max_lat_accel": 0,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 3.5,
+   "min_headway_s": 1.18
+  }
+ },
+ "multiple-threat": {
+  "result_sha": "39c575ccf2c4a8c9",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 94.6,
+   "progress": 1,
+   "distance_m": 1112,
+   "rms_jerk": 1.63,
+   "hard_brakes": 1,
+   "max_lat_accel": 0.13,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "school-bus": {
+  "result_sha": "3ed4014fab69ea68",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 52.4,
+   "progress": 1,
+   "distance_m": 299,
+   "rms_jerk": 4.37,
+   "hard_brakes": 4,
+   "max_lat_accel": 0.11,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "school-zone": {
+  "result_sha": "63035466aba10561",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 29.9,
+   "progress": 1,
+   "distance_m": 161,
+   "rms_jerk": 4.75,
+   "hard_brakes": 2,
+   "max_lat_accel": 3.69,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "move-over": {
+  "result_sha": "dd2026cc40d1532c",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 35.3,
+   "progress": 1,
+   "distance_m": 364,
+   "rms_jerk": 1.54,
+   "hard_brakes": 0,
+   "max_lat_accel": 2.18,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "streetcar": {
+  "result_sha": "f96dce4a8c16e988",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 76.5,
+   "progress": 1,
+   "distance_m": 381,
+   "rms_jerk": 2.74,
+   "hard_brakes": 2,
+   "max_lat_accel": 0.08,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "level-crossing": {
+  "result_sha": "c63fe39560c79ac3",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 77.3,
+   "progress": 1,
+   "distance_m": 317,
+   "rms_jerk": 2.8,
+   "hard_brakes": 3,
+   "max_lat_accel": 0.09,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 2.1,
+   "min_headway_s": 0.88
+  }
+ },
+ "junction-box": {
+  "result_sha": "b3d37d6280f528f5",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 89.1,
+   "progress": 1,
+   "distance_m": 194,
+   "rms_jerk": 2.59,
+   "hard_brakes": 4,
+   "max_lat_accel": 0.19,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 6.4,
+   "min_headway_s": 2.78
+  }
+ },
+ "left-arrow": {
+  "result_sha": "591a971442ef8675",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 57,
+   "progress": 1,
+   "distance_m": 225,
+   "rms_jerk": 2.4,
+   "hard_brakes": 2,
+   "max_lat_accel": 3.58,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "flagger": {
+  "result_sha": "7f78c5c9cc1bb31a",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 52.5,
+   "progress": 1,
+   "distance_m": 213,
+   "rms_jerk": 4.35,
+   "hard_brakes": 4,
+   "max_lat_accel": 3.82,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 1.2,
+   "min_headway_s": 1.19
+  }
+ },
+ "after-midnight": {
+  "result_sha": "acd239a43b0997d5",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 46,
+   "progress": 1,
+   "distance_m": 281,
+   "rms_jerk": 2.17,
+   "hard_brakes": 2,
+   "max_lat_accel": 0.38,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "lights-out": {
+  "result_sha": "085dfc8049ea53bf",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 65.4,
+   "progress": 1,
+   "distance_m": 358,
+   "rms_jerk": 4.84,
+   "hard_brakes": 6,
+   "max_lat_accel": 0.3,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "double-parked": {
+  "result_sha": "a1bde5fbdcdf0c5a",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 33.8,
+   "progress": 1,
+   "distance_m": 118,
+   "rms_jerk": 4.53,
+   "hard_brakes": 3,
+   "max_lat_accel": 4.76,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 0.4,
+   "min_headway_s": 0.44
+  }
+ },
+ "parallel-park": {
+  "result_sha": "9cfd62088cc5434e",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 33.1,
+   "progress": 0.81,
+   "distance_m": 111,
+   "rms_jerk": 1.94,
+   "hard_brakes": 0,
+   "max_lat_accel": 0.54,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 1.6,
+   "min_headway_s": null
+  }
+ },
+ "step-out": {
+  "result_sha": "391f62ac4f1ce15d",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 25.4,
+   "progress": 1,
+   "distance_m": 144,
+   "rms_jerk": 4.84,
+   "hard_brakes": 1,
+   "max_lat_accel": 4.14,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "blind-left": {
+  "result_sha": "6acabaef33b6796c",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 52.9,
+   "progress": 1,
+   "distance_m": 263,
+   "rms_jerk": 3.95,
+   "hard_brakes": 4,
+   "max_lat_accel": 4.52,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "snow-plow": {
+  "result_sha": "d07bee2e5437c828",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 72.4,
+   "progress": 0.999,
+   "distance_m": 330,
+   "rms_jerk": 0.81,
+   "hard_brakes": 0,
+   "max_lat_accel": 0.09,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "zipper": {
+  "result_sha": "4d0104fad2e61cc4",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 42.5,
+   "progress": 1,
+   "distance_m": 177,
+   "rms_jerk": 3.54,
+   "hard_brakes": 2,
+   "max_lat_accel": 1.02,
+   "collisions": 0,
+   "safety_brakes": 1,
+   "min_ttc_s": 1,
+   "min_headway_s": 1.03
+  }
+ },
+ "cyclist-pass": {
+  "result_sha": "0e55763ebb8b1d26",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 47,
+   "progress": 1,
+   "distance_m": 236,
+   "rms_jerk": 2.89,
+   "hard_brakes": 1,
+   "max_lat_accel": 4.81,
+   "collisions": 0,
+   "safety_brakes": 1,
+   "min_ttc_s": 2.3,
+   "min_headway_s": 1.1
+  }
+ },
+ "speed-humps": {
+  "result_sha": "15938781fdecc2b7",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 41,
+   "progress": 1,
+   "distance_m": 328,
+   "rms_jerk": 2.4,
+   "hard_brakes": 2,
+   "max_lat_accel": 0.08,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "scramble": {
+  "result_sha": "81ca6e98d33d39ea",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 98.1,
+   "progress": 1,
+   "distance_m": 269,
+   "rms_jerk": 2.85,
+   "hard_brakes": 2,
+   "max_lat_accel": 3.73,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "collection": {
+  "result_sha": "a5ac9971eb2a8f54",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 34.4,
+   "progress": 1,
+   "distance_m": 119,
+   "rms_jerk": 3.95,
+   "hard_brakes": 2,
+   "max_lat_accel": 4.74,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 0.7,
+   "min_headway_s": 0.7
+  }
+ },
+ "crossing-guard": {
+  "result_sha": "c4731f3c631a9fe8",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 34.1,
+   "progress": 1,
+   "distance_m": 149,
+   "rms_jerk": 4.77,
+   "hard_brakes": 3,
+   "max_lat_accel": 0,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "pxo-far-curb": {
+  "result_sha": "aa1583723e3787a5",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 26.7,
+   "progress": 1,
+   "distance_m": 117,
+   "rms_jerk": 3.68,
+   "hard_brakes": 2,
+   "max_lat_accel": 3.84,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "bus-lanes": {
+  "result_sha": "c953b1000dd9137d",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 21.6,
+   "progress": 1,
+   "distance_m": 128,
+   "rms_jerk": 3.29,
+   "hard_brakes": 1,
+   "max_lat_accel": 4.64,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "no-left-turn": {
+  "result_sha": "f5009949664ee94f",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 116.7,
+   "progress": 1,
+   "distance_m": 558,
+   "rms_jerk": 2.96,
+   "hard_brakes": 5,
+   "max_lat_accel": 4.67,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "contraflow": {
+  "result_sha": "bf94f3b24fc0e5c4",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 31,
+   "progress": 1,
+   "distance_m": 144,
+   "rms_jerk": 4.71,
+   "hard_brakes": 2,
+   "max_lat_accel": 5.05,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 38.2,
+   "min_headway_s": 5.67
+  }
+ },
+ "dip-your-lights": {
+  "result_sha": "f7ca7266ac1f6a3d",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 74.7,
+   "progress": 1,
+   "distance_m": 570,
+   "rms_jerk": 2,
+   "hard_brakes": 2,
+   "max_lat_accel": 0.11,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 4.9,
+   "min_headway_s": 0.95
+  }
+ },
+ "left-on-red": {
+  "result_sha": "60225d9ff9ccf021",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 34,
+   "progress": 1,
+   "distance_m": 160,
+   "rms_jerk": 4.67,
+   "hard_brakes": 2,
+   "max_lat_accel": 4.22,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": 8.96
+  }
+ },
+ "roundabout-gap": {
+  "result_sha": "2044b412e1459694",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 38.4,
+   "progress": 1,
+   "distance_m": 123,
+   "rms_jerk": 3.49,
+   "hard_brakes": 0,
+   "max_lat_accel": 3.64,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 4.8,
+   "min_headway_s": 0.95
+  }
+ },
+ "wait-for-green": {
+  "result_sha": "15966309d2994945",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 55.3,
+   "progress": 1,
+   "distance_m": 134,
+   "rms_jerk": 2.55,
+   "hard_brakes": 1,
+   "max_lat_accel": 4.66,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "amber-stop": {
+  "result_sha": "75bf1d80eb25ffd2",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 45.4,
+   "progress": 1,
+   "distance_m": 180,
+   "rms_jerk": 2.91,
+   "hard_brakes": 1,
+   "max_lat_accel": 0.05,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "amber-clear": {
+  "result_sha": "59fae19e83580671",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 15.5,
+   "progress": 1,
+   "distance_m": 138,
+   "rms_jerk": 2.31,
+   "hard_brakes": 0,
+   "max_lat_accel": 0.06,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "brakes-ahead": {
+  "result_sha": "67eea05b9b81513d",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 38.8,
+   "progress": 1,
+   "distance_m": 200,
+   "rms_jerk": 1.45,
+   "hard_brakes": 1,
+   "max_lat_accel": 0,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 5.2,
+   "min_headway_s": 4.12
+  }
+ },
+ "make-room": {
+  "result_sha": "3fff6e9520d78801",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 25,
+   "progress": 1,
+   "distance_m": 210,
+   "rms_jerk": 2.58,
+   "hard_brakes": 1,
+   "max_lat_accel": 0.08,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 4.8,
+   "min_headway_s": 1.31
+  }
+ },
+ "fresh-green": {
+  "result_sha": "8b9674f18f5c4795",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 25.6,
+   "progress": 1,
+   "distance_m": 120,
+   "rms_jerk": 2.86,
+   "hard_brakes": 0,
+   "max_lat_accel": 0.45,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "into-the-sun": {
+  "result_sha": "7da8744bbca91349",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 70.6,
+   "progress": 1,
+   "distance_m": 430,
+   "rms_jerk": 3.51,
+   "hard_brakes": 4,
+   "max_lat_accel": 0.1,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "reverse-lights": {
+  "result_sha": "77eeb54e24b35215",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 32.4,
+   "progress": 1,
+   "distance_m": 144,
+   "rms_jerk": 4.29,
+   "hard_brakes": 2,
+   "max_lat_accel": 4.19,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 1.6,
+   "min_headway_s": 1.07
+  }
+ },
+ "pothole-season": {
+  "result_sha": "e4194195e154ce03",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 27.9,
+   "progress": 1,
+   "distance_m": 160,
+   "rms_jerk": 1.49,
+   "hard_brakes": 0,
+   "max_lat_accel": 1.91,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "chasing-the-ball": {
+  "result_sha": "2b3201b88ba37bac",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 31.4,
+   "progress": 1,
+   "distance_m": 164,
+   "rms_jerk": 3.82,
+   "hard_brakes": 2,
+   "max_lat_accel": 3.11,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "goose-crossing": {
+  "result_sha": "32fc94d31d4fa725",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 68.9,
+   "progress": 1,
+   "distance_m": 131,
+   "rms_jerk": 3.13,
+   "hard_brakes": 3,
+   "max_lat_accel": 0.05,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "on-your-bumper": {
+  "result_sha": "b39d96ba25d9141b",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 88.3,
+   "progress": 1,
+   "distance_m": 525,
+   "rms_jerk": 2.27,
+   "hard_brakes": 3,
+   "max_lat_accel": 2.83,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "bridges-freeze-first": {
+  "result_sha": "eb410d699c40c176",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 40.2,
+   "progress": 1,
+   "distance_m": 292,
+   "rms_jerk": 1.65,
+   "hard_brakes": 2,
+   "max_lat_accel": 0.06,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 8.9,
+   "min_headway_s": 2.36
+  }
+ },
+ "one-car-at-a-time": {
+  "result_sha": "14bc85a5dac74d0f",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 82.7,
+   "progress": 0.999,
+   "distance_m": 233,
+   "rms_jerk": 1.23,
+   "hard_brakes": 0,
+   "max_lat_accel": 1.71,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "dont-splash": {
+  "result_sha": "5d47d3f5b1aa0547",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 28.5,
+   "progress": 1,
+   "distance_m": 184,
+   "rms_jerk": 1.74,
+   "hard_brakes": 0,
+   "max_lat_accel": 2.48,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "room-to-park": {
+  "result_sha": "037e9003234266f5",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 45.3,
+   "progress": 1,
+   "distance_m": 138,
+   "rms_jerk": 3.87,
+   "hard_brakes": 3,
+   "max_lat_accel": 0.03,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 3.6,
+   "min_headway_s": 2.2
+  }
+ },
+ "road-closed": {
+  "result_sha": "72c90b82206fb27f",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 96.4,
+   "progress": 0.798,
+   "distance_m": 431,
+   "rms_jerk": 5.08,
+   "hard_brakes": 5,
+   "max_lat_accel": 4.97,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "follow-the-officer": {
+  "result_sha": "1169df9af188447d",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 50.7,
+   "progress": 1,
+   "distance_m": 209,
+   "rms_jerk": 3.37,
+   "hard_brakes": 1,
+   "max_lat_accel": 3.69,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": null,
+   "min_headway_s": null
+  }
+ },
+ "road-test-kitsilano": {
+  "result_sha": "be157ba1352349d9",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 253.8,
+   "progress": 0.975,
+   "distance_m": 1637,
+   "rms_jerk": 3.46,
+   "hard_brakes": 11,
+   "max_lat_accel": 4.87,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 1.6,
+   "min_headway_s": null
+  }
+ },
+ "road-test-toronto": {
+  "result_sha": "f72b419d01920157",
+  "score_inputs": {
+   "method": "driven-corridor-v1",
+   "arrived": true,
+   "time_s": 203.4,
+   "progress": 0.965,
+   "distance_m": 1143,
+   "rms_jerk": 2.63,
+   "hard_brakes": 7,
+   "max_lat_accel": 7.11,
+   "collisions": 0,
+   "safety_brakes": 0,
+   "min_ttc_s": 1.6,
+   "min_headway_s": 5.21
+  }
+ }
+}

@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "data" / "runs"
 RESULTS = ROOT / "data" / "results"
 RECORDINGS = ROOT / "data" / "recordings"
+COMPARISON_SCORES = ROOT / "data" / "score-comparisons"
 OUTPUT = ROOT / "data" / "results.json"
 README = ROOT / "README.md"
 FORMAT = "jev-results/1"
@@ -430,7 +431,19 @@ def finite_number(value) -> bool:
     return type(value) is int or (type(value) is float and math.isfinite(value))
 
 
-def published_drive(result: dict, map_sha: str | None = None) -> dict:
+SCORE_NUMERIC = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
+SCORE_NULLABLE = ("min_ttc_s", "min_headway_s")
+
+
+def has_score_inputs(result: dict) -> bool:
+    return (
+        isinstance(result.get("arrived"), bool)
+        and all(finite_number(result.get(k)) for k in (*SCORE_NUMERIC, "time_s"))
+        and all(k in result and (result[k] is None or finite_number(result[k])) for k in SCORE_NULLABLE)
+    )
+
+
+def published_drive(result: dict, map_sha: str | None = None, comparison: dict | None = None) -> dict:
     seconds = result.get("time_s")
     drive = {
         "id": result["challenge"],
@@ -444,14 +457,31 @@ def published_drive(result: dict, map_sha: str | None = None) -> dict:
     drive["incident_counts"] = {
         k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if finite_number(result.get(k))
     }
-    numeric = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
-    nullable = ("min_ttc_s", "min_headway_s")
-    if (
-        isinstance(result.get("arrived"), bool)
-        and all(finite_number(result.get(k)) for k in (*numeric, "time_s"))
-        and all(k in result and (result[k] is None or finite_number(result[k])) for k in nullable)
-    ):
-        drive["score_inputs"] = {k: result[k] for k in ("arrived", *numeric, *nullable)}
+    if has_score_inputs(result):
+        drive["score_inputs"] = {k: result[k] for k in ("arrived", *SCORE_NUMERIC, *SCORE_NULLABLE)}
+    inputs = result.get("comparison_score_inputs")
+    if comparison is not None:
+        if not result.get("result_sha") or comparison.get("result_sha") != result["result_sha"] or inputs is not None:
+            raise ValueError(f"{result['challenge']}: comparison measurements disagree with the recording")
+        inputs = comparison["score_inputs"]
+    if inputs is not None:
+        shared = (
+            "arrived",
+            "time_s",
+            "distance_m",
+            "rms_jerk",
+            "hard_brakes",
+            "max_lat_accel",
+            "collisions",
+            "safety_brakes",
+        )
+        if (
+            inputs.get("method") != "driven-corridor-v1"
+            or not has_score_inputs(inputs)
+            or any(inputs[k] != result.get(k) for k in shared)
+        ):
+            raise ValueError(f"{result['challenge']}: invalid driven-corridor score measurements")
+        drive["comparison_score_inputs"] = inputs
     return drive
 
 
@@ -465,6 +495,8 @@ def challenge_rows(drivers: dict) -> list[dict]:
         # (the guarded track, every earlier record's, or the open one: static/js/brain/tracks.js)
         track = summary.get("track") or "guarded"
         recording_path = RECORDINGS / f"{name}-{date}.json.gz"
+        comparison_path = COMPARISON_SCORES / f"{name}-{date}.json"
+        comparisons = {}
         row_results, cost, cost_basis, model, requested = results, summary.get("cost_usd") or 0, None, None, None
         sources = [rel(path)]
         recording = recording_facts(recording_path) if recording_path.is_file() else None
@@ -489,6 +521,11 @@ def challenge_rows(drivers: dict) -> list[dict]:
             if billed is not None:
                 cost, cost_basis = billed, "billed by the provider (usage.cost in each recorded reply)"
             drivers.setdefault(driver, model_driver(header, model))
+        if comparison_path.is_file():
+            comparisons = json.loads(comparison_path.read_text())
+            if track != "guarded" or recording is None or comparisons.keys() - recording["results"].keys():
+                raise ValueError(f"{rel(comparison_path)} must match its guarded source recording")
+            sources.append(rel(comparison_path))
         if cost_basis is None:
             cost_basis = "none" if not cost else "as recorded (the cost the server counted for each call)"
         # (the whole set, every challenge and road test: a run of some of them, or one stopped part way,
@@ -532,7 +569,9 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "cost_usd": round(cost, 6),
                 "cost_basis": cost_basis,
                 "failed": failed,
-                "drives": [published_drive(r, map_shas.get(r["map"])) for r in row_results],
+                "drives": [
+                    published_drive(r, map_shas.get(r["map"]), comparisons.get(r["challenge"])) for r in row_results
+                ],
                 "sources": sources,
                 "recording": rel(recording_path) if recording_path.is_file() else None,
                 **({"manifest": manifest} if manifest else {}),
