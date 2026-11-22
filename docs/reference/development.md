@@ -97,16 +97,18 @@ Node 22 (checked against the release's SHA-256 sums), uv and the clone. Copy res
 Owner decision (2026-11-22, replacing the 15 idle minutes of 2026-11-21): every size stops as
 soon as its check ends, whatever happened to the check. A stopped sandbox bills nothing, and
 Boat keeps its machine for 10 minutes after it reads `stopped`, unbilled. A plain resume in
-that time, or while the sandbox is still `stopping`, takes that machine back with no restore,
-and Boat [doesn't count it as a start](https://docs.boat.dev/limits.md), so idling to save a
-start only spends plan hours. The script resumes a `stopping` sandbox straight away; when Boat
+that time, or while the sandbox is still `stopping`, usually takes that machine back with no
+restore, and Boat [doesn't count it as a start](https://docs.boat.dev/limits.md), so idling to
+save a start only spends plan hours. Boat can release the machine early; a resume after that
+restores the snapshot on a new machine and counts as a start. The script resumes a `stopping` sandbox straight away; when Boat
 can't take the machine back mid-stop (`sandbox_stopping`), it waits up to two minutes for
 `stopped` and resumes then. A resume at a new size always starts a new machine, so it waits for
 `stopped` first and uses a start. `JEV_BOAT_IDLE` (seconds) leaves the auto-stop that far ahead
 instead of stopping.
 
 Boat's auto-stop is a deadline, not an idle timer. While a check runs, the script keeps it 30
-minutes ahead, renewed every 10 minutes so a long check is never cut off. The renewal loop
+minutes ahead, renewed every 10 minutes from the moment the sandbox is running (through the push,
+the run and any resync) so a long check is never cut off. The renewal loop
 checks that the script is still alive before each renewal, so a run killed outright (no exit
 trap) leaves a sandbox that stops itself within 30 minutes. The exit trap is armed before the
 create or resume, so an interrupted run still stops the sandbox; a sandbox this run was creating

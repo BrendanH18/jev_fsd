@@ -32,8 +32,9 @@
 #
 # Stopping (owner decision, 2026-11-22): every size stops as soon as its check ends, whatever
 # happened to it. A stopped sandbox bills nothing, and Boat keeps its machine for 10 minutes
-# after it reads stopped, unbilled: a resume in that time, or while it is still stopping, takes
-# the machine back with no restore and no start. Boat's auto-stop is a deadline, not an idle
+# after it reads stopped, unbilled: a resume in that time, or while it is still stopping, usually
+# takes the machine back with no restore and no start. Boat can release the machine early; the
+# resume then restores from the snapshot on a new machine and counts as a start. Boat's auto-stop is a deadline, not an idle
 # timer, so while a check runs it is kept 30 minutes ahead, renewed every 10 minutes by a loop
 # that ends with this script; a run killed outright leaves a sandbox that stops itself within
 # 30 minutes. Overrides: JEV_BOAT_TYPE (the size, for every mode), JEV_BOAT_JOBS, JEV_BOAT_IDLE
@@ -182,9 +183,14 @@ look() {
     local out
     state="" size=""
     if out=$(boat info "$1" --json 2>&1); then
-        state=$(printf '%s\n' "$out" | jq -r '.sandbox.state // "unknown"')
-        size=$(printf '%s\n' "$out" | jq -r '.sandbox.type // ""')
-        return 0
+        # An answer jq can't read is an error too, never an empty state that would make a new sandbox.
+        if state=$(printf '%s\n' "$out" | jq -er '.sandbox.state // "unknown"') \
+            && size=$(printf '%s\n' "$out" | jq -r '.sandbox.type // ""'); then
+            return 0
+        fi
+        state="" size=""
+        echo "boat-check: couldn't read sandbox $1 from Boat's answer: $out" >&2
+        return 1
     fi
     case "$out" in *'"not_found"'*) state=gone; return 0 ;; esac
     echo "boat-check: couldn't read sandbox $1 from Boat: $out" >&2
@@ -417,25 +423,28 @@ unframe() {
     [ -n "$rc" ] || return 255
     return "$rc"
 }
-# run_remote ID MODE PUSH CMD: run the remote script in sandbox ID and return its exit code. The
-# files to sync come from send (base, tree, files_b64, paths_b64).
-# Auto-stop is pushed back to $budget seconds every $renew seconds meanwhile, so a long check never
-# reaches it. The loop checks that this script ($$, also in the subshell) is still alive before
-# each renewal, so a run killed outright (no exit trap) leaves at most $budget seconds of auto-stop.
-run_remote() {
-    local codes rc
+# keep_alive ID: from now until the exit trap, push sandbox ID's auto-stop back to $budget seconds
+# every $renew seconds, so a long check (its push, run and any resync) never reaches it. The loop
+# checks that this script ($$, also in the subshell) is still alive before each renewal, so a run
+# killed outright (no exit trap) leaves at most $budget seconds of auto-stop.
+keep_alive() {
+    stop_keepalive
     # Its own stdio, so its sleep never holds the caller's output pipe open after the script ends.
     ( while sleep "$renew"; do
           kill -0 $$ 2>/dev/null || exit 0
           boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1
       done ) </dev/null >/dev/null 2>&1 &
     keepalive=$!
+}
+# run_remote ID MODE PUSH CMD: run the remote script in sandbox ID and return its exit code. The
+# files to sync come from send (base, tree, files_b64, paths_b64).
+run_remote() {
+    local codes rc
     set +e
     boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" "$jobs" \
         "$base" "$tree" "$files_b64" "$paths_b64" | frames | unframe
     codes=("${PIPESTATUS[@]}")
     set -e
-    stop_keepalive
     rc=${codes[2]}
     if [ "$rc" = 255 ]; then   # no exit frame: the CLI failed before or while running the command
         rc=${codes[0]}
@@ -451,6 +460,7 @@ case "$action" in
         # changed on a check sandbox's disk reaches later sandboxes. Uses one start.
         echo "boat-check: building $snapshot from origin's default branch in a fresh sandbox" >&2
         build=$(new_sandbox "$snapshot-build")
+        keep_alive "$build"
         run_remote "$build" build "" "" || { echo "boat-check: the build failed, so $snapshot was not saved" >&2; exit 1; }
         # The save runs in the background. Wait for this sandbox's save of the name
         # (sourceSandboxId) to read ready; an older save of the name doesn't count.
@@ -554,6 +564,7 @@ if [ -z "$state" ]; then
     echo "$id" > "$id_file"
 fi
 boat extend "$id" --ttl "$budget" --json >/dev/null
+keep_alive "$id"
 echo "boat-check: $type sandbox $id ($name), ready in $((SECONDS - t0)) s" >&2
 
 # The working tree as git sees it (tracked files, and untracked ones git doesn't ignore, as
