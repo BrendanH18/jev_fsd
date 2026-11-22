@@ -162,6 +162,7 @@ export async function runScenario(
     diagnostics = false,
     shouldStop = () => false,
     tape = null,
+    onStep = null,
   } = {},
 ) {
   if (tape && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
@@ -223,6 +224,7 @@ export async function runScenario(
     limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m } }, { features, weather }));
   });
   try {
+    onStep?.(world, autopilot);
     while (world.t < limit && !shouldStop()) {
       const road = stepWorld(ctx, DT, world.t * 1000);
       closureReplans();
@@ -242,6 +244,7 @@ export async function runScenario(
           previous[audit] = value;
         }
       steps++;
+      onStep?.(world, autopilot);
       if (!autopilot.enabled) {
         arrived = events.some((e) => e.type === "arrived");
         break;

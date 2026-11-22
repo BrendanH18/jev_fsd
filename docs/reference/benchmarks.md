@@ -77,6 +77,38 @@ The project notes on the benchmark code, moved here verbatim from `AGENTS.md`, w
 
 **Benchmark** (`static/js/bench/`): `scenarios.buildSuite` (seeded, routes via `/api/route`), `runner.runScenario` / `setupScenario` (also used by the app's `/?replay=1`), and `metrics.DriveMetrics`. Pass/fail rules live in `failures()` (collisions, red lights, stop signs, failures to yield, off road). Who made the decisions is counted in the autopilot (`Autopilot.decidedBy`, classified where `fire` applies each decision) and reported by `decidedBy` in `metrics.js` for every driver but Rules (`model_decisions`, `partial_decisions`, `local_decisions`, `fallback_decisions` and their shares); Rules results never get these fields, so earlier records compare. Bench runs take a `weather` option. They also take `features`: `bare` (the default: every opt-in feature off, so earlier records compare) or `city` (the free drive's features from `freeDriveOptions` in `sim/free-drive.js`, without parking at the destination, on the app's 15:30 Monday clock, with routes that keep to turn restrictions). `freeDriveOptions` is the one definition of a free drive: the app builds its world from it, so a new opt-in feature is added there, never inline in `main.js` (`scripts/test_free_drive.mjs` checks every `World` option is in it). `node --experimental-default-type=module scripts/bench_node.mjs --features city` runs the city suite. A drive's deadline is its route length at 2.5 m/s (divided by the weather's speed for city snow); when a road closure re-plans the route (`autopilot.closureRouting`), it becomes the distance driven plus the new route at the same pace, while other re-plans keep theirs. Both presets accept `--park 1` (the challenge parking verdict, except that an arrival with no space ever planned near the destination, where the car stops in its lane as a free drive does, records `no_space` and is no failure; a space given up still fails) and `--hour 23.5` (local Monday time, including darkness and time-dependent populations); defaults keep earlier records unchanged. City accepts `--without geese,ice` (World/fleet option names) and `--cover 0` through `12`, the seeded binary pairwise array in `bench/features.js`, including destination parking and respecting `stepOuts`/`hazards`. `scripts/soak.mjs --port 8381 --maps kitsilano,toronto,calgary,victoria --seeds 1,2,3 --count 2 --shard 0 --shards 8 --json soak.json` runs city map/seed samples plus all covering rows on the first map/seed; `--mode city` or `pairs` selects one part. Throws, deadlocks/timeouts and collisions fail it; other audits are reported separately while city triage is open. `.github/workflows/soak.yml` runs the eight shards and four parking/night suites weekly and manually, report-only, on GitHub-hosted runners; its `Soak summary` job (`scripts/soak_summary.py`) lists each leg's failed routes in the run summary and as warning annotations, since the run itself stays green. Runs are stored by `server.py` under `data/runs/`, which is gitignored, so a baseline has to be added with `git add -f`. Model recordings (`static/js/brain/recording.js`: `bench_node.mjs --record PATH` / `--replay PATH`, `window.__bench.run({ record | replay })`, the `tape` option of `runScenario` and `evaluateChallenge`, lockstep only) wrap a model brain's `transport` and are saved under `data/recordings/`, which is committed; with no tape every result is exactly as before.
 
+## Trace a tuned Rules drive across engines
+
+Run these commands in the same Boat checkout with its loopback server on port 8331. Capture
+the scenario on Node, then reuse it on Bun, which runs JavaScriptCore.
+
+```sh
+node --experimental-default-type=module scripts/bench_node.mjs --only s1-1 --trace /tmp/jev-v8.json
+npm exec --yes --package=bun@1.4.5 -- bun scripts/bench_node.mjs --trace-from /tmp/jev-v8.json --trace /tmp/jev-jsc.json
+node scripts/bench_trace.mjs /tmp/jev-v8.json /tmp/jev-jsc.json
+```
+
+Use the same benchmark settings for both commands. `--trace-from` reuses the exact start, route
+and traffic seed even when engines would generate different scenarios from the same suite seed.
+The comparator verifies the map fingerprint, scenario and settings before comparing samples.
+Tick 0 is the initial state. Each following tick is one 1/60 s simulation step. The trace samples
+ego and fleet position, heading and speed, plus the count, motion, candidate ID and applicable
+headlight choice of the latest applied decision. The report gives the first state difference at full
+precision, the first exceeding `1e-9` in the field's units or changing a non-numeric field,
+and the first sampled decision difference. Compare the two tick counts and verdicts as well.
+Use tuned seeds for diagnosis.
+
+Bun provides a headless JavaScriptCore comparison on Linux. Safari's WKWebView results remain in
+the [Rules baseline](../rules-baseline.md). See the [engine trace validation](../validation/benchmark-engine-drift-2026-11-21.md).
+
+For **exact replay of a published tape**, use the source commit and exact Node release recorded
+in its manifest (`source_commit` and `engine`). `engine_version` gives the V8 build. The
+published tapes currently use Node v22.23.4. For older tapes without a source commit, consult the
+legacy revisions in [the replay drift script](../../scripts/report_replay_drift.py) and the row's
+engine. Run the corresponding Node benchmark or arena command on that checkout and check replay
+fidelity with `--check replay` where the checkout supports it. The published-drive web player
+provides a visual replay.
+
 ## Inspect a saved benchmark
 
 Run these commands from the repository root. The inspector reads saved benchmark JSON and prints JSON to standard output. It works offline with Python 3.10 or newer.

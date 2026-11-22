@@ -1,0 +1,119 @@
+// Compare two captures from bench_node.mjs --trace.
+import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const VERSION = 1;
+const STATE_TOLERANCE = 1e-9;
+
+const pose = ({ x, y, psi, v }) => ({ x, y, heading: psi, speed: v });
+
+function traceSettings(config, mapSha) {
+  const { engine: _engine, ...settings } = config;
+  return { settings, map_sha: mapSha };
+}
+
+export function captureTrace(config, mapSha, scenario) {
+  const runtime = process.versions.bun
+    ? { name: "Bun (JavaScriptCore)", version: process.versions.bun }
+    : { name: "Node (V8)", version: process.version, v8: process.versions.v8 };
+  const trace = { version: VERSION, runtime, inputs: { ...traceSettings(config, mapSha), scenario }, steps: [] };
+  return {
+    sample(world, autopilot) {
+      const d = autopilot.lastDecision;
+      trace.steps.push({
+        ego: pose(world.ego),
+        traffic: world.npcs.map((car) => ({ id: car.id, ...pose(car) })),
+        decision: d
+          ? { count: autopilot.totals.decisions, motion: d.motion, choice: d.chosenId, headlights: d.headlights }
+          : null,
+      });
+    },
+    write(path, result) {
+      const { pass, arrived, time_s } = result;
+      writeFileSync(path, JSON.stringify({ ...trace, result: { pass, arrived, time_s } }));
+    },
+  };
+}
+
+function difference(left, right, tolerance, path = "") {
+  if (left === right) return null;
+  if (typeof left === "number" && typeof right === "number" && Math.abs(left - right) <= tolerance) return null;
+  if (
+    left &&
+    right &&
+    typeof left === "object" &&
+    typeof right === "object" &&
+    Array.isArray(left) === Array.isArray(right)
+  ) {
+    for (const key of Object.keys(left)) {
+      const diff = difference(left[key], right[key], tolerance, path ? `${path}.${key}` : key);
+      if (diff) return diff;
+    }
+    for (const key of Object.keys(right)) {
+      if (!Object.hasOwn(left, key)) return { path: path ? `${path}.${key}` : key, left: null, right: right[key] };
+    }
+    return null;
+  }
+  return { path, left: left ?? null, right: right ?? null };
+}
+
+export function readTraceScenario(path, destination, config, mapSha) {
+  const sourceFile = statSync(path);
+  const destinationFile = statSync(destination, { throwIfNoEntry: false });
+  if (destinationFile?.dev === sourceFile.dev && destinationFile.ino === sourceFile.ino)
+    throw new Error("--trace-from and --trace need different files.");
+  const trace = JSON.parse(readFileSync(path, "utf8"));
+  if (trace?.version !== VERSION || typeof trace.inputs?.scenario?.id !== "string")
+    throw new Error("Invalid benchmark trace.");
+  const { scenario, ...settings } = trace.inputs;
+  const mismatch = difference(settings, traceSettings(config, mapSha), 0);
+  if (mismatch) throw new Error(`Benchmark trace inputs differ at ${mismatch.path}.`);
+  return scenario;
+}
+
+export function compareTraces(left, right) {
+  for (const trace of [left, right]) {
+    if (trace?.version !== VERSION || !trace.inputs || !Array.isArray(trace.steps) || !trace.steps.length)
+      throw new Error("Invalid benchmark trace.");
+  }
+  const mismatch = difference(left.inputs, right.inputs, 0);
+  if (mismatch) throw new Error(`Benchmark trace inputs differ at ${mismatch.path}.`);
+
+  let exactState = null;
+  let stateOverTolerance = null;
+  let decision = null;
+  const shared = Math.min(left.steps.length, right.steps.length);
+  for (let tick = 0; tick < shared; tick++) {
+    const { decision: aDecision, ...aState } = left.steps[tick];
+    const { decision: bDecision, ...bState } = right.steps[tick];
+    const exact = exactState ? null : difference(aState, bState, 0);
+    if (exact) exactState = { tick, ...exact };
+    const state = stateOverTolerance ? null : difference(aState, bState, STATE_TOLERANCE);
+    if (state) stateOverTolerance = { tick, ...state };
+    const choice = decision ? null : difference(aDecision, bDecision, 0, "decision");
+    if (choice) decision = { tick, ...choice };
+    if (exactState && stateOverTolerance && decision) break;
+  }
+  return {
+    scenario: left.inputs.scenario.id,
+    runtimes: [left.runtime, right.runtime],
+    steps: [left.steps.length - 1, right.steps.length - 1],
+    results: [left.result, right.result],
+    exactState,
+    stateTolerance: STATE_TOLERANCE,
+    stateOverTolerance,
+    decision,
+  };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    const files = process.argv.slice(2);
+    if (files.length !== 2) throw new Error("Usage: node scripts/bench_trace.mjs LEFT.json RIGHT.json");
+    const [left, right] = files.map((file) => JSON.parse(readFileSync(file, "utf8")));
+    console.log(JSON.stringify(compareTraces(left, right), null, 2));
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+}
