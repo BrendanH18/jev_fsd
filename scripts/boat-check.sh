@@ -432,7 +432,8 @@ keep_alive() {
     # Its own stdio, so its sleep never holds the caller's output pipe open after the script ends.
     ( while sleep "$renew"; do
           kill -0 $$ 2>/dev/null || exit 0
-          boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1
+          # set -e carries into the subshell: one failed renewal (a network blip) must not end the loop.
+          boat extend "$1" --ttl "$budget" --json >/dev/null 2>&1 || true
       done ) </dev/null >/dev/null 2>&1 &
     keepalive=$!
 }
