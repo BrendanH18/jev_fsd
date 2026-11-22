@@ -37,6 +37,8 @@ def build_pack(
     force: bool = False,
     log: Callable[[str], None] = lambda m: None,
     include_service: bool = False,
+    *,
+    before_publish: Callable[[], None] | None = None,
 ) -> dict:
     """Cached pack for a bbox. Raises fetch.FetchError when the map cannot be downloaded."""
     path = pack_path(maps_dir, bbox)
@@ -66,6 +68,8 @@ def build_pack(
         )
     )
     maps_dir.mkdir(parents=True, exist_ok=True)
+    if before_publish is not None:
+        before_publish()
     write_json(path, pack)
     return pack
 

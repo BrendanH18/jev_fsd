@@ -187,6 +187,19 @@ class FetchMapCliTests(unittest.TestCase):
                 self.assertEqual(self.command("kitsilano", *options), 0)
                 self.assertEqual(json.loads(restrictions.read_text())["restrictions"], [])
 
+    def test_import_retries_layers_after_a_failed_write(self):
+        fetch.cache_path(self.maps, BBOX).write_bytes(OSM)
+        self.assertEqual(self.command("kitsilano"), 0)
+        restrictions = next(self.maps.glob("*.restrictions.*.json"))
+        restrictions.write_text('{"restrictions":[{"edge":"obsolete"}]}')
+        pack_path(self.maps, BBOX).write_text("{")
+        with patch("jev.osm.bus_lanes.write_json", side_effect=OSError("disk full")):
+            self.assertEqual(self.command("kitsilano", "--calming"), 1)
+        self.assertEqual(json.loads(restrictions.read_text())["restrictions"][0]["edge"], "obsolete")
+        self.assertEqual(self.command("kitsilano"), 0)
+        self.assertEqual(json.loads(restrictions.read_text())["restrictions"], [])
+        self.assertFalse(list(self.maps.glob("*.layers-pending")))
+
     def test_transit_composes_with_other_layers_and_refreshes_once(self):
         fetch.cache_path(self.maps, BBOX).write_bytes(OSM)
         build_pack(BBOX, self.maps)

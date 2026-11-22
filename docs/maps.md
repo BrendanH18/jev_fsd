@@ -161,6 +161,7 @@ building. For compatibility, `--force` also refreshes raw OSM when combined with
 For example, `--parks --bridges --refresh-osm` fetches
 once and rebuilds those two layers against the existing map pack. If the pack is missing or
 invalid, the command replaces it and rebuilds all layers against the replacement.
+Retry the import if a layer write fails. The retry rebuilds the pack and all layers together.
 Use `--maps-dir PATH` to keep
 the pack, layers and raw cache in a separate directory while testing an import. The v5-to-v6
 migration script accepts the same directory option, and `--check` previews the migration.

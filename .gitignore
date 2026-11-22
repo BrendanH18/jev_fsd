@@ -24,6 +24,7 @@ data/runs/
 
 # Raw OSM downloads are a local cache. Curated processed map packs are committed.
 data/maps/*.osm.xml
+data/maps/*.layers-pending
 
 # Local scratch
 .shots/

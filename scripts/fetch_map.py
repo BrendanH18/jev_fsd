@@ -112,11 +112,16 @@ def main(argv: list[str]) -> int:
     try:
         if refresh:
             fetch.fetch_osm_xml(bbox, maps_dir, force=True, log=print)
-        path = pack_path(maps_dir, bbox)
-        before = path.stat().st_ino if path.is_file() else None
-        pack = build_pack(bbox, maps_dir, force=(args.force or refresh) and not layer_only, log=print)
-        # The pack writer replaces the file atomically. A replacement can change cached edge IDs.
-        rebuilt = path.stat().st_ino != before
+        pending = pack_path(maps_dir, bbox).with_suffix(".layers-pending")
+        # A failed import leaves this marker so a retry rebuilds the pack and all layers together.
+        pack = build_pack(
+            bbox,
+            maps_dir,
+            force=pending.is_file() or ((args.force or refresh) and not layer_only),
+            log=print,
+            before_publish=pending.touch,
+        )
+        rebuilt = pending.is_file()
         if layer_only and rebuilt:
             print("map: rebuilding all layers for the replacement pack")
         # A prepared pack can omit rail when it has no level crossings. Crossings can use v1.
@@ -138,6 +143,8 @@ def main(argv: list[str]) -> int:
                 path = layer_path(maps_dir, bbox, **path_args)
                 summary = ", ".join("%d %s" % (len(data.get(key, [])), label) for key, label in counts)
                 print("%s: %s (%s)" % (layer, path, summary))
+        if rebuilt:
+            pending.unlink()
     except (OSError, fetch.FetchError) as err:
         print("FAILED: %s" % err, file=sys.stderr)
         return 1
