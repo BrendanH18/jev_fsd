@@ -32,6 +32,14 @@ function puddleClause(h, ahead) {
 }
 
 export default {
+  rulesCost: (c, snap) => (c.id === "ease_round_puddle" && snap.puddle_splash?.room ? -1.5 : 0),
+  cautious: {
+    at: "afterAmber",
+    run: (snap, eligible, target) =>
+      snap.puddle_splash?.room
+        ? eligible.find((c) => c.id === "ease_round_puddle" && Math.abs(c.sim.end_speed - target) < 1.5)
+        : null,
+  },
   key: "puddles",
   seen: "puddlesSeen",
   calls: "puddleCalls",

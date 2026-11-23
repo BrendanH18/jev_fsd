@@ -175,6 +175,49 @@ same routes on both sides. Groups defined by behavior or outcomes can change mem
 group counts and route changes alongside the distributions. The reports describe associations
 within the saved runs.
 
+### Matched rate changes
+
+`--list-paired-rates` lists 100 reports that show how each matched route's exposure-adjusted
+rate changed. Select an ID or use `--paired-rates` with `--compare` to run all of them.
+
+```sh
+uv run python scripts/inspect_run.py data/runs/20261112-190015-rules.json \
+  --compare data/runs/20261120-120000-rules.json paired-collisions-per-km-by-arrival
+```
+
+Each pair stays in its baseline cohort, even if the second run changes its arrival or parking
+outcome. The baseline, comparison and change distributions all use the same complete pairs.
+Changes subtract the baseline rate from the comparison rate for each drive. Changes in time
+percentages are reported in percentage points. One-sided
+measurements are counted separately, and the distributions show how many pairs lacked a rate
+on either side. A zero rate or zero change is a measured value.
+
+### Hard city slice
+
+[Hard city v1](../../data/suites/hard-city-v1.json) selects five tuned Kitsilano seed-1
+drives that previously exposed difficult conditions. It pins the full generated route set and map
+fingerprints as well as the selected IDs, weather, local Monday clock and parking settings. It has
+its own report and benchmark check.
+
+| Route | Conditions | Earlier finding |
+| --- | --- | --- |
+| `s1-4` | 23:30, dry | A bicycle entering the West 8th Avenue traffic circle. [Night soak](../validation/night-2026-11-12.md) |
+| `s1-7` | 06:30, dry | A stop sign well before the Arbutus junction and an ambulance behind a reversing parker. [Night soak](../validation/night-2026-11-12.md) |
+| `s1-6` | 23:30, fog | An unprotected left turn on West Broadway in 28 metres of visibility. [Night soak](../validation/night-2026-11-12.md) |
+| `s1-3` | 15:30, snow | Starting within a snowbank narrowing. [Snow probe](../validation/city-snow-2026-11-10.json) |
+| `s1-10` | 15:30, dry, parking | Parking on Stephens Street. [Roadmap 1.8](../../ROADMAP.md#phase-1-make-the-default-world-pass) |
+
+With the local server already running, run Rules on all five drives and write a JSON report.
+
+```sh
+node --experimental-default-type=module scripts/soak.mjs --port 8331 --mode hard --json hard-city.json
+```
+
+The runner exits nonzero on any failed verdict or fingerprint mismatch and preserves the
+per-leg results or harness error in the report. Benchmark CI publishes the report as the
+`hard-city` artifact. Rules passed 5/5 on Node 22.23.5 on 23 November 2026, with elapsed drive
+times of 296.7, 235.2, 275.2, 318.9 and 236.9 seconds in the order above.
+
 ## Publish a Node run
 
 Start the local server and Node runner from the same clean checkout. Use `--json` for the report

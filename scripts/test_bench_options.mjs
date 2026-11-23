@@ -8,7 +8,7 @@ const { FEATURE_NAMES, coveringArray, validFeatureSet } = await import("../stati
 const { benchmarkConfig, presetOptions, setupScenario, runScenario, suiteOptions, parkingVerdict } = await import(
   "../static/js/bench/runner.js"
 );
-const { soakPlan, classifyResults, soakFailed } = await import("./soak.mjs");
+const { soakPlan, classifyResults, soakFailed, checkHardRun } = await import("./soak.mjs");
 const { failures } = await import("../static/js/bench/metrics.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
@@ -130,6 +130,34 @@ assert.equal(categories.collisions.join(), "collision");
 assert.equal(categories.audits[0].id, "audit");
 assert.equal(soakFailed(categories), true);
 assert.equal(soakFailed(classifyResults([{ id: "audit", arrived: true, failures: ["red light"] }])), false);
+const hard = soakPlan({ mode: "hard" });
+assert.equal(hard.length, 5);
+assert.equal(new Set(hard.map((task) => task.id)).size, hard.length);
+assert.equal(
+  hard.every((task) => task.seed === 1 && task.options.features === "city"),
+  true,
+);
+assert.equal(hard.filter((task) => task.options.park).length, 1);
+assert.equal(
+  soakPlan({ mode: "hard", shard: 1, shards: 2 })
+    .map((task) => task.id)
+    .join(),
+  [hard[1].id, hard[3].id].join(),
+);
+assert.throws(() => soakPlan({ mode: "hard", heldout: true }), /tuned routes/);
+const hardTask = hard[0];
+const hardRun = {
+  manifest: {
+    maps: { [hardTask.map]: { fingerprint: hardTask.map_sha } },
+    suite: { route_sha: hardTask.route_sha },
+  },
+  results: [{ id: hardTask.only[0], pass: true }],
+};
+assert.equal(checkHardRun(hardTask, hardRun), true);
+assert.equal(checkHardRun(hardTask, { ...hardRun, results: [{ ...hardRun.results[0], pass: false }] }), false);
+assert.throws(() => checkHardRun(hardTask, { ...hardRun, results: [] }), /fixed route IDs/);
+assert.throws(() => checkHardRun({ ...hardTask, map_sha: "changed" }, hardRun), /map fingerprint changed/);
+assert.throws(() => checkHardRun({ ...hardTask, route_sha: "changed" }, hardRun), /route fingerprint changed/);
 assert.equal(failures({ arrived: true, parked: false }).join(), "not parked");
 // (no space near the destination: the car stops in its lane, as a free drive does, and that is no failure)
 assert.equal(failures({ arrived: true, parked: null, no_space: true }).join(), "");

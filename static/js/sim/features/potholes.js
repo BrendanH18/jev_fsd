@@ -37,6 +37,14 @@ function potholeClause(h, ahead) {
 }
 
 export default {
+  rulesCost: (c, snap) => (c.id === "ease_round_pothole" && snap.pothole?.room ? -1.5 : 0),
+  cautious: {
+    at: "afterAmber",
+    run: (snap, eligible, target) =>
+      snap.pothole?.room
+        ? eligible.find((c) => c.id === "ease_round_pothole" && Math.abs(c.sim.end_speed - target) < 1.5)
+        : null,
+  },
   key: "potholes",
   seen: "potholesSeen",
   calls: "potholeCalls",

@@ -1,4 +1,13 @@
 import { beamChoice } from "../sim/high-beams.js";
+import { firstHookResult, hooks } from "../sim/features/index.js";
+
+const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
+const CAUTIOUS = hooks("cautious");
+const BEFORE_AMBER = hooks("cautious", "beforeAmber");
+const AFTER_AMBER = hooks("cautious", "afterAmber");
+const FEATURE_STOP = hooks("cautiousStop");
+const FEATURE_DRIVE = hooks("cautiousDrive");
+
 // Copy this module to build your own agent. The harness has already rejected unsafe candidates. On the
 // open track (brain/tracks.js) `eligible` also holds manoeuvres that failed a road-rule check, each with
 // `flagged` true and the check in `reject`; this agent keeps to the others, as Rules does.
@@ -15,7 +24,7 @@ export class CautiousAgent {
     // A legal left on red uses the shared target: zero until stopped and clear.
     const target =
       (snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12) ||
-      (snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 12)
+      FEATURE_STOP.some((shouldStop) => shouldStop(snap))
         ? 0
         : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
     const ranked = eligible.map((candidate) => ({
@@ -32,22 +41,6 @@ export class CautiousAgent {
     // passing a cyclist through the oncoming lane, once the way is clear: at the pass speed, so as to
     // spend no longer in that lane than the pass was judged clear for
     // a school crossing guard holding up the STOP sign: stop short of the crosswalk, however far off
-    // a cyclist riding against a one-way street to wait for (sim/contraflow.js): stop where the car waits
-    // a car running the red across the car's way on a green (sim/red-light-runner.js): wait at the line
-    // a car backing out of a driveway into the lane (sim/driveway-reversers.js): stop to give it room
-    // a pothole ahead in the lane with room to ease round it inside the lane (sim/potholes.js): round it,
-    // at the target speed (nothing else ahead calling for less)
-    // a ball rolled into the street (sim/ball-chase.js): slow, ready to stop for a child running out after it
-    // Canada geese crossing the road (sim/geese.js): stop and wait until the last is off the road
-    // a tailgater close behind, with a lane to the right (sim/tailgaters.js): move over and let it by
-    // (it already keeps below the limit, so it needs no easing off)
-    // black ice seen ahead or under the car (sim/black-ice.js): ease off early and cross it steadily
-    // an oncoming car's turn through a stretch narrowed by snowbanks (sim/snowbanks.js): wait short of it
-    // a puddle at the kerb with someone within splash reach, and room to ease round it inside the lane
-    // (sim/puddles.js): round it, at the target speed
-    // a car ahead parallel parking (sim/parkers.js): stop well back, short of the room it reverses into
-    // a road closed ahead with no detour yet (sim/road-closures.js): stop short of it until there is one
-    // a police officer directing traffic holding the car (sim/traffic-officer.js): stop at the line, even on a green
     // in a bus lane while it is in effect, short of the right-turn approach: out of it, after making way for an emergency vehicle
     const inBusLane =
       snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index);
@@ -58,36 +51,26 @@ export class CautiousAgent {
     const candidate =
       eligible.find((c) => c.id === "pull_over") ||
       eligible.find((c) => c.id === "stop_for_turn_restriction") ||
-      eligible.find((c) => c.id === "stop_for_closure") ||
+      firstHookResult(BEFORE_BUS_LANES, snap, eligible, target) ||
       exitBusLane ||
       (pxoStop && eligible.find((c) => c.id === "stop_for_pedestrian")) ||
       eligible.find((c) => c.id === "park" || c.id === "pull_out") ||
       eligible.find((c) => c.id === "pass_cyclist") ||
       eligible.find((c) => c.id === "stop_for_crossing_guard") ||
-      (snap.contraflow_cyclist?.wait && eligible.find((c) => c.id === "yield_to_contraflow_cyclist")) ||
-      (snap.red_light_runner?.wait && eligible.find((c) => c.id === "wait_for_runner")) ||
-      (snap.reversing_vehicle?.wait && eligible.find((c) => c.id === "yield_to_reversing")) ||
-      (snap.ball_in_road?.limit_mps != null && !snap.pedestrian && eligible.find((c) => c.id === "slow_for_ball")) ||
-      (snap.geese_crossing?.wait && eligible.find((c) => c.id === "wait_for_geese")) ||
-      (snap.tailgater?.can_move_right && eligible.find((c) => c.id === "let_tailgater_pass")) ||
-      (snap.black_ice && !snap.following && eligible.find((c) => c.id === "slow_for_ice")) ||
-      (snap.snowbank?.narrowing?.wait && eligible.find((c) => c.id === "wait_for_oncoming_narrowing")) ||
-      (snap.parking_ahead?.wait && eligible.find((c) => c.id === "wait_for_parker")) ||
-      (snap.traffic_officer?.direction === "stop" && eligible.find((c) => c.id === "wait_for_officer")) ||
+      firstHookResult(CAUTIOUS, snap, eligible, target) ||
+      firstHookResult(BEFORE_AMBER, snap, eligible, target) ||
       (amberStop && eligible.find((c) => c.id === "stop_at_line")) ||
-      (snap.pothole?.room &&
-        eligible.find((c) => c.id === "ease_round_pothole" && Math.abs(c.sim.end_speed - target) < 1.5)) ||
-      (snap.puddle_splash?.room &&
-        eligible.find((c) => c.id === "ease_round_puddle" && Math.abs(c.sim.end_speed - target) < 1.5)) ||
+      firstHookResult(AFTER_AMBER, snap, eligible, target) ||
       ranked[0]?.candidate;
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
-    // pulling up to park stops where the car reverses in; and waiting for the officer stops gently at the line)
+    // pulling up to park stops where the car reverses in)
     return {
       ...(snap.headlights ? { headlights: beamChoice(snap) } : {}),
       motion:
         !(amberStop && candidate?.id === "stop_at_line") &&
         candidate?.sim.end_speed < 0.3 &&
-        !["pull_over", "park", "pull_out", "wait_to_park", "wait_for_officer"].includes(candidate.id)
+        !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) &&
+        !FEATURE_DRIVE.some((drive) => drive(candidate, snap))
           ? "stop"
           : "drive",
       candidateId: candidate?.id ?? null,

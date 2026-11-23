@@ -14,7 +14,7 @@ const CORE_AUDITS = {
   plow_right_passes: "Passed a snow plow on the right",
   merge_cut_ins: "Merged out of turn at a lane closure",
   close_passes: "Passed a cyclist closer than the minimum passing distance",
-  hump_hits: "Took a speed hump too fast",
+  ...Object.fromEntries(countersAt("afterRestrictions")),
   ...Object.fromEntries(countersAt("afterCalming")),
   guard_violations: "Drove past a school crossing guard's STOP sign",
   pxo_early_goes: "Left a pedestrian crossover before the far curb",
@@ -24,8 +24,9 @@ const CORE_AUDITS = {
 const AUDITS = [
   ...Object.entries(CORE_AUDITS),
   ...countersAt("beforeRunner"),
-  ["fresh_green_conflicts", "Entered on green ahead of a car running the red"],
-  ...COUNTER_AUDITS.filter(({ at }) => at !== "beforeRunner" && at !== "afterCalming").map(auditPair),
+  ...COUNTER_AUDITS.filter(
+    ({ at }) => at !== "beforeRunner" && at !== "afterCalming" && at !== "afterRestrictions",
+  ).map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and

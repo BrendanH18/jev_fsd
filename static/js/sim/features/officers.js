@@ -53,6 +53,31 @@ function auditEntry(world, officer, control, edge, rc) {
 }
 
 export default {
+  rulesStop(snap, eligible) {
+    const i = snap.intersection;
+    return (
+      i?.officer?.direction === "stop" &&
+      !i.entered &&
+      i.bumper_to_line_m < 1.5 &&
+      i.bumper_to_line_m > -1 &&
+      (snap.ego.v < 0.5 || !eligible.some((c) => c.id === "wait_for_officer"))
+    );
+  },
+  rulesCost(c) {
+    if (c.id === "wait_for_officer") return -12;
+    if (c.id === "go_on_officer_wave") return -1;
+    return 0;
+  },
+  legitimateStop(snap, clearing) {
+    const i = snap?.intersection;
+    return i?.officer?.direction === "stop" && i.bumper_to_line_m < 12 && i.bumper_to_line_m > -clearing;
+  },
+  cautious: {
+    at: "beforeAmber",
+    run: (snap, eligible) =>
+      snap.traffic_officer?.direction === "stop" ? eligible.find((c) => c.id === "wait_for_officer") : null,
+  },
+  cautiousDrive: (candidate) => candidate.id === "wait_for_officer",
   key: "officers",
   seen: "officersSeen",
   calls: "officerCalls",

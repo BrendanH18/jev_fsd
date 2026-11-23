@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { driverDisplayName } from "../static/js/lab/results.js";
 
 const usage = `Usage: node --experimental-default-type=module scripts/check_driver.mjs --agent path [--set challenges|road-tests|all] [--only id,id] [--port 8331]`;
 const { values } = parseArgs({
@@ -87,7 +88,7 @@ try {
             ...Object.fromEntries(
               [...published]
                 .filter(([, drives]) => drives.size)
-                .map(([driver, drives]) => [leaderboard.drivers[driver].label, verdict(drives.get(key))]),
+                .map(([driver, drives]) => [driverDisplayName(leaderboard, driver), verdict(drives.get(key))]),
             ),
           },
         ]),

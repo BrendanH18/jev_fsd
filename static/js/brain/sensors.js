@@ -1,5 +1,4 @@
 import { observeAmber } from "../sim/amber.js";
-import { redLightRunner } from "../sim/red-light-runner.js";
 import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
@@ -62,7 +61,6 @@ import {
   streetcarRelation,
 } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
-import { CALM_EARLY_M, calmingAhead, slowsFor } from "../sim/traffic-calming.js";
 import {
   HEAR_M,
   HOLD_M as RAIL_HOLD_M,
@@ -175,6 +173,7 @@ const LIMIT = {
 const TARGET = {
   parking: hooks("target", "parking"),
   beforeCurve: hooks("target", "beforeCurve"),
+  beforeRoadside: hooks("target", "beforeRoadside"),
   restrictions: hooks("target", "restrictions"),
   driveways: hooks("target", "driveways"),
   streetHazards: hooks("target", "streetHazards"),
@@ -443,7 +442,6 @@ export function buildSnapshot(world, executing = null) {
     level_crossing: null,
     junction_box: null,
     speed_zone: null,
-    traffic_calming: null,
     roadside_stop: null,
     work_zone: null,
     lane_closure: null,
@@ -762,12 +760,6 @@ export function buildSnapshot(world, executing = null) {
     snap.cyclist_pass = cyclistPass(world, p, lane, executing);
     snap.crossing_guard = crossingGuard(world, frontS);
     for (const sense of SENSE.beforeRunner) sense(world, snap, { p, frontS, lane, road, executing, stopSpeedFor });
-    // (a car running the red across the car's way as its light is green, with that option on:
-    // sim/red-light-runner.js)
-    if (world.redRunners?.enabled && snap.intersection?.control === "signal" && !junctionPlan(snap.intersection)) {
-      const runner = redLightRunner(world, snap.intersection, route.headingAt(snap.intersection.s_line_route));
-      if (runner) snap.red_light_runner = runner;
-    }
     const senseCtx = { p, frontS, lane, road, route, visible };
     for (const sense of SENSE.driveways) sense(world, snap, senseCtx);
     for (const sense of SENSE.streetHazards) sense(world, snap, senseCtx);
@@ -876,11 +868,6 @@ export function buildSnapshot(world, executing = null) {
   snap.traffic = snap.traffic.slice(0, 8);
   if (executing?.hazard) snap.current_path_hazard = executing.hazard;
   snap.speed_zone = speedZone(world, snap, FRONT);
-  // (and, with calming on, the next speed hump, table, cushion or bump along the route: sim/traffic-calming.js)
-  if (world.calming && snap.route && snap.routeProj) {
-    const c = calmingAhead(snap.route, snap.routeProj.s, FRONT, ego.spec.rearOverhang);
-    snap.traffic_calming = c && slowsFor(ego.spec, c) ? c : null;
-  }
   // (coming up to a vehicle stopped at the roadside with its lights flashing, and passing it, the
   // speed to be down to by then is the limit, so that no manoeuvre goes faster)
   if (snap.roadside_stop) snap.limit = Math.min(snap.limit, roadsideSpeed(snap.roadside_stop));
@@ -889,8 +876,6 @@ export function buildSnapshot(world, executing = null) {
   // (and at a lane closure, from its merge point: sim/lane-closure.js)
   if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
   for (const limit of LIMIT.passing) limit(snap);
-  // (and coming up to a speed hump or the like, and over it: sim/traffic-calming.js)
-  if (snap.traffic_calming) snap.limit = Math.min(snap.limit, calmingSpeed(snap.traffic_calming));
   for (const sense of SENSE.afterCalming) sense(world, snap);
   for (const limit of LIMIT.beforeRunner) limit(snap);
   for (const limit of LIMIT.driveways) limit(snap);
@@ -2705,16 +2690,7 @@ export function desiredSpeed(snap) {
       reasons.push(`${ZONE_NAMES[z.kind]} ahead`);
     }
   }
-  // a speed hump, table, cushion or bump: down to the speed to cross it at by the time the front reaches
-  // it, gently, and no faster until the rear is over it (sim/traffic-calming.js)
-  const tc = snap.traffic_calming;
-  if (tc) {
-    const vc = calmingSpeed(tc);
-    if (vc < v + 0.05) {
-      v = Math.min(v, vc);
-      reasons.push(tc.over ? `over a ${tc.name}` : `${tc.name} ahead`);
-    }
-  }
+  for (const cap of TARGET.beforeRoadside) v = cap(snap, v, reasons);
   // a vehicle stopped at the roadside with its lights flashing: down to the speed to pass it at a
   // little before APPROACH_M short of it, gently, and no faster until past it
   const rs = snap.roadside_stop;
@@ -2853,15 +2829,6 @@ export function desiredSpeed(snap) {
     }
   }
   for (const cap of TARGET.beforeRunner) v = cap(snap, v, reasons, targetCtx);
-  // a car running the red across the car's way (sim/red-light-runner.js): wait at the line
-  const rr = snap.red_light_runner;
-  if (rr?.wait) {
-    const vr = rr.bumper_to_stop_m < 0.5 ? 0 : stopSpeedFor(rr.bumper_to_stop_m, decel);
-    if (vr < v) {
-      v = vr;
-      reasons.push("car running the red: wait");
-    }
-  }
   for (const target of TARGET.driveways) v = target(snap, v, reasons, targetCtx);
   for (const target of TARGET.streetHazards) v = target(snap, v, reasons, targetCtx);
   for (const target of TARGET.beforeEmergency) v = target(snap, v, reasons, targetCtx);
@@ -3040,14 +3007,6 @@ export function desiredSpeed(snap) {
 
 // The speed to pass a vehicle stopped at the roadside at (see roadsideStop), or, short of it, the speed
 // from which the car slows to that comfortably by 5 m before APPROACH_M short of it.
-// The speed to cross a speed hump or the like at (see traffic_calming), and short of it, the speed
-// from which the car slows to it comfortably by CALM_EARLY_M before it; in poor weather, no faster than
-// the weather allows.
-function calmingSpeed(tc) {
-  const lim = tc.speed_mps * Math.min(weather.speed, 1);
-  return tc.over ? lim : Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, tc.starts_in_m - CALM_EARLY_M));
-}
-
 function roadsideSpeed(rs, factor = 1) {
   const lim = rs.limit_mps * factor;
   return Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, rs.gap_m - APPROACH_M - 5));
@@ -3122,7 +3081,6 @@ export function hazardFlags(snap) {
     const label = flag(snap);
     if (label) f.push(label);
   }
-  if (snap.red_light_runner) f.push("red-light runner");
   for (const flag of HAZARD.driveways) {
     const x = flag(snap);
     if (Array.isArray(x)) f.push(...x);

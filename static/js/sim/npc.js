@@ -1,6 +1,5 @@
 import { reserveSlot } from "./parking.js";
 import { followingPolicy } from "./following.js";
-import { runnerCap, runnerHold, runsLight } from "./red-light-runner.js";
 import { observeAmber } from "./amber.js";
 import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -74,7 +73,6 @@ import {
 } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
 import { legalBusLane } from "./bus-lanes.js";
-import { pathCalmLimit } from "./traffic-calming.js";
 import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import {
   DEPART_S,
@@ -162,6 +160,9 @@ const TRAFFIC_BYPASS = hooks("trafficBypass"),
   TRAFFIC_KEEP = hooks("trafficLane", "late"),
   TRAFFIC_YIELD = hooks("trafficYield"),
   ORDINARY_TRAFFIC_SPEED = hooks("trafficSpeed", "ordinary"),
+  APPROACH_TRAFFIC_SPEED = hooks("trafficSpeed", "beforeControl"),
+  SIGNAL_PROCEED = hooks("trafficSignalProceed"),
+  SIGNAL_HOLD = hooks("trafficSignalHold"),
   TRAFFIC_SPEED = hooks("trafficSpeed"),
   TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import {
@@ -1627,8 +1628,7 @@ export class NpcFleet {
       let stopAt = null,
         flashCap = Infinity,
         amberCap = Infinity;
-      // a driver running a late amber or a fresh red holds the speed it had (sim/red-light-runner.js)
-      const runCap = n.runner && world.redRunners?.enabled ? runnerCap(world, n, path, front) : Infinity;
+      const approachSpeed = featureTrafficSpeed(world, n, front, APPROACH_TRAFFIC_SPEED);
       // Entry-stop checks stop at the line; an amber clearing speed stays in
       // force until the rear is beyond the junction's crossing street.
       if (world.amberLights)
@@ -1678,19 +1678,10 @@ export class NpcFleet {
             : null;
           const canStop = amber ? amber.stop : bumperToLine > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) + 1;
           if (amber && !amber.stop) amberCap = Math.min(amberCap, amber.speed_mps);
-          // (now and then running it instead; and on a green, waiting at the line for someone crossing
-          // who cannot stop for their red: sim/red-light-runner.js)
-          const run = world.redRunners?.enabled
-            ? runsLight(world, n, e, ctl, st, bumperToLine, canStop, () => this.boxBusy(n, e))
-            : null;
+          const proceed = firstHookResult(SIGNAL_PROCEED, world, this, n, e, ctl, st, bumperToLine, canStop);
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
-          else if (!run && (st === "red" || (st === "yellow" && canStop))) stopAt = bumperToLine;
-          else if (
-            !run &&
-            st === "green" &&
-            world.redRunners?.enabled &&
-            runnerHold(world, n, e.id, this.map.intersections.get(ctl.id), bumperToLine, all)
-          )
+          else if (!proceed && (st === "red" || (st === "yellow" && canStop))) stopAt = bumperToLine;
+          else if (!proceed && st === "green" && firstHookResult(SIGNAL_HOLD, world, n, e, ctl, bumperToLine, all))
             stopAt = Math.max(0, bumperToLine);
         } else if (ctl.type === "yield") {
           // roundabout entry: wait at the line while someone in the ring would arrive first
@@ -1990,11 +1981,6 @@ export class NpcFleet {
         lz ? closureLimit(lz, front) : Infinity,
       );
       // (a snow plow keeps to its clearing speed, whatever the weather)
-      // (and, with calming on, down to the speed to cross each speed hump at: sim/traffic-calming.js)
-      const vCalm =
-        this.world.calming && this.map.calmingSpans?.size
-          ? pathCalmLimit(this.map, path, front, spec, spec.rearOverhang, weather.speed)
-          : Infinity;
       const vFollow =
         this.world.followingDistance && n.lead && n.kind !== "bike" && !driverOverride?.skipFollowing
           ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps
@@ -2005,9 +1991,8 @@ export class NpcFleet {
         vCurve,
         flashCap,
         amberCap,
-        runCap,
+        approachSpeed,
         n.pull ? 5 : Infinity,
-        vCalm,
         vFollow,
         featureTrafficSpeed(world, n, front, ORDINARY_TRAFFIC_SPEED),
         featureLimit,

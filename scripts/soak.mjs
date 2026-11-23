@@ -4,6 +4,7 @@
 // node --experimental-default-type=module scripts/soak.mjs --port 8381 --maps kitsilano,toronto,calgary,victoria --seeds 1,2,3 --shard 0 --shards 8 --json soak.json
 // --heldout 1 runs each map's held-out routes instead (bench/heldout.js, city only, one configuration
 // per map, labelled heldout/<map>); report them apart and never debug against them (docs/rules-baseline.md).
+// --mode hard runs the fixed hard city slice without sampling or changing its conditions.
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,6 +15,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 globalThis.document = { querySelector: () => null };
 const { coveringArray, FEATURE_NAMES } = await import("../static/js/bench/features.js");
 const { heldoutPlan } = await import("../static/js/bench/heldout.js");
+const hardCity = JSON.parse(await readFile(new URL("../data/suites/hard-city-v1.json", import.meta.url), "utf8"));
 export function soakPlan({
   mode = "all",
   maps = ["kitsilano", "toronto", "calgary", "victoria"],
@@ -23,14 +25,31 @@ export function soakPlan({
   shards = 1,
   heldout = false,
 } = {}) {
-  if (!["all", "city", "pairs"].includes(mode)) throw new Error("mode must be all, city or pairs.");
+  if (!["all", "city", "pairs", "hard"].includes(mode)) throw new Error("mode must be all, city, pairs or hard.");
+  if (!Number.isInteger(shards) || shards < 1 || !Number.isInteger(shard) || shard < 0 || shard >= shards)
+    throw new Error("shard must be a zero-based index below shards.");
+  if (mode === "hard") {
+    if (heldout) throw new Error("The hard city slice uses tuned routes.");
+    return hardCity.legs
+      .map(({ id, weather, hour, park, only }) => ({
+        id,
+        weather,
+        only,
+        route_sha: hardCity.route_sha,
+        map_sha: hardCity.map_sha,
+        map: hardCity.map,
+        seed: hardCity.seed,
+        count: hardCity.count,
+        npcs: hardCity.npcs,
+        options: { features: "city", hour, park },
+      }))
+      .filter((_, i) => i % shards === shard);
+  }
   // (held-out routes are the city suite on seeds no fix was tuned against; the covering rows keep their tuned seed)
   if (heldout) {
     if (mode === "pairs") throw new Error("held-out runs cover the city suite, not the covering rows.");
     if (!maps.length || maps.some((m) => typeof m !== "string" || !m.trim()))
       throw new Error("maps must contain map preset ids.");
-    if (!Number.isInteger(shards) || shards < 1 || !Number.isInteger(shard) || shard < 0 || shard >= shards)
-      throw new Error("shard must be a zero-based index below shards.");
     return maps
       .map((map) => ({ id: `heldout/${map}`, map, ...heldoutPlan(map), heldout: true, options: { features: "city" } }))
       .filter((_, i) => i % shards === shard);
@@ -40,8 +59,6 @@ export function soakPlan({
   if (!seeds.length || seeds.some((s) => !Number.isSafeInteger(s) || s < 0))
     throw new Error("seeds must be nonnegative integers.");
   if (!Number.isInteger(count) || count < 1) throw new Error("count must be a positive integer.");
-  if (!Number.isInteger(shards) || shards < 1 || !Number.isInteger(shard) || shard < 0 || shard >= shards)
-    throw new Error("shard must be a zero-based index below shards.");
   const tasks = [];
   if (mode !== "pairs")
     for (const map of maps)
@@ -73,6 +90,16 @@ export function classifyResults(results) {
 }
 export const soakFailed = (r) => !!(r.throws.length || r.stuck.length || r.collisions.length);
 
+export function checkHardRun(task, run) {
+  if (run.manifest?.maps?.[task.map]?.fingerprint !== task.map_sha)
+    throw new Error(`${task.id}: map fingerprint changed from the slice definition.`);
+  if (run.manifest?.suite?.route_sha !== task.route_sha)
+    throw new Error(`${task.id}: route fingerprint changed from the slice definition.`);
+  if (run.results.map((r) => r.id).join(",") !== task.only.join(","))
+    throw new Error(`${task.id}: results do not cover the fixed route IDs.`);
+  return run.results.every((r) => r.pass === true);
+}
+
 async function main() {
   const args = {},
     allowed = ["port", "mode", "maps", "seeds", "count", "shard", "shards", "weather", "json", "heldout"];
@@ -86,8 +113,11 @@ async function main() {
   const integer = (s, fallback) => (s === undefined ? fallback : /^\d+$/.test(s) ? Number(s) : NaN);
   if (args.heldout !== undefined && !["0", "1"].includes(args.heldout)) throw new Error("--heldout must be 0 or 1.");
   const heldout = args.heldout === "1";
+  const hard = args.mode === "hard";
   if (heldout && (args.seeds !== undefined || args.count !== undefined))
     throw new Error("--heldout sets the seeds and routes: drop --seeds and --count.");
+  if (hard && ["maps", "seeds", "count", "weather"].some((key) => args[key] !== undefined))
+    throw new Error("--mode hard sets the conditions: drop --maps, --seeds, --count and --weather.");
   const tasks = soakPlan({
     mode: args.mode ?? (heldout ? "city" : undefined),
     maps: args.maps?.split(","),
@@ -99,11 +129,13 @@ async function main() {
   });
   const directory = await mkdtemp(join(tmpdir(), "jev-soak-")),
     runs = [];
+  const auditPolicy = hard ? "all drive verdicts count" : "report-only; throws, deadlocks/timeouts and collisions fail";
   let failed = false;
   try {
     for (const [index, task] of tasks.entries()) {
       const path = join(directory, `${index}.json`),
-        options = task.options;
+        options = task.options,
+        weather = task.weather || args.weather || "dry";
       const command = [
         "--experimental-default-type=module",
         fileURLToPath(new URL("bench_node.mjs", import.meta.url)),
@@ -115,18 +147,30 @@ async function main() {
         "--features",
         "city",
         "--weather",
-        args.weather || "dry",
+        weather,
         "--diagnostics",
         "1",
         "--json",
         path,
         ...(options.cover !== undefined ? ["--cover", String(options.cover)] : []),
+        ...(hard
+          ? [
+              "--hour",
+              String(options.hour),
+              "--park",
+              options.park ? "1" : "0",
+              "--npcs",
+              String(task.npcs),
+              "--only",
+              task.only.join(","),
+            ]
+          : []),
       ];
       console.log(
         JSON.stringify({
           configuration: task.id,
           ...task,
-          weather: args.weather || "dry",
+          weather,
           on: FEATURE_NAMES.filter((n) => (n !== "park" ? !options.without?.includes(n) : !!options.park)),
         }),
       );
@@ -154,10 +198,12 @@ async function main() {
         if (code !== 0) throw new Error(`Benchmark process exited ${code}.`);
         const run = JSON.parse(await readFile(path, "utf8"));
         const categories = classifyResults(run.results);
-        failed ||= soakFailed(categories);
+        const passed = hard ? checkHardRun(task, run) : !soakFailed(categories);
+        failed ||= !passed;
         const record = {
           ...task,
           suite_version: run.suite_version,
+          ...(hard ? { manifest: run.manifest } : {}),
           config: run.config,
           ...categories,
           results: run.results,
@@ -177,16 +223,16 @@ async function main() {
     const report = {
       schema: 1,
       suite_version: "custom",
-      weather: args.weather || "dry",
+      ...(hard ? { slice: hardCity.id } : { weather: args.weather || "dry" }),
       shard: integer(args.shard, 0),
       shards: integer(args.shards, 1),
       ...(heldout ? { heldout: true } : {}),
-      audit_policy: "report-only; throws, deadlocks/timeouts and collisions fail",
+      audit_policy: auditPolicy,
       failed,
       runs,
     };
     if (args.json) await writeFile(args.json, JSON.stringify(report, null, 1));
-    console.log(JSON.stringify({ configurations: runs.length, failed, audit_policy: report.audit_policy }));
+    console.log(JSON.stringify({ configurations: runs.length, failed, audit_policy: auditPolicy }));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

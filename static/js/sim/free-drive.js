@@ -41,8 +41,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     // on two-way streets with one lane each way, everyone passes a cyclist riding in the lane through
     // the oncoming lane once it is clear (`?cyclistpass=0`: everyone stays behind)
     passCyclists: on("cyclistpass"),
-    // speed humps, tables, cushions and bumps (`?calming=0`)
-    calming: on("calming"),
     // scramble crossings run their all-walk phase, with no right turn on red (`?scramble=0`)
     scrambles: on("scramble"),
     // crossing guards in school zones while they are in effect (`?guards=0`)
@@ -55,7 +53,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     leftOnRed: on("leftonred"),
     redTurnSigns: on("redturnsigns"),
     amberLights: on("amberlights"),
-    redRunners: on("redrunners"),
     followingDistance: on("followingdistance"),
   };
   const fleet = {

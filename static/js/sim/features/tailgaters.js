@@ -27,6 +27,13 @@ function tailgaterClause(t) {
 }
 
 export default {
+  rulesCost(c) {
+    if (c.id === "let_tailgater_pass") return -8;
+    if (c.id === "ease_off_for_tailgater") return -5;
+    return 0;
+  },
+  cautious: (snap, eligible) =>
+    snap.tailgater?.can_move_right ? eligible.find((c) => c.id === "let_tailgater_pass") : null,
   key: "tailgaters",
   seen: "tailgatersSeen",
   calls: "tailgaterCalls",

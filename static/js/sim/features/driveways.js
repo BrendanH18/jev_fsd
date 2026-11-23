@@ -25,6 +25,11 @@ function reversingClause(r) {
 }
 
 export default {
+  rulesStop: (snap) => snap.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 1.5,
+  legitimateStop: (snap) => snap?.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 8,
+  rulesCost: (c, snap) => (c.id === "yield_to_reversing" && snap.reversing_vehicle?.wait ? -6 : 0),
+  cautious: (snap, eligible) =>
+    snap.reversing_vehicle?.wait ? eligible.find((c) => c.id === "yield_to_reversing") : null,
   key: "driveways",
   seen: "drivewaysSeen",
   calls: "drivewayCalls",

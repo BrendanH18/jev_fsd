@@ -20,6 +20,13 @@ function roadClosedClause(c) {
 }
 
 export default {
+  rulesStop: {
+    at: "beforeSignal",
+    run: (snap) => snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 1.5,
+  },
+  rulesCost: (c) => (c.id === "stop_for_closure" ? -30 : 0),
+  cautious: { at: "beforeBusLanes", run: (_snap, eligible) => eligible.find((c) => c.id === "stop_for_closure") },
+  cautiousStop: (snap) => snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 12,
   key: "roadClosures",
   seen: "roadClosuresSeen",
   calls: "roadClosureCalls",

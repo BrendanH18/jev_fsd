@@ -33,6 +33,9 @@ const CORE = [
   "brain/state.js",
   "brain/llm-prompt.js",
   "brain/tracks.js",
+  "brain/rules.js",
+  "brain/safety.js",
+  "agents/cautious.js",
   "bench/metrics.js",
   "lab/trace.js",
   "lab/examiner.js",
@@ -42,8 +45,10 @@ test("every record is whole, its option and flags its own, and every hook at a s
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
     [
+      "calming",
       "sunGlare",
       "contraflow",
+      "redRunners",
       "driveways",
       "balls",
       "potholes",
@@ -104,6 +109,8 @@ test("the core runs every slot, and names no registered feature", () => {
     for (const name of [
       'contraflow.js"',
       'sun-glare.js"',
+      'traffic-calming.js"',
+      'red-light-runner.js"',
       'collection-truck.js"',
       'sim/driveway-reversers.js"',
       './driveway-reversers.js"',
@@ -136,6 +143,16 @@ test("the core runs every slot, and names no registered feature", () => {
     for (const field of [
       "snap.contraflow_cyclist",
       "snap.sun_glare",
+      "snap.traffic_calming",
+      "world.calming",
+      "this.calming",
+      "hump_hits",
+      "snap.red_light_runner",
+      "world.redRunners",
+      "this.redRunners",
+      "fresh_green_conflicts",
+      '"wait_for_runner"',
+      "enters_ahead_of_red_light_runner",
       "world.sunGlare",
       "this.sunGlare",
       "glare_speeding_seconds",
@@ -231,7 +248,9 @@ test("the World builds each feature from its option, with its seen flag and its 
     parked: 0,
     pedestrians: 0,
     sunGlare: true,
+    calming: true,
     contraflow: true,
+    redRunners: true,
     driveways: true,
     balls: true,
     potholes: true,
@@ -248,9 +267,9 @@ test("the World builds each feature from its option, with its seen flag and its 
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;
     if (!f.buildFleet) {
-      assert.equal(off[property].enabled, false, `${f.key} off by default`);
+      assert.equal(off[property].enabled ?? off[property], false, `${f.key} off by default`);
       assert.equal(
-        on[property].enabled,
+        on[property].enabled ?? on[property],
         f.key === "geese" ? !!map.parkSpans?.length : true,
         `${f.key} on with its option`,
       );
@@ -268,6 +287,7 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.ok(off.crewPassed instanceof Set);
   // (off, nothing is placed and no random stream is made)
   assert.equal(off.contraflow.random, null);
+  assert.equal(off.redRunners.random, null);
   assert.equal(off.driveways.random, null);
   assert.equal(off.balls.random, null);
   assert.equal(off.parkers.random, null);
@@ -306,9 +326,17 @@ test("metrics and failures appear only once a feature has met the car, each at i
   assert.deepEqual(R.featureMetrics(world, v, "afterCalming"), {});
   world.collectionSeen = true;
   assert.deepEqual(R.featureMetrics(world, v, "afterCalming"), { crew_close_passes: 0 });
+  assert.deepEqual(R.featureMetrics(world, v, "afterRestrictions"), {});
+  world.calmingSeen = true;
+  assert.deepEqual(R.featureMetrics(world, v, "afterRestrictions"), { hump_hits: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), {});
   world.contraflowSeen = true;
   assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), { contraflow_conflicts: 0 });
+  world.redRunnersSeen = true;
+  assert.deepEqual(Object.keys(R.featureMetrics(world, v, "beforeRunner")), [
+    "contraflow_conflicts",
+    "fresh_green_conflicts",
+  ]);
   assert.deepEqual(R.featureMetrics(world, v, "driveways"), {});
   assert.deepEqual(R.featureMetrics(world, v, "streetHazards"), { wildlife_conflicts: 2 });
   assert.deepEqual(R.featureMetrics(world, v, "rearTraffic"), { ice_overspeed: 0, pedestrians_splashed: 0 });
@@ -333,6 +361,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
     arrived: true,
     glare_speeding_seconds: 1.02,
     illegal_turns: 1,
+    hump_hits: 1,
+    pxo_early_goes: 1,
     crew_close_passes: 1,
     contraflow_conflicts: 1,
     fresh_green_conflicts: 1,
@@ -351,6 +381,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
   assert.deepEqual(failures(m), [
     "too fast for sun glare",
     "made a prohibited turn",
+    "took a speed hump too fast",
+    "left a pedestrian crossover before the far curb",
     "passed a garbage crew worker too close",
     "cut off or squeezed a contraflow cyclist",
     "entered on green ahead of a car running the red",

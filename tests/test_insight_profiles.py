@@ -197,3 +197,48 @@ class ProfilesTests(unittest.TestCase):
         ):
             _, report = profiles.REPORTS[report_id]
             self.assertEqual(report(rows)["groups"]["unknown"]["median"], value)
+
+    def test_paired_rates_hold_cohorts_and_measurements_constant(self):
+        _, report = profiles.PAIRED_RATES["paired-collisions-per-km-by-arrival"]
+        baseline = [
+            {"arrived": False, "distance_m": 500, "collisions": 2},
+            {"arrived": False, "distance_m": 500, "collisions": 0},
+            {"arrived": False, "distance_m": 0, "collisions": 0},
+            {"arrived": False, "distance_m": 500, "collisions": 1},
+            {"arrived": False, "distance_m": 0, "collisions": 0},
+        ]
+        comparison = [
+            {"arrived": True, "distance_m": 1000, "collisions": 1},
+            {"arrived": True, "distance_m": 500, "collisions": 0},
+            {"arrived": True, "distance_m": 250, "collisions": 1},
+            {"arrived": True, "distance_m": 750},
+            {"arrived": False, "distance_m": 0, "collisions": 0},
+        ]
+        result = report(baseline, comparison)
+        self.assertEqual(result["cohort_side"], "baseline")
+        self.assertEqual(list(result["groups"]), ["unfinished"])
+        group = result["groups"]["unfinished"]
+        self.assertEqual((group["pairs"], group["baseline_only"], group["comparison_only"]), (5, 1, 1))
+        self.assertEqual((group["baseline"]["median"], group["comparison"]["median"]), (2, 0.5))
+        self.assertEqual(
+            {key: group["difference"][key] for key in ("measured", "unavailable", "min", "median", "max", "zero")},
+            {"measured": 2, "unavailable": 3, "min": -3, "median": -1.5, "max": 0, "zero": 1},
+        )
+
+    def test_paired_rate_catalog_and_comparison(self):
+        catalog = subprocess.check_output([sys.executable, CLI, "--list-paired-rates"], text=True)
+        names = [line.split()[0] for line in catalog.splitlines()]
+        self.assertEqual(len(names), 100)
+        self.assertEqual(names, sorted(profiles.PAIRED_RATES))
+        result = json.loads(
+            subprocess.check_output([sys.executable, CLI, PREVIOUS, "--compare", SAMPLE, "--paired-rates"])
+        )
+        self.assertEqual(list(result["reports"]), names)
+        self.assertEqual(len(result["routes"]["matched"]), 2)
+        for report in result["reports"].values():
+            self.assertEqual(sum(group["pairs"] for group in report["groups"].values()), 2)
+        self.assertEqual(result["reports"]["paired-speeding-pct-by-length"]["difference_unit"], "percentage points")
+        name = "paired-collisions-per-km-by-arrival"
+        error = subprocess.run([sys.executable, CLI, SAMPLE, name], capture_output=True)
+        self.assertEqual(error.returncode, 2)
+        self.assertIn(b"require --compare", error.stderr)

@@ -266,3 +266,42 @@ RATE_REPORTS = dict(
     for cohort in RATE_COHORTS
 )
 REPORTS.update(RATE_REPORTS)
+
+
+def paired_rate(left, right, *, field, exposure, scale, unit, cohort):
+    """Compare rates on identically measured routes, grouped by their baseline conditions."""
+    groups = {}
+    for before, after in zip(left, right, strict=True):
+        group = groups.setdefault(cohort(before) or "unknown", {"pairs": 0, "baseline_only": 0, "comparison_only": 0})
+        group["pairs"] += 1
+        before_rate = exposure_rate(before, field, exposure, scale)
+        after_rate = exposure_rate(after, field, exposure, scale)
+        if before_rate is None or after_rate is None:
+            group["baseline_only"] += before_rate is not None
+            group["comparison_only"] += after_rate is not None
+            continue
+        group.setdefault("baseline", []).append(before_rate)
+        group.setdefault("comparison", []).append(after_rate)
+        group.setdefault("difference", []).append(after_rate - before_rate)
+
+    for group in groups.values():
+        for key in ("baseline", "comparison", "difference"):
+            group[key] = distribution(group.get(key, []), group["pairs"])
+    return {
+        "numerator": field,
+        "exposure": exposure,
+        "unit": unit,
+        "difference_unit": "percentage points" if unit.startswith("%") else unit,
+        "cohort_side": "baseline",
+        "groups": dict(sorted(groups.items())),
+    }
+
+
+PAIRED_RATES = {
+    f"paired-{name.replace('_', '-')}-by-{key}": (
+        f"Matched changes in {METRIC_LABELS.get(field, field.replace('_', ' '))} ({unit}) by baseline {COHORTS[key][0]}.",
+        partial(paired_rate, field=field, exposure=exposure, scale=scale, unit=unit, cohort=COHORTS[key][1]),
+    )
+    for name, (field, exposure, scale, unit) in RATE_METRICS.items()
+    for key in RATE_COHORTS
+}

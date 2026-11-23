@@ -9,6 +9,8 @@ Every number comes from a committed file, and each row names it:
 - the seeded benchmark: `data/runs/*.json` (docs/rules-baseline.md), the newest run for each
   driver, map, preset and weather on a named map (older runs that name their map by hash predate
   the current packs).
+- outside-driver runs: `data/submissions/<date>/<name>.json` and its matching `.json.gz` tape,
+  written by `scripts/driver_submission.mjs publish` after exact offline replay.
 
     uv run scripts/build_results.py           # rewrite data/results.json and the README block
     uv run scripts/build_results.py --check   # fail if either is out of date
@@ -21,17 +23,21 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
+import html
 import json
 import math
 import re
 import subprocess
 import sys
+from datetime import date as calendar_date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "data" / "runs"
 RESULTS = ROOT / "data" / "results"
 RECORDINGS = ROOT / "data" / "recordings"
+SUBMISSIONS = ROOT / "data" / "submissions"
 COMPARISON_SCORES = ROOT / "data" / "score-comparisons"
 OUTPUT = ROOT / "data" / "results.json"
 README = ROOT / "README.md"
@@ -285,7 +291,7 @@ def canonical_member(run: dict, manifest: dict, definition: dict) -> bool:
 
 
 def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = None) -> dict | None:
-    """Validate the declared run settings and bind the manifest to a matching model recording."""
+    """Validate the declared run settings and bind the manifest to any model or local tape."""
 
     def require(ok, message):
         if not ok:
@@ -382,9 +388,16 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         require(canonical_member(run, manifest, CANONICAL[version]), f"run is outside the canonical {version} suite")
     model, prompt = manifest.get("model"), manifest.get("prompt_hash")
     is_model = driver == "jev" or driver.startswith(("decision:", "llm:"))
+    is_local = recording is not None and recording.get("format") == "jev-local-recording/1"
     if is_model:
         require(isinstance(model, str) and model and fingerprint(prompt), "invalid model id or prompt fingerprint")
         require(recording is not None, "model runs need a corresponding recording")
+        require(not is_local, "model runs need a model recording")
+    elif is_local:
+        require(config is None and model is None and fingerprint(prompt), "invalid local agent provenance")
+    else:
+        require(model is None and prompt is None, "non-model runs cannot declare a model or prompt")
+    if is_model or is_local:
         require(header.get("manifest") == manifest, "recording and results disagree on their manifest")
         require(header.get("driver") == driver, "recording driver disagrees with the manifest")
         require(header.get("model") == model and header.get("engine") == engine, "recording model or engine disagrees")
@@ -445,8 +458,6 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
                 ),
                 "benchmark report and recording disagree on per-drive data",
             )
-    else:
-        require(model is None and prompt is None, "non-model runs cannot declare a model or prompt")
     return manifest
 
 
@@ -508,16 +519,75 @@ def published_drive(result: dict, map_sha: str | None = None, comparison: dict |
     return drive
 
 
+def challenge_sources():
+    for path in sorted(RESULTS.glob("*/*.json")):
+        name = f"{path.stem}-{path.parent.name}"
+        yield path, json.loads(path.read_text()), RECORDINGS / f"{name}.json.gz", None
+    for path in sorted(SUBMISSIONS.glob("*/*.json")):
+        entry = json.loads(path.read_text())
+        submitter, digest = entry.get("submitter"), entry.get("recording_sha256")
+        day = path.parent.name
+        try:
+            valid_date = day == calendar_date.fromisoformat(day).isoformat()
+        except ValueError:
+            valid_date = False
+        if (
+            entry.get("format") != "jev-published-submission/1"
+            or not isinstance(submitter, str)
+            or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,38}", submitter)
+            or not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or not valid_date
+            or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", path.stem)
+            or not isinstance(entry.get("report"), dict)
+        ):
+            raise ValueError(f"{rel(path)}: invalid published submission")
+        tape = path.with_suffix(".json.gz")
+        if not tape.is_file():
+            raise ValueError(f"{rel(path)}: the submitted recording is missing")
+        checksum = hashlib.sha256()
+        with tape.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                checksum.update(chunk)
+        if checksum.hexdigest() != digest:
+            raise ValueError(f"{rel(tape)}: the submitted recording checksum has changed")
+        yield path, entry["report"], tape, submitter
+
+
+def submission_driver(path: Path, report: dict, recording: dict, manifest: dict, submitter: str) -> tuple[str, dict]:
+    summary, results = report["summary"], report["results"]
+    driver = summary["brain"]
+    local = recording.get("format") == "jev-local-recording/1"
+    if (
+        not manifest
+        or manifest["format"] != MANIFEST_FORMAT
+        or not (local or recording.get("format") == "jev-model-recording/1")
+        or not re.fullmatch(r"[a-z][a-z0-9_-]{0,39}" if local else r"jev|(?:llm|decision):[a-z0-9_-]+", driver)
+        or (local and driver in BUILT_IN)
+        or len(results) != len(manifest["suite"]["drives"])
+        or not results
+        or summary.get("drives") != len(results)
+        or summary.get("passed") != sum(r["pass"] for r in results)
+        or any(r.get("stopped") or r.get("simulation_error") for r in recording["results"].values())
+    ):
+        raise ValueError(f"{rel(path)}: invalid submitted arena report or recording")
+    return f"submission:{submitter}:{driver}", {
+        "label": driver,
+        "kind": "agent" if local else recording["header"].get("kind"),
+        "model": manifest["model"],
+        "about": f"External submission by @{submitter}",
+        "submitter": submitter,
+    }
+
+
 def challenge_rows(drivers: dict) -> list[dict]:
     rows = []
-    for path in sorted(RESULTS.glob("*/*.json")):
+    for path, published, recording_path, submitter in challenge_sources():
         date, name = path.parent.name, path.stem
-        published = json.loads(path.read_text())
         summary, results = published["summary"], published["results"]
         driver = summary["brain"]
         # (the guarded track, every earlier record's, or the open one: static/js/brain/tracks.js)
         track = summary.get("track") or "guarded"
-        recording_path = RECORDINGS / f"{name}-{date}.json.gz"
         comparison_path = COMPARISON_SCORES / f"{name}-{date}.json"
         comparisons = {}
         row_results, cost, cost_basis, model, requested = results, summary.get("cost_usd") or 0, None, None, None
@@ -526,6 +596,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
         manifest = checked_manifest(path, published, date, recording)
         replay_source = LEGACY_REPLAY_SOURCES.get(recording_path.name) if recording and manifest is None else None
         map_shas = {key: entry["fingerprint"] for key, entry in manifest["maps"].items()} if manifest else {}
+        row_driver = driver
         if recording is not None:
             header = recording["header"]
             map_shas = header.get("maps") or map_shas
@@ -541,11 +612,16 @@ def challenge_rows(drivers: dict) -> list[dict]:
             sources.append(rel(recording_path))
             models, billed, _ = recording["answered"]
             requested = header.get("model")
-            model = models[0] if models else requested
-            if billed is not None:
-                cost, cost_basis = billed, "billed by the provider (usage.cost in each recorded reply)"
-            drivers.setdefault(driver, model_driver(header, model))
-        if comparison_path.is_file():
+            model = models[0] if models and not submitter else requested
+            if submitter:
+                row_driver, info = submission_driver(path, published, recording, manifest, submitter)
+                drivers.setdefault(row_driver, info)
+                cost_basis = "as recorded in the submission"
+            else:
+                if billed is not None:
+                    cost, cost_basis = billed, "billed by the provider (usage.cost in each recorded reply)"
+                drivers.setdefault(driver, model_driver(header, model))
+        if not submitter and comparison_path.is_file():
             comparisons = json.loads(comparison_path.read_text())
             if track != "guarded" or recording is None or comparisons.keys() - recording["results"].keys():
                 raise ValueError(f"{rel(comparison_path)} must match its guarded source recording")
@@ -561,7 +637,8 @@ def challenge_rows(drivers: dict) -> list[dict]:
         ]
         rows.append(
             {
-                "driver": driver,
+                "driver": row_driver,
+                **({"submitter": submitter, "submitted_driver": driver} if submitter else {}),
                 "suite_version": version,
                 "suite": ("open" if track == "open" else "challenges") if full else "pilot",
                 "track": track,
@@ -832,10 +909,17 @@ def readme_cohort(data: dict, rows: list[dict]) -> str:
         share = full.get("model_share") if full else None
         model_id = (full or opened or next(iter(city.values()))).get("model")
         model = f"`{model_id}`" if model_id else "none"
+        label = info["label"]
+        if submitter := info.get("submitter"):
+            label += f" (submitted by @{submitter})"
+            if model_id:
+                model = html.escape(model_id).translate(
+                    str.maketrans({"|": "&#124;", "`": "&#96;", "[": "&#91;", "]": "&#93;", "\r": " ", "\n": " "})
+                )
         # (a driver run on the open track alone: that run's cost, said so)
         cost = money(full["cost_usd"]) if full else f"{money(opened['cost_usd'])} (open track)" if opened else "$0"
         lines.append(
-            f"| {info['label']} | {model} | {challenge} | {open_track} | {home} | {other} | {percent(share) if full and 'model_share' in full else 'n/a'} | {cost} |"
+            f"| {label} | {model} | {challenge} | {open_track} | {home} | {other} | {percent(share) if full and 'model_share' in full else 'n/a'} | {cost} |"
         )
     dates = sorted({r["date"] for r in rows if r["suite"] in ("challenges", "open", "city")})
     plain = lambda values: " or ".join(str(v) for v in sorted(set(values), key=str))  # noqa: E731

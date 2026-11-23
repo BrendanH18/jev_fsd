@@ -59,14 +59,14 @@ claimed before the exits it depends on.
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app | Exited 9 Nov |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it | Exited 10 Nov; 1.8 open |
 | [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Met** on 21 November with the Kitsilano dry city suite (2.5b) |
-| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 15 of 41 moved |
+| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 17 of 41 moved |
 | [4](#phase-4-a-benchmark-that-separates-drivers) | Scores tell drivers apart | Two different models get measurably different scores for a stated reason | Met 20 Nov, on one run each |
 | [5](#phase-5-release-and-presentation) | The project presents what it is | 0.3.0 cut; README leads with results | Exited 20 Nov |
 | [6](#phase-6-grow-the-world-again) | New scenarios, under the admission rule | Each one passes the [checklist](#admission-rule-for-new-scenarios) | Gated (see [order](#expansion-plan-from-20-november)) |
 | [7](#phase-7-results-that-hold-up) | Published results survive the simulator changing, and say how sure they are | A clean checkout verifies every published row on its declared tree, failures included; a repeated comparison reports its spread | New |
 | [8](#phase-8-you-against-the-models) | "Take it yourself" meets the leaderboard | On the public demo, with no key, a visitor drives a challenge and sees their result beside Rules, Jev and Claude Haiku on the same drive | New |
 | [9](#phase-9-a-harder-test) | The test separates drivers by judgment, not by the filter | Rules, Jev and Claude Haiku differ by a stated margin on a set built for it, for reasons the report names, over repeated runs | New |
-| [10](#phase-10-open-to-outside-drivers) | Someone else can bring a driver and a result | An outside driver goes from scaffold to a verified submission bundle offline in one documented path | New |
+| [10](#phase-10-open-to-outside-drivers) | Someone else can bring a driver and a result | An outside driver goes from scaffold to a verified submission bundle offline in one documented path | Verified offline on all 62 drives |
 
 **Scenario freeze.** Lifted on 10 November under [D3](#open-decisions). New scenarios now wait for
 Phase 3's exit and the order below.
@@ -319,6 +319,7 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   Contraflow cyclists now use the registry, bringing the total to **13 of 41**.
   Low sun glare now uses the registry, bringing the total to **14 of 41**.
   Garbage trucks are the first fleet-owned feature on the registry, bringing it to **15 of 41**.
+  Traffic calming and red-light runners now use feature records, bringing it to **17 of 41**.
   The remaining parking and late features are next.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
@@ -362,12 +363,11 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   WebKit, and the cause has never been found. Find the first step where they part. *Moved to 7.4*,
   since it decides which published tapes a reader can replay.
 - [ ] **3.10 Hooks for what still sits outside a record.** (L) The registry now supplies free-drive
-  switches, trace labels and road-test categories. A registered feature still needs entries for the drivers'
-  preferences (`brain/rules.js`, `agents/cautious.js`), checkpoints and re-plans, the coach
+  switches, trace labels, road-test categories, Rules and cautious-agent preferences, and legitimate
+  stop handling. A registered feature still needs entries for checkpoints and re-plans, the coach
   (`sim/drive-score.js`), drawing, the HUD and the perception overlay
   ([list](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)).
-  Add the `rules`, `cautious`, `coach`, `view`, `notice` and `perception` hooks the
-  list names, proved on the registered features with the 3.2 record. Without this, finishing
+  Add the remaining hooks the list names, proved on the registered features with the 3.2 record. Without this, finishing
   3.2 does not meet the exit below.
 - [ ] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in
   `tests/fixtures/parity_cases.json`, and the exact-130° U-turn comparison, in one change that
@@ -594,7 +594,9 @@ past an agreed amount.
   route geometry, verdict, parking and recorded behavior. Trace comparisons identify missing
   ticks and changed verdict fields. Repeated-run reports include each attempt's results and cost.
   The [rate profiles](docs/reference/benchmarks.md#benchmark-profiles-by-route-cohort) add 100 views
-  that account for the distance, time or decisions recorded on each drive.
+  that account for the distance, time or decisions recorded on each drive. The
+  [100 matched rate reports](docs/reference/benchmarks.md#matched-rate-changes) measure changes
+  on complete route pairs within fixed baseline cohorts.
 
 Exit: a clean checkout verifies every published row on its declared tree, failed drives included, and
 a repeated comparison reports its spread.
@@ -642,9 +644,11 @@ ordinary manoeuvre that fails) and that most open-track flags never became viola
   situations together, like the road tests, each passing the admission rule. Run the latitude script of
   4.1 on each before admitting it: a drive in which no ordinary manoeuvre can fail does not separate
   drivers.
-- [ ] **9.4 A hard city slice.** (M) A small fixed set of city routes from the soak's hardest
+- [x] **9.4 A hard city slice.** (M) A small fixed set of city routes from the soak's hardest
   conditions (night, unprotected lefts in fog, snow narrowings, parking). Rules' failures there are
   results under 4.5; the slice becomes blocking once Rules passes it.
+  [Hard city v1](docs/reference/benchmarks.md#hard-city-slice) pins five tuned Kitsilano drives.
+  Rules passed all five on Node 22 and the slice contributes to the benchmark gate.
 
 Exit: on a set built for it, Rules, Jev and Claude Haiku differ by a stated margin over repeated runs
 (7.5), for reasons the report names.
@@ -654,14 +658,17 @@ Exit: on a set built for it, Rules, Jev and Claude Haiku differ by a stated marg
 - [x] **10.1 Check your own driver.** (S) `scripts/check_driver.mjs` runs a trusted custom module
   over the challenges on both tracks and prints its results beside Rules, the cautious agent and
   matching published model runs. See [adding a driver](docs/agents.md).
-- [ ] **10.2 A submission bundle.** (M) A versioned format (the 7.2 manifest, the recording and the
+- [x] **10.2 A submission bundle.** (M) A versioned format (the 7.2 manifest, the recording and the
   results) and an offline verifier that replays it and checks `model_share`, the prompt hash, the tree
   and the cost. Rows submitted from outside are marked as such on the leaderboard.
-  [Bundle creation and offline verification](docs/agents.md#submit-a-verifiable-drive) are in place.
-  Publication and leaderboard attribution remain open.
-- [ ] **10.3 Where recordings live.** (M) `data/recordings/` is 12 MB, and each Claude Haiku run of the
-  62 drives adds about 4.5 MB, so 7.5's repeats alone would add about 15 MB. Slim the tapes or move
-  them ([D8](#open-decisions)).
+  Maintainers [replay and curate a bundle](docs/agents.md#publish-a-verified-submission) for the
+  generated leaderboard. The report binds the tape by SHA-256 and keeps attribution in both
+  versioned rankings and custom runs. A local driver submission replayed exactly across all 62
+  suite `v1` drives.
+- [x] **10.3 Where recordings live.** (M) [New recordings](docs/agents.md#record-a-model-run-and-replay-it-without-a-key)
+  stay in Git and rebuild exact prompt and metadata copies at replay time. Re-encoding the two
+  published Claude Haiku arena tapes and the dry Kitsilano city tape reduced their gzip sizes
+  by 83–84%. A verified 62-drive local-agent submission added about 220 KiB for its report and tape.
 - [x] **10.4 A real-street report.** (S) The Map problem and Driving problem issue templates ask for
   the map, seed, route and a saved run.
 

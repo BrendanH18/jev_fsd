@@ -21,6 +21,9 @@ function ballClause(b) {
 }
 
 export default {
+  rulesCost: (c, snap) => (c.id === "slow_for_ball" && !snap.pedestrian ? -4 : 0),
+  cautious: (snap, eligible) =>
+    snap.ball_in_road?.limit_mps != null && !snap.pedestrian ? eligible.find((c) => c.id === "slow_for_ball") : null,
   key: "balls",
   seen: "ballsSeen",
   calls: "ballCalls",

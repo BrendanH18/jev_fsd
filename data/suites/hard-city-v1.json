@@ -1,0 +1,16 @@
+{
+  "id": "hard-city-v1",
+  "map": "kitsilano",
+  "map_sha": "585df0725632b07b",
+  "route_sha": "1607d4bf5bdaaeec",
+  "seed": 1,
+  "count": 12,
+  "npcs": 40,
+  "legs": [
+    { "id": "hard-city/night-roundabout", "weather": "dry", "hour": 23.5, "park": false, "only": ["s1-4"] },
+    { "id": "hard-city/dawn-junction", "weather": "dry", "hour": 6.5, "park": false, "only": ["s1-7"] },
+    { "id": "hard-city/fog-left", "weather": "fog", "hour": 23.5, "park": false, "only": ["s1-6"] },
+    { "id": "hard-city/snow-narrowing", "weather": "snow", "hour": 15.5, "park": false, "only": ["s1-3"] },
+    { "id": "hard-city/destination-parking", "weather": "dry", "hour": 15.5, "park": true, "only": ["s1-10"] }
+  ]
+}
