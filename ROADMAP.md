@@ -320,10 +320,14 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   Low sun glare now uses the registry, bringing the total to **14 of 41**.
   Garbage trucks are the first fleet-owned feature on the registry, bringing it to **15 of 41**.
   Traffic calming and red-light runners now use feature records, bringing it to **17 of 41**.
-  The remaining parking and late features are next.
+  Crossing guards, Ontario pedestrian crossovers, roadside vehicles, following distance, turn
+  restrictions, high beams and signed turn-on-red bans bring the total to **24 of 41**. The
+  [November batch inventory](docs/validation/november-improvements.md) lists the migrations.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
   under about 150 lines, with the same before-and-after record as 3.2.
+  Fleet scheduling and snapshot assembly have been extracted. The per-vehicle traffic loop still
+  needs to be split.
 - [x] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same
   thing: opt-in, own random stream, one shared conflict test, audit only once seen. State that
   pattern once, and move each feature's detail to the reference docs. Aim for under 12 KB.
@@ -363,12 +367,11 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   WebKit, and the cause has never been found. Find the first step where they part. *Moved to 7.4*,
   since it decides which published tapes a reader can replay.
 - [ ] **3.10 Hooks for what still sits outside a record.** (L) The registry now supplies free-drive
-  switches, trace labels, road-test categories, Rules and cautious-agent preferences, and legitimate
-  stop handling. A registered feature still needs entries for checkpoints and re-plans, the coach
-  (`sim/drive-score.js`), drawing, the HUD and the perception overlay
-  ([list](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)).
-  Add the remaining hooks the list names, proved on the registered features with the 3.2 record. Without this, finishing
-  3.2 does not meet the exit below.
+  switches, trace labels, road-test categories, driver preferences, legitimate stops, checkpoint
+  sharing and restore, routing options and triggers, coach checks, incident and HUD notices, and
+  AI Eyes text. Feature scenery and frame updates have a
+  [browser adapter](static/js/render/feature-views.js). Finish moving feature-specific vehicle
+  meshes and per-frame effects using the same before-and-after proof as 3.2.
 - [ ] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in
   `tests/fixtures/parity_cases.json`, and the exact-130° U-turn comparison, in one change that
   re-baselines routes, so the Python router and NPC paths join lanes the same way.
@@ -457,9 +460,9 @@ New scenarios resume here, one at a time, each passing the rule below, and not b
 ([D3](#open-decisions)). Compound drives are 9.3. Candidates, in no order and none committed:
 
 - Season as a benchmark condition beside weather and `--hour` (1.7).
-- More Canadian cities, only where a city brings a rule or a road layout the eleven lack. First list
-  which provincial rules the current cities already cover (S), so a new city is chosen for its gap,
-  not its name.
+- More Canadian cities, only where a city brings a rule or a road layout the eleven lack. The
+  [provincial coverage and gap analysis](docs/reference/provincial-rules.md) is ready for choosing
+  the next city or rule.
 - ~~Driving with a gamepad or on a touch screen.~~ Done 14 November: `ui/gamepad.js`, `ui/touch.js`
   (input only; see [Gamepad and touch](docs/drive-experience.md#gamepad-and-touch)).
 - ~~Longer drives that string several situations together, like the road tests.~~ Moved to 9.3.

@@ -1,4 +1,5 @@
-import { api, $, h, usd } from "../common.js";
+import { api, $, h, usd, appUrl } from "../common.js";
+import { downloadCsv, downloadJson } from "../ui/export.js";
 import { MapData } from "../map/mapdata.js";
 import { CHALLENGES, CHALLENGE_VERSION } from "./challenges.js";
 import { evaluateChallenge } from "./evaluation.js";
@@ -49,6 +50,48 @@ const runLabel = (run) =>
   `${new Date(run.created_at).toLocaleString()} · ${suiteVersion(run)} · ${run.status} · ${run.results.length} attempts · ${[...new Set(run.results.map((r) => r.mode))].join(" / ")}${run.results.some((r) => r.track === "open") ? " · open track" : ""}`;
 const visibleRun = () => ($("#arena-history").value === "current" ? current : saved[Number($("#arena-history").value)]);
 const baselineRun = () => ($("#arena-baseline").value === "" ? null : saved[Number($("#arena-baseline").value)]);
+const outcome = (r) => (r.stopped ? "stopped" : r.pass ? "pass" : "fail");
+const COLUMNS = [
+  ["Agent / challenge", (r) => `${agentLabel(r.brain)} · ${challengeLabel(r.challenge)}`],
+  ["Outcome", outcome],
+  ["Score", (r) => (r.report.qualified ? r.report.score : null)],
+  ["Ranking score", (r) => driveScores(r).score],
+  ["Time", (r) => r.time_s],
+  ["Incidents", incidentCount],
+  ["Hard brakes", (r) => r.hard_brakes],
+  ["p50", (r) => r.latency_p50_ms],
+  ["Cost", (r) => r.cost_usd],
+];
+let tableSort = null;
+let sortDirection = 1;
+
+function filteredResults(shown) {
+  const query = $("#arena-search").value.trim().toLowerCase();
+  const agent = $("#arena-filter-agent").value;
+  const verdict = $("#arena-filter-outcome").value;
+  const list = shown.filter(
+    (r) =>
+      (!agent || agent === r.brain) &&
+      (!verdict || verdict === outcome(r)) &&
+      (!query ||
+        `${r.brain} ${agentLabel(r.brain)} ${r.challenge} ${challengeLabel(r.challenge)}`
+          .toLowerCase()
+          .includes(query)),
+  );
+  if (tableSort === null) return list;
+  const [, value] = COLUMNS[tableSort];
+  return list
+    .map((r) => [r, value(r)])
+    .sort(([, a], [, b]) => {
+      if (a == null || b == null) return Number(a == null) - Number(b == null);
+      return sortDirection * (typeof a === "number" ? a - b : a.localeCompare(b));
+    })
+    .map(([r]) => r);
+}
+
+function exportName(run, suffix) {
+  return `jev-agent-evaluation-${run.created_at.replace(/[^0-9]+/g, "-").replace(/-$/, "")}.${suffix}`;
+}
 function agents() {
   const selection = new Set([...$("#agents").querySelectorAll("input:checked")].map((i) => i.value));
   $("#agents").replaceChildren(
@@ -112,10 +155,47 @@ function render() {
     baseline = baselineRun(),
     brain = $("#arena-baseline-agent").value;
   const comparisons = shown.map((r) => (baseline ? compareResult(r, baseline, brain) : {}));
+  const byResult = new Map(shown.map((r, i) => [r, comparisons[i]]));
+  const agentFilter = $("#arena-filter-agent");
+  const agentValue = agentFilter.value;
+  agentFilter.replaceChildren(
+    h("option", { value: "" }, "All agents"),
+    ...[...new Set(shown.map((r) => r.brain))].map((id) => h("option", { value: id }, agentLabel(id))),
+  );
+  if ([...agentFilter.options].some((option) => option.value === agentValue)) agentFilter.value = agentValue;
+  const focus = document.activeElement?.dataset.arenaSort;
+  $("#arena-columns").replaceChildren(
+    h(
+      "tr",
+      {},
+      COLUMNS.map(([label], index) =>
+        h(
+          "th",
+          { "aria-sort": tableSort === index ? (sortDirection === 1 ? "ascending" : "descending") : null },
+          h(
+            "button",
+            {
+              type: "button",
+              class: "table-sort",
+              "data-arena-sort": index,
+              onclick: () => {
+                sortDirection = tableSort === index ? -sortDirection : 1;
+                tableSort = index;
+                render();
+              },
+            },
+            label,
+          ),
+        ),
+      ),
+    ),
+  );
+  if (focus !== undefined) $(`[data-arena-sort="${focus}"]`)?.focus();
+  const filtered = filteredResults(shown);
   $("#arena-results").replaceChildren(
-    ...(shown.length
-      ? shown.map((r, i) => {
-          const comparison = comparisons[i],
+    ...(filtered.length
+      ? filtered.map((r) => {
+          const comparison = byResult.get(r),
             before = comparison.before;
           return h(
             "tr",
@@ -191,8 +271,19 @@ function render() {
             ),
           );
         })
-      : [h("tr", {}, h("td", { colspan: 9 }, "Run an evaluation or import a saved export to see results."))]),
+      : [
+          h(
+            "tr",
+            {},
+            h(
+              "td",
+              { colspan: 9 },
+              shown.length ? "No matching drives." : "Run an evaluation or import a saved export to see results.",
+            ),
+          ),
+        ]),
   );
+  $("#arena-csv").disabled = !filtered.length;
   $("#arena-export").disabled = !shown.length || running || editingHistory;
   $("#arena-delete").disabled = $("#arena-history").value === "current" || running || editingHistory;
   const matched = comparisons.filter((c) => c.before).length;
@@ -374,6 +465,8 @@ function busy(value) {
     "arena-mode",
     "arena-track",
     "arena-road-tests",
+    "arena-subset",
+    "arena-custom",
   ])
     if ($(`#${id}`)) $(`#${id}`).disabled = value;
   $("#agents")
@@ -406,6 +499,15 @@ async function run() {
     $("#arena-status").textContent = "Select at least one agent.";
     return;
   }
+  const subset = $("#arena-subset").value;
+  const custom = new Set([...$("#arena-custom").selectedOptions].map((option) => option.value));
+  const pool = [...CHALLENGES, ...($("#arena-road-tests").checked || subset === "custom" ? ROAD_TESTS : [])].filter(
+    (challenge) => !subset || (subset === "custom" ? custom.has(challenge.id) : challenge.map === subset),
+  );
+  if (!pool.length) {
+    $("#arena-status").textContent = "Choose at least one drive.";
+    return;
+  }
   running = true;
   stop = false;
   results = [];
@@ -422,9 +524,12 @@ async function run() {
   busy(true);
   render();
   $("#arena-run").textContent = "Stop evaluation";
+  const progress = $("#arena-progress");
+  progress.max = pool.length * selected.length;
+  progress.value = 0;
+  progress.hidden = false;
   const mode = $("#arena-mode").value,
-    track = $("#arena-track")?.value === "open" ? "open" : "guarded",
-    pool = [...CHALLENGES, ...($("#arena-road-tests")?.checked ? ROAD_TESTS : [])];
+    track = $("#arena-track")?.value === "open" ? "open" : "guarded";
   try {
     for (const challenge of pool) {
       if (stop) break;
@@ -436,6 +541,7 @@ async function run() {
           `${challenge.title} · ${agentLabel(brain)} · ${results.length + 1}/${pool.length * selected.length}`;
         const result = await evaluateChallenge(map, challenge, { brain, mode, track, shouldStop: () => stop });
         results.push({ ...result, suite_version: current.suite_version });
+        progress.value = results.length;
         render();
       }
     }
@@ -487,6 +593,26 @@ async function boot() {
   saved = await history.list();
   historyControls();
   $("#arena-run").addEventListener("click", run);
+  const subset = $("#arena-subset");
+  for (const map of new Set(CHALLENGES.map((challenge) => challenge.map)))
+    subset.append(h("option", { value: map }, map.replaceAll("-", " ")));
+  $("#arena-custom").replaceChildren(
+    ...[...CHALLENGES, ...ROAD_TESTS].map((challenge) => h("option", { value: challenge.id }, challenge.title)),
+  );
+  subset.addEventListener("change", () => {
+    $("#arena-custom-wrap").hidden = subset.value !== "custom";
+  });
+  $("#arena-search").addEventListener("input", render);
+  $("#arena-filter-agent").addEventListener("change", render);
+  $("#arena-filter-outcome").addEventListener("change", render);
+  $("#arena-csv").addEventListener("click", () => {
+    const run = visibleRun();
+    downloadCsv(
+      exportName(run, "csv"),
+      COLUMNS.map(([label]) => label),
+      filteredResults(run.results).map((r) => COLUMNS.map(([, value]) => value(r))),
+    );
+  });
   $("#arena-history").addEventListener("change", () => {
     $("#arena-details").hidden = true;
     render();
@@ -520,14 +646,11 @@ async function boot() {
   $("#arena-export").addEventListener("click", () => {
     const run = visibleRun();
     const suite_version = suiteVersion(run);
-    const blob = new Blob(
-      [JSON.stringify({ ...run, suite_version, results: run.results.map((r) => ({ ...r, suite_version })) })],
-      { type: "application/json" },
-    );
-    const url = URL.createObjectURL(blob),
-      a = h("a", { href: url, download: "jev-agent-evaluation.json" });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadJson(exportName(run, "json"), {
+      ...run,
+      suite_version,
+      results: run.results.map((r) => ({ ...r, suite_version })),
+    });
   });
   $("#arena-load").addEventListener("click", async () => {
     try {
@@ -555,7 +678,8 @@ async function boot() {
           h(
             "p",
             {},
-            `${r.title} · ${r.driver} · ${r.status} · ${r.qualified ? `${r.score}/100` : "practice"}${r.branched ? " · replay branch" : ""}${r.modified ? " · modified challenge" : ""}`,
+            h("a", { href: appUrl("", { challenge: r.config.challenge, drive: "manual" }) }, r.title),
+            ` · ${r.driver} · ${r.status} · ${r.qualified ? `${r.score}/100` : "practice"}${r.branched ? " · replay branch" : ""}${r.modified ? " · modified challenge" : ""}`,
           ),
         )
       : [h("p", {}, "Complete a challenge in the simulator to see your drive here.")]),

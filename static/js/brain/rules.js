@@ -1,14 +1,16 @@
-import { beamChoice } from "../sim/high-beams.js";
 // A brain made of plain code. It proves the harness works without any model and is the fallback
 // when a model call fails or times out. Zero latency, zero cost.
 
 import { desiredSpeed, waitsItsTurn } from "./sensors.js";
 import { comfort } from "../sim/vehicle.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
-import { hooks, junctionPlan } from "../sim/features/index.js";
+import { featureDecisionFields, hooks, junctionPlan } from "../sim/features/index.js";
 
 const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
 const FEATURE_STOP = hooks("rulesStop");
+const BEFORE_STOPS_COST = hooks("rulesCost", "beforeStops");
+const STOPS_COST = hooks("rulesCost", "stops");
+const BEFORE_PASSING_COST = hooks("rulesCost", "beforePassing");
 const FEATURE_COST = hooks("rulesCost");
 
 // Passing a cyclist through the oncoming lane (sim/cyclist-pass.js) costs this to start, so the car
@@ -27,8 +29,7 @@ export class RulesBrain {
     const directive = junctionPlan(i);
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     const v = snap.ego.v;
-    let stop = !!snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12;
-    if (STOP_BEFORE_SIGNAL.some((shouldStop) => shouldStop(snap, eligible))) stop = true;
+    let stop = STOP_BEFORE_SIGNAL.some((shouldStop) => shouldStop(snap, eligible));
     if (i) {
       const brakeDist = (v * v) / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
       if (
@@ -49,12 +50,10 @@ export class RulesBrain {
       if (i.give_way?.wait_for && i.give_way.bumper_to_hold_m < 1.5) stop = true;
     }
     if (snap.following && snap.following.gap_m < 3 && snap.following.speed < 0.5) stop = true;
-    if (snap.pxo?.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
     if (FEATURE_STOP.some((shouldStop) => shouldStop(snap, eligible))) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
-    if (snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 1.5) stop = true;
     if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) stop = true;
     // (parking, the space is the destination: sim/parallel-park.js)
     if (snap.nav?.arrived && snap.parking?.mode !== "in") stop = true;
@@ -67,7 +66,6 @@ export class RulesBrain {
     const toward = l?.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
     const vTurnLane = !l?.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
 
-    const rs = snap.roadside_stop;
     const cp = snap.cyclist_pass;
     let best = null;
     for (const c of eligible) {
@@ -111,7 +109,7 @@ export class RulesBrain {
         cost -= 6;
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
-      if (c.id === "stop_for_turn_restriction") cost -= 30;
+      for (const adjust of BEFORE_STOPS_COST) cost += adjust(c, snap);
       if (
         c.id === "stop_for_oncoming" ||
         c.id === "stop_for_cyclist" ||
@@ -123,11 +121,11 @@ export class RulesBrain {
         c.id === "stop_before_tracks" ||
         c.id === "wait_short_of_junction" ||
         c.id === "stop_for_flagger" ||
-        c.id === "stop_for_crossing_guard" ||
         c.id === "wait_to_merge" ||
         c.id === "let_merge_in"
       )
         cost -= 6;
+      for (const adjust of STOPS_COST) cost += adjust(c, snap);
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
       for (const adjust of FEATURE_COST) cost += adjust(c, snap);
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
@@ -149,10 +147,7 @@ export class RulesBrain {
       // passes only for a clear gain and goes back once there is room. A change under way is
       // finished unless finishing it is no longer safe.
       if (c.change) cost += c.change.offer === "abort" ? 5.0 : 1.0;
-      // Passing a vehicle stopped at the roadside with its lights flashing, the car keeps out of the
-      // lane next to it where there is another going its way, if it can (as a manoeuvre left in that
-      // lane, or into it, costs more than any other).
-      if (rs?.other_lane && c.law.lane === rs.adjacent_delta) cost += 6;
+      for (const adjust of BEFORE_PASSING_COST) cost += adjust(c, snap);
       if (c.law.lane) cost += 2.0 * Math.abs(c.law.lane);
       if (s.min_gap_m < 3) cost += (3 - s.min_gap_m) * 3;
       if (best === null || cost < best.cost) best = { c, cost };
@@ -166,7 +161,7 @@ export class RulesBrain {
         ? "stop"
         : "drive";
     return {
-      ...(snap.headlights ? { headlights: beamChoice(snap) } : {}),
+      ...featureDecisionFields(snap),
       motion,
       candidateId: best ? best.c.id : null,
       meta: { source: "rules", latency_ms: 0, input_tokens: 0, cost_usd: 0, model: "rules" },

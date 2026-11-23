@@ -1,13 +1,9 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
 import { setNightFlash, flashState } from "./night-flash.js";
-import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
-import { redTurnExits } from "./red-turn-signs.js";
-import { auditRestrictions } from "./turn-restrictions.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
 import { auditBusLanes } from "./bus-lanes.js";
-import { auditPxo, ontarioMap } from "./pxo.js";
 import { Vehicle, CAR, comfort } from "./vehicle.js";
 import { headingAt, pointAt, projectPoint } from "../map/mapdata.js";
 import { surfaceDistance } from "../map/junctions.js";
@@ -51,7 +47,6 @@ import {
   doorsOpen,
   streetcarRelation,
 } from "./streetcar.js";
-import { RoadsideStops } from "./roadside.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import {
@@ -84,13 +79,14 @@ import {
   featureObstacle,
   firstHookResult,
   hooks,
+  buildFeatures,
 } from "./features/index.js";
 import { FOLLOWING_STANDSTILL_M } from "./following.js";
-import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guardKey } from "./crossing-guard.js";
 
 // The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
 const OBSTACLES_NEAR = hooks("obstacles");
 const AUDIT_BEFORE_COLLISIONS = hooks("audit", "beforeCollisions");
+const AUDIT_BEFORE_DRIVEWAYS = hooks("audit", "beforeDriveways");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_STREET_HAZARDS = hooks("audit", "streetHazards");
 const AUDIT_REAR_TRAFFIC = hooks("audit", "rearTraffic");
@@ -101,6 +97,8 @@ const HIDES = hooks("hides"),
 const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
+const VISION_RANGE = hooks("visionRange");
+const SIGNED_EXITS = hooks("redEntryBans");
 const CONTROL_AUDIT = hooks("controlAudit");
 const AUDIT_SIGNAL = hooks("auditSignal");
 const RESET_CONTACT = hooks("resetContact");
@@ -250,18 +248,9 @@ const AUDIT_MERGE_MOVING_MPS = 1;
 // of the centre line, the car fails to yield when it cuts off oncoming traffic: once a pass.
 const AUDIT_PASS_SLACK_M = 0.1;
 const AUDIT_PASS_NEAR_M = 30;
-// Stopping for a school crossing guard's STOP sign (sim/crossing-guard.js, Ontario HTA s. 176), with
-// `guards` on: the car heading across the crosswalk owes a stop if, when the sign rose (or on first
-// approach for a later arrival), it could stop with its front 5 m short of the crosswalk's
-// centre braking at up to 3.5 m/s^2 (standing still, it can). It drives past the guard if, owing it,
-// its front goes more than AUDIT_GUARD_PAST_M past that point at more than 1 m/s while the sign is
-// still up or anyone is still in the road. Counted once each time the sign goes up.
-const AUDIT_GUARD_PAST_M = 2;
-const AUDIT_GUARD_MOVING_MPS = 1;
 
 export class World {
-  // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones. `roadside`: how many
-  // vehicles stand at the roadside with their lights flashing at a time (sim/roadside.js).
+  // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
   // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js). `outages`: how
   // many signals at a time have their lights out (sim/outage.js). `park`: the autopilot parks at the
   // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
@@ -274,8 +263,6 @@ export class World {
   // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
   // `scrambles`: signals with a scramble crossing run their
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
-  // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
-  // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
   // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
@@ -286,7 +273,6 @@ export class World {
       weather = "dry",
       vehicleSpec = CAR,
       buses = false,
-      roadside = 0,
       workZones = 0,
       outages = 0,
       park = false,
@@ -295,28 +281,17 @@ export class World {
       closures = 0,
       passCyclists = false,
       scrambles = false,
-      guards = false,
       busLanes = false,
-      pxo = false,
-      restrictions = false,
       nightFlash = false,
-      highBeams = false,
       leftOnRed = false,
-      redTurnSigns = false,
       amberLights = false,
-      followingDistance = false,
       ...features
     } = {},
   ) {
     this.map = map;
-    this.followingDistance = !!followingDistance;
     this.amberLights = !!amberLights;
     this.amberLightsSeen = false;
-    this.highBeams = !!highBeams;
-    this.highBeamsSeen = false;
-    this.pxo = !!pxo && ontarioMap(map);
-    this.pxoSeen = false;
-    this.pxoLines = new Map();
+    buildFeatures(this, features, seed, map, "early");
     this.seed = seed;
     this.visibility = new Visibility(map);
     this.staticObstacles = new StaticObstacles(map);
@@ -375,11 +350,7 @@ export class World {
     this.busLanes = !!busLanes;
     this.busLanesSeen = false;
     this.leftOnRed = !!leftOnRed;
-    this.redTurnSigns = !!redTurnSigns;
     this.leftOnRedSeen = false;
-    this.restrictions = !!restrictions;
-    this.restrictionsSeen = false;
-    this.restrictionEdge = null;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -399,27 +370,18 @@ export class World {
     this.plowsSeen = false; // whether a snow plow has worked the streets this drive (sim/snow-plow.js)
     this.mergeCall = null; // the lane closure the car is at, and what it owes and has counted there
     this.closuresSeen = false; // whether a lane closure has stood this drive (sim/lane-closure.js)
-    this.guardsSeen = false; // whether a crossing guard has held up the STOP sign this drive (sim/crossing-guard.js)
-    this.guardCalls = new Map(); // "<post id>:<stop>" -> { owed, counted }: a crossing guard's sign up
     this.events = []; // transient per-step events for the UI
     this.lastRoad = null;
     this.lastSignal = null;
     this.arrowCheck = null; // the left arrow the car crossed the line on: which way did it go?
     this.spawnEgo();
-    this.roadside = new RoadsideStops(this, { count: roadside, seed });
+    buildFeatures(this, features, seed, map, "afterSpawn");
     this.workZones = new WorkZones(this, { count: workZones, seed });
     this.laneClosures = new LaneClosures(this, { count: closures, seed });
     this.outages = new Outages(this, { count: outages, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
-    this.crossingGuards = new CrossingGuards(this, { enabled: guards, seed });
-    // each registered feature (sim/features/index.js): what it builds, whether it has met the car this
-    // drive, and its audit's calls
-    for (const f of FEATURES) {
-      this[f.property ?? f.key] = f.build(this, { enabled: features[f.key] ?? false, seed, map });
-      this[f.seen] = false;
-      if (f.calls) this[f.calls] = new Map();
-    }
+    buildFeatures(this, features, seed, map);
   }
 
   // Dynamic/roadside objects near (x, y). Buildings use a separate footprint index so traffic
@@ -452,14 +414,7 @@ export class World {
 
   // (`reach`: looking further along a street by clear daylight, see sim/visibility.js PASS_SIGHT_M)
   sees(observer, o, reach = 0) {
-    const enhanced =
-      this.highBeams &&
-      observer === this.ego &&
-      observer.highBeam &&
-      this.visibility.night > 0.5 &&
-      this.weather !== "fog" &&
-      this.weather !== "snow" &&
-      !wellLit(this);
+    const enhanced = VISION_RANGE.some((extend) => extend(this, observer));
     if (!(enhanced ? this.visibility.sees(observer, o, reach, true) : this.visibility.sees(observer, o, reach)))
       return false;
     // (what a registered feature hides from the car: a high snowbank at a corner, say, hides people,
@@ -545,8 +500,6 @@ export class World {
     this.ego.latAccel = 0;
     this._previousStaticPose = poseOf(this.ego);
     this.staticContacts.clear();
-    this.pxoLines?.clear();
-    this.restrictionEdge = null;
     this._lastFront = null;
     this.lastRoad = null;
     this.lastSignal = null;
@@ -575,7 +528,6 @@ export class World {
     this.mergeLetIn = null;
     this.bikePasses?.clear();
     this.cyclistPass = null;
-    this.guardCalls?.clear();
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
@@ -697,7 +649,6 @@ export class World {
   // contacts, where right of way decides and the sim does not judge it.
   audit(dt, road) {
     this.events.length = 0;
-    if (this.highBeams) auditHighBeams(this, dt);
     for (const audit of AUDIT_BEFORE_COLLISIONS) audit(this, dt);
     if (this.auditStatic(dt)) Object.assign(road, this.roadInfo());
     const egoBox = this.ego.obb();
@@ -878,7 +829,8 @@ export class World {
             this.egoStop.controlId === control.id &&
             this.egoStop.completed;
           // Preserve the signs in effect at entry: a schedule changing mid-turn cannot pardon it.
-          const signed = this.redTurnSigns ? { bannedExits: redTurnExits(this, edge.id) } : {};
+          const bannedExits = firstHookResult(SIGNED_EXITS, this, edge.id);
+          const signed = bannedExits ? { bannedExits } : {};
           if (state === "red" && !pending) {
             this.violations.red_lights_run++;
             this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) });
@@ -914,7 +866,7 @@ export class World {
                       ...(leftPending
                         ? {
                             leftAllowed: true,
-                            ...(this.redTurnSigns
+                            ...(bannedExits
                               ? {
                                   leftExits: (this.map.out.get(edge.to) || []).filter((id) =>
                                     leftOnRedAllowed(this, edge.id, id),
@@ -1042,10 +994,8 @@ export class World {
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
     if (this.busLanes) auditBusLanes(this, dt);
-    if (this.pxo) auditPxo(this);
-    if (this.restrictions) auditRestrictions(this);
     for (const audit of AUDIT_AFTER_CALMING) audit(this);
-    if (this.crossingGuards.enabled) this.auditGuards();
+    for (const audit of AUDIT_BEFORE_DRIVEWAYS) audit(this);
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this, frontOnPath);
     for (const audit of AUDIT_STREET_HAZARDS) audit(this);
     for (const audit of AUDIT_REAR_TRAFFIC) audit(this);
@@ -1260,36 +1210,6 @@ export class World {
         cyclist: bike.id,
       });
     }
-  }
-
-  // Driving past a school crossing guard's STOP sign once the stop was owed (see AUDIT_GUARD_PAST_M).
-  auditGuards() {
-    const g = this.crossingGuards,
-      ego = this.ego;
-    for (const post of g.posts) {
-      if (!post.onDuty || Math.abs(post.mid[0] - ego.x) > 60 || Math.abs(post.mid[1] - ego.y) > 60) continue;
-      const holding = post.paddleUp || g.inRoad(post).length > 0;
-      if (!holding) continue;
-      const d = frontToCentre(post.cw, ego);
-      if (d === null || d < -2) continue;
-      const key = guardKey(post);
-      let rec = this.guardCalls.get(key);
-      // (the manager remembers whether the car could stop when the sign rose)
-      if (!rec && this.sees(ego, post.guard))
-        this.guardCalls.set(key, (rec = { owed: g.owes(post, ego, d - GUARD_STOP_M), counted: false }));
-      if (rec?.owed && !rec.counted && d < GUARD_STOP_M - AUDIT_GUARD_PAST_M && ego.v > AUDIT_GUARD_MOVING_MPS) {
-        rec.counted = true;
-        this.violations.guard_violations = (this.violations.guard_violations || 0) + 1;
-        this.events.push({
-          type: "passed_crossing_guard",
-          guard: post.id,
-          crosswalk: post.cw.id,
-          in_road: g.inRoad(post).length,
-        });
-      }
-    }
-    if (this.guardCalls.size > 20)
-      for (const key of [...this.guardCalls.keys()].slice(0, 10)) this.guardCalls.delete(key);
   }
 
   // Going past a flagger's STOP paddle once the stop was owed (see AUDIT_FLAGGER_PAST_M).

@@ -13,25 +13,53 @@ export class Panel {
     this.body = $("#panel-body");
     this.tab = "state";
     this.last = null;
+    this.latest = null;
+    this.displayed = null;
+    this.pinned = false;
     this.dirty = true;
+    this.inlineMode = null;
+    this.snapshotDecision = null;
     this.toggles = [...document.querySelectorAll("[data-inspect]")];
     for (const button of this.toggles) button.addEventListener("click", () => this.toggle());
     $("#panel-close").addEventListener("click", () => this.toggle(false));
-    for (const b of this.el.querySelectorAll(".tabs button")) {
-      b.addEventListener("click", () => {
-        this.tab = b.dataset.tab;
-        for (const o of this.el.querySelectorAll(".tabs button")) o.classList.toggle("active", o === b);
-        this.dirty = true;
-        this.render();
+    this.tabButtons = [...this.el.querySelectorAll(".tabs [role='tab'], .tabs button")];
+    for (const b of this.tabButtons) {
+      b.addEventListener("click", () => this.selectTab(b.dataset.tab));
+      b.addEventListener("keydown", (ev) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) return;
+        ev.preventDefault();
+        const i = this.tabButtons.indexOf(b);
+        const next =
+          ev.key === "Home"
+            ? this.tabButtons[0]
+            : ev.key === "End"
+              ? this.tabButtons.at(-1)
+              : this.tabButtons[
+                  (i + (ev.key === "ArrowLeft" ? -1 : 1) + this.tabButtons.length) % this.tabButtons.length
+                ];
+        this.selectTab(next.dataset.tab, true);
       });
     }
+    this.pinButton = $("#pin-decision");
+    this.pinButton?.addEventListener("click", () => this.togglePin());
+    $("#copy-json")?.addEventListener("click", () => this.copyJson());
     $("#copy-curl").addEventListener("click", () => this.copyCurl());
-    $("#save-snapshot").addEventListener("click", () => this.saveSnapshot());
-    $("#edit-style").addEventListener("click", () => {
-      const next = prompt("driving_style (sent with every request):", this.autopilot.style);
-      if (next?.trim()) {
-        this.autopilot.style = next.trim();
-        this.hud.badge("driving style updated", "", 900);
+    $("#save-snapshot").addEventListener("click", () => this.openInline("snapshot"));
+    $("#edit-style").addEventListener("click", () => this.openInline("style"));
+    this.inlineForm = $("#panel-inline");
+    this.inlineLabel = $("#panel-inline-label");
+    this.inlineInput = $("#panel-inline-input");
+    this.inlineSubmit = $("#panel-inline-submit");
+    $("#panel-inline-cancel")?.addEventListener("click", () => this.closeInline());
+    this.inlineForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      this.submitInline();
+    });
+    this.inlineInput?.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.closeInline();
       }
     });
     $("#show-candidates").addEventListener("change", (ev) => {
@@ -40,9 +68,110 @@ export class Panel {
     this.lastRender = 0;
   }
 
+  selectTab(name, focus = false) {
+    this.tab = name;
+    for (const o of this.tabButtons) {
+      const selected = o.dataset.tab === name;
+      o.classList.toggle("active", selected);
+      o.setAttribute("aria-selected", String(selected));
+      o.tabIndex = selected ? 0 : -1;
+      if (selected && focus) o.focus();
+    }
+    // Keep the selected tab and its content in sync when live decisions are throttled.
+    this.lastRender = -Infinity;
+    this.dirty = true;
+    this.render();
+  }
+
+  togglePin(force) {
+    this.pinned = force === undefined ? !this.pinned : !!force;
+    if (this.pinned && this.displayed) this.last = this.displayed;
+    if (this.pinButton) {
+      this.pinButton.classList.toggle("on", this.pinned);
+      this.pinButton.setAttribute("aria-pressed", String(this.pinned));
+      this.pinButton.textContent = this.pinned ? "Pinned" : "Pin";
+    }
+    if (!this.pinned && this.latest !== this.last) {
+      this.last = this.latest;
+      this.dirty = true;
+      this.render();
+    }
+  }
+
+  openInline(mode) {
+    if (!this.inlineForm || !this.inlineInput) return;
+    if (mode === "snapshot") {
+      const d = this.displayed;
+      if (!d || !Object.keys(d.questions || {}).length) {
+        this.hud.badge("nothing to save (local decision)", "", 1200);
+        return;
+      }
+      this.snapshotDecision = d;
+      this.inlineMode = "snapshot";
+      this.inlineLabel.textContent = "Snapshot name (data/snapshots/<name>.json)";
+      this.inlineInput.value = `snap-${Date.now() % 100000}`;
+      this.inlineInput.placeholder = "snapshot-name";
+      this.inlineSubmit.textContent = "Save";
+    } else {
+      this.snapshotDecision = null;
+      this.inlineMode = "style";
+      this.inlineLabel.textContent = "driving_style (sent with every request)";
+      this.inlineInput.value = this.autopilot.style || "";
+      this.inlineInput.placeholder = "calm, smooth, cautious";
+      this.inlineSubmit.textContent = "Apply";
+    }
+    this.inlineForm.hidden = false;
+    this.inlineInput.focus();
+    this.inlineInput.select();
+  }
+
+  closeInline() {
+    this.inlineMode = null;
+    this.snapshotDecision = null;
+    if (this.inlineForm) this.inlineForm.hidden = true;
+  }
+
+  async submitInline() {
+    const mode = this.inlineMode;
+    const value = this.inlineInput?.value.trim();
+    if (!mode) return;
+    if (mode === "style") {
+      if (value) {
+        this.autopilot.style = value;
+        this.hud.badge("driving style updated", "", 900);
+      }
+      this.closeInline();
+      return;
+    }
+    if (mode === "snapshot") {
+      const d = this.snapshotDecision;
+      if (!value || !d || !Object.keys(d.questions || {}).length) {
+        this.closeInline();
+        return;
+      }
+      this.inlineSubmit.disabled = true;
+      try {
+        const res = await api("/api/snapshot/save", {
+          name: value,
+          state: d.state,
+          questions: d.questions,
+          tick: 0,
+          epoch: 0,
+        });
+        this.hud.badge(`saved ${res.saved}`, "", 1500);
+        this.closeInline();
+      } catch (err) {
+        this.hud.badge(`save failed: ${err.message}`, "", 2000);
+      } finally {
+        this.inlineSubmit.disabled = false;
+      }
+    }
+  }
+
   toggle(force) {
     const open = force === undefined ? this.el.hidden : force;
     this.el.hidden = !open;
+    if (!open) this.closeInline();
     for (const button of this.toggles) {
       button.classList.toggle("on", open);
       button.setAttribute("aria-expanded", String(open));
@@ -54,6 +183,8 @@ export class Panel {
   }
 
   set(decision) {
+    this.latest = decision;
+    if (this.pinned && this.last) return;
     this.last = decision;
     this.dirty = true;
   }
@@ -63,6 +194,8 @@ export class Panel {
     this.lastRender = now;
     this.dirty = false;
     const d = this.last;
+    this.displayed = d;
+    this.displayedTab = this.tab;
     if (!d) {
       this.body.replaceChildren(h("pre", {}, "No decision yet. Set a destination and press J."));
       return;
@@ -164,8 +297,23 @@ export class Panel {
     return [kv];
   }
 
+  async copyJson() {
+    const d = this.displayed;
+    if (!d) return;
+    const tab = this.displayedTab;
+    const payload =
+      tab === "state"
+        ? d.state
+        : tab === "questions"
+          ? llmRequest(d) || d.questions
+          : tab === "answers"
+            ? { motion: d.motion, chosenId: d.chosenId, answers: d.answers }
+            : { meta: d.meta, flags: d.flags, totals: this.autopilot.totals };
+    this.hud.badge((await copyText(JSON.stringify(payload, null, 2))) ? `copied ${tab} JSON` : "copy failed", "", 900);
+  }
+
   async copyCurl() {
-    const d = this.last;
+    const d = this.displayed;
     if (!d) return;
     // LLM and decision endpoints record their (credential-free) URL and key variable in the trace.
     const request = d.trace?.request?.url ? d.trace.request : null;
@@ -179,21 +327,5 @@ export class Panel {
       curl = `curl -s https://api.typesafe.ai/v1/systemone \\\n  -H "Authorization: Bearer $TYPESAFE_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '${body.replace(/'/g, "'\\''")}'`;
     }
     this.hud.badge((await copyText(curl)) ? "copied curl" : "copy failed", "", 900);
-  }
-
-  async saveSnapshot() {
-    const d = this.last;
-    if (!d || !Object.keys(d.questions || {}).length) {
-      this.hud.badge("nothing to save (local decision)", "", 1200);
-      return;
-    }
-    const name = prompt("Snapshot name (data/snapshots/<name>.json):", `snap-${Date.now() % 100000}`);
-    if (!name) return;
-    try {
-      const res = await api("/api/snapshot/save", { name, state: d.state, questions: d.questions, tick: 0, epoch: 0 });
-      this.hud.badge(`saved ${res.saved}`, "", 1500);
-    } catch (err) {
-      this.hud.badge(`save failed: ${err.message}`, "", 2000);
-    }
   }
 }

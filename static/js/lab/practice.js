@@ -1,6 +1,7 @@
 import { failures } from "../bench/metrics.js";
 
 export const PRACTICE_KEY = "jev-fsd-practice-v1";
+export const PRACTICE_BACKUP_FORMAT = "jev-practice-backup/1";
 const CITIES = {
   kitsilano: "Vancouver",
   mount_pleasant: "Vancouver",
@@ -14,6 +15,34 @@ const CITIES = {
   winnipeg: "Winnipeg",
   edmonton: "Edmonton",
   saskatoon: "Saskatoon",
+};
+const NEIGHBOURHOODS = {
+  kitsilano: "Kitsilano",
+  mount_pleasant: "Mount Pleasant",
+  victoria: "Old Town",
+  toronto: "The Annex",
+  montreal: "Le Plateau",
+  calgary: "Beltline",
+  ottawa: "Centretown",
+  quebec_city: "Saint-Roch",
+  halifax: "Downtown",
+  winnipeg: "Exchange District",
+  edmonton: "Old Strathcona",
+  saskatoon: "Downtown & Nutana",
+};
+const PROVINCES = {
+  kitsilano: "British Columbia",
+  mount_pleasant: "British Columbia",
+  victoria: "British Columbia",
+  toronto: "Ontario",
+  ottawa: "Ontario",
+  montreal: "Québec",
+  quebec_city: "Québec",
+  calgary: "Alberta",
+  edmonton: "Alberta",
+  halifax: "Nova Scotia",
+  winnipeg: "Manitoba",
+  saskatoon: "Saskatchewan",
 };
 const normalize = (value) =>
   String(value || "")
@@ -29,6 +58,14 @@ export function challengeCity(challenge) {
   return CITIES[challenge.map] || challenge.map.replaceAll("_", " ");
 }
 
+export function challengeNeighbourhood(challenge) {
+  return NEIGHBOURHOODS[challenge.map] || challenge.map.replaceAll("_", " ");
+}
+
+export function challengeProvince(challenge) {
+  return PROVINCES[challenge.map] || "";
+}
+
 export function practiceStatus(challenge, records = {}) {
   const record = Object.hasOwn(records, challenge.id) ? records[challenge.id] : null;
   if (!record || record.version !== version(challenge)) return "untried";
@@ -42,11 +79,40 @@ export function filterChallenges(challenges, filters = {}, records = {}) {
     return (
       terms.every((term) => haystack.includes(term)) &&
       (!filters.city || challengeCity(c) === filters.city) &&
+      (!filters.province || challengeProvince(c) === filters.province) &&
       (!filters.skill || c.difficulty === filters.skill) &&
       (!filters.weather || c.weather === filters.weather) &&
       (!filters.progress || practiceStatus(c, records) === filters.progress)
     );
   });
+}
+
+function sanitizePracticeRecords(parsed) {
+  const valid = (r) =>
+    r &&
+    Number.isInteger(r.version) &&
+    r.version > 0 &&
+    Number.isInteger(r.attempts) &&
+    r.attempts > 0 &&
+    typeof r.completed === "boolean" &&
+    (r.best_score === null || (finite(r.best_score) && r.best_score <= 100)) &&
+    date(r.last_at);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? Object.fromEntries(
+        Object.entries(parsed)
+          .filter(([id, r]) => /^[a-z0-9-]+$/.test(id) && valid(r))
+          .map(([id, r]) => [
+            id,
+            {
+              version: r.version,
+              attempts: r.attempts,
+              completed: r.completed,
+              best_score: r.best_score,
+              last_at: r.last_at,
+            },
+          ]),
+      )
+    : {};
 }
 
 // Progress is compact and independent of the last twenty full drive reports.
@@ -63,33 +129,7 @@ export function readPractice(storage) {
   } catch {
     parsed = {};
   }
-  const valid = (r) =>
-    r &&
-    Number.isInteger(r.version) &&
-    r.version > 0 &&
-    Number.isInteger(r.attempts) &&
-    r.attempts > 0 &&
-    typeof r.completed === "boolean" &&
-    (r.best_score === null || (finite(r.best_score) && r.best_score <= 100)) &&
-    date(r.last_at);
-  const records =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? Object.fromEntries(
-          Object.entries(parsed)
-            .filter(([id, r]) => /^[a-z0-9-]+$/.test(id) && valid(r))
-            .map(([id, r]) => [
-              id,
-              {
-                version: r.version,
-                attempts: r.attempts,
-                completed: r.completed,
-                best_score: r.best_score,
-                last_at: r.last_at,
-              },
-            ]),
-        )
-      : {};
-  return { records, available: true };
+  return { records: sanitizePracticeRecords(parsed), available: true };
 }
 
 // Reports and manual progress use the same arrival, safety and parking verdict.
@@ -171,6 +211,37 @@ const validBest = (b) =>
   Number.isInteger(b.fails) &&
   b.fails >= 0 &&
   date(b.at);
+
+function sanitizeRoadTestRecords(parsed) {
+  const valid = (r) =>
+    r &&
+    Number.isInteger(r.version) &&
+    r.version > 0 &&
+    Number.isInteger(r.attempts) &&
+    r.attempts > 0 &&
+    Number.isInteger(r.passes) &&
+    r.passes >= 0 &&
+    r.passes <= r.attempts &&
+    validBest(r.best) &&
+    date(r.last_at);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? Object.fromEntries(
+        Object.entries(parsed)
+          .filter(([id, r]) => /^[a-z0-9-]+$/.test(id) && valid(r))
+          .map(([id, r]) => [
+            id,
+            {
+              version: r.version,
+              attempts: r.attempts,
+              passes: r.passes,
+              best: { pass: r.best.pass, demerits: r.best.demerits, fails: r.best.fails, at: r.best.at },
+              last_at: r.last_at,
+            },
+          ]),
+      )
+    : {};
+}
+
 export function readRoadTests(storage) {
   let raw;
   try {
@@ -184,35 +255,7 @@ export function readRoadTests(storage) {
   } catch {
     parsed = {};
   }
-  const valid = (r) =>
-    r &&
-    Number.isInteger(r.version) &&
-    r.version > 0 &&
-    Number.isInteger(r.attempts) &&
-    r.attempts > 0 &&
-    Number.isInteger(r.passes) &&
-    r.passes >= 0 &&
-    r.passes <= r.attempts &&
-    validBest(r.best) &&
-    date(r.last_at);
-  const records =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? Object.fromEntries(
-          Object.entries(parsed)
-            .filter(([id, r]) => /^[a-z0-9-]+$/.test(id) && valid(r))
-            .map(([id, r]) => [
-              id,
-              {
-                version: r.version,
-                attempts: r.attempts,
-                passes: r.passes,
-                best: { pass: r.best.pass, demerits: r.best.demerits, fails: r.best.fails, at: r.best.at },
-                last_at: r.last_at,
-              },
-            ]),
-        )
-      : {};
-  return { records, available: true };
+  return { records: sanitizeRoadTestRecords(parsed), available: true };
 }
 export function roadTestRecord(test, records = {}) {
   const record = Object.hasOwn(records, test.id) ? records[test.id] : null;
@@ -246,4 +289,75 @@ export function saveRoadTest(test, report, sheet, storage) {
     state.available = false;
   }
   return { ...state, outcome };
+}
+
+export function exportPracticeBackup(storage) {
+  const practice = readPractice(storage);
+  const roadTests = readRoadTests(storage);
+  if (!practice.available || !roadTests.available) return null;
+  return {
+    format: PRACTICE_BACKUP_FORMAT,
+    exported_at: new Date().toISOString(),
+    practice: practice.records,
+    road_tests: roadTests.records,
+  };
+}
+
+export function importPracticeBackup(data, storage, confirmReplace = () => false) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Backup file must be a JSON object.");
+  }
+  if (data.format !== PRACTICE_BACKUP_FORMAT) {
+    throw new Error(`Unsupported backup format (expected ${PRACTICE_BACKUP_FORMAT}).`);
+  }
+  for (const field of ["practice", "road_tests"]) {
+    const records = data[field];
+    if (!Object.hasOwn(data, field) || !records || typeof records !== "object" || Array.isArray(records)) {
+      throw new Error(`Backup field ${field} must contain a record object.`);
+    }
+  }
+  const practiceRecords = sanitizePracticeRecords(data.practice);
+  const roadTestRecords = sanitizeRoadTestRecords(data.road_tests);
+  const rawPracticeCount = Object.keys(data.practice).length;
+  const rawRoadTestCount = Object.keys(data.road_tests).length;
+  if (
+    rawPracticeCount > Object.keys(practiceRecords).length ||
+    rawRoadTestCount > Object.keys(roadTestRecords).length
+  ) {
+    throw new Error("Backup contains invalid practice or road-test entries.");
+  }
+  const store = storage || globalThis.localStorage;
+  const keys = [PRACTICE_KEY, ROAD_TEST_KEY];
+  const previous = keys.map((key) => store.getItem(key));
+  if (previous.some((raw) => raw !== null && raw !== "{}") && !confirmReplace()) return null;
+  try {
+    store.setItem(PRACTICE_KEY, JSON.stringify(practiceRecords));
+    store.setItem(ROAD_TEST_KEY, JSON.stringify(roadTestRecords));
+  } catch (error) {
+    // A failed Web Storage write leaves its own key intact. Restore any key that changed.
+    for (const [i, key] of keys.entries()) {
+      if (store.getItem(key) === previous[i]) continue;
+      if (previous[i] === null) store.removeItem(key);
+      else store.setItem(key, previous[i]);
+    }
+    throw error;
+  }
+  return {
+    practice: practiceRecords,
+    roadTests: roadTestRecords,
+    practiceCount: Object.keys(practiceRecords).length,
+    roadTestCount: Object.keys(roadTestRecords).length,
+    available: true,
+  };
+}
+
+export function resetPractice(storage) {
+  try {
+    const store = storage || globalThis.localStorage;
+    store.removeItem(PRACTICE_KEY);
+    store.removeItem(ROAD_TEST_KEY);
+    return { available: true };
+  } catch {
+    return { available: false };
+  }
 }

@@ -1,3 +1,4 @@
+import { reverserNotice } from "../driveway-reversers.js";
 import { r1 } from "../../common.js";
 import {
   DrivewayReversers,
@@ -25,12 +26,72 @@ function reversingClause(r) {
 }
 
 export default {
+  checkpoint(world) {
+    if (world.driveways) world.driveways.world = world;
+  },
   rulesStop: (snap) => snap.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 1.5,
   legitimateStop: (snap) => snap?.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 8,
   rulesCost: (c, snap) => (c.id === "yield_to_reversing" && snap.reversing_vehicle?.wait ? -6 : 0),
   cautious: (snap, eligible) =>
     snap.reversing_vehicle?.wait ? eligible.find((c) => c.id === "yield_to_reversing") : null,
   key: "driveways",
+  coach: {
+    init: () => ({
+      driveways: false,
+      reversingConflicts: 0,
+    }),
+    seen: "driveways",
+    events: {
+      reversing_conflict(score, ev) {
+        score.reversingConflicts++;
+        score.incident(
+          "reversing_conflict",
+          ev.reason === "close_pass"
+            ? "Squeezed past a car backing out of a driveway"
+            : "Did not stop for a car backing out into the lane",
+          { car: ev.with, clearance_m: ev.clearance_m },
+        );
+      },
+    },
+    reports: [
+      {
+        at: "end",
+        order: 8,
+        read: (score) => (score.driveways ? { reversing_conflicts: score.reversingConflicts } : {}),
+      },
+    ],
+    deductions: [{ at: "safety", order: 5, counter: "reversingConflicts", weight: 20 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 14,
+        when: (score) => score.reversingConflicts,
+        text: "Watch driveways for reversing lights. Slow down when a car is backing out ahead, and once it is coming into your lane, stop and give it room to finish; never try to squeeze past behind it.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 2,
+    duration: 2500,
+    read: (world, autopilot) =>
+      world.driveways.enabled ? reverserNotice(autopilot.enabled ? autopilot.snap : null, world) : null,
+    style: (line) => (line.wait ? "safety" : ""),
+  },
+  eventBadges: {
+    reversing_conflict: (event) =>
+      event.reason === "close_pass" ? "SQUEEZED PAST A CAR BACKING OUT" : "DID NOT STOP FOR A CAR BACKING OUT",
+  },
+  perceptionLine(snap) {
+    const rv = snap.reversing_vehicle;
+    const text = rv
+      ? `Car backing out ${Math.round(rv.gap_m)} m ahead: ${rv.wait ? `give it room${rv.bumper_to_stop_m > 0.5 ? `, stop in ${Math.round(rv.bumper_to_stop_m)} m` : ""}` : `slow to ${Math.round(rv.limit_mps * 3.6)} km/h`}`
+      : null;
+    return text ? { order: 21, label: "Driveway", text } : null;
+  },
+  perceptionRejections: {
+    passes_reversing_vehicle_too_close: "Car backing out",
+  },
   seen: "drivewaysSeen",
   calls: "drivewayCalls",
   build: (world, options) => new DrivewayReversers(world, options),

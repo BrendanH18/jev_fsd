@@ -115,14 +115,13 @@ export class DriveMetrics {
       // (only for a drive in which traffic passes cyclists: sim/cyclist-pass.js)
       ...(world.passCyclists ? { close_passes: v.close_passes || 0 } : {}),
       ...(world.busLanesSeen ? { bus_lane_driving: v.bus_lane_driving || 0 } : {}),
-      ...(world.highBeamsSeen ? { glare_seconds: r(v.glare_seconds || 0, 2) } : {}),
+      ...featureMetrics(world, v, "headlights"),
       ...featureMetrics(world, v, "afterHeadlights"),
-      ...(world.pxoSeen ? { pxo_early_goes: v.pxo_early_goes || 0 } : {}),
-      ...(world.restrictionsSeen ? { illegal_turns: v.illegal_turns || 0 } : {}),
+      ...featureMetrics(world, v, "pxo"),
+      ...featureMetrics(world, v, "turns"),
       ...featureMetrics(world, v, "afterRestrictions"),
       ...featureMetrics(world, v, "afterCalming"),
-      // (only for a drive a school crossing guard held up the STOP sign in: sim/crossing-guard.js)
-      ...(world.guardsSeen ? { guard_violations: v.guard_violations || 0 } : {}),
+      ...featureMetrics(world, v, "guards"),
       ...featureMetrics(world, v, "beforeRunner"),
       // (and the registered features' metrics, each only for a drive in which the feature met the car:
       // sim/features/index.js; the car coming near a pothole, say)
@@ -182,13 +181,13 @@ export function failures(m) {
   if (m.merge_cut_ins) f.push("merged out of turn");
   if (m.close_passes) f.push("passed a cyclist too close");
   if (m.bus_lane_driving > 1) f.push("drove in a reserved bus lane");
-  if (m.glare_seconds > 0.8) f.push("failed to dip high beams");
+  f.push(...featureFailures(m, "headlights"));
   f.push(...featureFailures(m, "afterHeadlights"));
-  if (m.illegal_turns) f.push("made a prohibited turn");
+  f.push(...featureFailures(m, "turns"));
   f.push(...featureFailures(m, "afterRestrictions"));
-  if (m.pxo_early_goes) f.push("left a pedestrian crossover before the far curb");
+  f.push(...featureFailures(m, "pxo"));
   f.push(...featureFailures(m, "afterCalming"));
-  if (m.guard_violations) f.push("drove past a crossing guard's stop sign");
+  f.push(...featureFailures(m, "guards"));
   f.push(...featureFailures(m, "beforeRunner"));
   f.push(...featureFailures(m, "driveways"));
   f.push(...featureFailures(m, "streetHazards"));

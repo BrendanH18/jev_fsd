@@ -1,10 +1,16 @@
 // 2D overview: roads, route, cars, destination. Click to set a destination.
 
+const EMERGENCY_KINDS = new Set(["ambulance", "fire_truck"]);
+const TRANSIT_KINDS = new Set(["bus", "school_bus", "streetcar", "train"]);
+
 export class Minimap {
-  constructor(canvas, map, onClick) {
+  constructor(canvas, map, onClick, { onClearRoute = null, clearButton = null } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.map = map;
+    this._onClearRoute = onClearRoute;
+    this.clearButton = clearButton || canvas.parentElement?.querySelector("#clear-route") || null;
+    this.clearButton?.addEventListener("click", () => this._onClearRoute?.());
     const [x0, y0, x1, y1] = map.extent;
     this.x0 = x0;
     this.y0 = y0;
@@ -25,6 +31,10 @@ export class Minimap {
       const py = (ev.clientY - rect.top) * (canvas.height / rect.height);
       onClick(this.toWorld(px, py));
     });
+  }
+
+  onClearRoute(fn) {
+    this._onClearRoute = fn;
   }
 
   toPx(x, y) {
@@ -67,9 +77,35 @@ export class Minimap {
     }
   }
 
+  drawCompass(c) {
+    const x = this.canvas.width - 14,
+      y = 18;
+    c.save();
+    c.fillStyle = "rgba(11, 14, 19, 0.72)";
+    c.beginPath();
+    c.arc(x, y, 10, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#d6e2ea";
+    c.beginPath();
+    c.moveTo(x, y - 8);
+    c.lineTo(x - 3, y - 3);
+    c.lineTo(x + 3, y - 3);
+    c.closePath();
+    c.fill();
+    c.font = "700 8px system-ui, sans-serif";
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.fillText("N", x, y + 3.5);
+    c.restore();
+  }
+
   draw({ ego, npcs = [], route = null, destination = null }) {
     const c = this.ctx;
     c.drawImage(this.roads, 0, 0);
+    if (this.clearButton) {
+      const shouldHide = !route || !this._onClearRoute;
+      if (this.clearButton.hidden !== shouldHide) this.clearButton.hidden = shouldHide;
+    }
     if (route) {
       c.strokeStyle = "#4cc2ff";
       c.lineWidth = 2;
@@ -80,10 +116,32 @@ export class Minimap {
       });
       c.stroke();
     }
-    c.fillStyle = "#ffd166";
     for (const n of npcs) {
       const [px, py] = this.toPx(n.x, n.y);
-      c.fillRect(px - 1.5, py - 1.5, 3, 3);
+      if (EMERGENCY_KINDS.has(n.kind)) {
+        if (n.siren) {
+          c.strokeStyle = "rgba(255, 79, 216, 0.65)";
+          c.lineWidth = 1.2;
+          c.beginPath();
+          c.arc(px, py, 4.5, 0, Math.PI * 2);
+          c.stroke();
+        }
+        c.fillStyle = "#ff4fd8";
+        c.beginPath();
+        c.arc(px, py, 2.5, 0, Math.PI * 2);
+        c.fill();
+      } else if (TRANSIT_KINDS.has(n.kind)) {
+        c.fillStyle = "#38d9f5";
+        c.fillRect(px - 2, py - 2, 4, 4);
+      } else if (n.kind === "bike") {
+        c.fillStyle = "#9be564";
+        c.beginPath();
+        c.arc(px, py, 1.7, 0, Math.PI * 2);
+        c.fill();
+      } else {
+        c.fillStyle = "#ffd166";
+        c.fillRect(px - 1.5, py - 1.5, 3, 3);
+      }
     }
     if (destination) {
       const [px, py] = this.toPx(destination[0], destination[1]);
@@ -107,5 +165,6 @@ export class Minimap {
       c.fill();
       c.restore();
     }
+    this.drawCompass(c);
   }
 }

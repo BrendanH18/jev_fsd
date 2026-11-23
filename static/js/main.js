@@ -1,8 +1,5 @@
 import { nightFlashNotice } from "./sim/night-flash.js";
 import { npcHighBeam } from "./sim/high-beams.js";
-import { buildPxos } from "./render/pxo.js";
-let pxoRendering = null;
-import { buildRestrictions } from "./render/turn-restrictions.js";
 // Bootstrap: load the map, build the scene, wire the UI, run the loop.
 
 import { api, $, h } from "./common.js";
@@ -10,6 +7,8 @@ import { MapData } from "./map/mapdata.js";
 import { Route } from "./map/route.js";
 import { World } from "./sim/world.js";
 import { SceneView } from "./render/scene.js";
+import { mountFeatureViews } from "./render/feature-views.js";
+import { announceFeatureNotices, featureEventBadge, featureRouteOptions } from "./sim/features/index.js";
 import { buildRoads, buildScrambleMarkings } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
@@ -29,52 +28,26 @@ import {
   streetcarRelation,
 } from "./sim/streetcar.js";
 import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
-import { ROADSIDE_NAMES, passLimit, roadsideRelation } from "./sim/roadside.js";
 import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
 import { workZoneNotice } from "./sim/work-zone.js";
 import { createLaneClosureMesh, syncLaneClosure } from "./render/lane-closure.js";
 import { laneClosureNotice } from "./sim/lane-closure.js";
 import { outageNotice } from "./sim/outage.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
-import { vanNotice } from "./sim/double-parked.js";
 import { isPlow, plowNotice } from "./sim/snow-plow.js";
 import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
 import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
 import { hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
 import { cyclistNotice } from "./sim/cyclist-pass.js";
-import { calmingNotice } from "./sim/traffic-calming.js";
-import { sunGlareNotice, egoGlare } from "./sim/sun-glare.js";
-import { SunGlareView } from "./render/sun-glare.js";
 import { isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
 import { buildBusLanes } from "./render/bus-lanes.js";
-import { buildContraflow } from "./render/contraflow.js";
-import { contraflowNotice } from "./sim/contraflow.js";
-import { runnerNotice } from "./sim/red-light-runner.js";
-import { buildDriveways, syncReverseLamps } from "./render/driveway-reversers.js";
-import { reverserNotice } from "./sim/driveway-reversers.js";
-import { buildPotholes, potholeJolt } from "./render/potholes.js";
-import { potholeNotice } from "./sim/potholes.js";
-import { BallView } from "./render/ball-chase.js";
-import { ballNotice } from "./sim/ball-chase.js";
-import { geeseNotice } from "./sim/geese.js";
-import { GeeseView } from "./render/geese.js";
-import { tailgaterFlash, tailgaterNotice } from "./sim/tailgaters.js";
-import { parkerNotice } from "./sim/parkers.js";
-import { roadClosedNotice } from "./sim/road-closures.js";
-import { RoadClosureView } from "./render/road-closures.js";
+import { syncReverseLamps } from "./render/driveway-reversers.js";
+import { potholeJolt } from "./render/potholes.js";
+import { tailgaterFlash } from "./sim/tailgaters.js";
 import { syncTailgaterFlash } from "./render/tailgaters.js";
-import { officerNotice } from "./sim/traffic-officer.js";
-import { OfficerView } from "./render/traffic-officer.js";
-import { IceView } from "./render/black-ice.js";
-import { iceNotice } from "./sim/black-ice.js";
-import { PuddleView, buildPuddles } from "./render/puddles.js";
-import { puddleNotice } from "./sim/puddles.js";
-import { buildSnowbanks } from "./render/snowbanks.js";
-import { snowbankNotice } from "./sim/snowbanks.js";
-import { buildCalming, rideOver } from "./render/traffic-calming.js";
-import { guardNotice } from "./sim/crossing-guard.js";
+import { rideOver } from "./render/traffic-calming.js";
 import { addGuardSign, syncGuardSign } from "./render/crossing-guard.js";
 import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
@@ -279,49 +252,8 @@ export async function boot() {
     fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, ...free.fleet });
     autopilot = new Autopilot(world, callbacks);
   }
-  // speed humps and the like, where the world slows for them (sim/traffic-calming.js)
   if (world.busLanes) view.scene.add(buildBusLanes(map));
-  if (world.restrictions || world.redTurnSigns)
-    view.scene.add(
-      buildRestrictions(map, [
-        ...(world.restrictions ? map.restrictions : []),
-        ...(world.redTurnSigns ? map.redTurns : []),
-      ]),
-    );
-  if (world.calming) view.scene.add(buildCalming(map));
-  // a low sun's flare and haze, where the world has sun glare (sim/sun-glare.js)
-  const sunGlareView = world.sunGlare.enabled ? new SunGlareView(view.scene) : null;
-  // and the contraflow lanes, sharrows and signs of one-way streets cyclists ride both ways, where the
-  // world has them ride (sim/contraflow.js)
-  if (world.contraflow.enabled) view.scene.add(buildContraflow(map));
-  // and the driveways cars back out of, where the world has them do so (sim/driveway-reversers.js)
-  if (world.driveways.enabled) view.scene.add(buildDriveways(map));
-  // and spring potholes in the lanes, where the world has them (sim/potholes.js; `?potholes=0` takes them
-  // off in a free drive)
-  if (world.potholes.enabled) view.scene.add(buildPotholes(world));
-  // and a ball rolling into the street, where the world has one roll out now and then (sim/ball-chase.js)
-  const ballView = world.balls?.enabled ? new BallView(view.scene) : null;
-  // and the Canada geese crossing the road, where the world has them (sim/geese.js)
-  const geeseView = world.geese.enabled ? new GeeseView(view.scene) : null;
-  // and the barricades across a block closed for an event, where the world closes one now and then
-  // (sim/road-closures.js; `?roadclosures=0` takes them off in a free drive)
-  const closureView = world.roadClosures?.enabled ? new RoadClosureView(view.scene) : null;
-  // and black ice on bridges and in the shade, while the weather and the time favour it, where the world
-  // has it (sim/black-ice.js; `?ice=0` takes it off in a free drive)
-  const iceView = world.ice?.enabled ? new IceView(view.scene) : null;
-  // and puddles at the kerb while they lie, the spray thrown from them and anyone splashed flinching, where
-  // the world has them (sim/puddles.js; `?puddles=0` takes them off in a free drive)
-  const puddleGroup = world.puddles?.enabled ? buildPuddles(world) : null;
-  if (puddleGroup) view.scene.add(puddleGroup);
-  const puddleView = puddleGroup ? new PuddleView(view.scene, puddleGroup) : null;
-  // and police officers directing traffic, and their cruisers up on the kerb, where the world has them
-  // (sim/traffic-officer.js; `?officers=0` takes them off in a free drive)
-  const officerView = world.officers?.enabled ? new OfficerView(view.scene) : null;
-  // and snowbanks along the kerbs, where the world has them (sim/snowbanks.js; `?snowbanks=0` takes them off
-  // in a free drive)
-  if (world.snowbanks?.geo.runs.length) view.scene.add(buildSnowbanks(world));
-  pxoRendering = world.pxo ? buildPxos(world) : null;
-  if (pxoRendering) view.scene.add(pxoRendering.group);
+  const featureViews = mountFeatureViews(view, world);
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
   // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
@@ -438,14 +370,14 @@ export async function boot() {
     if (!on) overlays.setCandidates(null);
   };
   const weatherView = new WeatherView(view);
-  const applySky = () => {
+  const applySky = (skyHour = hour, skyWeather = world.weather, preview = false) => {
     // (a sun glare challenge's clock has its date and time zone, and the sky draws that day's sun:
     // sim/sun-glare.js)
     const sunDay =
       world.sunGlare.enabled && world.clock?.day !== undefined
         ? { day: world.clock.day, utcOffset: world.clock.utc_offset ?? pack.origin.lon / 15 }
         : {};
-    const a = atmosphereFor(hour, world.weather, {
+    const a = atmosphereFor(skyHour, skyWeather, {
       latitude: pack.origin.lat,
       longitude: pack.origin.lon,
       utcOffset: status.map.utc_offset ?? -7,
@@ -453,6 +385,7 @@ export async function boot() {
     });
     view.setAtmosphere(a);
     tintSurroundings(a);
+    if (preview) return;
     world.visibility.setNight(a.night);
     syncClock();
   };
@@ -579,7 +512,10 @@ export async function boot() {
     }
     hud.badge(`graphics: ${view.quality}`, "", 800);
   });
-  const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt));
+  const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt), {
+    onClearRoute: challenge || replay ? null : () => clearDestination(),
+  });
+  $("#feature-switches").hidden = Boolean(challenge || replay);
   const showMapNote = () =>
     hud.setMapNote(
       status.map.synthetic
@@ -735,6 +671,11 @@ export async function boot() {
   }
   hud.onBrainChange(selectBrain);
   const audio = new DriveAudio($("#drive-sound"));
+  const volume = $("#drive-volume");
+  volume.addEventListener("input", () => {
+    audio.setVolume(Number(volume.value) / 100);
+    $("#drive-volume-value").textContent = `${volume.value}%`;
+  });
   const cockpit = new Cockpit();
   function cameraChanged() {
     const orbit = view.mode === "orbit";
@@ -784,18 +725,33 @@ export async function boot() {
     view.cameraMotion = ev.target.checked;
   });
   let pausedBeforePhoto = false;
+  let photoHour, photoWeather;
   const photo = new PhotoMode({
     view,
     place: status.map.synthetic ? "practice grid" : status.map.label,
     getHour: () => hour,
-    setHour: (value) => setHour(value),
+    setHour: (value) => {
+      photoHour = parseHour(value);
+      if (photo.active) applySky(photoHour, photoWeather, true);
+    },
+    getWeather: () => world.weather,
+    setWeather: (value) => {
+      photoWeather = value;
+      if (!photo.active) return;
+      weatherView.apply(photoWeather);
+      applySky(photoHour, photoWeather, true);
+    },
     onEnter: () => {
+      photoHour = hour;
+      photoWeather = world.weather;
       pausedBeforePhoto = world.paused;
       world.paused = true;
       input.keys.clear();
       hud.toggleKeys(false);
     },
     onExit: () => {
+      weatherView.apply(world.weather);
+      applySky();
       input.keys.clear();
       world.paused = lab?.reviewing ? true : pausedBeforePhoto;
       cameraChanged();
@@ -807,7 +763,7 @@ export async function boot() {
   function togglePause() {
     if (simulationError || photo?.active) return; // photo mode holds the world still until it closes
     if (lab?.reviewing) {
-      lab.live();
+      lab.togglePlay();
       return;
     }
     world.paused = !world.paused;
@@ -820,11 +776,29 @@ export async function boot() {
     manualSignal = world.ego.signal ? { t: world.t, heading: world.ego.psi } : null;
   }
   const input = new Input({
+    interceptKey: (key, repeat) => {
+      if (photo.active) {
+        if ([" ", "h"].includes(key)) {
+          if (!repeat) photo.handleKey(key);
+          return true;
+        }
+        return ["i", "l", "t", "v", "x", "?", "/"].includes(key);
+      }
+      if (key !== " " || !lab?.isReviewing()) return false;
+      if (!repeat) lab.togglePlay();
+      return true;
+    },
     autopilot: toggleAutopilot,
     camera: switchCamera,
     signalLeft: () => signal("left"),
     signalRight: () => signal("right"),
     horn: () => audio.horn(),
+    inspector: () => panel.toggle(),
+    perception: () => lab.toggleEyes(),
+    telemetry: () => lab.toggleTelemetry(),
+    sound: () => audio.toggle(),
+    explorer: () => explorer.open(),
+    lab: () => lab.home(),
     reset: () => {
       if (photo.active || lab?.reviewing) return;
       if (challenge) challengeModified = true;
@@ -1036,21 +1010,50 @@ export async function boot() {
     },
   });
 
-  // Routes from elsewhere (explorer and scenic drives) are routed again to obey turn restrictions;
-  // a newer destination picked meanwhile wins. Resolves false when no drive started.
+  // Apply active routing rules to routes from Explorer and scenic drives. The latest choice wins.
   let routeGeneration = 0;
+  function replaceDriveRoute(route, destination) {
+    autopilot.parker.clear(world);
+    world.route = route;
+    world.destination = destination;
+    world.turnaround = null;
+    autopilot.pausedTurnaround = null;
+    autopilot.turnaroundRoute = null;
+    autopilot.pendingRoutes = null;
+    autopilot.detourRouting = null;
+    autopilot.offRouteFor = 0;
+    autopilot.bumpEpoch();
+    autopilot.executing = null;
+    overlays.setRoute(route);
+    overlays.setCandidates(null);
+  }
+
+  function clearDestination() {
+    if (simulationError || lab?.reviewing) return;
+    routeGeneration++;
+    replaceDriveRoute(null, null);
+    autopilot.setEnabled(false);
+    hud.setAutopilot(false);
+    if (drive && !drive.finished) {
+      const report = withDecidedBy(drive.finish("route cleared"));
+      if (drive.distance > 1) saveDrive(report);
+      driveReport.lastUpdate = -Infinity;
+      driveReport.update(drive);
+    }
+    if (drive) recorder.record({ world, fleet, autopilot, drive, clock }, true);
+    hud.badge("Route cleared", "", 1000);
+  }
   async function applyRoute(data, pt, title, checked = false) {
     if (simulationError) return false;
     const generation = ++routeGeneration;
-    if (world.restrictions && !checked) {
+    const routeOptions = featureRouteOptions(world);
+    if (Object.keys(routeOptions).length && !checked) {
       const res = await api("/api/route", {
         bbox: status.map.bbox.join(","),
         from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
         to: { x: pt[0], y: pt[1] },
         k: 1,
-        ...(world.restrictions
-          ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 }
-          : {}),
+        ...routeOptions,
       });
       if (generation !== routeGeneration || simulationError) return false;
       if (!res.routes.length) {
@@ -1061,11 +1064,7 @@ export async function boot() {
     }
 
     if (challenge) challengeModified = true;
-    world.destination = pt;
-    world.route = new Route(data, map, world.ego.spec);
-    overlays.setRoute(world.route);
-    autopilot.bumpEpoch();
-    autopilot.executing = null;
+    replaceDriveRoute(new Route(data, map, world.ego.spec), pt);
     hud.badge(`route: ${world.route.summary}`, "", 2200);
     if (!autopilot.enabled) toggleAutopilot();
     startDrive(title || `Drive to ${map.nearestLane(...pt)?.lane.edgeRef.name || "your destination"}`, world.route);
@@ -1221,9 +1220,7 @@ export async function boot() {
         from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
         to: { x: pt[0], y: pt[1] },
         k: 1,
-        ...(world.restrictions
-          ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 }
-          : {}),
+        ...featureRouteOptions(world),
       });
       if (generation !== routeGeneration) return;
       if (!res.routes.length) {
@@ -1232,7 +1229,7 @@ export async function boot() {
       }
       await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
     } catch (err) {
-      hud.badge(`routing failed: ${err.message}`, "safety", 2000);
+      if (generation === routeGeneration) hud.badge(`routing failed: ${err.message}`, "safety", 2000);
     }
   }
 
@@ -1327,7 +1324,7 @@ export async function boot() {
 
   let last = performance.now();
   let acc = 0;
-  let announcedPothole = null;
+  const announcedFeatures = new Map();
   let indicatorLit = false,
     announcedEv = null,
     announcedAt = -Infinity,
@@ -1335,7 +1332,6 @@ export async function boot() {
     announcedCrosswalk = null,
     announcedSchool = null,
     announcedZone = null,
-    announcedRoadside = null,
     announcedStreetcar = null,
     announcedCrossing = null,
     announcedBox = null,
@@ -1344,29 +1340,13 @@ export async function boot() {
     announcedClosure = null,
     announcedOutage = null,
     announcedNightFlash = null,
-    announcedVan = null,
     announcedPlow = null,
     announcedPark = null,
     announcedHazard = null,
     announcedTraffic = null,
     announcedCyclist = null,
-    announcedCalming = null,
     announcedScramble = null,
-    announcedLeftRed = null,
-    announcedGuard = null,
-    announcedContraflow = null,
-    announcedRunner = null,
-    announcedGlare = null,
-    announcedReversing = null,
-    announcedGeese = null;
-  let announcedTailgater = null,
-    announcedRoadClosed = null;
-  let announcedOfficer = null;
-  let announcedBall = null;
-  let announcedIce = null;
-  let announcedSnowbank = null;
-  let announcedPuddle = null;
-  let announcedParker = null;
+    announcedLeftRed = null;
   let lastConditions = "",
     skyAt = world.t;
   function frame(now) {
@@ -1465,48 +1445,11 @@ export async function boot() {
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
           else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
           else if (ev.type === "close_pass") hud.badge("PASSED A CYCLIST TOO CLOSE", "alert", 1500);
-          else if (ev.type === "contraflow_conflict") hud.badge("MET A CONTRAFLOW CYCLIST TOO CLOSE", "alert", 1500);
-          else if (ev.type === "officer_violation")
-            hud.badge("WENT ON WHILE THE OFFICER SIGNALLED STOP", "alert", 1500);
-          else if (ev.type === "fresh_green_conflict")
-            hud.badge("ENTERED AHEAD OF A CAR RUNNING THE RED", "alert", 1500);
-          else if (ev.type === "pothole_hit") hud.badge(`HIT A POTHOLE AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
-          else if (ev.type === "ball_warning_ignored")
-            hud.badge("TOO FAST PAST WHERE A BALL ROLLED OUT", "alert", 1500);
-          else if (ev.type === "reversing_conflict")
-            hud.badge(
-              ev.reason === "close_pass" ? "SQUEEZED PAST A CAR BACKING OUT" : "DID NOT STOP FOR A CAR BACKING OUT",
-              "alert",
-              1500,
-            );
-          else if (ev.type === "brake_check") hud.badge("BRAKE CHECK · TAILGATER BEHIND", "alert", 1500);
-          else if (ev.type === "parking_conflict")
-            hud.badge(ev.reason === "passed" ? "WENT ROUND A CAR PARKING" : "BLOCKED A CAR PARKING", "alert", 1500);
-          else if (ev.type === "snowbank_conflict")
-            hud.badge(
-              ev.reason === "oncoming_inside"
-                ? "DROVE INTO THE NARROW STRETCH WITH A CAR IN IT"
-                : "DROVE INTO THE NARROW STRETCH OUT OF TURN",
-              "alert",
-              1500,
-            );
-          else if (ev.type === "wildlife_conflict")
-            hud.badge(ev.reason === "hit" ? "HIT A GOOSE" : "DROVE ON TOO CLOSE TO THE GEESE", "alert", 1500);
-          else if (ev.type === "ice_overspeed")
-            hud.badge(
-              ev.reason === "fast"
-                ? `ONTO BLACK ICE AT ${Math.round(ev.kmh)} KM/H`
-                : ev.reason === "skid"
-                  ? "SKIDDED ON BLACK ICE"
-                  : `${ev.reason === "brake" ? "BRAKED" : "ACCELERATED"} HARD ON BLACK ICE`,
-              "alert",
-              1500,
-            );
-          else if (ev.type === "pedestrian_splashed")
-            hud.badge(`SPLASHED A PEDESTRIAN AT ${Math.round(ev.kmh)} KM/H`, "alert", 1500);
-          else if (ev.type === "passed_crossing_guard")
-            hud.badge("DROVE PAST THE CROSSING GUARD'S STOP SIGN", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
+          else {
+            const notice = featureEventBadge(ev);
+            if (notice) hud.badge(notice, "alert", 1500);
+          }
         }
         if (drive && !drive.finished) recorder.record({ world, fleet, autopilot, drive, clock });
         acc -= FIXED_DT;
@@ -1580,7 +1523,7 @@ export async function boot() {
     if (world.calming) rideOver(map, egoMesh, renderEgo);
     // (and jolting over potholes: render/potholes.js)
     if (world.potholes.enabled) potholeJolt(world, egoMesh, renderEgo, dt, world.calming);
-    pxoRendering?.update();
+    featureViews.updateSignals();
     for (const n of fleet.vehicles) {
       const next = replayNext?.fleet.vehicles.find((v) => v.id === n.id),
         pose = {
@@ -1754,13 +1697,7 @@ export async function boot() {
       hud.badge(outage.text, outage.stop ? "safety" : "stop", 2500);
     }
     if (!outage) announcedOutage = null;
-    // a van double-parked in the car's lane ahead: wait behind it, or the way round is clear
-    const van = vanNotice(world);
-    if (van && van.key !== announcedVan) {
-      announcedVan = van.key;
-      hud.badge(van.text, van.wait ? "safety" : "", 2500);
-    }
-    if (!van) announcedVan = null;
+    announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
     // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
     const plowLine = plowNotice(world);
     if (plowLine && plowLine.key !== announcedPlow) {
@@ -1798,120 +1735,7 @@ export async function boot() {
     }
     if (!cyclistLine) announcedCyclist = null;
     // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
-    const contraLine = contraflowNotice(world, autopilot.snap);
-    if (contraLine && contraLine.key !== announcedContraflow) {
-      announcedContraflow = contraLine.key;
-      hud.badge(contraLine.text, contraLine.wait ? "safety" : "", 2500);
-    }
-    if (!contraLine) announcedContraflow = null;
-    // a car running the red across the car's way as its light is green: wait at the line
-    // (sim/red-light-runner.js)
-    const runnerLine = runnerNotice(world, autopilot.snap);
-    if (runnerLine && runnerLine.key !== announcedRunner) {
-      announcedRunner = runnerLine.key;
-      hud.badge(runnerLine.text, runnerLine.wait ? "safety" : "alert", 2500);
-    }
-    if (!runnerLine) announcedRunner = null;
-    // a car backing out of a driveway ahead (sim/driveway-reversers.js)
-    const reverseLine = world.driveways.enabled
-      ? reverserNotice(autopilot.enabled ? autopilot.snap : null, world)
-      : null;
-    if (reverseLine && reverseLine.key !== announcedReversing) {
-      announcedReversing = reverseLine.key;
-      hud.badge(reverseLine.text, reverseLine.wait ? "safety" : "", 2500);
-    }
-    if (!reverseLine) announcedReversing = null;
-    // a pothole in the car's lane ahead: going round it in the lane, or slowing to drive over it
-    // (sim/potholes.js)
-    const potholeLine = potholeNotice(world, autopilot.enabled ? autopilot.snap : null);
-    if (potholeLine && potholeLine.key !== announcedPothole) {
-      announcedPothole = potholeLine.key;
-      hud.badge(potholeLine.text, potholeLine.slow ? "safety" : "", 2000);
-    }
-    if (!potholeLine) announcedPothole = null;
-    // a ball rolled into the street ahead: a child may follow (sim/ball-chase.js)
-    const ballLine = ballView ? ballNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (ballLine && ballLine.key !== announcedBall) {
-      announcedBall = ballLine.key;
-      hud.badge(ballLine.text, "safety", 2500);
-    }
-    if (!ballLine) announcedBall = null;
-    // Canada geese by the road ahead, or crossing it: wait for the last one (sim/geese.js)
-    const geeseLine = world.geese.enabled ? geeseNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
-    if (geeseLine && geeseLine.key !== announcedGeese) {
-      announcedGeese = geeseLine.key;
-      hud.badge(geeseLine.text, geeseLine.wait ? "safety" : "", 2500);
-    }
-    if (!geeseLine) announcedGeese = null;
-    // a car tailgating the driven car: leave more room ahead, and let it by (sim/tailgaters.js)
-    const tailLine = world.tailgaters?.enabled
-      ? tailgaterNotice(world, autopilot.enabled ? autopilot.snap : null)
-      : null;
-    if (tailLine && tailLine.key !== announcedTailgater) {
-      announcedTailgater = tailLine.key;
-      hud.badge(tailLine.text, "safety", 2500);
-    }
-    if (!tailLine) announcedTailgater = null;
-    // a road closed ahead for an event: follow the detour (sim/road-closures.js)
-    const closedLine = closureView ? roadClosedNotice(autopilot.enabled ? autopilot.snap : null, world) : null;
-    if (closedLine && closedLine.key !== announcedRoadClosed) {
-      announcedRoadClosed = closedLine.key;
-      hud.badge(closedLine.text, closedLine.stop ? "safety" : "", 3000);
-    }
-    if (!closedLine) announcedRoadClosed = null;
-    // a police officer directing traffic at the junction ahead: their direction, not the light's (sim/traffic-officer.js)
-    const officerLine = world.officers?.enabled
-      ? officerNotice(world, autopilot.enabled ? autopilot.snap : null)
-      : null;
-    if (officerLine && officerLine.key !== announcedOfficer) {
-      announcedOfficer = officerLine.key;
-      hud.badge(officerLine.text, officerLine.wait ? "alert" : "safety", 2500);
-    }
-    if (!officerLine) announcedOfficer = null;
-    // black ice seen ahead, or under the car, or a bridge coming up while it is near freezing
-    // (sim/black-ice.js)
-    const iceLine = iceView ? iceNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (iceLine && iceLine.key !== announcedIce) {
-      announcedIce = iceLine.key;
-      hud.badge(iceLine.text, iceLine.slow ? "safety" : "", 2500);
-    }
-    if (!iceLine) announcedIce = null;
-    // a puddle at the kerb with people beside it: ease left in the lane, or slow (sim/puddles.js)
-    const puddleLine = puddleView ? puddleNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (puddleLine && puddleLine.key !== announcedPuddle) {
-      announcedPuddle = puddleLine.key;
-      hud.badge(puddleLine.text, puddleLine.slow ? "safety" : "", 2500);
-    }
-    if (!puddleLine) announcedPuddle = null;
-    // snowbanks: taking turns through a stretch they narrow to one car, and creeping up to a corner they
-    // hide (sim/snowbanks.js)
-    const snowLine = world.snowbanks?.enabled ? snowbankNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (snowLine && snowLine.key !== announcedSnowbank) {
-      announcedSnowbank = snowLine.key;
-      hud.badge(snowLine.text, snowLine.wait ? "safety" : "", 2500);
-    }
-    if (!snowLine) announcedSnowbank = null;
-    // a car ahead parallel parking: stop well back and wait until it is in (sim/parkers.js)
-    const parkerLine = world.parkers?.enabled ? parkerNotice(world, autopilot.enabled ? autopilot.snap : null) : null;
-    if (parkerLine && parkerLine.key !== announcedParker) {
-      announcedParker = parkerLine.key;
-      hud.badge(parkerLine.text, "safety", 2500);
-    }
-    if (!parkerLine) announcedParker = null;
-    // a speed hump or the like on the route ahead: the speed to take it at (said again once over it)
-    const calmingLine = calmingNotice(world);
-    if (calmingLine && calmingLine.key !== announcedCalming) {
-      announcedCalming = calmingLine.key;
-      hud.badge(calmingLine.text, calmingLine.slow ? "safety" : "", 2000);
-    }
-    if (!calmingLine) announcedCalming = null;
-    // driving into a low sun: slowing to what the car can see (said again when that changes)
-    const glareLine = sunGlareNotice(world);
-    if (glareLine && glareLine.key !== announcedGlare) {
-      announcedGlare = glareLine.key;
-      hud.badge(glareLine.text, glareLine.slow ? "safety" : "", 2500);
-    }
-    if (!glareLine) announcedGlare = null;
+    announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud);
     // a scramble crossing ahead: every light red while people cross every way; no right turn on red
     const leftRed = autopilot.snap?.intersection?.left_on_red;
     const leftRedKey = leftRed ? `${autopilot.snap.intersection.id}:${leftRed.stop_completed}:${leftRed.clear}` : null;
@@ -1932,34 +1756,12 @@ export async function boot() {
       hud.badge(scrambleLine.text, "safety", 2500);
     }
     if (!scrambleLine) announcedScramble = null;
-    // a school crossing guard ahead: children waiting to cross, or the STOP sign up until everyone is
-    // across (said once each time)
-    const guardLine = guardNotice(world);
-    if (guardLine && guardLine.key !== announcedGuard) {
-      announcedGuard = guardLine.key;
-      hud.badge(guardLine.text, guardLine.stop ? "safety" : "", 2500);
-    }
-    if (!guardLine) announcedGuard = null;
+    announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
     const ringing = (fleet.trains || [])
       .filter((n) => n.rail.gong)
       .map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
     audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
-    // a vehicle stopped at the roadside ahead with its lights flashing: say so once
-    // (and to move over, in the lane next to it where there is another going the car's way)
-    const roadsideAhead = world.roadside.vehicles
-      .map((v) => ({ v, r: roadsideRelation(world.ego, v) }))
-      .find(({ v, r }) => r && r.ahead_m < 70 && world.sees(world.ego, v));
-    if (roadsideAhead && roadsideAhead.v.id !== announcedRoadside) {
-      announcedRoadside = roadsideAhead.v.id;
-      const moveOver =
-        roadsideAhead.r.adjacent &&
-        (map.nearestLane(world.ego.x, world.ego.y, world.ego.psi, 6)?.lane.edgeRef.lanes || 1) > 1;
-      hud.badge(
-        `${ROADSIDE_NAMES[roadsideAhead.v.kind].toUpperCase()} · LIGHTS FLASHING · SLOW TO ${Math.round(passLimit(world._road?.limit ?? 11.2) * 3.6)}${moveOver ? " · MOVE OVER" : ""}`,
-        "safety",
-        2500,
-      );
-    }
+    announceFeatureNotices("beforeZone", world, autopilot, featureViews, announcedFeatures, hud);
     // into a school or playground zone in effect: say so once
     const zone = world._road?.zone;
     if (zone && zone.id !== announcedZone)
@@ -1993,16 +1795,10 @@ export async function boot() {
     roads.streetLights.setOutage?.(!!world.streetLightsOut);
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
-    if (geeseView) geeseView.sync(world, world.t);
-    closureView?.sync(world, world.t);
-    iceView?.sync(world);
-    puddleView?.update(world, [world.ego, ...fleet.vehicles], pedMeshes, view.camera, dt);
-    officerView?.sync(world, dt, view.camera, lightsOn);
-    if (sunGlareView) sunGlareView.update(view.camera, view.atmosphere, egoGlare(world)?.severity ?? 0);
-    ballView?.update(world, view.camera);
+    featureViews.update(fleet, pedMeshes, dt, lightsOn);
     view.render(dt, photo.active);
     cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
-    audio.update(world.ego, world.weather, world.paused || document.hidden, view.mode === "hood");
+    audio.update(world.ego, world.weather, world.paused, view.mode === "hood");
     const blink = world.ego.signal && world.t % 0.8 < 0.45;
     if (blink && !indicatorLit && !world.paused) audio.tick();
     indicatorLit = blink;

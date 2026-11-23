@@ -1,3 +1,4 @@
+import { parkerNotice } from "../parkers.js";
 import { r1 } from "../../common.js";
 import {
   auditParkers,
@@ -25,6 +26,8 @@ function parkerClause(a) {
   return `${lead} Stop well back, short of that room, and wait until it is in (\`wait_for_parker\`${w < 2 ? ", holding still" : `, stopping ${w} m ahead`}). Never creep up behind it, and never go round it while it signals or reverses.`;
 }
 
+const PARKER_COACH = "The car ahead is parallel parking. Stay well back, leave it room to reverse in, and wait.";
+
 export default {
   rulesStop: (snap) => snap.parking_ahead?.wait && snap.parking_ahead.bumper_to_stop_m < 1.5,
   legitimateStop: (snap) =>
@@ -32,6 +35,67 @@ export default {
   rulesCost: (c, snap) => (c.id === "wait_for_parker" && snap.parking_ahead?.wait ? -6 : 0),
   cautious: (snap, eligible) => (snap.parking_ahead?.wait ? eligible.find((c) => c.id === "wait_for_parker") : null),
   key: "parkers",
+  coach: {
+    init: () => ({
+      parkers: false,
+      parkingConflicts: 0,
+    }),
+    seen: "parkers",
+    events: {
+      parking_conflict(score, ev) {
+        score.parkingConflicts++;
+        score.incident(
+          "parking_conflict",
+          ev.reason === "passed"
+            ? "Went round a car while it was parallel parking"
+            : "Blocked the room a car parallel parking needed to reverse into",
+          { with: ev.with, phase: ev.phase },
+        );
+      },
+    },
+    reports: [
+      { at: "end", order: 17, read: (score) => (score.parkers ? { parking_conflicts: score.parkingConflicts } : {}) },
+    ],
+    deductions: [{ at: "legality", order: 3, counter: "parkingConflicts", weight: 20 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 8,
+        when: (score) => score.parkingConflicts,
+        text: "A car ahead signalling and stopping beside a gap in the parked cars is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses.",
+      },
+    ],
+    guidance: [
+      {
+        at: "beforeSample",
+        order: 2,
+        read: (_score, { world, onRoad }) => (onRoad && world.parkers?.behind ? PARKER_COACH : ""),
+      },
+      { at: "afterSample", order: 2, read: (_score, { world }) => (world.parkers?.behind ? PARKER_COACH : "") },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 12,
+    duration: 2500,
+    read: (world, autopilot) =>
+      world.parkers?.enabled ? parkerNotice(world, autopilot.enabled ? autopilot.snap : null) : null,
+    style: "safety",
+  },
+  eventBadges: {
+    parking_conflict: (event) => (event.reason === "passed" ? "WENT ROUND A CAR PARKING" : "BLOCKED A CAR PARKING"),
+  },
+  perceptionLine(snap) {
+    const pa = snap.parking_ahead;
+    const text = pa
+      ? `Car ${pa.phase === "reversing" ? "reversing into a space" : "parking"} ${Math.max(0, Math.round(pa.gap_m))} m ahead: ${pa.in_room ? "in its room, hold still" : pa.bumper_to_stop_m > 0.5 ? `wait ${Math.round(pa.hold_m)} m back, stop in ${Math.round(pa.bumper_to_stop_m)} m` : "waiting well back"}`
+      : null;
+    return text ? { order: 28, label: "Parallel parker", text } : null;
+  },
+  perceptionFocus: (snap, o) => snap.parking_ahead && o.id === snap.parking_ahead.id,
+  perceptionRejections: {
+    blocks_parking_car: "Car parking: wait well back",
+  },
   seen: "parkersSeen",
   calls: "parkerCalls",
   build: (_world, options) => createParkers(options),

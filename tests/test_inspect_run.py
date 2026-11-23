@@ -1,3 +1,6 @@
+import csv
+import gzip
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -14,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "scripts" / "inspect_run.py"
 SAMPLE = ROOT / "data/runs/20261120-120000-rules.json"
 PREVIOUS = ROOT / "data/runs/20261112-190015-rules.json"
+OPEN_ARENA = ROOT / "data/results/2026-11-20/claude-haiku-open.json"
 
 
 class InspectRunTests(unittest.TestCase):
@@ -198,3 +202,354 @@ class InspectRunTests(unittest.TestCase):
             "safety-brake-outcomes": {"observed": {"failed": 1}, "unknown": {"passed": 2, "failed": 1}},
         }
         self.assertEqual(outputs, expected)
+
+    def test_gzip_and_arena_loading_and_comparison(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gz_path = Path(directory) / "sample.json.gz"
+            gz_path.write_bytes(gzip.compress(SAMPLE.read_bytes()))
+            result = json.loads(subprocess.check_output([sys.executable, CLI, gz_path, "suite-verdicts"]))
+            self.assertEqual(result["suite-verdicts"]["counts"], {"passed": 2})
+
+            heldout_gz = Path(directory) / "heldout.json.gz"
+            heldout_gz.write_bytes(gzip.compress(b'{"config":{"seed":101},"results":[]}'))
+            error = subprocess.run([sys.executable, CLI, heldout_gz], capture_output=True)
+            self.assertEqual(error.returncode, 2)
+            self.assertIn(b"held-out", error.stderr)
+
+            arena_a = Path(directory) / "arena_a.json.gz"
+            arena_b = Path(directory) / "arena_b.json"
+            a_data = {
+                "summary": {"brain": "rules", "set": "challenges", "track": "guarded", "drives": 2},
+                "results": [
+                    {"challenge": "door-zone", "map": "kitsilano", "pass": True, "arrived": True, "time_s": 50},
+                    {"challenge": "fog-junction", "map": "victoria", "pass": False, "arrived": False, "collisions": 1},
+                ],
+            }
+            b_data = {
+                "summary": {"brain": "jev", "set": "challenges", "track": "open", "drives": 2},
+                "results": [
+                    {"challenge": "door-zone", "map": "kitsilano", "pass": True, "arrived": True, "time_s": 40},
+                    {"challenge": "fog-junction", "map": "victoria", "pass": True, "arrived": True, "collisions": 0},
+                ],
+            }
+            arena_a.write_bytes(gzip.compress(json.dumps(a_data).encode("utf-8")))
+            arena_b.write_text(json.dumps(b_data))
+            cmp_out = json.loads(
+                subprocess.check_output(
+                    [sys.executable, CLI, arena_a, "--compare", arena_b, "scores-ranked", "paired-score-by-arrival"]
+                )
+            )
+            self.assertEqual(cmp_out["routes"]["matched"], ["door-zone", "fog-junction"])
+            self.assertEqual(
+                cmp_out["condition_differences"],
+                {
+                    "track": {"baseline": "guarded", "comparison": "open"},
+                    "driver": {"baseline": "rules", "comparison": "jev"},
+                },
+            )
+            self.assertEqual(cmp_out["reports"]["scores-ranked"]["baseline"]["routes"][0]["id"], "door-zone")
+
+            a_data["results"][0]["seed"] = 1
+            b_data["results"][0]["seed"] = 2
+            arena_a.write_bytes(gzip.compress(json.dumps(a_data).encode("utf-8")))
+            arena_b.write_text(json.dumps(b_data))
+            changed = json.loads(
+                subprocess.check_output([sys.executable, CLI, arena_a, "--compare", arena_b, "scores-ranked"])
+            )
+            self.assertEqual(changed["routes"]["matched"], ["fog-junction"])
+            self.assertEqual(changed["routes"]["changed_tags"], ["door-zone"])
+
+            # Existing committed arena file normalizes challenge -> id.
+            open_ranked = json.loads(
+                subprocess.check_output([sys.executable, CLI, OPEN_ARENA, "scores-ranked", "--top", "3"])
+            )
+            self.assertEqual(len(open_ranked["scores-ranked"]["routes"]), 3)
+            self.assertTrue(all(r["id"] for r in open_ranked["scores-ranked"]["routes"]))
+
+    def test_formats_summary_filters_and_list_modes(self):
+        # --list-scores, --list-analytics, --list-paired-metrics, --filter
+        score_list = subprocess.check_output([sys.executable, CLI, "--list-scores"], text=True).splitlines()
+        self.assertEqual(len(score_list), 12)
+        analytics_list = subprocess.check_output([sys.executable, CLI, "--list-analytics"], text=True).splitlines()
+        self.assertEqual(len(analytics_list), 20)
+        paired_list = subprocess.check_output([sys.executable, CLI, "--list-paired-metrics"], text=True).splitlines()
+        self.assertEqual(len(paired_list), 170)
+        filtered = subprocess.check_output(
+            [sys.executable, CLI, "--list-scores", "--filter", "verdict"], text=True
+        ).splitlines()
+        self.assertEqual([line.split()[0] for line in filtered], ["scores-by-verdict"])
+        empty_filter = subprocess.check_output([sys.executable, CLI, "--list", "--filter", "no-such-report"], text=True)
+        self.assertEqual(empty_filter, "")
+
+        # --scores, --analytics, --paired-metrics
+        scores_out = json.loads(subprocess.check_output([sys.executable, CLI, SAMPLE, "--scores"]))
+        self.assertIn("scores-summary", scores_out)
+        analytics_out = json.loads(subprocess.check_output([sys.executable, CLI, SAMPLE, "--analytics"]))
+        self.assertIn("safety-overview", analytics_out)
+        self.assertIn("safety-exposure", analytics_out)
+        self.assertIn("median-call-latency-summary", analytics_out)
+        shape = json.loads(
+            subprocess.check_output([sys.executable, CLI, SAMPLE, "token-demand", "token-demand-summary"])
+        )
+        self.assertIsInstance(shape["token-demand"], list)
+        self.assertEqual(shape["token-demand-summary"]["routes"], shape["token-demand"])
+        paired_out = json.loads(
+            subprocess.check_output([sys.executable, CLI, PREVIOUS, "--compare", SAMPLE, "--paired-metrics"])
+        )
+        self.assertIn("paired-score-by-length", paired_out["reports"])
+        self.assertIn("paired-avg-kmh-by-length", paired_out["reports"])
+
+        # --summary (single and compare) + formats (table, markdown, csv)
+        summary_json = json.loads(subprocess.check_output([sys.executable, CLI, SAMPLE, "--summary"]))
+        self.assertEqual(summary_json["verdicts"]["passed"], 2)
+        self.assertIn("scores", summary_json)
+        self.assertIn("motion_peaks", summary_json)
+        self.assertIn("decisions", summary_json)
+
+        table_out = subprocess.check_output([sys.executable, CLI, SAMPLE, "--summary", "--format", "table"], text=True)
+        self.assertIn("verdicts", table_out)
+        self.assertIn("scores", table_out)
+
+        md_out = subprocess.check_output(
+            [sys.executable, CLI, SAMPLE, "scores-ranked", "--format", "markdown"], text=True
+        )
+        self.assertIn("## scores-ranked", md_out)
+        self.assertIn("| --- |", md_out)
+
+        csv_out = subprocess.check_output(
+            [sys.executable, CLI, SAMPLE, "scores-ranked", "suite-verdicts", "--format", "csv"], text=True
+        )
+        parsed_csv = list(csv.DictReader(io.StringIO(csv_out)))
+        self.assertGreaterEqual(len(parsed_csv), 3)
+        self.assertEqual(parsed_csv[0]["section"], "scores-ranked")
+
+        empty = subprocess.check_output(
+            [sys.executable, CLI, SAMPLE, "suite-verdicts", "scores-ranked", "--format", "table", "--route", "missing"],
+            text=True,
+        )
+        self.assertIn("scores-ranked: summary", empty)
+
+        digest_comparison = subprocess.check_output(
+            [sys.executable, CLI, PREVIOUS, "--compare", SAMPLE, "--summary", "--format", "markdown"],
+            text=True,
+        )
+        self.assertIn("## baseline: motion_peaks", digest_comparison)
+        self.assertIn("## comparison: decisions", digest_comparison)
+
+        # --top, --only-failures, --route, --cohort
+        top_out = json.loads(subprocess.check_output([sys.executable, CLI, SAMPLE, "motion-duration", "--top", "1"]))
+        self.assertEqual(len(top_out["motion-duration"]["routes"]), 1)
+
+        route_out = json.loads(
+            subprocess.check_output([sys.executable, CLI, SAMPLE, "suite-verdicts", "--route", "s1-2"])
+        )
+        self.assertEqual(route_out["suite-verdicts"]["measured_routes"], 1)
+
+        fail_out = json.loads(
+            subprocess.check_output([sys.executable, CLI, PREVIOUS, "suite-verdicts", "--only-failures"])
+        )
+        self.assertEqual(fail_out["suite-verdicts"]["counts"], {"failed": 1})
+
+        cohort_out = json.loads(
+            subprocess.check_output([sys.executable, CLI, PREVIOUS, "suite-verdicts", "--cohort", "verdict=failed"])
+        )
+        self.assertEqual(cohort_out["suite-verdicts"]["counts"], {"failed": 1})
+
+    def test_fail_on_regression_and_condition_differences(self):
+        # Improvement (PREVIOUS -> SAMPLE): exits 0.
+        ok = subprocess.run(
+            [sys.executable, CLI, PREVIOUS, "--compare", SAMPLE, "suite-verdicts", "--fail-on-regression"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(ok.returncode, 0)
+        self.assertIn("condition_differences", json.loads(ok.stdout))
+
+        # Regression (SAMPLE -> PREVIOUS): exits 2 AND prints valid JSON report.
+        reg = subprocess.run(
+            [sys.executable, CLI, SAMPLE, "--compare", PREVIOUS, "suite-verdicts", "--fail-on-regression"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(reg.returncode, 2)
+        payload = json.loads(reg.stdout)
+        self.assertEqual(payload["routes"]["matched"], ["s1-1", "s1-2"])
+
+        # Counted violations can regress with unchanged pass and collision totals.
+        tags = {"length_m": 500, "signals": 0, "stops": 0, "lefts": 0, "rights": 0}
+        cfg = {"map": "kitsilano", "bbox": [1, 2, 3, 4], "pack": 6, "seed": 1, "count": 1}
+        with tempfile.TemporaryDirectory() as directory:
+            a = Path(directory) / "a.json"
+            b = Path(directory) / "b.json"
+            row = {
+                "id": "s1-1",
+                "tags": tags,
+                "pass": False,
+                "collisions": 0,
+                "red_lights": 1,
+                "stop_signs": 3,
+                "failed_to_yield": 0,
+                "failures": [],
+            }
+            a.write_text(json.dumps({"config": cfg, "results": [row]}))
+            b.write_text(
+                json.dumps(
+                    {
+                        "config": {**cfg, "weather": "snow", "npcs": 50},
+                        "results": [{**row, "red_lights": 2, "stop_signs": 1}],
+                    }
+                )
+            )
+            vreg = subprocess.run(
+                [sys.executable, CLI, a, "--compare", b, "suite-verdicts", "--fail-on-regression"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(vreg.returncode, 2)
+            vdata = json.loads(vreg.stdout)
+            self.assertEqual(vdata["regression"]["deltas"]["violations"], -1)
+            self.assertEqual(
+                vdata["regression"]["increased_violations"], [{"id": "s1-1", "field": "red_lights", "increase": 1}]
+            )
+            self.assertEqual(
+                vdata["condition_differences"],
+                {
+                    "weather": {"baseline": "dry", "comparison": "snow"},
+                    "npcs": {"baseline": None, "comparison": 50},
+                },
+            )
+
+            # Seconds and metres do not count as new individual violations.
+            b.write_text(json.dumps({"config": cfg, "results": [{**row, "off_road_s": 3, "bus_lane_driving": 20}]}))
+            duration_only = subprocess.run(
+                [sys.executable, CLI, a, "--compare", b, "suite-verdicts", "--fail-on-regression"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(duration_only.returncode, 0)
+
+            # A missing route or counter makes the gate inconclusive in both reporting modes.
+            b.write_text(json.dumps({"config": cfg, "results": [{**row, "id": "s1-2"}]}))
+            for mode in ("--summary", "suite-verdicts"):
+                missing = subprocess.run(
+                    [sys.executable, CLI, a, "--compare", b, mode, "--fail-on-regression"],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(missing.returncode, 3)
+                coverage = json.loads(missing.stdout)["regression"]["coverage"]
+                self.assertEqual(coverage["baseline_only"], ["s1-1"])
+                self.assertEqual(coverage["comparison_only"], ["s1-2"])
+
+            b.write_text(json.dumps({"config": cfg, "results": [{**row, "collisions": None}]}))
+            missing = subprocess.run(
+                [sys.executable, CLI, a, "--compare", b, "--fail-on-regression", "--summary"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(missing.returncode, 3)
+            self.assertEqual(json.loads(missing.stdout)["regression"]["coverage"]["collision_count_pairs"], 0)
+
+        # --fail-on-regression without --compare fails cleanly.
+        bad = subprocess.run([sys.executable, CLI, SAMPLE, "--fail-on-regression"], capture_output=True)
+        self.assertEqual(bad.returncode, 2)
+
+    def test_csv_preserves_formula_like_route_id_as_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            run = json.loads(SAMPLE.read_text())
+            run["results"][0]["id"] = " =1+1"
+            run["results"][1]["id"] = "line one\rline two"
+            path.write_text(json.dumps(run))
+            output = subprocess.check_output([sys.executable, CLI, path, "scores-ranked", "--format", "csv"])
+            route_ids = [row["id"] for row in csv.DictReader(io.StringIO(output.decode(), newline="")) if row["id"]]
+            self.assertCountEqual(route_ids, ["' =1+1", "line one\rline two"])
+
+    def test_safety_top_limits_route_details_without_changing_counts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            rows = [
+                {"id": "most-affected", "red_lights": 2, "off_road_s": 2, "distance_m": 500},
+                {"id": "also-affected", "red_lights": 1, "off_road_s": 1, "distance_m": 500},
+            ]
+            path.write_text(json.dumps({"results": rows}))
+            command = [
+                sys.executable,
+                CLI,
+                path,
+                "safety-signals",
+                "safety-overview",
+                "safety-exposure",
+                "--top",
+                "1",
+            ]
+            output = json.loads(subprocess.check_output(command))
+            for report in ("safety-overview", "safety-exposure"):
+                incidents = output[report]["off_road_incidents"]
+                self.assertEqual(incidents["triggered_routes"], 2)
+                self.assertEqual([r["id"] for r in incidents["affected_routes"]], ["most-affected"])
+            csv_text = subprocess.check_output([*command, "--format", "csv"], text=True)
+            report_rows = list(csv.DictReader(io.StringIO(csv_text)))
+            signals = [r for r in report_rows if r["section"] == "safety-signals: affected routes"]
+            self.assertEqual([r["id"] for r in signals], ["most-affected"])
+            aggregate = next(r for r in report_rows if r["section"] == "safety-signals" and r["field"] == "red_lights")
+            self.assertEqual(aggregate["affected_routes"], "2")
+
+    def test_reports_handle_finite_measurements_at_numeric_limits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "results": [
+                            {
+                                "id": "a",
+                                "time_s": 10**308,
+                                "distance_m": 5e-324,
+                                "red_lights": 1,
+                                "latency_p50_ms": 1e-308,
+                                "latency_p95_ms": 1e308,
+                            },
+                            {"id": "b", "time_s": 10**308, "distance_m": 5e-324, "red_lights": 0},
+                        ]
+                    }
+                )
+            )
+            command = [
+                sys.executable,
+                CLI,
+                path,
+                "motion-duration",
+                "scores-ranked",
+                "safety-overview",
+                "latency-tail-inflation",
+            ]
+            output = json.loads(subprocess.check_output(command))
+            self.assertEqual(output["motion-duration"]["summary"]["mean"], 1e308)
+            self.assertEqual(output["latency-tail-inflation"], [])
+            self.assertIsNone(output["safety-overview"]["hazards"]["red_lights"]["per_km"])
+
+    def test_regression_gate_uses_audit_labels_when_arena_counters_are_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            before = Path(directory) / "before.json"
+            after = Path(directory) / "after.json"
+            row = {"challenge": "quiet-crossing", "pass": False, "failures": ["timeout"], "collisions": 0}
+            summary = {"brain": "rules", "set": "all"}
+            new_failure = "left a pedestrian crossover before the far curb"
+            changed = {**row, "failures": ["timeout", new_failure]}
+            before.write_text(json.dumps({"summary": summary, "results": [row]}))
+            after.write_text(json.dumps({"summary": summary, "results": [changed]}))
+            result = subprocess.run(
+                [sys.executable, CLI, before, "--compare", after, "--fail-on-regression", "--summary"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("coverage is incomplete", result.stderr)
+            regression = json.loads(result.stdout)["regression"]
+            self.assertTrue(regression["regressed"])
+            self.assertEqual(regression["new_audit_failures"], [{"id": "quiet-crossing", "failures": [new_failure]}])
+            self.assertEqual(regression["deltas"], {"passed": 0, "collisions": 0, "violations": None})
+            self.assertEqual(regression["coverage"]["failure_label_pairs"], 1)
+            self.assertEqual(regression["coverage"]["comparable_traffic_counters"], 0)
+            self.assertTrue(regression["coverage"]["incomplete"])

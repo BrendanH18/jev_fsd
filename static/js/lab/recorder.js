@@ -2,6 +2,7 @@ import { FEATURE_METRICS, hooks } from "../sim/features/index.js";
 import { setNightFlash } from "../sim/night-flash.js";
 
 const CHECKPOINT = hooks("checkpoint");
+const CHECKPOINT_SHARE = hooks("checkpointShare");
 
 // In-memory checkpoints preserve prototypes, object identity, and seeded random streams.
 // Immutable map/render resources are shared; mutable driving state is copied.
@@ -88,19 +89,7 @@ export class DriveRecorder {
       shared.add(info);
       for (const leg of info.list) shared.add(leg);
     }
-    // (spring potholes never move once placed: sim/potholes.js)
-    if (world.potholes?.enabled) shared.add(world.potholes);
-    // (nor does black ice: which patches lie on the road follows the conditions, each step: sim/black-ice.js)
-    if (world.ice?.enabled) shared.add(world.ice);
-    // (nor do snowbanks, nor the narrowings they make: sim/snowbanks.js)
-    if (world.snowbanks?.enabled) {
-      shared.add(world.snowbanks.geo);
-      shared.add(world.snowbanks.piles);
-      for (const nw of world.snowbanks.narrowings) shared.add(nw);
-      shared.add(world.snowbanks.routeEnds);
-    }
-    // (nor do the puddles: whether they lie follows the weather, sim/puddles.js puddlesLie)
-    if (world.puddles?.enabled) shared.add(world.puddles);
+    for (const share of CHECKPOINT_SHARE) share(world, shared);
     for (const route of [world.route, autopilot.snap?.route])
       if (route) {
         for (const key of [
@@ -128,7 +117,7 @@ export class DriveRecorder {
       inFlight: null,
       firing: null,
       rerouting: false,
-      ...(context.autopilot.closureRouting !== undefined ? { closureRouting: null } : {}),
+      ...(context.autopilot.detourRouting !== undefined ? { detourRouting: null } : {}),
     };
     const state = cloneState(
       { world: context.world, fleet: context.fleet, drive: context.drive, clock: context.clock, pilot },
@@ -158,9 +147,6 @@ export class DriveRecorder {
         "failed_to_yield",
         "merged_out_of_turn",
         "close_pass",
-        "passed_crossing_guard",
-        "pxo_early_go",
-        "illegal_turn",
         "contraflow_conflict",
         "reversing_conflict",
         "pothole_hit",
@@ -169,7 +155,6 @@ export class DriveRecorder {
         "ice_overspeed",
         "snowbank_conflict",
         "pedestrian_splashed",
-        "glare",
         "safety",
         "brake_check",
         "parking_conflict",
@@ -207,21 +192,13 @@ export class DriveRecorder {
     setNightFlash(target.world);
     target.fleet.world = target.world;
     target.world.crowd.world = target.world;
-    target.world.roadside.world = target.world;
     target.world.workZones.world = target.world;
     target.world.laneClosures.world = target.world;
     target.world.outages.world = target.world;
-    target.world.doubleParked.world = target.world;
     target.world.stepOuts.world = target.world;
-    target.world.crossingGuards.world = target.world;
-    if (target.world.contraflow) target.world.contraflow.world = target.world;
-    if (target.world.driveways) target.world.driveways.world = target.world;
-    if (target.world.balls) target.world.balls.world = target.world;
-    if (target.world.geese) target.world.geese.world = target.world;
-    if (target.world.snowbanks) target.world.snowbanks.world = target.world;
     for (const restore of CHECKPOINT) restore(target.world, target.fleet);
     target.world.npcs = target.fleet.vehicles;
-    for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;
+    for (const n of target.fleet.vehicles) if (n.path?.constraintsWorld) n.path.constraintsWorld = target.world;
     Object.assign(target.autopilot, callbacks, {
       world: target.world,
       inFlight: null,
@@ -230,7 +207,7 @@ export class DriveRecorder {
       epoch: epoch + 1,
     });
     // (a route round a closed road still to come is asked for again: sim/road-closures.js)
-    if (target.autopilot.closureRouting) target.autopilot.closureRouting = null;
+    if (target.autopilot.detourRouting) target.autopilot.detourRouting = null;
     target.world.paused = true;
     target.world.visibility.setNight(frame.night);
     target.setDrive(state.drive);

@@ -19,7 +19,8 @@ coaching and the pilot's latest decision visible while you drive.
 
 ## Quick start
 
-Install [uv](https://docs.astral.sh/uv/) and use a desktop browser with WebGL. The app needs
+Install [uv](https://docs.astral.sh/uv/) and use a modern browser with WebGL (keyboard, on-screen
+touch controls and gamepads are supported). The app needs
 Python 3.10 or newer; `uv` manages Python and the project dependency.
 
 ```sh
@@ -34,9 +35,11 @@ and the local server uses Python. The pinned Three.js runtime and all twelve map
 so driving with Rules needs no external network after installing the Python dependencies.
 
 Try **Explore cities → Victoria → Neighbourhood cruise**. A suggested drive starts the selected
-autopilot; `W A S D` takes over manually. You can also click a destination on the minimap or
-start a free drive with the keyboard. Cycle **View** to hood view and enable **Sound** for driving
-ambience. Open **Settings** to change weather, time and graphics, or press `?` for keyboard help.
+autopilot; `W A S D`, touch controls or a gamepad takes over manually
+([controls](drive-coach-and-hud.md#controls-and-driving-feel)). You can also click a destination on
+the minimap or start a free drive directly. Cycle **View** to hood view and enable **Sound** for
+driving ambience. Open **Settings** to change weather, time, traffic, garage vehicle and graphics,
+or press `?` for keyboard help.
 
 To enable Jev, get a key from the [TypeSafe console](https://console.typesafe.ai). Open
 **Decision ▾ → Connect a decision model…**, choose **TypeSafe**, paste the key and keep the

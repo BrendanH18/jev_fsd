@@ -2,6 +2,8 @@
 
 from math import isfinite
 
+from .profiles import ranking_summary
+
 
 def _ratio(numerator, denominator, scale=1):
     if denominator > 0:
@@ -31,10 +33,11 @@ def _valid_number(value):
 
 
 def _rank(description, unit, *fields, calculate=None, lowest_first=False):
-    """Rank using full precision, retaining input order on ties and counting unavailable rows."""
+    """Rank using full precision, breaking ties by route ID and reporting suite summary."""
 
     def report(rows):
         routes = []
+        raw_values = []
         for row in rows:
             values = [1 if field == "progress" and row.get("arrived") is True else row.get(field) for field in fields]
             if not all(_valid_number(v) and (v <= 0 if k == "max_decel" else v >= 0) for k, v in zip(fields, values)):
@@ -42,10 +45,22 @@ def _rank(description, unit, *fields, calculate=None, lowest_first=False):
             value = calculate(*values) if calculate else values[0]
             if _valid_number(value):
                 routes.append({"id": row.get("id"), "value": value})
-        routes.sort(key=lambda route: route["value"], reverse=not lowest_first)
+                raw_values.append(value)
+        routes.sort(
+            key=lambda route: (
+                route["value"] if lowest_first else -route["value"],
+                route["id"] is None,
+                "" if route["id"] is None else str(route["id"]),
+            )
+        )
         for route in routes:
             route["value"] = round(route["value"], 4)
-        return {"unit": unit, "routes": routes, "unavailable": len(rows) - len(routes)}
+        return {
+            "unit": unit,
+            "routes": routes,
+            "unavailable": len(rows) - len(routes),
+            "summary": ranking_summary(raw_values, 4),
+        }
 
     return description, report
 

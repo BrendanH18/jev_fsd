@@ -85,3 +85,24 @@ class MotionInsightsTests(unittest.TestCase):
             self.assertEqual(report(name, [parked])["unavailable"], 1)
         self.assertEqual(report("moving-time", [parked])["routes"][0]["value"], 0)
         self.assertEqual(report("stopped-share", [parked])["routes"][0]["value"], 100)
+
+    def test_summary_and_deterministic_tie_breaking(self):
+        rows = [
+            {"id": "z", "rms_jerk": 2, "min_ttc_s": 1},
+            {"id": "a", "rms_jerk": 2, "min_ttc_s": 1},
+            {"id": "m", "rms_jerk": 6, "min_ttc_s": 3},
+            {"id": "missing"},
+        ]
+        jerk = report("rms-jerk", rows)
+        self.assertEqual([r["id"] for r in jerk["routes"]], ["m", "a", "z"])
+        self.assertEqual(jerk["unavailable"], 1)
+        self.assertEqual(
+            jerk["summary"],
+            {"min": 2, "median": 2, "p95": 5.6, "max": 6, "mean": 3.3333},
+        )
+        ttc = report("closing-time", rows)
+        self.assertEqual([r["id"] for r in ttc["routes"]], ["a", "z", "m"])
+        self.assertEqual(
+            report("rms-jerk", [])["summary"],
+            {"min": None, "median": None, "p95": None, "max": None, "mean": None},
+        )

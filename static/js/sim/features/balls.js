@@ -1,3 +1,4 @@
+import { ballNotice } from "../ball-chase.js";
 import { r1 } from "../../common.js";
 import { BallChase, auditBalls, ballInRoad, ballYield, coverAfter } from "../ball-chase.js";
 
@@ -21,10 +22,64 @@ function ballClause(b) {
 }
 
 export default {
+  checkpoint(world) {
+    if (world.balls) world.balls.world = world;
+  },
   rulesCost: (c, snap) => (c.id === "slow_for_ball" && !snap.pedestrian ? -4 : 0),
   cautious: (snap, eligible) =>
     snap.ball_in_road?.limit_mps != null && !snap.pedestrian ? eligible.find((c) => c.id === "slow_for_ball") : null,
   key: "balls",
+  coach: {
+    init: () => ({
+      balls: false,
+      ballWarnings: 0,
+    }),
+    seen: "balls",
+    events: {
+      ball_warning_ignored(score, ev) {
+        score.ballWarnings++;
+        score.incident(
+          "ball_warning_ignored",
+          "Drove on past where a ball rolled out, too fast to stop for a child after it",
+          { ball: ev.ball, kmh: ev.kmh },
+        );
+      },
+    },
+    reports: [
+      { at: "end", order: 10, read: (score) => (score.balls ? { ball_warnings_ignored: score.ballWarnings } : {}) },
+    ],
+    deductions: [{ at: "safety", order: 6, counter: "ballWarnings", weight: 25 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 3,
+        when: (score) => score.ballWarnings,
+        text: "A ball bouncing into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 4,
+    duration: 2500,
+    read: (world, autopilot, views) =>
+      views.balls ? ballNotice(world, autopilot.enabled ? autopilot.snap : null) : null,
+    style: "safety",
+  },
+  eventBadges: {
+    ball_warning_ignored: "TOO FAST PAST WHERE A BALL ROLLED OUT",
+  },
+  perceptionLine(snap) {
+    const bl = snap.ball_in_road;
+    const text = bl
+      ? `Ball in the road ${Math.max(0, Math.round(bl.gap_m))} m ahead: ${bl.child === "in_road" ? "child after it, stop for them" : bl.child === "clear" ? "child back at the kerb" : bl.limit_mps != null ? `a child may follow, ${Math.round(bl.limit_mps * 3.6)} km/h` : "past it"}`
+      : null;
+    return text ? { order: 24, label: "Ball chase", text } : null;
+  },
+  perceptionFocus: (snap, o) => snap.ball_in_road?.child_id && o.id === snap.ball_in_road.child_id,
+  perceptionRejections: {
+    passes_ball_gap_too_fast: "Ball in the road: a child may follow",
+  },
   seen: "ballsSeen",
   calls: "ballCalls",
   build: (world, options) => new BallChase(world, options),

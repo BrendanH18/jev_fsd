@@ -126,7 +126,7 @@ DEBRIEF_REPLAY = """async () => {
   app.world.paused = false; app.advance(8);
   app.drive.incident('test', 'Test incident');
   app.advance(2); app.finishDrive('finished');
-  const { readHistory } = await import('/js/sim/drive-score.js');
+  const { readHistory, saveDrive } = await import('/js/sim/drive-score.js');
   const report = readHistory()[0], incident = report.incidents[0], frames = app.recorder.frames;
   const eventTime = frames[0].t - frames[0].state.drive.elapsed + incident.at_s;
   app.driveReport.dialog.querySelector('details').open = true;
@@ -144,13 +144,20 @@ DEBRIEF_REPLAY = """async () => {
   app.driveReport.showHistory(); app.driveReport.dialog.querySelector('.history-entry').click();
   const history = app.driveReport.dialog.textContent.includes('Replay unavailable')
     && !app.driveReport.dialog.querySelector('.incident-replay');
+  app.driveReport.showHistory();
+  const deleteDrive = app.driveReport.dialog.querySelector('.history-delete');
+  saveDrive({ ...report, title: 'Drive saved while history was open' });
+  deleteDrive.click();
+  const keptNewDrive = readHistory()[0]?.title === 'Drive saved while history was open'
+    && app.driveReport.dialog.querySelector('.history-entry').textContent.includes('Drive saved while history was open');
   app.recorder.reset(); app.driveReport.show(report);
   const replaced = app.driveReport.dialog.textContent.includes('Replay unavailable')
     && !app.driveReport.dialog.querySelector('.incident-replay');
   return [{ name: 'Real report opens paused replay before incident', ok: replay,
     detail: JSON.stringify({ focused, eventTime, chosen }) },
     { name: 'A stale incident button revalidates after branching', ok: revalidated },
-    { name: 'History and replaced recordings do not seek discarded events', ok: history && replaced }];
+    { name: 'History and replaced recordings do not seek discarded events', ok: history && replaced },
+    { name: 'Deleting a drive retains newer history entries', ok: keptNewDrive }];
   } finally {
     app.view.render = render;
   }
@@ -173,8 +180,15 @@ def check_published_replay(page, url):
     heading_visible = page.locator("#replay-heading").evaluate(
         "heading => heading.getBoundingClientRect().bottom > 0 && heading.getBoundingClientRect().top < innerHeight"
     )
+    driver_header = page.locator("#results-challenges thead th").nth(1)
+    sort_button = driver_header.get_by_role("button")
+    sort_button.focus()
+    for direction in ("descending", "ascending", "none"):
+        page.keyboard.press("Enter")
+        assert driver_header.get_attribute("aria-sort") == direction
+        assert sort_button.evaluate("button => button === document.activeElement")
     replay = page.locator("#published-replay")
-    canvas = replay.get_by_role("img")
+    canvas = replay.get_by_role("img", name="Overhead street map of the recorded drive")
     play = replay.get_by_role("button", name="Play replay", exact=True)
     play.wait_for()
     first = canvas.evaluate("canvas => canvas.toDataURL()")
@@ -182,6 +196,12 @@ def check_published_replay(page, url):
     page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
     replay.get_by_role("button", name="Pause replay").click()
     slider = replay.get_by_role("slider", name="Replay time")
+    replay.get_by_role("combobox", name="Playback speed").select_option("2")
+    slider.press("Home")
+    replay.get_by_role("button", name="+1 s", exact=True).click()
+    assert float(slider.input_value()) == 1
+    replay.get_by_role("img", name="Ego vehicle speed over time").click()
+    assert abs(float(slider.input_value()) / float(slider.get_attribute("max")) - 0.5) < 0.02
     seek_trigger = "slider => { slider.value = 5; slider.dispatchEvent(new Event('input')); }"
     slider.evaluate(seek_trigger)
     assert replay.get_by_role("status").inner_text() == "Cross traffic released"
@@ -207,7 +227,7 @@ def check_published_replay(page, url):
         slider.evaluate(seek_trigger)
         assert replay.get_by_role("status").inner_text() == trigger
         if flag:
-            replay.get_by_role("button", name="Flagged at").first.click()
+            replay.get_by_role("button", name="Next flag", exact=True).click()
             replay.get_by_text(f"Flagged: {flag}", exact=False).wait_for()
     page.route("**/jev-flagger.json", lambda route: route.fulfill(status=503))
     select.select_option("jev-flagger")
@@ -223,6 +243,57 @@ def check_published_replay(page, url):
             }
         ],
     )
+
+
+def check_snapshot_form(page):
+    # Let new decisions arrive both before the next paint and while the name field is open.
+    page.evaluate("""() => {
+        const app = window.__jev;
+        app.view.render = () => {};
+        if (app.lab.dialog.open) app.lab.dialog.close();
+        window.showSnapshotDecision = label => app.autopilot.onDecision({
+          meta: {}, candidates: [], questions: { vector: label }, state: { label }
+        });
+        window.showSnapshotDecision('displayed');
+    }""")
+    page.keyboard.press("i")
+    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('displayed')")
+    page.evaluate("""() => {
+        window.showSnapshotDecision('awaiting paint');
+        document.querySelector('#save-snapshot').click();
+        window.showSnapshotDecision('newer');
+    }""")
+    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('newer')")
+    page.route("**/api/snapshot/save", lambda route: route.fulfill(json={"saved": "fixture"}))
+    page.locator("#panel-inline-input").fill("fixture")
+    with page.expect_request("**/api/snapshot/save") as request:
+        page.locator("#panel-inline-submit").click()
+    payload = request.value.post_data_json
+    assert payload["state"] == {"label": "displayed"}
+    assert payload["questions"] == {"vector": "displayed"}
+    print("Inspector snapshot kept the displayed decision", flush=True)
+    copied = page.evaluate("""() => {
+        let text;
+        const writeText = navigator.clipboard.writeText;
+        navigator.clipboard.writeText = (value) => { text = value; };
+        try {
+          window.showSnapshotDecision('awaiting another paint');
+          document.querySelector('#copy-json').click();
+          document.querySelector('#pin-decision').click();
+          const state = JSON.parse(text);
+          document.querySelector('#panel [data-tab="state"]').click();
+          document.querySelector('#panel [data-tab="questions"]').click();
+          document.querySelector('#copy-json').click();
+          return [state, JSON.parse(text)];
+        } finally {
+          navigator.clipboard.writeText = writeText;
+        }
+    }""")
+    assert copied == [{"label": "newer"}, {"vector": "newer"}], copied
+    assert "newer" in page.locator("#panel-body").inner_text()
+    page.locator("#pin-decision").click()
+    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('awaiting another paint')")
+    print("Inspector copy and pin use the displayed decision", flush=True)
 
 
 def check_incident_comparison(page):
@@ -381,6 +452,7 @@ def check(url, chromium=None, groups=GROUPS):
             results = page.evaluate("import('/tests/render-tests.js').then(m => m.runRenderTests())")
             ok &= report("renderer tests", results)
             ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
+            check_snapshot_form(page)
             page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
 
         kinds = (PRACTICE_KINDS if "practice" in groups else []) + (PARKING_KINDS if "parking" in groups else [])
@@ -398,9 +470,11 @@ def check(url, chromium=None, groups=GROUPS):
                 if kind == "early":
                     score = comparison.locator("tbody tr").first.locator("td").nth(2).inner_text()
                     assert float(score) > 0, score
-                    published = comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents()
+                    published_scores = comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)")
+                    published = published_scores.locator(".comparison-score").all_text_contents()
                     assert published[0] == "Unavailable", published
                     assert all(0 <= float(value) <= 100 for value in published[1:]), published
+                    assert published_scores.locator(".comparison-delta").count() == 2
             elif kind in ("rules", "branched", "modified"):
                 assert comparison.count() == 0
             page.close()
@@ -438,6 +512,10 @@ def check(url, chromium=None, groups=GROUPS):
 
             for endpoint in ("**/api/results", "**/demo-data/results.json"):
                 page.route(endpoint, lambda route: route.fulfill(status=503))
+            # Reload to clear the in-page results cache while keeping the saved road test.
+            page.reload(wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+            page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+            page.evaluate("() => { window.__jev.view.render = () => {}; }")
             page.evaluate("""async () => {
               const { readHistory } = await import('/js/sim/drive-score.js');
               window.__jev.driveReport.show(readHistory()[0]);

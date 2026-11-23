@@ -23,6 +23,7 @@
     "test_challenge_modules.mjs": 0.4,
     "test_ci_shard.mjs": 0.4,
     "test_cinematic_photo.mjs": 0,
+    "test_cli_tooling.mjs": 1.5,
     "test_close_pass_body.mjs": 0.1,
     "test_closure_deadline.mjs": 0.1,
     "test_collection_clearance.mjs": 0.1,

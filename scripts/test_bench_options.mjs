@@ -13,6 +13,17 @@ const { failures } = await import("../static/js/bench/metrics.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
 
+const { parseOptions } = await import("./cli_tools.mjs");
+const parse = (args) => parseOptions(args, ["track", "check", "map"]);
+assert.equal(parse(["-h"]).help, true);
+assert.equal(parse(["--check", "0", "--track=open"]).args.check, "0");
+assert.equal(parse(["--check", "0", "--track=open"]).args.track, "open");
+assert.throws(() => parse(["--track="]), /non-empty value/);
+assert.throws(() => parse(["--track", "--check", "1"]), /non-empty value/);
+assert.throws(() => parse(["--unknown", "1"]), /Unknown option/);
+assert.throws(() => parse(["guarded"]), /Unexpected argument/);
+assert.equal(parse(["--map", "-123,49,-122,50"]).args.map, "-123,49,-122,50");
+
 assert.equal(JSON.stringify(benchmarkConfig()), "{}");
 assert.equal(JSON.stringify(benchmarkConfig({ features: "city", park: false, hour: 15.5 })), '{"features":"city"}');
 assert.equal(JSON.stringify(presetOptions()), '{"world":{},"fleet":{}}');

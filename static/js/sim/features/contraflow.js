@@ -1,3 +1,4 @@
+import { contraflowNotice } from "../contraflow.js";
 import { r1 } from "../../common.js";
 import { cumulative, pointAt } from "../../map/mapdata.js";
 import {
@@ -184,11 +185,85 @@ function contraflowClause(c) {
 }
 
 export default {
+  checkpoint(world) {
+    if (world.contraflow) world.contraflow.world = world;
+  },
   rulesStop: (snap) => snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 1.5,
   legitimateStop: (snap) => snap?.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 8,
   cautious: (snap, eligible) =>
     snap.contraflow_cyclist?.wait ? eligible.find((c) => c.id === "yield_to_contraflow_cyclist") : null,
   key: "contraflow",
+  coach: {
+    init: () => ({
+      contraflow: false,
+      contraflowMeets: 0,
+      contraflowCutoffs: 0,
+    }),
+    seen: "contraflow",
+    events: {
+      contraflow_conflict(score, ev) {
+        score.contraflowMeets++;
+        score.incident(
+          "contraflow_meet",
+          "Met a cyclist riding against the one-way with less than the minimum passing distance",
+          { cyclist: ev.with, clearance_m: ev.clearance_m, min_m: ev.min_m },
+        );
+      },
+      failed_to_yield(score, ev) {
+        if (!ev.contraflow) return;
+        score.contraflowCutoffs++;
+        score.incident("contraflow_cutoff", "Cut off a cyclist riding against the one-way", { cyclist: ev.with });
+      },
+    },
+    reports: [
+      {
+        at: "end",
+        order: 19,
+        read: (score) =>
+          score.contraflow
+            ? {
+                contraflow_conflicts: score.contraflowMeets + score.contraflowCutoffs,
+                contraflow_meets: score.contraflowMeets,
+                contraflow_cutoffs: score.contraflowCutoffs,
+              }
+            : {},
+      },
+    ],
+    deductions: [{ at: "legality", order: 1, counter: "contraflowMeets", weight: 20 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 0,
+        when: (score) => score.contraflowMeets || score.contraflowCutoffs,
+        text: "On a one-way street where cyclists may ride both ways, look both ways. Before turning or going straight into one, check for a cyclist coming out of it against the traffic, on your left, and let them clear the junction first. Driving along one, keep right for a cyclist coming the other way, and where that doesn't leave them at least 1 m (1.5 m above 50 km/h), stop and let them go by.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 0,
+    duration: 2500,
+    read: (world, autopilot) => contraflowNotice(world, autopilot.snap),
+    style: (line) => (line.wait ? "safety" : ""),
+  },
+  eventBadges: {
+    contraflow_conflict: "MET A CONTRAFLOW CYCLIST TOO CLOSE",
+  },
+  perceptionLine(snap) {
+    const cf = snap.contraflow_cyclist;
+    const text =
+      cf?.relation === "entering"
+        ? "Contraflow street ahead, out of sight: creep and look both ways"
+        : cf
+          ? `Cyclist against the one-way ${Math.round(cf.gap_m)} m away: ${cf.wait ? `${cf.relation === "oncoming" ? "no room to pass, move over and" : "give way,"} wait${cf.bumper_to_stop_m > 0.5 ? ` in ${Math.round(cf.bumper_to_stop_m)} m` : ""}` : `keep right, ${cf.min_pass_m} m clear`}`
+          : null;
+    return text ? { order: 20, label: "Contraflow", text } : null;
+  },
+  perceptionFocus: (snap, o) => o.id === snap.contraflow_cyclist?.cyclist_id,
+  perceptionRejections: {
+    fails_to_yield_to_contraflow_cyclist: "Cyclist against the one-way",
+    passes_contraflow_cyclist_too_close: "Cyclist coming: less than the passing distance",
+  },
   seen: "contraflowSeen",
   calls: "contraflowCalls",
   snapshot: { contraflow_cyclist: null },

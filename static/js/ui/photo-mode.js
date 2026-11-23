@@ -37,8 +37,8 @@ const formatHour = (hour) =>
   `${String(Math.floor(hour) % 24).padStart(2, "0")}:${String(Math.round((hour % 1) * 60) % 60).padStart(2, "0")}`;
 
 export class PhotoMode {
-  constructor({ view, place, getHour, setHour, onEnter, onExit }) {
-    Object.assign(this, { view, place, getHour, setHour, onEnter, onExit });
+  constructor({ view, place, getHour, setHour, getWeather, setWeather, onEnter, onExit }) {
+    Object.assign(this, { view, place, getHour, setHour, getWeather, setWeather, onEnter, onExit });
     this.active = false;
     this.inputs = {};
     const sliders = Object.entries(LOOK_RANGES).map(([key, range]) => {
@@ -72,6 +72,15 @@ export class PhotoMode {
         this.timeOutput.textContent = formatHour(Number(ev.target.value));
       },
     });
+    this.weather = setWeather
+      ? h(
+          "select",
+          { onchange: (ev) => this.setWeather(ev.target.value) },
+          ["dry", "rain", "fog", "snow"].map((name) => h("option", { value: name }, name)),
+        )
+      : null;
+    this.grid = h("div", { class: "photo-grid", "aria-hidden": "true", hidden: true });
+    this.gridToggle = h("input", { type: "checkbox", onchange: (ev) => (this.grid.hidden = !ev.target.checked) });
     this.cameraButtons = ["orbit", "cinematic", "chase", "hood"].map((mode) =>
       h(
         "button",
@@ -95,6 +104,7 @@ export class PhotoMode {
       {
         id: "photo-panel",
         class: "photo-panel panel",
+        tabindex: "-1",
         "aria-label": "Photo mode",
         hidden: true,
         onkeydown: (ev) => {
@@ -128,6 +138,8 @@ export class PhotoMode {
         this.timeInput,
         this.timeOutput,
       ),
+      this.weather && h("label", { class: "photo-weather" }, "Weather ", this.weather),
+      h("label", { class: "check" }, this.gridToggle, "Composition grid"),
       this.status,
       h(
         "div",
@@ -142,7 +154,7 @@ export class PhotoMode {
       { type: "button", class: "chip-button photo-reveal", hidden: true, onclick: () => this.collapse(false) },
       "Show photo controls",
     );
-    document.body.append(this.panel, this.reveal);
+    document.body.append(this.grid, this.panel, this.reveal);
   }
 
   describe(key, value) {
@@ -159,21 +171,27 @@ export class PhotoMode {
     if (this.active) return;
     this.active = true;
     this.previousCamera = this.view.mode;
+    this.previousHour = this.getHour();
+    this.previousWeather = this.getWeather?.();
     this.onEnter?.();
     document.body.classList.add("photo-mode");
     this.panel.hidden = false;
     this.collapse(false);
-    const hour = this.getHour();
+    const hour = this.previousHour;
+    if (this.weather) this.weather.value = this.previousWeather;
+    this.grid.hidden = !this.gridToggle.checked;
     this.timeInput.value = String(Math.round(hour * 4) / 4);
     this.timeOutput.textContent = formatHour(hour);
     this.setCamera(this.previousCamera === "cinematic" ? "cinematic" : "orbit");
-    this.panel.querySelector("button").focus({ preventScroll: true });
   }
 
   exit() {
     if (!this.active) return;
     this.active = false;
+    this.setHour(String(this.previousHour));
+    if (this.previousWeather) this.setWeather?.(this.previousWeather);
     this.resetLook();
+    this.grid.hidden = true;
     this.panel.hidden = true;
     this.reveal.hidden = true;
     document.body.classList.remove("photo-mode");
@@ -184,7 +202,15 @@ export class PhotoMode {
   collapse(hidden) {
     this.panel.hidden = hidden || !this.active;
     this.reveal.hidden = !hidden || !this.active;
-    (hidden ? this.reveal : this.panel.querySelector("button")).focus({ preventScroll: true });
+    (hidden ? this.view.renderer.domElement : this.panel).focus({ preventScroll: true });
+  }
+
+  handleKey(key) {
+    if (!this.active) return false;
+    if (key === " ") this.capture();
+    else if (key === "h") this.collapse(!this.panel.hidden);
+    else return false;
+    return true;
   }
 
   setCamera(mode) {

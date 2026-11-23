@@ -9,8 +9,9 @@
 //   key       the World option (fleet option when `buildFleet` is present) and the default World property
 //   property  the World property when it differs from `key`
 //   defaultCount  the free-drive default for a feature whose option is a count
+//   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations
 //   snapshot  default sensing fields kept in the snapshot even when the feature is inactive
-//   seen      the World flag that says the feature has met the driven car this drive (its audit's metric
+//   seen      required with a metric: the World flag that says the feature has met the driven car this drive (its audit's metric
 //             reaches the results, and fails a drive, only once it is set)
 //   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
@@ -166,9 +167,20 @@ import roadClosures from "./road-closures.js";
 import doubleParked from "./double-parked.js";
 import sunGlare from "./sun-glare.js";
 import calming from "./traffic-calming.js";
+import guards from "./crossing-guard.js";
+import pxo from "./pxo.js";
+import roadside from "./roadside.js";
+import following from "./following.js";
+import restrictions from "./turn-restrictions.js";
+import highBeams from "./high-beams.js";
+import redTurnSigns from "./red-turn-signs.js";
 import runners from "./red-light-runner.js";
 
 export const FEATURES = [
+  highBeams,
+  guards,
+  pxo,
+  restrictions,
   calming,
   sunGlare,
   contraflow,
@@ -186,37 +198,71 @@ export const FEATURES = [
   roadClosures,
   collection, // A stopped truck also matches the double-parked obstacle.
   doubleParked,
+  roadside,
+  following,
+  redTurnSigns,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
 // run, so `hooks` refuses to load one (and scripts/test_feature_registry.mjs checks every record).
 export const SLOTS = {
+  routeOptions: ["end"],
+  requestReroute: ["beforeOffRoute", "afterOffRoute"],
+  checkpointShare: ["end"],
   rulesStop: ["beforeSignal", "end"],
-  rulesCost: ["end"],
-  cautious: ["beforeBusLanes", "end", "beforeAmber", "afterAmber"],
+  notice: ["beforePlow", "beforeLeftOnRed", "end", "beforeZone"],
+  perceptionLine: ["end"],
+  perceptionFocus: ["end"],
+  rulesCost: ["beforeStops", "stops", "beforePassing", "end"],
+  cautious: ["beforeBusLanes", "afterBusLanes", "afterPassing", "end", "beforeAmber", "afterAmber"],
   cautiousStop: ["end"],
   cautiousDrive: ["end"],
   legitimateStop: ["end"],
   obstacles: ["end"],
-  stepBeforeTraffic: ["first", "afterOutages", "end"],
+  stepBeforeTraffic: ["first", "afterParked", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
-  audit: ["beforeCollisions", "afterFlagger", "afterCalming", "driveways", "streetHazards", "rearTraffic", "late"],
-  sense: ["afterCalming", "beforeRunner", "parking", "driveways", "streetHazards", "late", "junctions", "following"],
+  audit: [
+    "beforeCollisions",
+    "afterFlagger",
+    "afterCalming",
+    "beforeDriveways",
+    "driveways",
+    "streetHazards",
+    "rearTraffic",
+    "late",
+  ],
+  sense: [
+    "afterPedestrians",
+    "beforeWorkZone",
+    "afterCalming",
+    "beforeRunner",
+    "parking",
+    "driveways",
+    "streetHazards",
+    "late",
+    "junctions",
+    "following",
+    "beforeTarget",
+    "end",
+  ],
   finishLanes: ["end"],
-  limit: ["beforeRunner", "passing", "driveways", "streetHazards", "parking"],
+  limit: ["beforeWorkZone", "beforeRunner", "passing", "driveways", "streetHazards", "parking"],
   target: [
     "beforeRunner",
     "restrictions",
     "beforeCurve",
     "beforeRoadside",
+    "beforeParked",
+    "afterSchoolBus",
     "driveways",
     "streetHazards",
     "beforeEmergency",
     "parking",
   ],
-  hazard: ["beforeRunner", "parking", "driveways", "streetHazards", "rearTraffic", "late"],
-  laneOffer: ["end"],
+  hazard: ["beforeWorkZone", "beforeRunner", "parking", "driveways", "streetHazards", "rearTraffic", "late"],
+  laneOffer: ["afterPassing", "end"],
   laneChangeCandidate: ["end"],
+  laneChangeStyle: ["end"],
   lineStop: ["end"],
   predictionIgnore: ["end"],
   candidateSettle: ["end"],
@@ -230,11 +276,24 @@ export const SLOTS = {
   trafficSignalProceed: ["end"],
   trafficSignalHold: ["end"],
   turnPace: ["end"],
-  candidates: ["beforeRunner", "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"],
+  candidates: [
+    "afterFlagger",
+    "beforeRunner",
+    "restrictions",
+    "driveways",
+    "streetHazards",
+    "junctions",
+    "rearTraffic",
+    "parking",
+  ],
   adjust: ["streetHazards", "end"],
   brakeDetour: ["end"],
-  sim: ["beforeRunner", "first", "driveways", "streetHazards", "beforeEmergency", "parking", "end"],
+  sim: ["beforeRunner", "first", "afterCollision", "driveways", "streetHazards", "beforeEmergency", "parking", "end"],
   state: [
+    "signal",
+    "afterFollowing",
+    "beforePlow",
+    "afterPlow",
     "beforeRunner",
     "restrictions",
     "afterCalming",
@@ -245,9 +304,14 @@ export const SLOTS = {
     "parking",
   ],
   greenSignalClause: ["end"],
-  outcome: ["ids"],
+  outcome: ["ids", "laneChange"],
   slowOutcome: ["lane", "end"],
   clause: [
+    "signal",
+    "afterJunctionBox",
+    "afterClosure",
+    "afterPassing",
+    "following",
     "beforeRunner",
     "restrictions",
     "afterCalming",
@@ -257,8 +321,12 @@ export const SLOTS = {
     "rearTraffic",
     "parking",
   ],
-  holdStill: ["beforeRunner", "driveways", "late", "parking"],
+  holdStill: ["afterFlagger", "beforeRunner", "driveways", "late", "parking"],
   prompt: [
+    "headlights",
+    "pedestrian",
+    "beforeSchoolBus",
+    "afterPlow",
     "afterBusLanes",
     "afterGlare",
     "beforeRunner",
@@ -272,9 +340,13 @@ export const SLOTS = {
     "afterParking",
   ],
   metric: [
+    "headlights",
     "afterHeadlights",
+    "pxo",
+    "turns",
     "afterRestrictions",
     "afterCalming",
+    "guards",
     "beforeRunner",
     "driveways",
     "streetHazards",
@@ -286,16 +358,28 @@ export const SLOTS = {
   trafficManage: ["beforePlows", "afterPlows", "end"],
   trafficDriver: ["end"],
   trafficManeuver: ["beforeSpecial", "end"],
-  trafficStop: ["end"],
+  trafficStop: ["afterMerge", "end"],
   checkpoint: ["end"],
   trafficLeaderHold: ["end"],
   trafficParkingPlan: ["end"],
   trafficStart: ["end", "beforeControl"],
-  trafficReplan: ["end"],
+  trafficReplan: ["beforeCorner", "end"],
   trafficActors: ["end"],
   trafficLane: ["beforeLaneMoves", "laneMoves", "late"],
   trafficYield: ["end"],
-  trafficSpeed: ["beforeControl", "ordinary", "end"],
+  trafficSpeed: ["beforeControl", "limit", "following", "ordinary", "end"],
+  trafficParkingReach: ["end"],
+  trafficTurnBlocked: ["end"],
+  visionRange: ["end"],
+  redEntryBans: ["end"],
+  turnOnRedBlocked: ["end"],
+  routeTurnOnRedBlocked: ["end"],
+  followingPolicy: ["end"],
+  handlesPedestrian: ["end"],
+  returnClause: ["end"],
+  standingVehicleLabel: ["end"],
+  questions: ["end"],
+  decisionFields: ["end"],
   trafficPullOut: ["end"],
   hides: ["end"],
   blocksView: ["end"],
@@ -313,6 +397,7 @@ const FIELDS = [
   "key",
   "property",
   "defaultCount",
+  "buildAt",
   "snapshot",
   "seen",
   "calls",
@@ -321,6 +406,9 @@ const FIELDS = [
   "obstacle",
   "priority",
   "flagText",
+  "perceptionRejections",
+  "eventBadges",
+  "coach",
   "motion",
   "parkingTraffic",
   "day",
@@ -330,7 +418,11 @@ const FIELDS = [
 // What is wrong with record `f`, or null: a missing field, an unknown hook, or a hook at a slot the core
 // never runs.
 export function recordProblem(f) {
-  for (const k of ["key", "seen"]) if (typeof f[k] !== "string" || !f[k]) return `${f.key || "a record"} has no ${k}`;
+  if (typeof f.key !== "string" || !f.key) return "a record has no key";
+  if ((f.seen !== undefined || f.metric !== undefined) && (typeof f.seen !== "string" || !f.seen.trim()))
+    return `${f.key} has no seen flag`;
+  if (f.buildAt !== undefined && !["early", "afterSpawn"].includes(f.buildAt))
+    return `${f.key} has an unknown build position`;
   if (f.calls !== undefined && (typeof f.calls !== "string" || !f.calls))
     return `${f.key} has an invalid audit calls field`;
   if (typeof f.build !== "function") return `${f.key} has no build`;
@@ -378,13 +470,17 @@ function fillHooks(out, name, slot) {
   }
 }
 
-// Return the first result when a feature takes over a junction control.
+// Return the first result when a feature takes over a core decision.
 export function firstHookResult(list, ...args) {
   for (const run of list) {
     const result = run(...args);
     if (result) return result;
   }
   return null;
+}
+
+export function featureRouteOptions(world, rerouting = false) {
+  return Object.assign({}, ...hooks("routeOptions").map((options) => options(world, rerouting)));
 }
 
 const CONTROL_DIRECTION = hooks("controlDirection");
@@ -394,6 +490,31 @@ export const junctionPlan = (intersection) => firstHookResult(JUNCTION_PLAN, int
 
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
 export const recordsAt = (name, slot) => FEATURES.filter((f) => f[name] && (f[name].at || "end") === slot);
+
+const NOTICES = Object.fromEntries(
+  SLOTS.notice.map((slot) => [slot, recordsAt("notice", slot).sort((a, b) => a.notice.order - b.notice.order)]),
+);
+const EVENT_BADGES = Object.assign(Object.create(null), ...FEATURES.map((f) => f.eventBadges));
+const PERCEPTION_REJECTIONS = Object.assign(Object.create(null), ...FEATURES.map((f) => f.perceptionRejections));
+
+export function announceFeatureNotices(slot, world, autopilot, views, announced, hud) {
+  for (const { key, notice } of NOTICES[slot]) {
+    const previous = announced.get(key);
+    const line = notice.read(world, autopilot, views, previous);
+    if (line && line.key !== previous) {
+      announced.set(key, line.key);
+      const style = typeof notice.style === "function" ? notice.style(line) : notice.style;
+      hud.badge(line.text, style, notice.duration);
+    } else if (!line && !notice.hold) announced.delete(key);
+  }
+}
+
+export function featureEventBadge(event) {
+  const badge = EVENT_BADGES[event.type];
+  return typeof badge === "function" ? badge(event) : badge;
+}
+
+export const featurePerceptionRejection = (id) => PERCEPTION_REJECTIONS[id];
 
 // Metrics in slot order, with registration order within each slot.
 export const FEATURE_METRICS = SLOTS.metric.flatMap((slot) => recordsAt("metric", slot).map((f) => f.metric));
@@ -447,7 +568,7 @@ export const featureFailures = (m, slot) =>
 // The LLM system prompt's lines at `slot`, each with its newline.
 export const promptLines = (slot) =>
   recordsAt("prompt", slot)
-    .map((f) => `${f.prompt.text}\n`)
+    .map((f) => (f.prompt.inline ? f.prompt.text : `${f.prompt.text}\n`))
     .join("");
 
 // Whether a registered feature that is on reads the day of the year from the World's clock.
@@ -457,9 +578,27 @@ const enabled = (world, f) => world[f.property ?? f.key]?.enabled;
 export const featureNeedsDay = (world) => DAY.some((f) => enabled(world, f));
 export const featureNeedsUtcOffset = (world) => UTC_OFFSET.some((f) => enabled(world, f));
 
+// Supply default decision fields to built-in drivers.
+const DECISION_FIELDS = hooks("decisionFields");
+export function featureDecisionFields(snap) {
+  const fields = {};
+  for (const decide of DECISION_FIELDS) Object.assign(fields, decide(snap));
+  return fields;
+}
+
 // Every World option a registered feature takes.
 export const FEATURE_OPTIONS = FEATURES.filter((f) => !f.buildFleet).map((f) => f.key);
 export const FLEET_FEATURES = FEATURES.filter((f) => f.buildFleet);
+
+export function buildFeatures(world, options, seed, map, position) {
+  for (const f of FEATURES) {
+    if (f.buildAt !== position) continue;
+    const enabled = options[f.key] ?? (f.defaultCount === undefined ? false : 0);
+    world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
+    if (f.seen) world[f.seen] = false;
+    if (f.calls) world[f.calls] = new Map();
+  }
+}
 
 // Default snapshot fields that older readers expect even when the feature is inactive.
 export const FEATURE_SNAPSHOT_FIELDS = Object.assign({}, ...FEATURES.map((f) => f.snapshot));

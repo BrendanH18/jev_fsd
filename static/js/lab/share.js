@@ -1,5 +1,22 @@
 import { appUrl, copyText } from "../common.js";
 
+export function exportFilename(report, ext = "json", prefix = "jev") {
+  const raw = report?.config?.challenge || report?.title || "drive";
+  const slug =
+    String(raw)
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "drive";
+  const date =
+    report?.started_at && Number.isFinite(Date.parse(report.started_at)) ? new Date(report.started_at) : new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  return `${prefix}-${slug}-${stamp}.${ext}`;
+}
+
 export function driveLink(config, base = appUrl()) {
   const url = new URL(base);
   url.search = "";
@@ -85,7 +102,7 @@ export async function exportDriveCard(report, config = {}) {
   const url = URL.createObjectURL(blob),
     a = document.createElement("a");
   a.href = url;
-  a.download = "jev-drive-card.png";
+  a.download = exportFilename(report, "png", "jev-card");
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

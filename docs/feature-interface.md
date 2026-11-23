@@ -6,10 +6,12 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Seventeen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
-officers, tailgaters, black ice, snowbanks, puddles, traffic parking, road closures, double-parked vans,
-contraflow cyclists, low sun glare, garbage trucks, traffic calming and red-light runners. Each record
-holds its core pipeline hooks and model wording.
+Twenty-four features have moved to the registry. They include driveway reversers, ball chase, spring
+potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddles, traffic parking,
+road closures, double-parked vans, contraflow cyclists, low sun glare, garbage trucks, traffic calming,
+red-light runners, crossing guards, Ontario pedestrian crossovers, roadside stops, following distance,
+turn restrictions, high beams and no-turn-on-red signs. Each record holds its core pipeline hooks and
+model wording.
 
 ## A record
 
@@ -44,13 +46,21 @@ export default {
 };
 ```
 
-The header of `features/index.js` lists every hook, its arguments and its slots. The World takes the
-option through `...features` in its constructor and builds every record at the end of the constructor,
-in registration order. It sets each `seen` flag to false and creates an empty map for each declared `calls` field.
-A record's `build` can return a boolean for a feature whose only setting is on or off.
+The header of `features/index.js` lists the hook arguments, and `SLOTS` lists the dispatch positions.
+The World takes the option through `...features` and builds records in registration order at the end of
+its constructor. A record that uses `buildAt` can run earlier to preserve construction dependencies.
+Ontario crossovers set their option in the `early` position so the crowd can read it. Roadside stops
+reserve parking bays at `afterSpawn` before other features that use the same bays. The World initializes
+each declared `seen` flag to false and each declared `calls` field to an empty map. A metric requires a
+seen flag. A record's `build` can return a boolean for a feature whose only setting is on or off.
 A record with `buildFleet` takes its option from the fleet. The fleet stores the result under the option
-key and supplies its seed and a path factory. The World still builds the record's audit state. The
-`checkpoint` hook restores references to the live World and fleet after a rewind.
+key and supplies its seed and a path factory. The World still builds the record's audit state.
+`checkpointShare` adds state that can be shared across checkpoints, and `checkpoint` restores
+references to the live World and fleet after a rewind.
+
+`routeOptions` supplies the active constraints when requesting a route, including detours.
+`requestReroute` runs before or after the ordinary off-route check to preserve the trigger order.
+The record keeps any conditions required before it requests a detour.
 
 A core module asks for its hooks once, when it loads (`hooks(name, slot)`). Through an import cycle that
 can be before the records have loaded (the snowbanks record's simulation reaches `sim/npc.js`, say), so the
@@ -226,13 +236,18 @@ gave identical city results, the 12.81 km of the committed reference.
 
 A registered feature still has these integration points outside its own files:
 
-| Where | What | Hook needed |
+| Where | What still needs a change |
 |---|---|---|
-| `lab/challenges.js` | the challenge entry and its installer/step | ROADMAP 3.5 (one file per challenge) |
-| `brain/brain.js`, `bench/runner.js`, `lab/evaluation.js`, `lab/recorder.js` | road closures' re-plan round a closure (`avoid`, `closureRouting`) and checkpoint fixes (geese' `world` back-reference, potholes shared between checkpoints) | `reroute`, `checkpoint` |
-| `sim/drive-score.js` | the coach: its seen flag, incident text, score penalty, tip and report field | `coach` |
-| `main.js`, `render/*.js`, `render/perception.js`, `ui/lab.js` | drawing it, the HUD notice and badge, the perception overlay's line and rejection label | `view`, `notice`, `perception` |
-| `AGENTS.md` | its paragraph | ROADMAP 3.4 |
+| `lab/challenges.js` | Register the authored challenge module. |
+| `render/feature-views.js` | Mount and update any scene object the feature draws, through the browser adapter. |
+| `main.js`, vehicle renderers | Add a mesh or a per-vehicle effect when existing renderers cannot draw the actor. |
+| `AGENTS.md` | Link any project rule that agents need to preserve. |
+
+Set `coach` on the record for its driving messages, penalties, tips and report fields. Use `notice`
+for live HUD updates, `eventBadges` for audit badges, and the perception fields for AI Eyes
+observations and rejection text. Use `routeOptions` and `requestReroute` to participate in routing.
+Checkpoints call `checkpointShare` for immutable state and `checkpoint` after restoring the
+world and fleet.
 
 Free drives and the city benchmark enable every registered feature by default. Use the record's
 option key with `--without` and its lowercase form in the URL. For example, disable road closures
@@ -246,7 +261,7 @@ Use `eventType` when a counter audit emits its own world event with a different 
 The examiner groups failures by `metric.category` and puts uncategorized failures under Other.
 
 Rules reads `rulesStop` and `rulesCost` from the feature records. The cautious agent reads `cautious` at
-four points in its candidate precedence, along with `cautiousStop` for its speed target and `cautiousDrive`
+slots in its candidate precedence, along with `cautiousStop` for its speed target and `cautiousDrive`
 for a manoeuvre whose law already brings the car to a stop. The deadlock detector uses `legitimateStop`
 when the car is waiting for a feature.
 
@@ -286,6 +301,17 @@ entries in the presentation files above.
   signal, then asks `trafficSignalProceed` about waiving a red or amber stop and `trafficSignalHold`
   about waiting at a green. The runner rejection, metrics and wording follow contraflow within the
   same pipeline slots.
+* **Crossing guards and Ontario crossovers.** Guard hooks retain the order of approaching traffic stops,
+  the ego stop candidate, its pass-line rejection and the model wording. Crossovers sense occupancy
+  before the ordinary crosswalk hold. Their held-stop wording stays in the pedestrian instruction.
+* **Roadside stops and following distance.** The roadside record supplies the speed cap and lane-change
+  offer, including the speed the car can keep in the next lane. Following distance supplies the two
+  lane policies, traffic's safe speed and the final-gap rejection after the collision check.
+* **Turn restrictions and no-turn-on-red signs.** Traffic checks prohibited successors and replans
+  before it reaches a prohibited corner. Red-only signs preserve the banned exits in effect when
+  a car crosses on red, so a schedule change during the turn cannot change the verdict.
+* **High beams.** The record extends sight only when the headlights and conditions allow it. It supplies
+  the model question, the local decision field and the glare audit, including its trace threshold.
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).
@@ -320,7 +346,7 @@ entries in the presentation files above.
 * **Low sun glare.** The record keeps the clock's `day` and `utc_offset` while enabled and installs
   the glare visibility callback. The ordinary-traffic speed hook excludes cyclists. The driving audit
   still runs before the collision checks and keeps its reaction allowance in the checkpoint.
-* **Hooks still to add.** The coach, the HUD and renderers, checkpoint fixes and the re-plan, as in
-  the table above.
+* **Presentation hooks.** Records supply feature notices, perception lines and rejection labels.
+  Renderer integration points are listed in the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are
   mostly the core's own logic and loops over hooks, and can be broken up.

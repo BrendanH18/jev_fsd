@@ -10,12 +10,47 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { benchPage, loopbackPort, parseOptions } from "./cli_tools.mjs";
 
 // freeDriveOptions' imports use common.js, which reads the token at module load.
 globalThis.document = { querySelector: () => null };
 const { coveringArray, FEATURE_NAMES } = await import("../static/js/bench/features.js");
 const { heldoutPlan } = await import("../static/js/bench/heldout.js");
 const hardCity = JSON.parse(await readFile(new URL("../data/suites/hard-city-v1.json", import.meta.url), "utf8"));
+
+const DEFAULT_TIMEOUT_MS = 20 * 60 * 1000;
+const STDERR_TAIL_CHARS = 2000;
+const VALUE_OPTIONS = [
+  "port",
+  "mode",
+  "maps",
+  "seeds",
+  "count",
+  "shard",
+  "shards",
+  "weather",
+  "json",
+  "heldout",
+  "timeout",
+];
+const FLAG_OPTIONS = ["dry-run", "list"];
+const USAGE = [
+  "Usage: node --experimental-default-type=module scripts/soak.mjs [options]",
+  "  --mode <all|city|pairs|hard>  task mode (default: all, or city with --heldout 1)",
+  "  --maps <m1,m2,...>            map presets (default: kitsilano,toronto,calgary,victoria)",
+  "  --seeds <s1,s2,...>           suite seeds (default: 1,2,3)",
+  "  --count <N>                   routes per seed (default: 2)",
+  "  --shard <i:0..shards-1>       zero-based shard index (default: 0)",
+  "  --shards <N>                  total shard count (default: 1)",
+  "  --weather <name>              weather condition (default: dry)",
+  "  --heldout <0|1>               run held-out routes instead of tuned seeds",
+  "  --port <port>                 local server port (default: PORT or 8331)",
+  "  --timeout <ms>                per-configuration timeout in ms (default: 1200000)",
+  "  --json <path>                 write soak report JSON",
+  "  --dry-run, --list             print shard assignments without running benchmarks",
+  "  --help, -h                    show this help",
+].join("\n");
+
 export function soakPlan({
   mode = "all",
   maps = ["kitsilano", "toronto", "calgary", "victoria"],
@@ -101,35 +136,56 @@ export function checkHardRun(task, run) {
 }
 
 async function main() {
-  const args = {},
-    allowed = ["port", "mode", "maps", "seeds", "count", "shard", "shards", "weather", "json", "heldout"];
-  for (let i = 2; i < process.argv.length; i += 2) {
-    const name = process.argv[i].slice(2),
-      value = process.argv[i + 1];
-    if (!process.argv[i].startsWith("--") || !allowed.includes(name) || value === undefined || value.startsWith("--"))
-      throw new Error(`Invalid soak option ${process.argv[i]} (expected --${allowed.join(", --")} and a value).`);
-    args[name] = value;
+  const parsed = parseOptions(process.argv.slice(2), VALUE_OPTIONS, FLAG_OPTIONS);
+  if (parsed.help) {
+    console.log(USAGE);
+    return 0;
   }
+  const args = parsed.args;
+  const port = loopbackPort(args.port ?? process.env.PORT ?? "8331");
   const integer = (s, fallback) => (s === undefined ? fallback : /^\d+$/.test(s) ? Number(s) : NaN);
   if (args.heldout !== undefined && !["0", "1"].includes(args.heldout)) throw new Error("--heldout must be 0 or 1.");
+  const timeoutMs = integer(args.timeout, DEFAULT_TIMEOUT_MS);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2 ** 31 - 1)
+    throw new Error("--timeout must be a positive number of milliseconds.");
   const heldout = args.heldout === "1";
   const hard = args.mode === "hard";
   if (heldout && (args.seeds !== undefined || args.count !== undefined))
     throw new Error("--heldout sets the seeds and routes: drop --seeds and --count.");
   if (hard && ["maps", "seeds", "count", "weather"].some((key) => args[key] !== undefined))
     throw new Error("--mode hard sets the conditions: drop --maps, --seeds, --count and --weather.");
+  const shard = integer(args.shard, 0);
+  const shards = integer(args.shards, 1);
   const tasks = soakPlan({
     mode: args.mode ?? (heldout ? "city" : undefined),
     maps: args.maps?.split(","),
     seeds: args.seeds?.split(",").map((s) => integer(s)),
     count: integer(args.count, 2),
-    shard: integer(args.shard, 0),
-    shards: integer(args.shards, 1),
+    shard,
+    shards,
     heldout,
   });
+  if (args["dry-run"] || args.list) {
+    const listed = tasks.map((task) => ({
+      configuration: task.id,
+      map: task.map,
+      weather: task.weather || args.weather || "dry",
+      ...(task.heldout
+        ? { heldout: true, seeds: task.seeds, count: task.count }
+        : { seed: task.seed, count: task.count }),
+      ...(task.only ? { only: task.only } : {}),
+      options: task.options,
+    }));
+    console.log(JSON.stringify({ shard, shards, configurations: listed.length, tasks: listed }, null, 2));
+    return 0;
+  }
+
+  await benchPage(port);
+
   const directory = await mkdtemp(join(tmpdir(), "jev-soak-")),
     runs = [];
   const auditPolicy = hard ? "all drive verdicts count" : "report-only; throws, deadlocks/timeouts and collisions fail";
+  const killGraceMs = Math.min(5000, Math.max(200, timeoutMs));
   let failed = false;
   try {
     for (const [index, task] of tasks.entries()) {
@@ -140,7 +196,7 @@ async function main() {
         "--experimental-default-type=module",
         fileURLToPath(new URL("bench_node.mjs", import.meta.url)),
         "--port",
-        args.port || process.env.PORT || "8331",
+        String(port),
         "--map",
         task.map,
         ...(task.heldout ? ["--heldout", "1"] : ["--seed", String(task.seed), "--count", String(task.count)]),
@@ -174,28 +230,44 @@ async function main() {
           on: FEATURE_NAMES.filter((n) => (n !== "park" ? !options.without?.includes(n) : !!options.park)),
         }),
       );
-      let code;
       try {
-        code = await new Promise((resolve, reject) => {
+        const outcome = await new Promise((resolve, reject) => {
           const child = spawn(process.execPath, command, { stdio: ["ignore", "pipe", "pipe"] });
           child.stdout.pipe(process.stdout);
-          child.stderr.pipe(process.stderr);
-          const timer = setTimeout(
-            () => {
-              child.kill("SIGTERM");
-            },
-            20 * 60 * 1000,
-          );
-          child.on("error", (error) => {
+          let stderrTail = "";
+          child.stderr.on("data", (chunk) => {
+            process.stderr.write(chunk);
+            stderrTail += chunk.toString("utf8");
+            if (stderrTail.length > STDERR_TAIL_CHARS) stderrTail = stderrTail.slice(-STDERR_TAIL_CHARS);
+          });
+          let timedOut = false;
+          let killTimer = null;
+          const timer = setTimeout(() => {
+            timedOut = true;
+            child.kill("SIGTERM");
+            killTimer = setTimeout(() => {
+              child.kill("SIGKILL");
+            }, killGraceMs);
+          }, timeoutMs);
+          const clearTimers = () => {
             clearTimeout(timer);
+            if (killTimer) clearTimeout(killTimer);
+          };
+          child.on("error", (error) => {
+            clearTimers();
             reject(error);
           });
           child.on("close", (status, signal) => {
-            clearTimeout(timer);
-            resolve(signal ? `signal ${signal}` : status);
+            clearTimers();
+            resolve({ code: signal ? `signal ${signal}` : status, timedOut, stderrTail: stderrTail.trim() });
           });
         });
-        if (code !== 0) throw new Error(`Benchmark process exited ${code}.`);
+        if (outcome.timedOut || outcome.code !== 0) {
+          const reason = outcome.timedOut
+            ? `Benchmark process timed out after ${timeoutMs}ms (exited ${outcome.code}).`
+            : `Benchmark process exited ${outcome.code}.`;
+          throw new Error(outcome.stderrTail ? `${reason} stderr: ${outcome.stderrTail}` : reason);
+        }
         const run = JSON.parse(await readFile(path, "utf8"));
         const categories = classifyResults(run.results);
         const passed = hard ? checkHardRun(task, run) : !soakFailed(categories);
@@ -224,8 +296,8 @@ async function main() {
       schema: 1,
       suite_version: "custom",
       ...(hard ? { slice: hardCity.id } : { weather: args.weather || "dry" }),
-      shard: integer(args.shard, 0),
-      shards: integer(args.shards, 1),
+      shard,
+      shards,
       ...(heldout ? { heldout: true } : {}),
       audit_policy: auditPolicy,
       failed,

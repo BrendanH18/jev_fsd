@@ -22,6 +22,7 @@ The output has no timestamps, so it changes only with the records.
 from __future__ import annotations
 
 import argparse
+import difflib
 import gzip
 import hashlib
 import json
@@ -29,6 +30,7 @@ import math
 import re
 import subprocess
 import sys
+import zlib
 from datetime import date as calendar_date
 from pathlib import Path
 
@@ -52,21 +54,27 @@ HOME_MAP = "kitsilano"
 LEADERBOARD = "https://brendanh18.github.io/jev_fsd/results.html"
 WEATHERS = ("dry", "fog", "rain", "snow")
 
-# The bundled maps (jev/config.py PRESET_BBOXES), with the names the docs use. Add a new map here.
-MAP_NAMES = {
-    "kitsilano": "Kitsilano",
-    "mount_pleasant": "Mount Pleasant",
-    "victoria": "Victoria",
-    "calgary": "Calgary",
-    "edmonton": "Edmonton",
-    "halifax": "Halifax",
-    "montreal": "Montréal",
-    "ottawa": "Ottawa",
-    "quebec_city": "Québec City",
-    "saskatoon": "Saskatoon",
-    "toronto": "Toronto",
-    "winnipeg": "Winnipeg",
-}
+
+def _load_map_names() -> dict[str, str]:
+    """Derive bundled map display names from jev.config.PRESET_BBOXES and jev.maps.MAP_CATALOG."""
+    root = str(ROOT)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from jev.config import PRESET_BBOXES
+    from jev.maps import MAP_CATALOG
+
+    city_counts: dict[str, int] = {}
+    for item in MAP_CATALOG:
+        city_counts[item["city"]] = city_counts.get(item["city"], 0) + 1
+    return {
+        item["id"]: item["name"] if city_counts[item["city"]] > 1 else item["city"]
+        for item in MAP_CATALOG
+        if item["id"] in PRESET_BBOXES
+    }
+
+
+# The bundled maps (jev/config.py PRESET_BBOXES), with the names the docs use.
+MAP_NAMES = _load_map_names()
 # Drivers without a recording (no model) and the order drivers are listed in. A model driver's
 # label and model come from its recording's header.
 BUILT_IN = {
@@ -120,7 +128,7 @@ LEGACY_REPLAY_SOURCES = {
 
 
 def rel(path: Path) -> str:
-    return path.relative_to(ROOT).as_posix()
+    return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
 
 
 def round_share(value):
@@ -485,13 +493,20 @@ def published_drive(result: dict, map_sha: str | None = None, comparison: dict |
         "time_s": seconds if finite_number(seconds) else None,
     }
     drive.update({key: result[key] for key in ("version", "pack") if key in result})
+    flagged = result.get("flagged_choices")
+    if type(flagged) is int and flagged >= 0:
+        drive["flagged_choices"] = flagged
     if map_sha:
         drive["map_sha"] = map_sha
     drive["incident_counts"] = {
         k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if finite_number(result.get(k))
     }
     if has_score_inputs(result):
-        drive["score_inputs"] = {k: result[k] for k in ("arrived", *SCORE_NUMERIC, *SCORE_NULLABLE)}
+        score_inputs = {k: result[k] for k in ("arrived", *SCORE_NUMERIC, *SCORE_NULLABLE)}
+        tags = result.get("tags")
+        if isinstance(tags, dict) and finite_number(tags.get("length_m")):
+            score_inputs["tags"] = {"length_m": tags["length_m"]}
+        drive["score_inputs"] = score_inputs
     inputs = result.get("comparison_score_inputs")
     if comparison is not None:
         if not result.get("result_sha") or comparison.get("result_sha") != result["result_sha"] or inputs is not None:
@@ -518,39 +533,43 @@ def published_drive(result: dict, map_sha: str | None = None, comparison: dict |
     return drive
 
 
+def _read_submission_source(path: Path) -> tuple[Path, dict, Path, str]:
+    entry = json.loads(path.read_text())
+    submitter, digest = entry.get("submitter"), entry.get("recording_sha256")
+    day = path.parent.name
+    try:
+        valid_date = day == calendar_date.fromisoformat(day).isoformat()
+    except ValueError:
+        valid_date = False
+    if (
+        entry.get("format") != "jev-published-submission/1"
+        or not isinstance(submitter, str)
+        or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,38}", submitter)
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+        or not valid_date
+        or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", path.stem)
+        or not isinstance(entry.get("report"), dict)
+    ):
+        raise ValueError(f"{rel(path)}: invalid published submission")
+    tape = path.with_suffix(".json.gz")
+    if not tape.is_file():
+        raise ValueError(f"{rel(path)}: the submitted recording is missing")
+    checksum = hashlib.sha256()
+    with tape.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            checksum.update(chunk)
+    if checksum.hexdigest() != digest:
+        raise ValueError(f"{rel(tape)}: the submitted recording checksum has changed")
+    return path, entry["report"], tape, submitter
+
+
 def challenge_sources():
     for path in sorted(RESULTS.glob("*/*.json")):
         name = f"{path.stem}-{path.parent.name}"
         yield path, json.loads(path.read_text()), RECORDINGS / f"{name}.json.gz", None
     for path in sorted(SUBMISSIONS.glob("*/*.json")):
-        entry = json.loads(path.read_text())
-        submitter, digest = entry.get("submitter"), entry.get("recording_sha256")
-        day = path.parent.name
-        try:
-            valid_date = day == calendar_date.fromisoformat(day).isoformat()
-        except ValueError:
-            valid_date = False
-        if (
-            entry.get("format") != "jev-published-submission/1"
-            or not isinstance(submitter, str)
-            or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,38}", submitter)
-            or not isinstance(digest, str)
-            or not re.fullmatch(r"[0-9a-f]{64}", digest)
-            or not valid_date
-            or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", path.stem)
-            or not isinstance(entry.get("report"), dict)
-        ):
-            raise ValueError(f"{rel(path)}: invalid published submission")
-        tape = path.with_suffix(".json.gz")
-        if not tape.is_file():
-            raise ValueError(f"{rel(path)}: the submitted recording is missing")
-        checksum = hashlib.sha256()
-        with tape.open("rb") as stream:
-            while chunk := stream.read(1024 * 1024):
-                checksum.update(chunk)
-        if checksum.hexdigest() != digest:
-            raise ValueError(f"{rel(tape)}: the submitted recording checksum has changed")
-        yield path, entry["report"], tape, submitter
+        yield _read_submission_source(path)
 
 
 def submission_driver(path: Path, report: dict, recording: dict, manifest: dict, submitter: str) -> tuple[str, dict]:
@@ -579,106 +598,106 @@ def submission_driver(path: Path, report: dict, recording: dict, manifest: dict,
     }
 
 
+def _build_challenge_row(
+    path: Path, published: dict, recording_path: Path, submitter: str | None, drivers: dict
+) -> dict:
+    date, name = path.parent.name, path.stem
+    summary, results = published["summary"], published["results"]
+    if not isinstance(results, list) or any(
+        not isinstance(row, dict) or not isinstance(row.get("pass"), bool) for row in results
+    ):
+        raise ValueError(f"{rel(path)} needs a results list with boolean verdicts")
+    driver = summary["brain"]
+    # (the guarded track, every earlier record's, or the open one: static/js/brain/tracks.js)
+    track = summary.get("track") or "guarded"
+    comparison_path = COMPARISON_SCORES / f"{name}-{date}.json"
+    comparisons = {}
+    row_results, cost, cost_basis, model, requested = results, summary.get("cost_usd") or 0, None, None, None
+    sources = [rel(path)]
+    recording = recording_facts(recording_path) if recording_path.is_file() else None
+    manifest = checked_manifest(path, published, date, recording)
+    replay_source = LEGACY_REPLAY_SOURCES.get(recording_path.name) if recording and manifest is None else None
+    map_shas = {key: entry["fingerprint"] for key, entry in manifest["maps"].items()} if manifest else {}
+    row_driver = driver
+    if recording is not None:
+        header = recording["header"]
+        map_shas = header.get("maps") or map_shas
+        if header.get("driver") != driver:
+            raise ValueError(f"{rel(recording_path)} is for {header.get('driver')}, {rel(path)} for {driver}")
+        if ((header.get("arena") or {}).get("track") or "guarded") != track:
+            raise ValueError(f"{rel(recording_path)} and {rel(path)} were driven on different tracks")
+        row_results = list(recording["results"].values())
+        mine = {r["challenge"]: r["pass"] for r in results}
+        theirs = {r["challenge"]: r["pass"] for r in row_results}
+        if mine != theirs:
+            raise ValueError(f"{rel(recording_path)} and {rel(path)} disagree on which drives passed")
+        sources.append(rel(recording_path))
+        models, billed, _ = recording["answered"]
+        requested = header.get("model")
+        model = models[0] if models and not submitter else requested
+        if submitter:
+            row_driver, info = submission_driver(path, published, recording, manifest, submitter)
+            drivers.setdefault(row_driver, info)
+            cost_basis = "as recorded in the submission"
+        else:
+            if billed is not None:
+                cost, cost_basis = billed, "billed by the provider (usage.cost in each recorded reply)"
+            drivers.setdefault(driver, model_driver(header, model))
+    if not submitter and comparison_path.is_file():
+        comparisons = json.loads(comparison_path.read_text())
+        if track != "guarded" or recording is None or comparisons.keys() - recording["results"].keys():
+            raise ValueError(f"{rel(comparison_path)} must match its guarded source recording")
+        sources.append(rel(comparison_path))
+    if cost_basis is None:
+        cost_basis = "none" if not cost else "as recorded (the cost the server counted for each call)"
+    # (the whole set, every challenge and road test: a run of some of them, or one stopped part way,
+    # is a pilot, never the full set)
+    version = published.get("suite_version", LEGACY_SUITE)
+    full = summary.get("set") == "all" and {r["challenge"] for r in row_results} == full_set_ids(version)
+    failed = [{"id": r["challenge"], "map": r["map"], "failures": r["failures"]} for r in row_results if not r["pass"]]
+    return {
+        "driver": row_driver,
+        **({"submitter": submitter, "submitted_driver": driver} if submitter else {}),
+        "suite_version": version,
+        "suite": ("open" if track == "open" else "challenges") if full else "pilot",
+        "track": track,
+        "label": ("Open track: challenges and road tests" if track == "open" else "Challenges and road tests")
+        if full
+        else ", ".join(sorted(r["challenge"] for r in row_results)),
+        "map": None,
+        "preset": None,
+        "weather": "authored per challenge",
+        "passed": sum(1 for r in row_results if r["pass"]),
+        "total": len(row_results),
+        "date": date,
+        "seed": "authored per challenge",
+        "mode": "lockstep",
+        "engine": summary.get("engine"),
+        "model": model,
+        "model_requested": requested if requested != model else None,
+        **shares(row_results),
+        "fallbacks": sum(r.get("fallbacks") or 0 for r in row_results),
+        "hard_brakes": sum(r.get("hard_brakes") or 0 for r in row_results),
+        "safety_brakes": sum(r.get("safety_brakes") or 0 for r in row_results),
+        # (the open track: how often the car went on with a manoeuvre that broke a road rule)
+        **({"flagged_choices": sum(r.get("flagged_choices") or 0 for r in row_results)} if track == "open" else {}),
+        "driving_s": round(sum(r.get("time_s") or 0 for r in row_results), 1),
+        "cost_usd": round(cost, 6),
+        "cost_basis": cost_basis,
+        "failed": failed,
+        "drives": [published_drive(r, map_shas.get(r["map"]), comparisons.get(r["challenge"])) for r in row_results],
+        "sources": sources,
+        "recording": rel(recording_path) if recording_path.is_file() else None,
+        **({"manifest": manifest} if manifest else {}),
+        **({"replay_source_commit": replay_source} if replay_source else {}),
+    }
+
+
 def challenge_rows(drivers: dict) -> list[dict]:
-    rows = []
-    for path, published, recording_path, submitter in challenge_sources():
-        date, name = path.parent.name, path.stem
-        summary, results = published["summary"], published["results"]
-        driver = summary["brain"]
-        # (the guarded track, every earlier record's, or the open one: static/js/brain/tracks.js)
-        track = summary.get("track") or "guarded"
-        comparison_path = COMPARISON_SCORES / f"{name}-{date}.json"
-        comparisons = {}
-        row_results, cost, cost_basis, model, requested = results, summary.get("cost_usd") or 0, None, None, None
-        sources = [rel(path)]
-        recording = recording_facts(recording_path) if recording_path.is_file() else None
-        manifest = checked_manifest(path, published, date, recording)
-        replay_source = LEGACY_REPLAY_SOURCES.get(recording_path.name) if recording and manifest is None else None
-        map_shas = {key: entry["fingerprint"] for key, entry in manifest["maps"].items()} if manifest else {}
-        row_driver = driver
-        if recording is not None:
-            header = recording["header"]
-            map_shas = header.get("maps") or map_shas
-            if header.get("driver") != driver:
-                raise ValueError(f"{rel(recording_path)} is for {header.get('driver')}, {rel(path)} for {driver}")
-            if ((header.get("arena") or {}).get("track") or "guarded") != track:
-                raise ValueError(f"{rel(recording_path)} and {rel(path)} were driven on different tracks")
-            row_results = list(recording["results"].values())
-            mine = {r["challenge"]: r["pass"] for r in results}
-            theirs = {r["challenge"]: r["pass"] for r in row_results}
-            if mine != theirs:
-                raise ValueError(f"{rel(recording_path)} and {rel(path)} disagree on which drives passed")
-            sources.append(rel(recording_path))
-            models, billed, _ = recording["answered"]
-            requested = header.get("model")
-            model = models[0] if models and not submitter else requested
-            if submitter:
-                row_driver, info = submission_driver(path, published, recording, manifest, submitter)
-                drivers.setdefault(row_driver, info)
-                cost_basis = "as recorded in the submission"
-            else:
-                if billed is not None:
-                    cost, cost_basis = billed, "billed by the provider (usage.cost in each recorded reply)"
-                drivers.setdefault(driver, model_driver(header, model))
-        if not submitter and comparison_path.is_file():
-            comparisons = json.loads(comparison_path.read_text())
-            if track != "guarded" or recording is None or comparisons.keys() - recording["results"].keys():
-                raise ValueError(f"{rel(comparison_path)} must match its guarded source recording")
-            sources.append(rel(comparison_path))
-        if cost_basis is None:
-            cost_basis = "none" if not cost else "as recorded (the cost the server counted for each call)"
-        # (the whole set, every challenge and road test: a run of some of them, or one stopped part way,
-        # is a pilot, never the full set)
-        version = published.get("suite_version", LEGACY_SUITE)
-        full = summary.get("set") == "all" and {r["challenge"] for r in row_results} == full_set_ids(version)
-        failed = [
-            {"id": r["challenge"], "map": r["map"], "failures": r["failures"]} for r in row_results if not r["pass"]
-        ]
-        rows.append(
-            {
-                "driver": row_driver,
-                **({"submitter": submitter, "submitted_driver": driver} if submitter else {}),
-                "suite_version": version,
-                "suite": ("open" if track == "open" else "challenges") if full else "pilot",
-                "track": track,
-                "label": ("Open track: challenges and road tests" if track == "open" else "Challenges and road tests")
-                if full
-                else ", ".join(sorted(r["challenge"] for r in row_results)),
-                "map": None,
-                "preset": None,
-                "weather": "authored per challenge",
-                "passed": sum(1 for r in row_results if r["pass"]),
-                "total": len(row_results),
-                "date": date,
-                "seed": "authored per challenge",
-                "mode": "lockstep",
-                "engine": summary.get("engine"),
-                "model": model,
-                "model_requested": requested if requested != model else None,
-                **shares(row_results),
-                "fallbacks": sum(r.get("fallbacks") or 0 for r in row_results),
-                "hard_brakes": sum(r.get("hard_brakes") or 0 for r in row_results),
-                "safety_brakes": sum(r.get("safety_brakes") or 0 for r in row_results),
-                # (the open track: how often the car went on with a manoeuvre that broke a road rule)
-                **(
-                    {"flagged_choices": sum(r.get("flagged_choices") or 0 for r in row_results)}
-                    if track == "open"
-                    else {}
-                ),
-                "driving_s": round(sum(r.get("time_s") or 0 for r in row_results), 1),
-                "cost_usd": round(cost, 6),
-                "cost_basis": cost_basis,
-                "failed": failed,
-                "drives": [
-                    published_drive(r, map_shas.get(r["map"]), comparisons.get(r["challenge"])) for r in row_results
-                ],
-                "sources": sources,
-                "recording": rel(recording_path) if recording_path.is_file() else None,
-                **({"manifest": manifest} if manifest else {}),
-                **({"replay_source_commit": replay_source} if replay_source else {}),
-            }
-        )
-    return rows
+    return [
+        _build_challenge_row(path, published, recording_path, submitter, drivers)
+        for path, published, recording_path, submitter in challenge_sources()
+    ]
 
 
 def full_set_ids(version: str = LEGACY_SUITE) -> set[str]:
@@ -704,56 +723,96 @@ def committed_runs() -> list[Path]:
 VARIANT_KEYS = ("heldout", "park", "hour", "cover", "without", "track")
 
 
+def _check_run_shape(run):
+    if not isinstance(run, dict):
+        raise ValueError("benchmark run must be an object")
+    config, summary, results = run.get("config"), run.get("summary"), run.get("results")
+    if not isinstance(config, dict) or not isinstance(summary, dict):
+        raise ValueError("benchmark run needs config and summary objects")
+    required_strings = (run.get("name"), run.get("saved_at"), config.get("brain"), config.get("map"))
+    if any(not isinstance(value, str) or not value.strip() for value in required_strings):
+        raise ValueError("benchmark run needs a name, saved_at, driver and map")
+    calendar_date.fromisoformat(run["saved_at"][:10])
+    stop_reason = run.get("stopped")
+    if not isinstance(results, list) or (not results and not (isinstance(stop_reason, str) and stop_reason.strip())):
+        raise ValueError("benchmark run needs a results list with drives or a stop reason")
+    if any(
+        not isinstance(row, dict)
+        or not isinstance(row.get("id"), str)
+        or not row["id"].strip()
+        or not isinstance(row.get("pass"), bool)
+        for row in results
+    ):
+        raise ValueError("benchmark result needs a route ID and boolean verdict")
+
+
+def _validated_run(path: Path, *, validate_filtered=False):
+    run = json.loads(path.read_text())
+    if validate_filtered:
+        _check_run_shape(run)
+    config = run.get("config") or {}
+    key = map_key(config)
+    if not validate_filtered and (not key or not run.get("results")):
+        return None
+    # (`is`, not `in`: hour 0 and cover row 0 are variants, and 0 == False in Python)
+    variant = any(
+        config.get(k) is not None and config.get(k) is not False and config.get(k) not in ([], "") for k in VARIANT_KEYS
+    )
+    version = run.get("suite_version", LEGACY_SUITE)
+    manifest_data = run.get("manifest")
+    partial = isinstance(manifest_data, dict) and (
+        run.get("stopped") or (manifest_data.get("suite") or {}).get("only") is True
+    )
+    excluded = (
+        not key
+        or not run.get("results")
+        or (version == LEGACY_SUITE and (partial or variant))
+        or (version == CUSTOM_SUITE and (config.get("heldout") or run.get("stopped")))
+    )
+    if excluded and not validate_filtered:
+        return None
+    recording_path = RECORDINGS / f"{path.stem}.json.gz"
+    recording = recording_facts(recording_path) if recording_path.is_file() else None
+    manifest = checked_manifest(path, run, run["saved_at"][:10], recording)
+    # Numbered held-out results are reported apart.
+    skip = excluded or (variant and version != CUSTOM_SUITE)
+    if skip and not validate_filtered:
+        return None
+    if recording is not None:
+        header = recording["header"]
+        published_verdicts = {r["id"]: r["pass"] for r in run["results"]}
+        recorded_verdicts = {k: r["pass"] for k, r in recording["results"].items()}
+        if (
+            header.get("driver") != config["brain"]
+            or header.get("bench") != config
+            or published_verdicts != recorded_verdicts
+        ):
+            raise ValueError(f"{rel(recording_path)} disagrees with the driver, config or verdicts in {rel(path)}")
+    if skip:
+        return None
+    preset = config.get("features") or "bare"
+    group = (
+        config.get("brain"),
+        version,
+        preset,
+        key,
+        config.get("weather") or "dry",
+        config.get("count"),
+        config.get("seed"),
+        path if version == CUSTOM_SUITE else None,
+    )
+    return group, (run, path, manifest, recording, recording_path)
+
+
 def run_rows(drivers: dict) -> list[dict]:
     newest = {}
     for path in committed_runs():
-        run = json.loads(path.read_text())
-        config = run.get("config") or {}
-        key = map_key(config)
-        if not key or not run.get("results"):
+        entry = _validated_run(path)
+        if entry is None:
             continue
-        # (`is`, not `in`: hour 0 and cover row 0 are variants, and 0 == False in Python)
-        variant = any(
-            config.get(k) is not None and config.get(k) is not False and config.get(k) not in ([], "")
-            for k in VARIANT_KEYS
-        )
-        version = run.get("suite_version", LEGACY_SUITE)
-        manifest_data = run.get("manifest")
-        partial = isinstance(manifest_data, dict) and (
-            run.get("stopped") or (manifest_data.get("suite") or {}).get("only") is True
-        )
-        if (version == LEGACY_SUITE and (partial or variant)) or (
-            version == CUSTOM_SUITE and (config.get("heldout") or run.get("stopped"))
-        ):
-            continue
-        recording_path = RECORDINGS / f"{path.stem}.json.gz"
-        recording = recording_facts(recording_path) if recording_path.is_file() else None
-        manifest = checked_manifest(path, run, run["saved_at"][:10], recording)
-        if variant and version != CUSTOM_SUITE:  # Numbered held-out results are reported apart.
-            continue
-        if recording is not None:
-            header = recording["header"]
-            published_verdicts = {r["id"]: r["pass"] for r in run["results"]}
-            recorded_verdicts = {key: r["pass"] for key, r in recording["results"].items()}
-            if (
-                header.get("driver") != config["brain"]
-                or header.get("bench") != config
-                or published_verdicts != recorded_verdicts
-            ):
-                raise ValueError(f"{rel(recording_path)} disagrees with the driver, config or verdicts in {rel(path)}")
-        preset = config.get("features") or "bare"
-        group = (
-            config.get("brain"),
-            version,
-            preset,
-            key,
-            config.get("weather") or "dry",
-            config.get("count"),
-            config.get("seed"),
-            path if version == CUSTOM_SUITE else None,
-        )
-        if group not in newest or run["name"] > newest[group][0]["name"]:
-            newest[group] = (run, path, manifest, recording, recording_path)
+        group, value = entry
+        if group not in newest or value[0]["name"] > newest[group][0]["name"]:
+            newest[group] = value
     rows = []
     for (driver, version, preset, key, weather, count, seed, _custom_path), (
         run,
@@ -880,7 +939,14 @@ def readme_cohort(data: dict, rows: list[dict]) -> str:
         mine = [r for r in rows if r["driver"] == driver]
         full = next((r for r in mine if r["suite"] == "challenges"), None)
         opened = next((r for r in mine if r["suite"] == "open"), None)
-        city = {(r["map"], r["weather"]): r for r in mine if r["suite"] == "city"}
+        city: dict[tuple[str, str], dict] = {}
+        newest_city = sorted(
+            (r for r in mine if r["suite"] == "city"),
+            key=lambda r: (r["date"], r["sources"][0]),
+            reverse=True,
+        )
+        for r in newest_city:
+            city.setdefault((r["map"], r["weather"]), r)
         label = info["label"]
         submitter = info.get("submitter")
         if submitter:
@@ -975,16 +1041,83 @@ def readme_with(text: str, block: str) -> str:
     return pattern.sub(lambda _: f"{START}\n{block}\n{END}", text, count=1)
 
 
+def _format_validation_error(path: Path, err: Exception) -> str:
+    label = rel(path)
+    text = str(err)
+    return text if text.startswith(label) else f"{label}: {text}"
+
+
+_ARTIFACT_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError, EOFError, zlib.error)
+
+
+def validate_all() -> list[str]:
+    """Validate every result, submission, and committed run, returning all errors found."""
+    errors: list[str] = []
+    drivers: dict = {k: dict(v) for k, v in BUILT_IN.items()}
+    for path in sorted(RESULTS.glob("*/*.json")):
+        try:
+            published = json.loads(path.read_text())
+            name = f"{path.stem}-{path.parent.name}"
+            _build_challenge_row(path, published, RECORDINGS / f"{name}.json.gz", None, drivers)
+        except _ARTIFACT_ERRORS as err:
+            errors.append(_format_validation_error(path, err))
+    for path in sorted(SUBMISSIONS.glob("*/*.json")):
+        try:
+            sub_path, report, tape, submitter = _read_submission_source(path)
+            _build_challenge_row(sub_path, report, tape, submitter, drivers)
+        except _ARTIFACT_ERRORS as err:
+            errors.append(_format_validation_error(path, err))
+    for path in committed_runs():
+        try:
+            _validated_run(path, validate_filtered=True)
+        except _ARTIFACT_ERRORS as err:
+            errors.append(_format_validation_error(path, err))
+    return errors
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--check", action="store_true", help="fail if data/results.json or the README block is out of date"
     )
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="print a unified diff when data/results.json or the README block is out of date (implies --check)",
+    )
+    parser.add_argument(
+        "--validate-all",
+        action="store_true",
+        help="validate every manifest, result, run and submission and report all errors",
+    )
     args = parser.parse_args(argv)
+    if args.validate_all:
+        errors = validate_all()
+        if errors:
+            print(f"Validation failed with {len(errors)} error(s):", file=sys.stderr)
+            for err in errors:
+                print(f"  - {err}", file=sys.stderr)
+            return 1
+        if not args.check and not args.diff:
+            print("All manifests, results, runs and submissions are valid.")
+            return 0
     data = build()
     output, readme = render(data), readme_with(README.read_text(), readme_block(data))
-    if args.check:
-        stale = [p.name for p, want in ((OUTPUT, output), (README, readme)) if not p.is_file() or p.read_text() != want]
+    if args.check or args.diff:
+        stale = []
+        for p, want in ((OUTPUT, output), (README, readme)):
+            current = p.read_text() if p.is_file() else ""
+            if not p.is_file() or current != want:
+                stale.append(p.name)
+                if args.diff:
+                    label = rel(p)
+                    diff = difflib.unified_diff(
+                        current.splitlines(keepends=True),
+                        want.splitlines(keepends=True),
+                        fromfile=f"a/{label}",
+                        tofile=f"b/{label}",
+                    )
+                    sys.stdout.writelines(diff)
         if stale:
             print(f"Out of date: {', '.join(stale)}. Run: uv run scripts/build_results.py", file=sys.stderr)
             return 1

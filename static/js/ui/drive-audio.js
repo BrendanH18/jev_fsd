@@ -4,7 +4,21 @@ export class DriveAudio {
     this.button = button;
     this.enabled = false;
     this.context = null;
+    this.volume = 1;
+    this.paused = false;
     button.addEventListener("click", () => this.toggle());
+    document.addEventListener("visibilitychange", () => this.updateGain());
+  }
+
+  setVolume(value) {
+    if (Number.isFinite(value)) this.volume = Math.max(0, Math.min(1, value));
+    this.updateGain();
+  }
+
+  updateGain() {
+    if (!this.master) return;
+    const gain = this.enabled && !this.paused && !document.hidden ? this.volume * 0.4 : 0;
+    this.master.gain.setTargetAtTime(gain, this.context.currentTime, 0.08);
   }
 
   create() {
@@ -66,6 +80,7 @@ export class DriveAudio {
   }
 
   async toggle() {
+    if (this.button.disabled) return;
     this.button.disabled = true;
     try {
       if (!this.context) this.create();
@@ -73,7 +88,7 @@ export class DriveAudio {
       this.enabled = !this.enabled;
       this.button.textContent = this.enabled ? "Sound on" : "Sound off";
       this.button.setAttribute("aria-pressed", String(this.enabled));
-      this.master.gain.setTargetAtTime(this.enabled ? 0.4 : 0, this.context.currentTime, 0.15);
+      this.updateGain();
     } catch (err) {
       this.button.textContent = "Sound unavailable";
       this.button.title = err.message;
@@ -83,12 +98,13 @@ export class DriveAudio {
   }
 
   update(ego, weather, paused, hood) {
+    this.paused = paused;
     if (!this.context || !this.enabled) return;
     const t = this.context.currentTime,
       speed = Math.abs(ego.v),
       wet = weather === "rain" ? 1 : weather === "fog" ? 0.3 : 0;
     const set = (param, value) => param.setTargetAtTime(value, t, 0.08);
-    set(this.master.gain, paused ? 0 : 0.4);
+    this.updateGain();
     set(this.motor.oscillator.frequency, 55 + speed * 6 + Math.max(0, ego.ax || 0) * 8);
     set(this.harmonic.oscillator.frequency, 110 + speed * 12);
     set(this.motor.level.gain, 0.08 + Math.min(speed / 100, 0.15));

@@ -52,3 +52,9 @@ body.arena { background: radial-gradient(ellipse at 80% 0, #193a34, #0b131d 50%)
 .run-details .candidate-list { padding-left: 20px; }
 .arena [hidden] { display: none !important; }
 @media(max-width:600px) { .arena main { padding: 20px; } .arena header { margin-bottom: 40px; } }
+.arena-table-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0; }
+.arena-table-tools label { display: flex; align-items: center; gap: 6px; }
+.table-sort { border: 0; padding: 0; background: none; color: inherit; cursor: pointer; font: inherit; }
+[aria-sort="ascending"] > .table-sort::after { content: " ▲"; }
+[aria-sort="descending"] > .table-sort::after { content: " ▼"; }
+#arena-progress { width: min(100%, 360px); accent-color: var(--accent); }

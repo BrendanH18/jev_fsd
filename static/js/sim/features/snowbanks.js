@@ -1,4 +1,5 @@
 // Snowbanks (sim/snowbanks.js) as a feature record (sim/features/index.js, docs/feature-interface.md).
+import { snowbankNotice } from "../snowbanks.js";
 import { r1 } from "../../common.js";
 import {
   NARROW_FULL_M,
@@ -42,12 +43,86 @@ function snowbankClauses({ narrowing: n, corner: k }) {
 }
 
 export default {
+  checkpointShare(world, shared) {
+    if (!world.snowbanks?.enabled) return;
+    shared.add(world.snowbanks.geo);
+    shared.add(world.snowbanks.piles);
+    for (const narrowing of world.snowbanks.narrowings) shared.add(narrowing);
+    shared.add(world.snowbanks.routeEnds);
+  },
+  checkpoint(world) {
+    if (world.snowbanks) world.snowbanks.world = world;
+  },
   rulesStop: (snap) => snap.snowbank?.narrowing?.wait && snap.snowbank?.narrowing.bumper_to_stop_m < 1.5,
   legitimateStop: (snap) => snap?.snowbank?.narrowing?.wait && snap.snowbank?.narrowing.bumper_to_stop_m < 8,
   rulesCost: (c) => (c.id === "wait_for_oncoming_narrowing" ? -6 : 0),
   cautious: (snap, eligible) =>
     snap.snowbank?.narrowing?.wait ? eligible.find((c) => c.id === "wait_for_oncoming_narrowing") : null,
   key: "snowbanks",
+  coach: {
+    init: () => ({
+      snowbanks: false,
+      snowbankConflicts: 0,
+    }),
+    seen: "snowbanks",
+    events: {
+      snowbank_conflict(score, ev) {
+        score.snowbankConflicts++;
+        score.incident(
+          "snowbank_conflict",
+          ev.reason === "oncoming_inside"
+            ? "Drove into the stretch narrowed by snowbanks with an oncoming car already in it"
+            : ev.reason === "forced_to_stop"
+              ? "Drove into the stretch narrowed by snowbanks in front of an oncoming car too close to stop"
+              : "Drove into the stretch narrowed by snowbanks out of turn",
+          { with: ev.with, narrowing: ev.narrowing },
+        );
+      },
+    },
+    reports: [
+      {
+        at: "end",
+        order: 15,
+        read: (score) => (score.snowbanks ? { snowbank_conflicts: score.snowbankConflicts } : {}),
+      },
+    ],
+    deductions: [{ at: "legality", order: 2, counter: "snowbankConflicts", weight: 20 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 11,
+        when: (score) => score.snowbankConflicts,
+        text: "Where snowbanks push the parked cars out and leave room for only one car, take turns: whoever is already in the narrow stretch, or got to it first, goes first. Wait at your end until the oncoming car is through, and keep to the middle, slowly, when it is your turn.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 11,
+    duration: 2500,
+    read: (world, autopilot) =>
+      world.snowbanks?.enabled ? snowbankNotice(world, autopilot.enabled ? autopilot.snap : null) : null,
+    style: (line) => (line.wait ? "safety" : ""),
+  },
+  eventBadges: {
+    snowbank_conflict: (event) =>
+      event.reason === "oncoming_inside"
+        ? "DROVE INTO THE NARROW STRETCH WITH A CAR IN IT"
+        : "DROVE INTO THE NARROW STRETCH OUT OF TURN",
+  },
+  perceptionLine(snap) {
+    const sn = snap.snowbank?.narrowing,
+      sk = snap.snowbank?.corner;
+    const text = sn
+      ? `One-car stretch between snowbanks ${sn.inside ? "here" : `${Math.max(0, Math.round(sn.gap_m))} m ahead`}: ${sn.wait ? `oncoming car's turn${sn.bumper_to_stop_m > 0.5 ? `, wait in ${Math.round(sn.bumper_to_stop_m)} m` : ", waiting"}` : sn.squeeze ? "squeeze past the oncoming car" : "car's turn"}`
+      : sk
+        ? `Snowbank hides the ${sk.side === "both" ? "corners" : `${sk.side} corner`} ${Math.round(sk.gap_m)} m ahead: creep to ${Math.round(sk.limit_mps * 3.6)} km/h`
+        : null;
+    return text ? { order: 27, label: "Snowbank", text } : null;
+  },
+  perceptionRejections: {
+    enters_narrowing_out_of_turn: "Snowbanks: oncoming car's turn",
+  },
   seen: "snowbanksSeen",
   calls: "snowbankCalls",
   // the banks, piles and narrowings; a car placed in a narrowing keeps over toward the middle

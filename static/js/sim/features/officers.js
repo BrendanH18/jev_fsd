@@ -1,4 +1,5 @@
 // The registry adapters for junctions controlled by police (sim/traffic-officer.js).
+import { officerNotice } from "../traffic-officer.js";
 import { r1 } from "../../common.js";
 import { TAIL_STOP_DECEL } from "../tailgaters.js";
 import {
@@ -52,6 +53,11 @@ function auditEntry(world, officer, control, edge, rc) {
   };
 }
 
+const OFFICER_COACH = {
+  stop: "The officer is holding your way. Stop at the line, even on a green.",
+  go: "The officer is waving you through. Go, even on a red, and yield to anyone in the junction.",
+};
+
 export default {
   rulesStop(snap, eligible) {
     const i = snap.intersection;
@@ -79,6 +85,77 @@ export default {
   },
   cautiousDrive: (candidate) => candidate.id === "wait_for_officer",
   key: "officers",
+  coach: {
+    init: () => ({
+      officers: false,
+      officerViolations: 0,
+    }),
+    seen: "officers",
+    events: {
+      officer_violation(score, ev) {
+        score.officerViolations++;
+        score.incident("officer_violation", "Went on into the junction while the police officer signalled stop", {
+          officer: ev.officer,
+          junction: ev.junction,
+        });
+      },
+    },
+    reports: [
+      {
+        at: "end",
+        order: 13,
+        read: (score) => (score.officers ? { officer_violations: score.officerViolations } : {}),
+      },
+    ],
+    deductions: [{ at: "post", order: 4, counter: "officerViolations", weight: 35, category: "legality" }],
+    cap: "officerViolations",
+    tips: [
+      {
+        at: "afterMerge",
+        order: 6,
+        when: (score) => score.officerViolations,
+        text: "Where a police officer is directing traffic, follow the officer, not the lights: stop at the line when they hold you, even on a green, and go when they wave you through, even on a red, still yielding to anyone in the junction.",
+      },
+    ],
+    guidance: [
+      {
+        at: "beforeSample",
+        order: 4,
+        read: (score, context) => {
+          const { world, normal } = context;
+          const officer = world.officers?.list.length ? officerNotice(world, null) : null;
+          context.officer = officer;
+          return officer && normal && score.lastTtc >= 1.5 ? OFFICER_COACH[officer.wait ? "stop" : "go"] : "";
+        },
+      },
+      {
+        at: "afterSample",
+        order: 3,
+        read: (_score, { officer }) => (officer ? OFFICER_COACH[officer.wait ? "stop" : "go"] : ""),
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 8,
+    duration: 2500,
+    read: (world, autopilot) =>
+      world.officers?.enabled ? officerNotice(world, autopilot.enabled ? autopilot.snap : null) : null,
+    style: (line) => (line.wait ? "alert" : "safety"),
+  },
+  eventBadges: {
+    officer_violation: "WENT ON WHILE THE OFFICER SIGNALLED STOP",
+  },
+  perceptionLine(snap) {
+    const to = snap.traffic_officer;
+    const text = to
+      ? `Police officer directing traffic, ${Math.max(0, Math.round(to.bumper_to_line_m))} m: ${to.direction === "go" ? "waved through" : "held"}${to.against_light ? `, light ${to.signal}` : ""}`
+      : null;
+    return text ? { order: 1, label: "Officer", text } : null;
+  },
+  perceptionRejections: {
+    passes_officer_stop: "Officer: stop",
+  },
   seen: "officersSeen",
   calls: "officerCalls",
   build: (_world, { enabled, seed }) => createOfficers({ enabled, seed }),

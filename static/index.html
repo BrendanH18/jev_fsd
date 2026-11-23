@@ -110,7 +110,11 @@
               <option value="80">Busy · 80</option>
             </select></label>
           <label><span class="label">world seed</span>
-            <input id="world-seed" type="number" min="1" max="2147483647" step="1" value="1" required></label>
+            <span class="seed-row"><input id="world-seed" type="number" min="1" max="2147483647" step="1" value="1" required><button id="randomize-seed" type="button" class="chip-button" title="Pick a random world seed">Random</button></span></label>
+          <label class="wide"><span class="label">sound volume</span>
+            <span class="range-row"><input id="drive-volume" type="range" min="0" max="100" step="1" value="100" aria-label="Master sound volume"><output id="drive-volume-value" class="muted">100%</output></span></label>
+          <label class="wide"><span class="label">gamepad dead-zone</span>
+            <span class="range-row"><input id="gamepad-deadzone" type="range" min="0" max="40" step="1" value="15" aria-label="Gamepad stick dead-zone"><output id="gamepad-deadzone-value" class="muted">15%</output></span></label>
           <section class="vehicle-garage" aria-labelledby="garage-heading">
             <div class="garage-heading"><h3 id="garage-heading">Your garage</h3><span>Six ways to drive</span></div>
             <div id="vehicle-options" class="vehicle-options" role="group" aria-label="Vehicle">
@@ -199,6 +203,15 @@
             <label class="check"><input id="camera-motion" type="checkbox" checked> Camera motion</label>
             <button id="settings-inspect" class="chip-button settings-inspect" data-inspect aria-controls="panel" aria-expanded="false">Inspect JSON</button>
           </div>
+          <details id="feature-switches" class="feature-switches wide">
+            <summary>Free-drive feature switches</summary>
+            <div id="feature-switches-list" class="feature-switches-list"></div>
+            <div class="feature-switches-actions">
+              <button id="feature-switches-all" type="button" class="chip-button">All on</button>
+              <button id="feature-switches-none" type="button" class="chip-button">All off</button>
+              <button id="feature-switches-apply" type="button" class="toggle">Apply switches</button>
+            </div>
+          </details>
           <div class="world-settings-footer">
             <span>Vehicle, paint, traffic and seed apply when you start a new world. Cyclists and pedestrians remain active.</span>
             <button id="restart-world" class="toggle">Start new world</button>
@@ -209,8 +222,11 @@
 
     <div id="hud-right" class="hud-column hud-right">
       <section class="hud-top-right panel" aria-label="Map">
-        <canvas id="minimap" width="220" height="220" title="Click to set a destination"></canvas>
-        <div id="map-note" class="note"></div>
+        <canvas id="minimap" width="220" height="220" title="Click to set a destination" aria-label="Route minimap. Click to set a destination."></canvas>
+        <div class="minimap-footer">
+          <div id="map-note" class="note"></div>
+          <button id="clear-route" type="button" class="chip-button" hidden>Clear route</button>
+        </div>
       </section>
 
       <section id="decision-card" class="decision-card panel" aria-label="Autopilot decision">
@@ -238,7 +254,7 @@
       </section>
     </div>
 
-    <div id="badge" class="badge" role="status" hidden></div>
+    <div id="badge" class="badge" role="status" aria-live="polite" hidden></div>
     <div class="cluster panel" aria-label="Driving instruments">
       <span id="left-indicator" class="indicator" aria-hidden="true">◀</span>
       <div id="limit-sign" class="limit-sign" title="Speed limit"><small>MAXIMUM</small><b id="limit">–</b></div>
@@ -247,22 +263,38 @@
       <span id="right-indicator" class="indicator" aria-hidden="true">▶</span>
     </div>
 
-    <div id="keys-help" class="keys-help panel" hidden>
-      <div class="card-heading"><span class="label">Keyboard</span><button id="keys-close" class="chip-button" aria-label="Close shortcuts">×</button></div>
+    <div id="keys-help" class="keys-help panel" role="dialog" aria-modal="false" aria-labelledby="keys-help-title" hidden>
+      <div class="card-heading"><span id="keys-help-title" class="label">Keyboard &amp; Gamepad</span><button id="keys-close" type="button" class="chip-button" aria-label="Close shortcuts">×</button></div>
       <dl>
-        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Drive (takes over from autopilot)</dd>
-        <dt><kbd>Space</kbd></dt><dd>Brake hard</dd>
+        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></dt><dd>Drive (takes over from autopilot)</dd>
+        <dt><kbd>Space</kbd></dt><dd>Brake hard (or play/pause in replay)</dd>
         <dt><kbd>J</kbd></dt><dd>Toggle autopilot</dd>
         <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dt><dd>Decision model / Rules / LLM brain</dd>
         <dt><kbd>Q</kbd><kbd>E</kbd></dt><dd>Left / right indicator</dd>
         <dt><kbd>H</kbd></dt><dd>Horn (with sound on)</dd>
+        <dt><kbd>M</kbd></dt><dd>Sound on / mute</dd>
         <dt><kbd>C</kbd></dt><dd>Cycle camera (chase, 360°, hood, top, far, cinematic)</dd>
         <dt><kbd>O</kbd></dt><dd>Photo mode</dd>
+        <dt><kbd>I</kbd></dt><dd>Toggle inspector drawer</dd>
+        <dt><kbd>V</kbd></dt><dd>Toggle AI eyes</dd>
+        <dt><kbd>T</kbd></dt><dd>Toggle telemetry</dd>
+        <dt><kbd>X</kbd></dt><dd>Explore cities</dd>
+        <dt><kbd>L</kbd></dt><dd>Open Drive Lab</dd>
         <dt>Drag / pinch</dt><dd>Orbit around the car / zoom</dd>
         <dt>Shift + arrows</dt><dd>Rotate the focused driving view</dd>
         <dt><kbd>R</kbd></dt><dd>Reset to lane</dd>
         <dt><kbd>P</kbd></dt><dd>Pause</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Close overlays / exit photo mode</dd>
         <dt><kbd>?</kbd></dt><dd>Show or hide this list</dd>
+      </dl>
+      <div class="keys-section-heading"><span class="label">Gamepad</span></div>
+      <dl>
+        <dt>Left stick / D-pad</dt><dd>Steer</dd>
+        <dt><kbd>RT</kbd> / <kbd>LT</kbd></dt><dd>Accelerate / brake &amp; reverse</dd>
+        <dt><kbd>A</kbd> / <kbd>B</kbd></dt><dd>Hard brake (hold) / horn</dd>
+        <dt><kbd>X</kbd> / <kbd>Y</kbd></dt><dd>Cycle camera / toggle autopilot</dd>
+        <dt><kbd>LB</kbd> / <kbd>RB</kbd></dt><dd>Left / right indicator</dd>
+        <dt><kbd>View</kbd> / <kbd>Menu</kbd></dt><dd>Reset to lane / pause</dd>
       </dl>
     </div>
   </div>
@@ -270,21 +302,31 @@
   <aside id="panel" class="panel drawer" hidden>
     <header>
       <strong>What Jev sees</strong>
-      <div class="tabs">
-        <button data-tab="state" class="active">State</button>
-        <button data-tab="questions">Questions</button>
-        <button data-tab="answers">Answers</button>
-        <button data-tab="meta">Meta</button>
+      <div class="tabs" role="tablist" aria-label="Inspector tabs">
+        <button type="button" role="tab" data-tab="state" class="active" aria-selected="true" aria-controls="panel-body" tabindex="0">State</button>
+        <button type="button" role="tab" data-tab="questions" aria-selected="false" aria-controls="panel-body" tabindex="-1">Questions</button>
+        <button type="button" role="tab" data-tab="answers" aria-selected="false" aria-controls="panel-body" tabindex="-1">Answers</button>
+        <button type="button" role="tab" data-tab="meta" aria-selected="false" aria-controls="panel-body" tabindex="-1">Meta</button>
       </div>
-      <button id="panel-close" class="toggle" aria-label="Close inspector">×</button>
+      <button id="panel-close" type="button" class="toggle" aria-label="Close inspector">×</button>
     </header>
     <div class="actions">
-      <button id="copy-curl" class="toggle">Copy as curl</button>
-      <button id="save-snapshot" class="toggle">Save snapshot</button>
-      <button id="edit-style" class="toggle">Driving style</button>
+      <button id="pin-decision" type="button" class="toggle" aria-pressed="false" title="Freeze live updates in the inspector">Pin</button>
+      <button id="copy-json" type="button" class="toggle">Copy JSON</button>
+      <button id="copy-curl" type="button" class="toggle">Copy as curl</button>
+      <button id="save-snapshot" type="button" class="toggle">Save snapshot</button>
+      <button id="edit-style" type="button" class="toggle">Driving style</button>
       <label class="check"><input type="checkbox" id="show-candidates" checked> candidates</label>
     </div>
-    <div id="panel-body" class="body"><pre>No decision yet.</pre></div>
+    <form id="panel-inline" class="panel-inline" hidden>
+      <label id="panel-inline-label" for="panel-inline-input" class="label"></label>
+      <div class="panel-inline-row">
+        <input id="panel-inline-input" type="text" autocomplete="off">
+        <button id="panel-inline-submit" type="submit" class="toggle on">Apply</button>
+        <button id="panel-inline-cancel" type="button" class="chip-button">Cancel</button>
+      </div>
+    </form>
+    <div id="panel-body" class="body" role="tabpanel"><pre>No decision yet.</pre></div>
   </aside>
 
   <script type="module" src="/js/start.js"></script>

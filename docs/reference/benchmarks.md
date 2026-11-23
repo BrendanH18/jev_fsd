@@ -2,7 +2,7 @@
 
 ![The benchmark page](../bench.png)
 
-Open [/bench](http://127.0.0.1:8322/bench), or use **Benchmark this city** in the explorer.
+Open [/bench](http://127.0.0.1:8322/bench), or use **Benchmark this map** in the explorer.
 The benchmark runs seeded drives through the same simulation and autopilot without graphics.
 **Lockstep** pauses while decisions are pending; **realtime** keeps the world moving so model
 latency affects the drive. Runs save under `data/runs/`, support side-by-side comparison and
@@ -18,8 +18,9 @@ weighted score.
 
 **Scores and held-out routes.** So that two drivers that both pass can still be ranked, the table, the
 arena and the Node scripts also show each drive's progress, pace, comfort, margin kept and time lost
-and a combined score, computed from the saved fields when shown (`bench/scores.js`). The **held-out
-routes** box (`--heldout 1` in `bench_node.mjs` and `soak.mjs`) runs routes no fix was tuned against,
+and a combined score, computed from the saved fields when shown (`bench/scores.js`). Published lab
+scores use the planned route length when the source has one and the driven distance otherwise.
+The **held-out routes** box (`--heldout 1` in `bench_node.mjs` and `soak.mjs`) runs routes no fix was tuned against,
 reported apart. Formulas and the held-out policy are in the [Rules baseline](../rules-baseline.md).
 
 **Guarded and open tracks.** By default (the **guarded** track) the shared safety filter removes every
@@ -56,15 +57,23 @@ suite's overall shares; the benchmark table shows the model and local shares per
 summary cards the three shares. The arena shows them in each result row, its details and each
 driver's summary; the drive report and the Inspect drawer show them for an AI drive.
 
-Recorded validation includes a 500 m Rules drive through Victoria in rain with no audited
-collision, red-light, stop or yield violations and a score of 97. The
-[2026-10-20 Rules baseline](../rules-baseline.md) is the current seeded record. In WebKit, the
-12-route Kitsilano suite passed 12/12 dry, 11/12 fog, 12/12 rain and 12/12 snow, and every route
-arrived; all eleven two-route city smoke suites passed. In V8 every Kitsilano route passed and
-Edmonton's smoke suite failed one route.
-Results vary between JavaScript engines, so compare runs from the same browser. These are
-individual recorded checks, not guarantees for every city or seed. Live Jev behaviour with the revised prompt has
-not been validated; offline fixtures establish request consistency, not model judgment.
+Recorded validation spans both deterministic Rules baselines and live, recorded model runs.
+In [Rules benchmark baseline](../rules-baseline.md) (updated through 20 November 2026 on Node
+22.23.4 / V8), Rules passes 12/12 on Kitsilano `bare` dry, 12/12 on Kitsilano `city` in all four
+weathers (dry, fog, rain and snow) and `city` dry with destination parking, 2/2 on all eleven other
+bundled maps' city smoke suites (94/94 seed-1 drives), 5/5 on the [hard city slice](#hard-city-slice)
+(23 November 2026, Node 22.23.5), and 62/62 on the authored challenges and road tests. Earlier
+WebKit records (including the 2026-10-20 WebKit suite) remain in the same baseline document;
+results vary between JavaScript engines (V8 vs JavaScriptCore), so compare runs from the same
+engine and browser. These are recorded checks, not guarantees for every city or seed.
+
+Live model runs are published in [Model results](../model-results.md) with exact keyless replay
+tapes under `data/recordings/`: 39/39 committed Jev snapshots passed live on `jev-1.14.0`
+(11 November 2026); complete 62-drive arena suites exist for Jev (`jev-1.14.0`, 62/62 guarded and
+62/62 open track), Claude Haiku 5.5 (61/62 guarded and 61/62 open track, 20 November 2026) and
+DeepSeek V4.1 Flash (61/62 guarded, 11 November 2026); and full 12-route Kitsilano dry city suites
+are published for Rules (12/12), Cautious (9/12), Jev (2/12) and Claude Haiku 5.5 (3/12)
+(21 November 2026, [city results](../validation/city-model-pilots.md#complete-city-suites)).
 
 Detailed results: [Rules benchmark baseline](../rules-baseline.md), [drive experience](../drive-experience.md),
 [realism validation](../realism-validation.md) and [rendering validation](../render-performance.md). Release history is in [CHANGELOG.md](../../CHANGELOG.md).
@@ -75,7 +84,7 @@ collisions, darkness, startup reliability and final seeded comparisons.
 
 The project notes on the benchmark code, moved here verbatim from `AGENTS.md`, which keeps a summary.
 
-**Benchmark** (`static/js/bench/`): `scenarios.buildSuite` (seeded, routes via `/api/route`), `runner.runScenario` / `setupScenario` (also used by the app's `/?replay=1`), and `metrics.DriveMetrics`. Pass/fail rules live in `failures()` (collisions, red lights, stop signs, failures to yield, off road). Who made the decisions is counted in the autopilot (`Autopilot.decidedBy`, classified where `fire` applies each decision) and reported by `decidedBy` in `metrics.js` for every driver but Rules (`model_decisions`, `partial_decisions`, `local_decisions`, `fallback_decisions` and their shares); Rules results never get these fields, so earlier records compare. Bench runs take a `weather` option. They also take `features`: `bare` (the default: every opt-in feature off, so earlier records compare) or `city` (the free drive's features from `freeDriveOptions` in `sim/free-drive.js`, without parking at the destination, on the app's 15:30 Monday clock, with routes that keep to turn restrictions). `freeDriveOptions` is the one definition of a free drive: the app builds its world from it, so a new opt-in feature is added there, never inline in `main.js` (`scripts/test_free_drive.mjs` checks every `World` option is in it). `node --experimental-default-type=module scripts/bench_node.mjs --features city` runs the city suite. A drive's deadline is its route length at 2.5 m/s (divided by the weather's speed for city snow); when a road closure re-plans the route (`autopilot.closureRouting`), it becomes the distance driven plus the new route at the same pace, while other re-plans keep theirs. Both presets accept `--park 1` (the challenge parking verdict, except that an arrival with no space ever planned near the destination, where the car stops in its lane as a free drive does, records `no_space` and is no failure; a space given up still fails) and `--hour 23.5` (local Monday time, including darkness and time-dependent populations); defaults keep earlier records unchanged. City accepts `--without geese,ice` (World/fleet option names) and `--cover 0` through `12`, the seeded binary pairwise array in `bench/features.js`, including destination parking and respecting `stepOuts`/`hazards`. `scripts/soak.mjs --port 8381 --maps kitsilano,toronto,calgary,victoria --seeds 1,2,3 --count 2 --shard 0 --shards 8 --json soak.json` runs city map/seed samples plus all covering rows on the first map/seed; `--mode city` or `pairs` selects one part. Throws, deadlocks/timeouts and collisions fail it; other audits are reported separately while city triage is open. `.github/workflows/soak.yml` runs the eight shards and four parking/night suites weekly and manually, report-only, on GitHub-hosted runners; its `Soak summary` job (`scripts/soak_summary.py`) lists each leg's failed routes in the run summary and as warning annotations, since the run itself stays green. Runs are stored by `server.py` under `data/runs/`, which is gitignored, so a baseline has to be added with `git add -f`. Model recordings (`static/js/brain/recording.js`: `bench_node.mjs --record PATH` / `--replay PATH`, `window.__bench.run({ record | replay })`, the `tape` option of `runScenario` and `evaluateChallenge`, lockstep only) wrap a model brain's `transport` and are saved under `data/recordings/`, which is committed; with no tape every result is exactly as before.
+**Benchmark** (`static/js/bench/`): `scenarios.buildSuite` (seeded, routes via `/api/route`), `runner.runScenario` / `setupScenario` (also used by the app's `/?replay=1`), and `metrics.DriveMetrics`. Pass/fail rules live in `failures()` (collisions, red lights, stop signs, failures to yield, off road). Who made the decisions is counted in the autopilot (`Autopilot.decidedBy`, classified where `fire` applies each decision) and reported by `decidedBy` in `metrics.js` for every driver but Rules (`model_decisions`, `partial_decisions`, `local_decisions`, `fallback_decisions` and their shares); Rules results never get these fields, so earlier records compare. Bench runs take a `weather` option. They also take `features`: `bare` (the default: every opt-in feature off, so earlier records compare) or `city` (the free drive's features from `freeDriveOptions` in `sim/free-drive.js`, without parking at the destination, on the app's 15:30 Monday clock, with routes that keep to turn restrictions). `freeDriveOptions` is the one definition of a free drive: the app builds its world from it, so a new opt-in feature is added there, never inline in `main.js` (`scripts/test_free_drive.mjs` checks every `World` option is in it). `node --experimental-default-type=module scripts/bench_node.mjs --features city` runs the city suite. A drive's deadline is its route length at 2.5 m/s (divided by the weather's speed for city snow); when a road closure re-plans the route (`autopilot.detourRouting`), it becomes the distance driven plus the new route at the same pace, while other re-plans keep theirs. Both presets accept `--park 1` (the challenge parking verdict, except that an arrival with no space ever planned near the destination, where the car stops in its lane as a free drive does, records `no_space` and is no failure; a space given up still fails) and `--hour 23.5` (local Monday time, including darkness and time-dependent populations); defaults keep earlier records unchanged. City accepts `--without geese,ice` (World/fleet option names) and `--cover 0` through `12`, the seeded binary pairwise array in `bench/features.js`, including destination parking and respecting `stepOuts`/`hazards`. `scripts/soak.mjs --port 8381 --maps kitsilano,toronto,calgary,victoria --seeds 1,2,3 --count 2 --shard 0 --shards 8 --json soak.json` runs city map/seed samples plus all covering rows on the first map/seed; `--mode city` or `pairs` selects one part. Throws, deadlocks/timeouts and collisions fail it; other audits are reported separately while city triage is open. `.github/workflows/soak.yml` runs the eight shards and four parking/night suites weekly and manually, report-only, on GitHub-hosted runners; its `Soak summary` job (`scripts/soak_summary.py`) lists each leg's failed routes in the run summary and as warning annotations, since the run itself stays green. Runs are stored by `server.py` under `data/runs/`, which is gitignored, so a baseline has to be added with `git add -f`. Model recordings (`static/js/brain/recording.js`: `bench_node.mjs --record PATH` / `--replay PATH`, `window.__bench.run({ record | replay })`, the `tape` option of `runScenario` and `evaluateChallenge`, lockstep only) wrap a model brain's `transport` and are saved under `data/recordings/`, which is committed; with no tape every result is exactly as before.
 
 ## Before-and-after runs
 
@@ -154,7 +163,7 @@ uv run python scripts/inspect_run.py data/results/2026-11-20/claude-haiku-open.j
 ```
 
 Each group gives its route count, measured and unavailable counts, measured zeros, and its
-minimum, lower quartile, median, upper quartile and maximum. Quartiles interpolate within the
+minimum, lower quartile, median, upper quartile, mean, 90th and 95th percentiles, and maximum. Quantiles interpolate within the
 observed range and give each measured route equal weight. Use the counts to interpret small groups.
 The latency example distributes the saved per-route p95 values across groups. A missing audit or
 flag counter goes down as unavailable. Missing grouping fields go to an unknown group. When all 50
@@ -191,6 +200,25 @@ Changes subtract the baseline rate from the comparison rate for each drive. Chan
 percentages are reported in percentage points. One-sided
 measurements are counted separately, and the distributions show how many pairs lacked a rate
 on either side. A zero rate or zero change is a measured value.
+
+### Scores, safety and regression checks
+
+`inspect_run.py` accepts saved benchmark and Arena JSON, including gzip files. The original
+report catalog remains available through `--list`. Use `--list-analytics` for composite scores,
+safety exposure, and decision summaries, or `--list-paired-metrics` for changes in scores,
+motion, latency and decision shares on matched drives. Add `--filter` to search a catalog.
+
+```sh
+uv run python scripts/inspect_run.py data/results/2026-11-20/claude-haiku-open.json --summary --format table
+uv run python scripts/inspect_run.py baseline.json --compare candidate.json --paired-metrics \
+  --fail-on-regression --format markdown
+```
+
+`--only-failures`, repeatable `--route`, and `--cohort` restrict the input. `--top` limits ranked
+lists in the output. JSON is the default. The regression check reports evidence coverage and
+exits 2 for fewer passes, more measured collisions, an increased violation counter, or a new
+audit failure. It exits 3 when selected routes or measurements could not be compared and
+the matched evidence showed no regression.
 
 ### Hard city slice
 

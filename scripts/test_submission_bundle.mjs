@@ -98,7 +98,14 @@ for (const [field, forged] of [
   ["cost_usd", 0],
 ]) {
   const tampered = { ...report, results: [{ ...report.results[0], [field]: forged }] };
-  assert.throws(() => verifySubmissionReport(tampered, report), /differs from the replayed report/);
+  assert.throws(
+    () => verifySubmissionReport(tampered, report),
+    (error) => {
+      assert.match(error.message, /differs from the replayed report/);
+      assert.ok(error.message.includes(`drive ${id}.${field}: expected ${forged}, actual ${report.results[0][field]}`));
+      return true;
+    },
+  );
 }
 const cli = fileURLToPath(new URL("./driver_submission.mjs", import.meta.url));
 for (const out of [

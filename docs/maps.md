@@ -32,7 +32,7 @@ crossings are uncontrolled in OpenStreetMap, as they often are on the street.
 Changing city starts a new world and keeps the selected weather, time and graphics setting.
 An active drive with distance recorded is saved as **map changed**, without an arrival claim.
 Routing, rerouting, status and map attribution use the selected city's bounding box.
-**Benchmark this city** in the explorer opens the benchmark on that same map; saved runs and
+**Benchmark this map** in the explorer opens the benchmark on that same map; saved runs and
 3D replays preserve the bounding box. Signal-heavy downtowns can start scenarios on controlled
 streets when the original uncontrolled-street sampling cannot fill a suite.
 The map geometry has no elevation data; buildings use tagged heights or procedural estimates.
@@ -104,18 +104,28 @@ a streetcar route in a traffic lane.
 ### Crosswalks
 
 Each bundled map also has its marked crosswalks between junctions beside its pack, in
-`data/maps/<key>.crossings.v1.json` (`jev/osm/crossings.py`), built on 2026-10-27 from the same
-OpenStreetMap downloads as the bus routes. A crossing node on a drivable street tagged as marked and
+`data/maps/<key>.crossings.v1.json` — or `data/maps/<key>.crossings.v2.json` where Ontario
+pedestrian crossovers (PXOs) are mapped (`jev/osm/crossings.py`). The v1 layers were built on
+2026-10-27 from the same OpenStreetMap downloads as the bus routes; Toronto (4 crossings, including
+Harbord Street node 67344971) and Ottawa (17 crossings, including Somerset Street West node
+5606060531 and Metcalfe Street node 2317854682) carry `crossings.v2.json` files adding `pxo` and
+`beacons` flags while leaving the v6 street packs unchanged. The server, demo and Node loaders
+prefer `v2` when present and fall back to `v1` elsewhere; see
+[Ontario pedestrian crossovers](reference/pedestrian-crossovers.md).
+
+A crossing node on a drivable street tagged as marked and
 without a signal (`crossing=uncontrolled`, `marked` or `zebra`, or a `crossing:markings` value other
 than `no`) is placed on the pack street whose centreline passes within 3 m of it, as a point along an
 edge, with how it is painted (bars along the traffic for zebra and ladder markings, two lines across it
-for lines, dots and dashes) and whether it has a refuge island. Crossings within 16 m of a junction
-are left out, since people already cross at every junction's corners, and so are those within 12 m
-of a dead end or the edge of the map, unmarked ones (in BC a crosswalk away from a junction exists
-only where it is marked), signalled ones, and a second one within 8 m of another on the same street.
-That leaves 102 across the twelve maps (Mount Pleasant, Québec City and Edmonton have none). The
-packs are unchanged; the server and the browser demo add the file to the map as `crossings`, and
-`--transit` rebuilds it with the bus routes.
+for lines, dots and dashes) and whether it has a refuge island. Ordinary mid-block crossings within
+16 m of a junction are left out, since people already cross at every junction's corners, and so are
+those within 12 m of a dead end or the edge of the map, unmarked ones (in BC a crosswalk away from a
+junction exists only where it is marked), signalled ones, and a second one within 8 m of another on
+the same street (explicitly tagged Ontario PXOs are retained even near junctions).
+That leaves 102 ordinary crosswalks across the twelve maps (Mount Pleasant, Québec City and Edmonton
+have none), plus the three mapped Ontario PXOs. The packs are unchanged; the server and the browser
+demo add the file to the map as `crossings` (with PXOs split into `MapData.pxos`), and `--crossings`
+or `--transit` rebuilds it.
 
 ### School and playground zones
 
@@ -227,3 +237,30 @@ Traffic Bridge, the Broadway Bridge and the Chief Mistawasis Bridge over the Sou
 Johnson Street Bridge and its approaches (10), Kitsilano a stretch of West Broadway mapped as a bridge (6).
 The other bboxes have only footbridges, rail bridges or motorways that are not pack streets. Black ice
 forms there first (sim/black-ice.js).
+
+### Traffic calming, scramble crossings and turn restrictions
+
+Three additional sidecar layers complete the twelve committed layers beside each street pack
+(`transit`, `crossings`, `zones`, `rail`, `calming`, `scrambles`, `buslanes`, `restrictions`,
+`contraflow`, `driveways`, `parks`, and `bridges`):
+
+- **Traffic calming** (`<key>.calming.v1.json`, `jev/osm/calming.py`): built with
+  `uv run scripts/fetch_map.py <preset> --calming` (which also rebuilds scrambles). Extracts nodes
+  tagged `traffic_calming=hump|table|cushion|bump` within 4 m of a pack street centreline and maps
+  them onto both directions of two-way streets. All twelve presets have layers; eight contain
+  devices (169 in total: Ottawa 65, Kitsilano 30, Mount Pleasant 22, Montréal 21, Toronto 15,
+  Victoria 8, Edmonton 5, Calgary 3). See [traffic calming](reference/traffic-calming.md).
+- **Scramble crossings** (`<key>.scrambles.v1.json`, `jev/osm/scrambles.py`): rebuilt alongside
+  `--calming`. Marks signalled intersections whose crossings or footways indicate an exclusive
+  all-walk (Barnes dance) phase, or where a tagged crossing footway crosses diagonally. All twelve
+  presets have layers; Victoria's Old Town currently has the one mapped site (Government, Wharf and
+  Humboldt streets). See [scramble crossings](reference/scrambles.md).
+- **Turn restrictions and red-turn signs** (`<key>.restrictions.v1.json`,
+  `jev/osm/restrictions.py`): built with `uv run scripts/fetch_map.py <preset> --restrictions` from
+  a fresh OSM download. Stores ordinary via-node `type=restriction` bans (`restrictions`, 500
+  entries across all twelve presets, with conditional weekday/time schedules and `skipped` records
+  for unsupported syntax) alongside a separate `red_turns` array for `no_right_turn_on_red` /
+  `no_left_turn_on_red` and `type=restriction:on_red` relations (currently 7 mapped signs in
+  Toronto's layer, kept out of ordinary routing so legal green-light turns remain routable). See
+  [OpenStreetMap turn restrictions](reference/turn-restrictions.md) and
+  [red-turn signs](reference/red-turn-signs.md).

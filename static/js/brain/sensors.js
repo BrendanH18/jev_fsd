@@ -1,8 +1,6 @@
 import { observeAmber } from "../sim/amber.js";
-import { followingPolicy } from "../sim/following.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
-import { turnRestrictionAhead } from "../sim/turn-restrictions.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
 
@@ -22,9 +20,6 @@ import { darkControl } from "../sim/outage.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy, ringJoining } from "../sim/roundabout.js";
-import { routeRedTurnBanned } from "../sim/red-turn-signs.js";
-import { headlights } from "../sim/high-beams.js";
-import { pxoAhead } from "../sim/pxo.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
 import { headingAt, onStreet, pointAt, projectPoint } from "../map/mapdata.js";
@@ -72,16 +67,6 @@ import {
   waitsAt,
 } from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
-import {
-  ADJACENT_M,
-  APPROACH_M,
-  ROADSIDE_LIGHTS,
-  ROADSIDE_NAMES,
-  SIDE_M as ROADSIDE_SIDE_M,
-  endsOf,
-  flashing,
-  passLimit,
-} from "../sim/roadside.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
 import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
 import { laneSight } from "../sim/hidden-traffic.js";
@@ -139,7 +124,6 @@ import {
   sideOf,
   stopKey,
 } from "../sim/work-zone.js";
-import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "../sim/crossing-guard.js";
 import {
   controlDirection,
   firstHookResult,
@@ -154,6 +138,10 @@ import {
 // The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
 const SENSE = {
+  afterPedestrians: hooks("sense", "afterPedestrians"),
+  beforeWorkZone: hooks("sense", "beforeWorkZone"),
+  beforeTarget: hooks("sense", "beforeTarget"),
+  end: hooks("sense"),
   parking: hooks("sense", "parking"),
   afterCalming: hooks("sense", "afterCalming"),
   beforeRunner: hooks("sense", "beforeRunner"),
@@ -164,6 +152,7 @@ const SENSE = {
   junctions: hooks("sense", "junctions"),
 };
 const LIMIT = {
+  beforeWorkZone: hooks("limit", "beforeWorkZone"),
   passing: hooks("limit", "passing"),
   beforeRunner: hooks("limit", "beforeRunner"),
   driveways: hooks("limit", "driveways"),
@@ -171,6 +160,8 @@ const LIMIT = {
   parking: hooks("limit", "parking"),
 };
 const TARGET = {
+  beforeParked: hooks("target", "beforeParked"),
+  afterSchoolBus: hooks("target", "afterSchoolBus"),
   parking: hooks("target", "parking"),
   beforeCurve: hooks("target", "beforeCurve"),
   beforeRoadside: hooks("target", "beforeRoadside"),
@@ -182,7 +173,12 @@ const TARGET = {
 };
 const FINISH_LANES = hooks("finishLanes");
 const LANE_OFFER = hooks("laneOffer");
+const AFTER_PASSING = hooks("laneOffer", "afterPassing");
+const ROUTE_RED_BANS = hooks("routeTurnOnRedBlocked");
+const FOLLOWING_POLICY = hooks("followingPolicy");
+const STANDING_VEHICLE_LABELS = hooks("standingVehicleLabel");
 const HAZARD = {
+  beforeWorkZone: hooks("hazard", "beforeWorkZone"),
   parking: hooks("hazard", "parking"),
   beforeRunner: hooks("hazard", "beforeRunner"),
   driveways: hooks("hazard", "driveways"),
@@ -227,10 +223,6 @@ const GAP_AHEAD_S = 2.0;
 const GAP_BEHIND_S = 2.5;
 export const LANE_CLEAR_M = 2.2; // a car this far across has left its old lane
 const SHIFT_DONE_M = 0.15; // a lane change this close to the new lane's centre is over
-// Moving over for a vehicle stopped at the roadside: not once the car's front is this close to its
-// rear, and only into a lane that runs on this far past its front.
-const MOVE_OVER_MIN_M = 5;
-const MOVE_OVER_PAST_M = 10;
 // Turning left at a signal: oncoming traffic has the right of way. The car turns in front of an
 // oncoming vehicle only if it would clear that vehicle's path (6 m past the junction's centre, plus
 // its own length, taking the turn at up to 6 m/s and pulling away at 2 m/s^2) 1.5 s before the
@@ -413,406 +405,350 @@ export function drivenMetricSnapshot(world) {
   };
 }
 
-export function buildSnapshot(world, executing = null) {
-  const { ego, map, route } = world;
-  const FRONT = ego.spec.length - ego.spec.rearOverhang;
-  const visible = world.visibleObstaclesNear(ego.x, ego.y, TRAFFIC_RADIUS_M);
-  const visibleNpcs = world.npcs.filter((n) => visible.includes(n));
-  const road = world._road || world.roadInfo();
-  const snap = {
-    t: world.t,
-    tick: world.tick,
-    ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
-    road,
-    route,
-    routeProj: null,
-    onRoute: false,
-    nav: null,
-    intersection: null,
-    control_line_m: null,
-    following: null,
-    pedestrian: null,
-    right_hook: null,
-    emergency: null,
-    emergency_ahead: null,
-    bus: null,
-    crosswalk_stop: null,
-    school_bus: null,
-    streetcar: null,
-    level_crossing: null,
-    junction_box: null,
-    speed_zone: null,
-    roadside_stop: null,
-    work_zone: null,
-    lane_closure: null,
-    ...FEATURE_SNAPSHOT_FIELDS,
-    snow_plow: null,
-    cyclist_pass: null,
-    crossing_guard: null,
-    parking: null,
-    blind_spot: null,
-    rear_follower: null,
-    traffic: [],
-    current_path_hazard: null,
-    lane: null,
-    stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
-    limit: road.limit || 11.2,
-    observed: visible,
-    visibility: {
-      range_m: world.visibility.range,
-      safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT),
-      building_occlusion: true,
-    },
-    roadside: [],
-  };
-  if (route) {
-    const p = route.project(ego.x, ego.y);
-    const headingErr = wrap(ego.psi - p.heading);
-    snap.routeProj = { s: p.s, lateral: p.lateral, headingErr, distance: p.distance, point: p.point, index: p.index };
-    let clearPath = Math.min(world.visibility.range, route.length - p.s);
-    for (let d = 6; d <= Math.min(world.visibility.range, 60, route.length - p.s); d += 3) {
-      if (!world.visibility.canSee(ego, ...route.pointAt(p.s + d))) {
-        clearPath = d - 3;
+function crossingTraffic(world, control, entry, junction, bumperToLine, visibleNpcs) {
+  const { ego, map } = world;
+  let crossTraffic = false;
+  const rb = control.type === "yield" ? map.roundabouts.get(control.roundabout) : null;
+  // yielding at a roundabout: look further round the ring the longer the car needs to reach the line
+  // (and for a vehicle about to come into the ring at another entry: it will be in it first)
+  if (rb) {
+    const node = map.nodes.get(map.edges.get(entry.edge).to),
+      extra = Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v));
+    crossTraffic =
+      ringBusy(rb, node, visibleNpcs, null, extra) || (bumperToLine > 0 && ringJoining(rb, node, visibleNpcs, extra));
+  } else if (junction) {
+    // crossing traffic in the junction, or heading for it and due within a few seconds (at a
+    // two-way stop the through road does not stop, so its traffic must be waited for)
+    for (const n of visibleNpcs) {
+      if (Math.abs(n.v) < 0.5) continue;
+      const diff = Math.abs(wrap(n.psi - ego.psi));
+      if (diff <= Math.PI / 6 || diff >= (Math.PI * 5) / 6) continue;
+      const dx = junction[0] - n.x,
+        dy = junction[1] - n.y,
+        d = Math.hypot(dx, dy);
+      const closing = (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6);
+      if (d < 20 || (closing > 0.7 && d < 60 && d / n.v < CROSS_ETA_S)) {
+        crossTraffic = true;
         break;
       }
     }
-    snap.visibility.clear_path_m = clearPath;
-    // At a blind corner retain a walking pace so the car can expose the sight line gradually.
-    snap.visibility.safe_speed_mps = visibilitySpeed(Math.max(12, clearPath), FRONT);
-    snap.onRoute = p.distance < 25 && Math.abs(headingErr) < (Math.PI * 100) / 180;
-    const remaining = route.remaining(p.s);
-    const turns = route.turnsAfter(p.s);
-    const dest = ego.toLocal(route.endPoint()[0], route.endPoint()[1]);
-    snap.nav = {
-      next_turn: turns.length ? turns[0].dir : "none",
-      exit: turns.length && turns[0].exit ? turns[0].exit : null,
-      turn_in_m: turns.length ? turns[0].at_m - p.s : remaining,
-      turn_street: turns.length ? turns[0].street : "",
-      remaining_m: remaining,
-      destination: { right: dest.right, ahead: dest.ahead },
-      arrived: remaining < 3.5,
-    };
-    // a U-turn next (at a dead end), still ahead: how far ahead the car stops to turn round, until
-    // it starts
-    if (turns.length && turns[0].dir === "uturn" && turns[0].at_m > p.s && !world.turnaround)
-      snap.nav.turn_round_in_m = turnaroundStopS(route, turns[0]) - p.s;
-    const frontS = p.s + FRONT;
-    // Keep a legal amber entry's speed ceiling until the rear clears the
-    // crossing street, even after the ordinary control-look window moves on.
-    if (world.amberLights)
-      for (const c of route.controls) {
-        const choice = ego.amberChoices?.get(`${c.edge}:${c.control.id}`);
-        const clearAt = (c.sJunction ?? c.sRoute + 8) + map.crossingHalfWidth(c.edge);
-        if (
-          choice &&
-          !choice.stop &&
-          world.t < choice.stop_until &&
-          frontS >= c.sRoute &&
-          p.s - ego.spec.rearOverhang <= clearAt &&
-          (!snap.amber_clear || choice.speed_mps < snap.amber_clear.speed_mps)
-        )
-          snap.amber_clear = choice;
-      }
-    for (let k = 0; k < route.controls.length; k++) {
-      const c = route.controls[k],
-        next = route.controls[k + 1];
-      // (a signal whose lights are out is an all-way stop, once the car can see that they are:
-      // sim/outage.js; until then it is a signal it cannot see)
-      const inter = c.control.type === "signal" ? map.intersections.get(c.control.id) : null;
-      const junction = inter ? [inter.x, inter.y] : c.junction;
-      const directive = inter ? firstHookResult(CONTROL_SENSE, world, c, frontS) : null;
-      const dark =
-        !directive &&
-        !!inter &&
-        world.outages?.isDark(inter.id) &&
-        !!junction &&
-        world.visibility.canSee(ego, ...junction);
-      const seenFlash =
-        !directive && inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction)
-          ? flashState(inter, c.control.group, world)
-          : null;
-      const control = dark
-        ? darkControl(c.control, c.edge)
-        : seenFlash
-          ? flashControl(world, c.control, c.edge)
-          : c.control;
-      const leftTurn =
-        (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") &&
-        (c.turn === "left" || c.turn === "uturn") &&
-        c.sJunction !== null;
-      // already through this one (a left turn stays in view until the car is past oncoming traffic,
-      // unless the next control is coming up)
+  }
+  return { crossTraffic, rb };
+}
+
+function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
+  const { ego, map, route } = world;
+  // Keep a legal amber entry's speed ceiling until the rear clears the
+  // crossing street, even after the ordinary control-look window moves on.
+  if (world.amberLights)
+    for (const c of route.controls) {
+      const choice = ego.amberChoices?.get(`${c.edge}:${c.control.id}`);
+      const clearAt = (c.sJunction ?? c.sRoute + 8) + map.crossingHalfWidth(c.edge);
       if (
-        c.sRoute + 12 < frontS &&
-        !(leftTurn && frontS < c.sJunction + JUNCTION_BOX_M && !(next && next.sRoute - frontS < NEXT_CONTROL_M))
+        choice &&
+        !choice.stop &&
+        world.t < choice.stop_until &&
+        frontS >= c.sRoute &&
+        p.s - ego.spec.rearOverhang <= clearAt &&
+        (!snap.amber_clear || choice.speed_mps < snap.amber_clear.speed_mps)
       )
-        continue;
-      if (c.sRoute - frontS > LOOK_AHEAD_CONTROL_M) break;
-      // (the nearest junction, for lane changes, even when a control beyond it is the one reported)
-      if (snap.control_line_m === null) snap.control_line_m = c.sRoute - frontS;
-      const bumperToLine = c.sRoute - frontS;
-      // (the light for the way the car goes: under a left arrow only a left turn has a green; and
-      // whether an advance green shows, or holds the car while the approach opposite has it)
-      const shows =
-        inter && !dark && junction && world.visibility.canSee(ego, ...junction)
-          ? approachPhase(inter, c.edge, world.t)
-          : null;
-      if (seenFlash === "flashing_amber") snap.limit = Math.min(snap.limit, NIGHT_CAUTION_MPS);
-      const signal =
-        seenFlash ||
-        (control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null);
-      const advance =
-        !shows || directive
-          ? null
-          : ADVANCE_LIGHTS[shows]
-            ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
-            : shows === "red" && advanceHolds(inter, c.edge, world.t)
-              ? { light: "held", protected: false }
-              : null;
-      let crossTraffic = false;
-      const rb = control.type === "yield" ? map.roundabouts.get(control.roundabout) : null;
-      // yielding at a roundabout: look further round the ring the longer the car needs to reach the line
-      // (and for a vehicle about to come into the ring at another entry: it will be in it first)
-      if (rb) {
-        const node = map.nodes.get(map.edges.get(c.edge).to),
-          extra = Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v));
-        crossTraffic =
-          ringBusy(rb, node, visibleNpcs, null, extra) ||
-          (bumperToLine > 0 && ringJoining(rb, node, visibleNpcs, extra));
-      } else if (junction) {
-        // crossing traffic in the junction, or heading for it and due within a few seconds (at a
-        // two-way stop the through road does not stop, so its traffic must be waited for)
-        for (const n of visibleNpcs) {
-          if (Math.abs(n.v) < 0.5) continue;
-          const diff = Math.abs(wrap(n.psi - ego.psi));
-          if (diff <= Math.PI / 6 || diff >= (Math.PI * 5) / 6) continue;
-          const dx = junction[0] - n.x,
-            dy = junction[1] - n.y,
-            d = Math.hypot(dx, dy);
-          const closing = (dx * Math.cos(n.psi) + dy * Math.sin(n.psi)) / Math.max(d, 1e-6);
-          if (d < 20 || (closing > 0.7 && d < 60 && d / n.v < CROSS_ETA_S)) {
-            crossTraffic = true;
-            break;
-          }
-        }
-      }
-      const stopMem = world.egoStop;
-      const entered = bumperToLine < 0;
-      const stopCompleted = control.type === "stop" ? stopMem.controlId === control.id && stopMem.completed : null;
-      const priority = control.type === "stop" && control.all_way ? allWayPriority(world, control, visible) : null;
-      // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn;
-      // without a sign or signal, always
-      const turnNow = directive
-        ? entered || directive.direction === "go"
-        : control.type === "stop"
-          ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
-          : control.type === "uncontrolled" ||
-            entered ||
-            signal === "green" ||
-            signal === "yellow" ||
-            signal === "flashing_amber";
-      // Amber gives way only to traffic already crossing; red reuses two-way-stop gap and sight checks.
-      const giveWay =
-        seenFlash === "flashing_amber"
-          ? giveWayAt(world, { ...c, control: { ...control, type: "uncontrolled", rule: "major" } }, frontS)
-          : (control.type === "uncontrolled" && control.rule !== "major") ||
-              (control.type === "stop" && !control.all_way && stopCompleted)
-            ? giveWayAt(world, { ...c, control }, frontS)
+        snap.amber_clear = choice;
+    }
+  for (let k = 0; k < route.controls.length; k++) {
+    const c = route.controls[k],
+      next = route.controls[k + 1];
+    // (a signal whose lights are out is an all-way stop, once the car can see that they are:
+    // sim/outage.js; until then it is a signal it cannot see)
+    const inter = c.control.type === "signal" ? map.intersections.get(c.control.id) : null;
+    const junction = inter ? [inter.x, inter.y] : c.junction;
+    const directive = inter ? firstHookResult(CONTROL_SENSE, world, c, frontS) : null;
+    const dark =
+      !directive &&
+      !!inter &&
+      world.outages?.isDark(inter.id) &&
+      !!junction &&
+      world.visibility.canSee(ego, ...junction);
+    const seenFlash =
+      !directive && inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction)
+        ? flashState(inter, c.control.group, world)
+        : null;
+    const control = dark
+      ? darkControl(c.control, c.edge)
+      : seenFlash
+        ? flashControl(world, c.control, c.edge)
+        : c.control;
+    const leftTurn =
+      (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") &&
+      (c.turn === "left" || c.turn === "uturn") &&
+      c.sJunction !== null;
+    // already through this one (a left turn stays in view until the car is past oncoming traffic,
+    // unless the next control is coming up)
+    if (
+      c.sRoute + 12 < frontS &&
+      !(leftTurn && frontS < c.sJunction + JUNCTION_BOX_M && !(next && next.sRoute - frontS < NEXT_CONTROL_M))
+    )
+      continue;
+    if (c.sRoute - frontS > LOOK_AHEAD_CONTROL_M) break;
+    // (the nearest junction, for lane changes, even when a control beyond it is the one reported)
+    if (snap.control_line_m === null) snap.control_line_m = c.sRoute - frontS;
+    const bumperToLine = c.sRoute - frontS;
+    // (the light for the way the car goes: under a left arrow only a left turn has a green; and
+    // whether an advance green shows, or holds the car while the approach opposite has it)
+    const shows =
+      inter && !dark && junction && world.visibility.canSee(ego, ...junction)
+        ? approachPhase(inter, c.edge, world.t)
+        : null;
+    if (seenFlash === "flashing_amber") snap.limit = Math.min(snap.limit, NIGHT_CAUTION_MPS);
+    const signal =
+      seenFlash ||
+      (control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null);
+    const advance =
+      !shows || directive
+        ? null
+        : ADVANCE_LIGHTS[shows]
+          ? { light: ADVANCE_LIGHTS[shows], protected: protectedLeft(shows, c.turn) }
+          : shows === "red" && advanceHolds(inter, c.edge, world.t)
+            ? { light: "held", protected: false }
             : null;
-      // (a left turn under an advance green is protected: oncoming traffic is held on its red; and
-      // inside the junction once the light has changed, the car clears it as soon as the traffic it can
-      // see allows, without waiting to see along the oncoming lanes)
-      const oncoming =
-        leftTurn && turnNow && !advance?.protected
-          ? oncomingYield(
-              world,
-              c,
-              frontS,
-              !(control.type === "signal" && entered && signal !== "green" && directive?.direction !== "go"),
-            )
+    const { crossTraffic, rb } = crossingTraffic(world, control, c, junction, bumperToLine, visibleNpcs);
+    const stopMem = world.egoStop;
+    const entered = bumperToLine < 0;
+    const stopCompleted = control.type === "stop" ? stopMem.controlId === control.id && stopMem.completed : null;
+    const priority = control.type === "stop" && control.all_way ? allWayPriority(world, control, visible) : null;
+    // at a stop sign, oncoming traffic matters once the stop is made and it is the car's turn;
+    // without a sign or signal, always
+    const turnNow = directive
+      ? entered || directive.direction === "go"
+      : control.type === "stop"
+        ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
+        : control.type === "uncontrolled" ||
+          entered ||
+          signal === "green" ||
+          signal === "yellow" ||
+          signal === "flashing_amber";
+    // Amber gives way only to traffic already crossing; red reuses two-way-stop gap and sight checks.
+    const giveWay =
+      seenFlash === "flashing_amber"
+        ? giveWayAt(world, { ...c, control: { ...control, type: "uncontrolled", rule: "major" } }, frontS)
+        : (control.type === "uncontrolled" && control.rule !== "major") ||
+            (control.type === "stop" && !control.all_way && stopCompleted)
+          ? giveWayAt(world, { ...c, control }, frontS)
           : null;
-      // A junction without a sign that asks nothing of the car right now (it has the right of way,
-      // or nothing it gives way to is coming and it can see) does not hide a control further on:
-      // a signal just beyond it, say.
-      if (
-        control.type === "uncontrolled" &&
-        (!giveWay || giveWay.go) &&
-        !oncoming &&
-        next &&
-        next.sRoute - frontS <= LOOK_AHEAD_CONTROL_M
-      )
-        continue;
-      const redTurnBan = control.type === "signal" && !directive && routeRedTurnBanned(world, c);
-      snap.intersection = {
-        id: control.id,
-        control: control.type,
-        signal,
-        group: control.group || null,
-        advance,
-        ...directive?.fields(world.outages?.isDark(inter.id) ? "dark" : signal),
-        ...(world.amberLights && control.type === "signal" && inter && !directive
-          ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) }
-          : {}),
-        bumper_to_line_m: bumperToLine,
-        s_line_route: c.sRoute,
-        entered,
-        ...(world.amberLights && entered && control.type === "signal" ? { clear_entered: true } : {}),
-        turn: c.turn || "straight",
-        oncoming,
-        // (never at a scramble crossing, sim/signals.js: `scramble` says so)
-        right_on_red:
-          control.type === "signal" &&
-          !directive &&
-          map.rightOnRed &&
-          !redTurnBan &&
-          !isScramble(inter) &&
-          c.turn === "right" &&
-          signal === "red" &&
-          bumperToLine > -CLEARING_M &&
-          inter
-            ? turnOnRed(world, c, inter, frontS, visible, advance?.light === "held")
-            : null,
-        ...(redTurnBan ? { no_turn_on_red: true } : {}),
-        ...(control.type === "signal" && isScramble(inter) && !dark && !seenFlash
-          ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } }
-          : {}),
-        ...(world.leftOnRed &&
-        !directive &&
+    // (a left turn under an advance green is protected: oncoming traffic is held on its red; and
+    // inside the junction once the light has changed, the car clears it as soon as the traffic it can
+    // see allows, without waiting to see along the oncoming lanes)
+    const oncoming =
+      leftTurn && turnNow && !advance?.protected
+        ? oncomingYield(
+            world,
+            c,
+            frontS,
+            !(control.type === "signal" && entered && signal !== "green" && directive?.direction !== "go"),
+          )
+        : null;
+    // A junction without a sign that asks nothing of the car right now (it has the right of way,
+    // or nothing it gives way to is coming and it can see) does not hide a control further on:
+    // a signal just beyond it, say.
+    if (
+      control.type === "uncontrolled" &&
+      (!giveWay || giveWay.go) &&
+      !oncoming &&
+      next &&
+      next.sRoute - frontS <= LOOK_AHEAD_CONTROL_M
+    )
+      continue;
+    const signed = control.type === "signal" && !directive ? firstHookResult(ROUTE_RED_BANS, world, c) : null;
+    snap.intersection = {
+      id: control.id,
+      control: control.type,
+      signal,
+      group: control.group || null,
+      advance,
+      ...directive?.fields(world.outages?.isDark(inter.id) ? "dark" : signal),
+      ...(world.amberLights && control.type === "signal" && inter && !directive
+        ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) }
+        : {}),
+      bumper_to_line_m: bumperToLine,
+      s_line_route: c.sRoute,
+      entered,
+      ...(world.amberLights && entered && control.type === "signal" ? { clear_entered: true } : {}),
+      turn: c.turn || "straight",
+      oncoming,
+      // (never at a scramble crossing, sim/signals.js: `scramble` says so)
+      right_on_red:
         control.type === "signal" &&
-        signal === "red" &&
-        c.turn === "left" &&
-        inter &&
+        !directive &&
+        map.rightOnRed &&
+        !signed &&
         !isScramble(inter) &&
+        c.turn === "right" &&
+        signal === "red" &&
         bumperToLine > -CLEARING_M &&
-        leftOnRedExit(world, c)
-          ? { left_on_red: turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") }
-          : {}),
-        stop_completed: stopCompleted,
-        all_way: control.type === "stop" ? !!control.all_way : null,
-        ...(dark ? { dark: true } : {}),
-        rule: control.type === "uncontrolled" ? control.rule : null,
-        priority,
-        give_way: giveWay,
-        roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
-        cross_traffic_moving: crossTraffic,
-        seconds_to_green: c.secondsToGreen && !dark && !seenFlash && !directive ? c.secondsToGreen(world.t) : null,
-      };
+        inter
+          ? turnOnRed(world, c, inter, frontS, visible, advance?.light === "held")
+          : null,
+      ...signed,
+      ...(control.type === "signal" && isScramble(inter) && !dark && !seenFlash
+        ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } }
+        : {}),
+      ...(world.leftOnRed &&
+      !directive &&
+      control.type === "signal" &&
+      signal === "red" &&
+      c.turn === "left" &&
+      inter &&
+      !isScramble(inter) &&
+      bumperToLine > -CLEARING_M &&
+      leftOnRedExit(world, c)
+        ? { left_on_red: turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") }
+        : {}),
+      stop_completed: stopCompleted,
+      all_way: control.type === "stop" ? !!control.all_way : null,
+      ...(dark ? { dark: true } : {}),
+      rule: control.type === "uncontrolled" ? control.rule : null,
+      priority,
+      give_way: giveWay,
+      roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
+      cross_traffic_moving: crossTraffic,
+      seconds_to_green: c.secondsToGreen && !dark && !seenFlash && !directive ? c.secondsToGreen(world.t) : null,
+    };
+    break;
+  }
+}
+
+function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
+  const { ego, route } = world;
+  const { road } = snap;
+  const p = route.project(ego.x, ego.y);
+  const headingErr = wrap(ego.psi - p.heading);
+  snap.routeProj = { s: p.s, lateral: p.lateral, headingErr, distance: p.distance, point: p.point, index: p.index };
+  let clearPath = Math.min(world.visibility.range, route.length - p.s);
+  for (let d = 6; d <= Math.min(world.visibility.range, 60, route.length - p.s); d += 3) {
+    if (!world.visibility.canSee(ego, ...route.pointAt(p.s + d))) {
+      clearPath = d - 3;
       break;
     }
-    const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, {
-      list: world.crowd.list.filter((p) => visible.includes(p)),
-    });
-    if (cw)
-      snap.pedestrian = {
-        id: cw.ped.id,
-        bumper_to_crosswalk_m: cw.s - (p.s + FRONT),
-        s_route: cw.s,
-        to_path_m: cw.toPath,
-        speed: cw.ped.v,
-        mid_block: !!cw.ped.crossing?.jaywalk,
-      };
-    // (what a registered feature puts in the road, geese or a closed road's barricades, is never followed
-    // or passed: sim/features/index.js)
-    const vehicles = visible.filter((o) => o.kind !== "pedestrian" && isTrafficObstacle(o));
-    if (world.busLanes) {
-      route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
-      const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
-      if (b)
-        snap.bus_lane = {
-          edge: b.edge,
-          lanes: b.lanes.map((l) => l.lane),
-          in_effect: b.active,
-          entering_allowed: b.entering_allowed,
-          approach_m: b.approach_m,
-          block_end_in_m: b.remaining,
-        };
-    }
-    const lane = (snap.lane = laneState(route, p, executing?.law));
-    snap.right_hook = rightHook(world, p, frontS, lane);
-    snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection, executing);
-    snap.emergency_ahead = emergencyAhead(world, p, frontS);
-    snap.bus = busPullingOut(world, frontS, visible);
-    if (world.pxo) {
-      const pxo = pxoAhead(world, frontS);
-      if (pxo) {
-        snap.pxo = pxo;
-        const d = pxo.bumper_to_crosswalk_m;
-        if (!snap.pedestrian || d < snap.pedestrian.bumper_to_crosswalk_m)
-          snap.pedestrian = {
-            id: pxo.pedestrian_ids[0],
-            bumper_to_crosswalk_m: d,
-            s_route: pxo.stop_s_route + 2,
-            to_path_m: 0,
-            speed: 0,
-          };
-      }
-    }
-    snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
-    snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
-    snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);
-    snap.level_crossing = levelCrossing(world, route, frontS, vehicles);
-    snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
-    snap.roadside_stop = roadsideStop(world, p, frontS, lane, road);
-    snap.work_zone = workZone(world, p, frontS, road);
-    snap.lane_closure = laneClosure(world, p, frontS, road, lane);
-    for (const sense of SENSE.parking) sense(world, snap, { p, frontS, lane, executing });
-    snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
-    snap.cyclist_pass = cyclistPass(world, p, lane, executing);
-    snap.crossing_guard = crossingGuard(world, frontS);
-    for (const sense of SENSE.beforeRunner) sense(world, snap, { p, frontS, lane, road, executing, stopSpeedFor });
-    const senseCtx = { p, frontS, lane, road, route, visible };
-    for (const sense of SENSE.driveways) sense(world, snap, senseCtx);
-    for (const sense of SENSE.streetHazards) sense(world, snap, senseCtx);
-    for (const sense of SENSE.late) sense(world, snap, senseCtx);
-    for (const sense of SENSE.junctions) sense(world, snap, senseCtx);
-    // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
-    // Once moving past the line the car has committed and carries on.
-    const ltor = snap.intersection?.left_on_red;
-    if (ltor) world.leftOnRedSeen = true;
-    const rtor = ltor || snap.intersection?.right_on_red;
-    if (rtor && !rtor.wait_for && (lane.index !== (ltor ? 0 : lane.lanes - 1) || lane.shift))
-      rtor.wait_for = { kind: "lane" };
-    if (
-      rtor &&
-      snap.pedestrian &&
-      !rtor.wait_for &&
-      snap.pedestrian.s_route < snap.intersection.s_line_route + RTOR_PAST_M
-    )
-      rtor.wait_for = { kind: "pedestrian", id: snap.pedestrian.id };
-    if (rtor) {
-      rtor.clear = !rtor.wait_for;
-      rtor.go = rtor.stop_completed && (rtor.clear || (rtor.entered && ego.v > 1.5));
-    }
-    // Ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed.
-    // Oncoming traffic that is passing is not a follow target; a stopped car facing us still is.
-    // During a lane change the lane being left still counts while the car overlaps it, for vehicles
-    // the car reaches before its planned path has cleared that lane.
-    // (follow along the way the car will go round an obstruction)
-    // (and round a cyclist, through the oncoming lane: see cyclistPass)
-    const detour =
-      snap.work_zone?.detour ||
-      snap.lane_closure?.detour ||
-      featurePassingDetour(snap) ||
-      snap.cyclist_pass?.detour ||
-      featureDetour(snap) ||
-      null;
-    const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
-    snap.following = followingInLane(ego, route, p, lane, vehicles, frame, snap);
-    if (snap.following) {
-      if (world.followingDistance) snap.following.policy = followingPolicy(ego, snap.following);
-    }
-    const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
-    if (behind.length) {
-      const b = behind[behind.length - 1];
-      const bs = b.vehicle.spec || CAR;
-      snap.rear_follower = {
-        id: b.vehicle.id,
-        gap_m: p.s - b.s - (bs.length - bs.rearOverhang) - ego.spec.rearOverhang,
-        closing_mps: b.vehicle.v - ego.v,
-      };
-    }
-    for (const sense of SENSE.following) sense(world, snap, { visibleNpcs, s: p.s });
   }
+  snap.visibility.clear_path_m = clearPath;
+  // At a blind corner retain a walking pace so the car can expose the sight line gradually.
+  snap.visibility.safe_speed_mps = visibilitySpeed(Math.max(12, clearPath), FRONT);
+  snap.onRoute = p.distance < 25 && Math.abs(headingErr) < (Math.PI * 100) / 180;
+  const remaining = route.remaining(p.s);
+  const turns = route.turnsAfter(p.s);
+  const dest = ego.toLocal(route.endPoint()[0], route.endPoint()[1]);
+  snap.nav = {
+    next_turn: turns.length ? turns[0].dir : "none",
+    exit: turns.length && turns[0].exit ? turns[0].exit : null,
+    turn_in_m: turns.length ? turns[0].at_m - p.s : remaining,
+    turn_street: turns.length ? turns[0].street : "",
+    remaining_m: remaining,
+    destination: { right: dest.right, ahead: dest.ahead },
+    arrived: remaining < 3.5,
+  };
+  // a U-turn next (at a dead end), still ahead: how far ahead the car stops to turn round, until
+  // it starts
+  if (turns.length && turns[0].dir === "uturn" && turns[0].at_m > p.s && !world.turnaround)
+    snap.nav.turn_round_in_m = turnaroundStopS(route, turns[0]) - p.s;
+  const frontS = p.s + FRONT;
+  senseRouteControls(world, snap, p, frontS, visible, visibleNpcs);
+  const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, {
+    list: world.crowd.list.filter((p) => visible.includes(p)),
+  });
+  if (cw)
+    snap.pedestrian = {
+      id: cw.ped.id,
+      bumper_to_crosswalk_m: cw.s - (p.s + FRONT),
+      s_route: cw.s,
+      to_path_m: cw.toPath,
+      speed: cw.ped.v,
+      mid_block: !!cw.ped.crossing?.jaywalk,
+    };
+  // (what a registered feature puts in the road, geese or a closed road's barricades, is never followed
+  // or passed: sim/features/index.js)
+  const vehicles = visible.filter((o) => o.kind !== "pedestrian" && isTrafficObstacle(o));
+  if (world.busLanes) {
+    route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
+    const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
+    if (b)
+      snap.bus_lane = {
+        edge: b.edge,
+        lanes: b.lanes.map((l) => l.lane),
+        in_effect: b.active,
+        entering_allowed: b.entering_allowed,
+        approach_m: b.approach_m,
+        block_end_in_m: b.remaining,
+      };
+  }
+  const lane = (snap.lane = laneState(route, p, executing?.law));
+  snap.right_hook = rightHook(world, p, frontS, lane);
+  snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection, executing);
+  snap.emergency_ahead = emergencyAhead(world, p, frontS);
+  snap.bus = busPullingOut(world, frontS, visible);
+  for (const sense of SENSE.afterPedestrians) sense(world, snap, { frontS });
+  snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
+  snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
+  snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);
+  snap.level_crossing = levelCrossing(world, route, frontS, vehicles);
+  snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
+  for (const sense of SENSE.beforeWorkZone) sense(world, snap, { p, frontS, lane, road });
+  snap.work_zone = workZone(world, p, frontS, road);
+  snap.lane_closure = laneClosure(world, p, frontS, road, lane);
+  for (const sense of SENSE.parking) sense(world, snap, { p, frontS, lane, executing });
+  snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
+  snap.cyclist_pass = cyclistPass(world, p, lane, executing);
+  for (const sense of SENSE.beforeRunner) sense(world, snap, { p, frontS, lane, road, executing, stopSpeedFor });
+  const senseCtx = { p, frontS, lane, road, route, visible };
+  for (const sense of SENSE.driveways) sense(world, snap, senseCtx);
+  for (const sense of SENSE.streetHazards) sense(world, snap, senseCtx);
+  for (const sense of SENSE.late) sense(world, snap, senseCtx);
+  for (const sense of SENSE.junctions) sense(world, snap, senseCtx);
+  // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
+  // Once moving past the line the car has committed and carries on.
+  const ltor = snap.intersection?.left_on_red;
+  if (ltor) world.leftOnRedSeen = true;
+  const rtor = ltor || snap.intersection?.right_on_red;
+  if (rtor && !rtor.wait_for && (lane.index !== (ltor ? 0 : lane.lanes - 1) || lane.shift))
+    rtor.wait_for = { kind: "lane" };
+  if (
+    rtor &&
+    snap.pedestrian &&
+    !rtor.wait_for &&
+    snap.pedestrian.s_route < snap.intersection.s_line_route + RTOR_PAST_M
+  )
+    rtor.wait_for = { kind: "pedestrian", id: snap.pedestrian.id };
+  if (rtor) {
+    rtor.clear = !rtor.wait_for;
+    rtor.go = rtor.stop_completed && (rtor.clear || (rtor.entered && ego.v > 1.5));
+  }
+  // Ahead means in front of the bumper: a cyclist alongside is passed or waited for, not followed.
+  // Oncoming traffic that is passing is not a follow target; a stopped car facing us still is.
+  // During a lane change the lane being left still counts while the car overlaps it, for vehicles
+  // the car reaches before its planned path has cleared that lane.
+  // (follow along the way the car will go round an obstruction)
+  // (and round a cyclist, through the oncoming lane: see cyclistPass)
+  const detour =
+    snap.work_zone?.detour ||
+    snap.lane_closure?.detour ||
+    featurePassingDetour(snap) ||
+    snap.cyclist_pass?.detour ||
+    featureDetour(snap) ||
+    null;
+  const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
+  snap.following = followingInLane(ego, route, p, lane, vehicles, frame, snap);
+  const behind = corridorQuery(route, p.s - 14, p.s - 1, 1.7, visibleNpcs, p.index, lane.center, frame);
+  if (behind.length) {
+    const b = behind[behind.length - 1];
+    const bs = b.vehicle.spec || CAR;
+    snap.rear_follower = {
+      id: b.vehicle.id,
+      gap_m: p.s - b.s - (bs.length - bs.rearOverhang) - ego.spec.rearOverhang,
+      closing_mps: b.vehicle.v - ego.v,
+    };
+  }
+  for (const sense of SENSE.following) sense(world, snap, { visibleNpcs, s: p.s });
+}
+
+function senseSurroundings(snap, ego, visible, visibleNpcs) {
   for (const n of visibleNpcs) {
     const d = Math.hypot(n.x - ego.x, n.y - ego.y);
     if (d > TRAFFIC_RADIUS_M) continue;
@@ -856,7 +792,7 @@ export function buildSnapshot(world, executing = null) {
                 ? "work zone"
                 : isLaneClosure(o)
                   ? "lane closure"
-                  : featureObstacle(o)?.label || ROADSIDE_NAMES[o.kind] || "parked car",
+                  : featureObstacle(o)?.label || firstHookResult(STANDING_VEHICLE_LABELS, o) || "parked car",
       right: local.right,
       ahead: local.ahead,
       signal: o.signal || null,
@@ -866,11 +802,63 @@ export function buildSnapshot(world, executing = null) {
   snap.roadside = snap.roadside.slice(0, 6);
   snap.traffic.sort((a, b) => a.dist - b.dist);
   snap.traffic = snap.traffic.slice(0, 8);
+}
+
+export function buildSnapshot(world, executing = null) {
+  const { ego, route } = world;
+  const FRONT = ego.spec.length - ego.spec.rearOverhang;
+  const visible = world.visibleObstaclesNear(ego.x, ego.y, TRAFFIC_RADIUS_M);
+  const visibleNpcs = world.npcs.filter((n) => visible.includes(n));
+  const road = world._road || world.roadInfo();
+  const snap = {
+    t: world.t,
+    tick: world.tick,
+    ego: { x: ego.x, y: ego.y, psi: ego.psi, v: ego.v, front_m: FRONT },
+    road,
+    route,
+    routeProj: null,
+    onRoute: false,
+    nav: null,
+    intersection: null,
+    control_line_m: null,
+    following: null,
+    pedestrian: null,
+    right_hook: null,
+    emergency: null,
+    emergency_ahead: null,
+    bus: null,
+    crosswalk_stop: null,
+    school_bus: null,
+    streetcar: null,
+    level_crossing: null,
+    junction_box: null,
+    speed_zone: null,
+    work_zone: null,
+    lane_closure: null,
+    ...FEATURE_SNAPSHOT_FIELDS,
+    snow_plow: null,
+    cyclist_pass: null,
+    parking: null,
+    blind_spot: null,
+    rear_follower: null,
+    traffic: [],
+    current_path_hazard: null,
+    lane: null,
+    stuck: world.stuckFor > 6 ? { for_s: world.stuckFor } : null,
+    limit: road.limit || 11.2,
+    observed: visible,
+    visibility: {
+      range_m: world.visibility.range,
+      safe_speed_mps: visibilitySpeed(world.visibility.range, FRONT),
+      building_occlusion: true,
+    },
+    roadside: [],
+  };
+  if (route) senseRoute(world, snap, executing, visible, visibleNpcs, FRONT);
+  senseSurroundings(snap, ego, visible, visibleNpcs);
   if (executing?.hazard) snap.current_path_hazard = executing.hazard;
   snap.speed_zone = speedZone(world, snap, FRONT);
-  // (coming up to a vehicle stopped at the roadside with its lights flashing, and passing it, the
-  // speed to be down to by then is the limit, so that no manoeuvre goes faster)
-  if (snap.roadside_stop) snap.limit = Math.min(snap.limit, roadsideSpeed(snap.roadside_stop));
+  for (const limit of LIMIT.beforeWorkZone) limit(snap);
   // (likewise coming up to a work zone, and through it)
   if (snap.work_zone) snap.limit = Math.min(snap.limit, workZoneSpeed(snap.work_zone));
   // (and at a lane closure, from its merge point: sim/lane-closure.js)
@@ -891,11 +879,11 @@ export function buildSnapshot(world, executing = null) {
   snap.parking = parkingState(world, snap, executing);
   // (and what a registered feature caps once the turnaround and the parking are known: black ice, say)
   for (const limit of LIMIT.parking) limit(snap);
-  if (world.restrictions && snap.routeProj) snap.turn_restriction = turnRestrictionAhead(world, snap.routeProj.s);
+  for (const sense of SENSE.beforeTarget) sense(world, snap);
   snap.target = desiredSpeed(snap);
   if (snap.lane) laneOptions(snap, world);
   for (const finish of FINISH_LANES) finish(snap);
-  if (world.highBeams) snap.headlights = headlights(world, world.ego, undefined, 25);
+  for (const sense of SENSE.end) sense(world, snap);
   return snap;
 }
 
@@ -1713,54 +1701,6 @@ function workZone(world, _p, frontS, road) {
   return null;
 }
 
-// A school crossing guard at a marked crosswalk on the car's route ahead (sim/crossing-guard.js), with
-// `guards` on, from when the car can see the guard, within GUARD_LOOK_M, until its front is 2 m past the
-// crosswalk's centre. `paddle` is "up" from when the guard steps out with the STOP sign until the guard
-// is back on the sidewalk; `in_road` who is still on the roadway (the guard and children); `waiting`
-// the children at the curb; `stop_s_route` where the front stops, GUARD_STOP_M short of the crosswalk's
-// centre; `wait` whether the car must stop there now: the sign is up, or anyone is still in the road,
-// and when the sign rose (or on first approach for a later arrival) it could stop at the owed rate, or was
-// standing still (a car too close to stop by then goes on, giving way to anyone in its path); `ready`
-// while children wait at the curb and the sign is down: the guard may step out. Or null.
-function crossingGuard(world, frontS) {
-  const g = world.crossingGuards;
-  if (!g?.enabled || !g.posts.length) return null;
-  const { ego, route } = world;
-  for (const { cw, s } of crosswalksAlong(route, world.crowd)) {
-    if (s + 2 < frontS) continue;
-    if (s - frontS > GUARD_LOOK_M) break;
-    const post = g.at(cw.id);
-    if (!post) continue;
-    const guard = post.guard,
-      stop = s - GUARD_STOP_M;
-    const inRoad = g.inRoad(post),
-      up = post.paddleUp || inRoad.length > 0;
-    const visible = world.sees(ego, guard);
-    // Once observed, a raised sign remains binding if traffic temporarily hides the guard.
-    if (!visible && !(up && post.egoSawStop)) continue;
-    if (visible && up) post.egoSawStop = true;
-    const owed = up && g.owes(post, ego, stop - frontS);
-    const waiting = g.waiting(post).length;
-    return {
-      id: post.id,
-      guard_id: guard.id,
-      crosswalk_id: cw.id,
-      ...(post.zone?.name ? { school: post.zone.name } : {}),
-      paddle: post.paddleUp ? "up" : "down",
-      phase: post.phase,
-      in_road: inRoad.map((p) => p.id),
-      waiting,
-      crosswalk_s_route: s,
-      bumper_to_crosswalk_m: s - frontS,
-      stop_s_route: stop,
-      bumper_to_stop_m: stop - frontS,
-      wait: up && owed,
-      ready: !up && waiting > 0,
-    };
-  }
-  return null;
-}
-
 // A lane closure on the car's route ahead (sim/lane-closure.js), from when the car can see it (or is 30 m
 // short of its merge point) until its front is out of it. `side` is "closed" when the car is in the lane
 // that is closed (past the merge point: came from it) and "open" otherwise; `closed_lane` which lane that
@@ -2103,56 +2043,6 @@ function junctionBox(world, route, frontS, vehicles, inter) {
     room_m: b.rear_m,
     need_m: ego.spec.length + BOX_ROOM_M,
   };
-}
-
-// A vehicle stopped at the roadside with its lights flashing that the car must slow down and move over
-// for (sim/roadside.js, BC MVA Regulations s. 47.02): the nearest it can see on the right of its route
-// ahead, going its way, within ROADSIDE_LOOK_M, until the car's rear is past its front. `gap_m` is
-// from the car's front to its rear (negative beside it), `limit_mps` the speed to pass it at (from
-// APPROACH_M short of it), `adjacent_delta` the lane next to it (by lanes right of the route's, as
-// `lane.delta`), `in_adjacent_lane` whether the car is in it, and `other_lane` whether there is a
-// lane further from it going the car's way to move over into.
-const ROADSIDE_LOOK_M = 100;
-function roadsideStop(world, p, frontS, lane, road) {
-  const { ego, route } = world;
-  let best = null;
-  for (const v of world.roadside?.vehicles || []) {
-    if (!flashing(v) || Math.hypot(v.x - ego.x, v.y - ego.y) > ROADSIDE_LOOK_M + 20 || !world.sees(ego, v)) continue;
-    const { rear, front } = endsOf(v),
-      qr = route.project(rear[0], rear[1], p.index),
-      qf = route.project(front[0], front[1], p.index);
-    if (!qr || !qf || qr.distance > 15 || Math.abs(wrap(v.psi - qr.heading)) > Math.PI / 6) continue;
-    const gap = qr.s - frontS;
-    if (gap > ROADSIDE_LOOK_M || p.s - ego.spec.rearOverhang > qf.s) continue;
-    // its near side, in metres right of the route where the car is
-    const side =
-      Math.min(qr.lateral + route.frameMove(p.s, qr.s), qf.lateral + route.frameMove(p.s, qf.s)) - v.spec.width / 2;
-    if (side - lane.center < 0 || side - lane.center > ROADSIDE_SIDE_M) continue;
-    if (best && gap >= best.gap_m) continue;
-    // the lanes going the car's way, left of it: the one nearest it is next to it
-    const here = route.laneAt(p.s),
-      lanes = [];
-    for (let d = -here.idx; d < here.lanes - here.idx; d++) {
-      const span = d === 0 ? { offset: here.center } : route.laneSpan(p.s, d);
-      if (span && span.offset < side) lanes.push({ d, offset: span.offset });
-    }
-    lanes.sort((a, b) => b.offset - a.offset);
-    const adjacent = lanes.length && side - lanes[0].offset < ADJACENT_M ? lanes[0].d : null;
-    best = {
-      id: v.id,
-      kind: v.kind,
-      name: ROADSIDE_NAMES[v.kind] || v.kind,
-      lights: ROADSIDE_LIGHTS[v.kind] || "flashing",
-      gap_m: gap,
-      s_rear_route: qr.s,
-      s_front_route: qf.s,
-      limit_mps: passLimit(road.limit || 11.2),
-      adjacent_delta: adjacent,
-      in_adjacent_lane: adjacent !== null && lane.delta === adjacent,
-      other_lane: adjacent !== null && lanes.length > 1,
-    };
-  }
-  return best;
 }
 
 // An emergency vehicle with its siren on ahead of the car, going its way along its route, within
@@ -2540,11 +2430,7 @@ function laneOptions(snap, world) {
     (f.speed < 0.5 || f.speed < free - 2.5 || f.kind !== "car") &&
     !(i && line < f.gap_m + 20) &&
     !(turnLane && f.kind === "car");
-  // In the lane next to a vehicle stopped at the roadside with its lights flashing, still short of it:
-  // move over, to the lane on the left, if it runs on past it.
-  const rs = snap.roadside_stop;
   const sp = snap.snow_plow;
-  const moveOver = rs?.in_adjacent_lane && rs.other_lane && rs.gap_m > MOVE_OVER_MIN_M;
   for (const dir of ["left", "right"]) {
     const delta = lane.delta + (dir === "left" ? -1 : 1);
     const span = route.laneSpan(s, delta);
@@ -2589,7 +2475,10 @@ function laneOptions(snap, world) {
     // (in a lane with a snow plow on its right, the car need not stay back of it: sim/snow-plow.js)
     const plowThere = sp && sp.lateral_route - span.offset > SAME_LANE_M ? null : sp;
     const sideFollowing = side.leader ? { gap_m: side.leader.gap_m, speed: side.leader.speed } : null;
-    if (sideFollowing && world.followingDistance) sideFollowing.policy = followingPolicy(world.ego, sideFollowing);
+    if (sideFollowing) {
+      const policy = firstHookResult(FOLLOWING_POLICY, world, world.ego, sideFollowing);
+      if (policy) sideFollowing.policy = policy;
+    }
     side.target_v = desiredSpeed({ ...snap, snow_plow: plowThere, following: sideFollowing }).v;
     const room = (side.until_s ?? route.length) - (s + FRONT);
     if (lane.shift) side.offer = delta === lane.from_delta && !inJunction(CHANGE_JUNCTION_M) ? "abort" : null;
@@ -2603,12 +2492,12 @@ function laneOptions(snap, world) {
         room >= Math.max(80, 2 * laneChangeLength(v) + 30) &&
         !inJunction(PASS_JUNCTION_M)
           ? "pass"
-          : moveOver &&
-              dir === "left" &&
-              (side.until_s ?? route.length) > rs.s_front_route + MOVE_OVER_PAST_M &&
-              !inJunction(CHANGE_JUNCTION_M)
-            ? "move_over"
-            : null;
+          : firstHookResult(AFTER_PASSING, snap, side, {
+              dir,
+              routeLength: route.length,
+              inJunction,
+              changeMargin: CHANGE_JUNCTION_M,
+            });
     if (!side.offer)
       side.offer = firstHookResult(LANE_OFFER, snap, side, {
         dir,
@@ -2649,10 +2538,6 @@ export function desiredSpeed(snap) {
     v = snap.limit * weather.speed;
     reasons.push(weather.label);
   }
-  if (snap.turn_restriction?.banned) {
-    v = Math.min(v, Math.sqrt(2 * decel * Math.max(0, snap.turn_restriction.distance_m - FRONT - 8)));
-    reasons.push("prohibited turn; replan route");
-  }
   const targetCtx = { decel, FRONT, stopSpeedFor };
   for (const target of TARGET.restrictions) v = target(snap, v, reasons, targetCtx);
   if (snap.visibility) {
@@ -2691,18 +2576,7 @@ export function desiredSpeed(snap) {
     }
   }
   for (const cap of TARGET.beforeRoadside) v = cap(snap, v, reasons);
-  // a vehicle stopped at the roadside with its lights flashing: down to the speed to pass it at a
-  // little before APPROACH_M short of it, gently, and no faster until past it
-  const rs = snap.roadside_stop;
-  if (rs) {
-    const vr = roadsideSpeed(rs, Math.min(weather.speed, 1));
-    if (vr <= v + 0.05) {
-      v = Math.min(v, vr);
-      reasons.push(
-        rs.gap_m <= APPROACH_M ? `passing a ${rs.name} with its lights flashing` : `${rs.name} ahead, lights flashing`,
-      );
-    }
-  }
+  for (const cap of TARGET.beforeParked) v = cap(snap, v, reasons, targetCtx);
   // cars parked at the kerb that hide the sidewalk (sim/hidden-hazards.js): down to the speed the car
   // can stop from for someone stepping out from between them, gently, by the first of them
   const bs = snap.blind_spot;
@@ -2898,21 +2772,7 @@ export function desiredSpeed(snap) {
       reasons.push(sb.lights === "red" ? "school bus stopped, red lights flashing" : "school bus about to stop");
     }
   }
-  // a school crossing guard holding up the STOP sign, or anyone still in the road: stop short of the
-  // crosswalk; with children waiting at the curb, slow down, ready to
-  const cg = snap.crossing_guard;
-  if (cg && (cg.wait || (cg.ready && cg.bumper_to_stop_m > 0))) {
-    const room = cg.bumper_to_stop_m;
-    const vg = cg.wait
-      ? room < 1.0
-        ? 0
-        : stopSpeedFor(room - 0.5, decel)
-      : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
-    if (vg < v) {
-      v = vg;
-      reasons.push(cg.wait ? "crossing guard holding up STOP" : "children waiting to cross with a crossing guard");
-    }
-  }
+  for (const cap of TARGET.afterSchoolBus) v = cap(snap, v, reasons, targetCtx);
   // a streetcar with its doors open: stop behind them; slowing for its stop, slow down, ready to
   const sc = snap.streetcar;
   if (sc) {
@@ -3005,13 +2865,6 @@ export function desiredSpeed(snap) {
   return { v: Math.max(0, v), reasons };
 }
 
-// The speed to pass a vehicle stopped at the roadside at (see roadsideStop), or, short of it, the speed
-// from which the car slows to that comfortably by 5 m before APPROACH_M short of it.
-function roadsideSpeed(rs, factor = 1) {
-  const lim = rs.limit_mps * factor;
-  return Math.sqrt(lim * lim + 2 * comfort().decel * 0.6 * Math.max(0, rs.gap_m - APPROACH_M - 5));
-}
-
 // The speed to go through a work zone at (see workZone), from 5 m short of its stop line, or, short of
 // that, the speed from which the car slows to it comfortably by then.
 function workZoneSpeed(wz) {
@@ -3067,7 +2920,10 @@ export function hazardFlags(snap) {
   if (snap.streetcar) f.push("streetcar");
   if (snap.level_crossing) f.push("level crossing");
   if (snap.junction_box) f.push("junction box");
-  if (snap.roadside_stop) f.push("roadside vehicle");
+  for (const flag of HAZARD.beforeWorkZone) {
+    const label = flag(snap);
+    if (label) f.push(label);
+  }
   if (snap.work_zone) f.push("work zone");
   if (snap.lane_closure) f.push("lane closure");
   for (const flag of HAZARD.parking) {
@@ -3076,7 +2932,6 @@ export function hazardFlags(snap) {
   }
   if (snap.snow_plow) f.push("snow plow");
   if (snap.cyclist_pass) f.push("cyclist ahead");
-  if (snap.crossing_guard) f.push("crossing guard");
   for (const flag of HAZARD.beforeRunner) {
     const label = flag(snap);
     if (label) f.push(label);

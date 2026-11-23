@@ -2,6 +2,7 @@
 
 from functools import partial
 from math import isfinite
+from sys import float_info
 
 from . import outcomes, safety
 
@@ -149,6 +150,7 @@ COHORTS = {
     "parking": ("recorded parking outcome", parking),
     "rerouting": ("observed rerouting", rerouting),
     "brake-assist": ("recorded emergency-brake intervention", partial(presence, field="safety_brakes")),
+    "deadlocks": ("recorded deadlock override", partial(presence, field="deadlocks")),
     "fallback": ("recorded model fallback incident", partial(presence, field="fallbacks")),
     "flags": ("recorded flagged choice", partial(presence, field="flagged_choices")),
     "collisions": ("recorded collision", partial(presence, field="collisions")),
@@ -161,7 +163,20 @@ def percentile(values, fraction):
     upper = min(lower + 1, len(values) - 1)
     if position == lower:
         return values[lower]
-    return values[lower] + (values[upper] - values[lower]) * (position - lower)
+    weight = position - lower
+    diff = values[upper] - values[lower]
+    if -float_info.max <= diff <= float_info.max:
+        return values[lower] + diff * weight
+    return values[lower] * (1 - weight) + values[upper] * weight
+
+
+def _mean(values):
+    if not values:
+        return None
+    total = sum(values)
+    if type(total) is int or isfinite(total):
+        return total / len(values)
+    return sum(v / len(values) for v in values)
 
 
 def distribution(values, route_count):
@@ -172,11 +187,22 @@ def distribution(values, route_count):
         "measured": count,
         "unavailable": route_count - count,
         "zero": values.count(0),
+        "mean": _mean(values),
         "min": values[0] if values else None,
         "p25": percentile(values, 0.25) if values else None,
         "median": percentile(values, 0.5) if values else None,
         "p75": percentile(values, 0.75) if values else None,
+        "p90": percentile(values, 0.9) if values else None,
+        "p95": percentile(values, 0.95) if values else None,
         "max": values[-1] if values else None,
+    }
+
+
+def ranking_summary(values, digits):
+    stats = distribution(values, len(values))
+    return {
+        key: round(stats[key], digits) if stats[key] is not None else None
+        for key in ("min", "median", "p95", "max", "mean")
     }
 
 
@@ -200,6 +226,7 @@ EXCLUDED = {
     "arrival": {"progress"},
     "brake-assist": {"safety_brakes"},
     "collisions": {"collisions", "at_fault"},
+    "deadlocks": {"deadlocks"},
     "fallback": {"fallbacks", "fallback_decisions", "fallback_share"},
     "flags": {"flagged_choices"},
 }

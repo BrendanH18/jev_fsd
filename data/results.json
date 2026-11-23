@@ -3088,6 +3088,7 @@
      "time_s": 61.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3114,6 +3115,7 @@
      "time_s": 71.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -3140,6 +3142,7 @@
      "time_s": 62.7,
      "version": 2,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -3166,6 +3169,7 @@
      "time_s": 76.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -3192,6 +3196,7 @@
      "time_s": 34,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3218,6 +3223,7 @@
      "time_s": 97.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3244,6 +3250,7 @@
      "time_s": 27.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -3270,6 +3277,7 @@
      "time_s": 63.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -3296,6 +3304,7 @@
      "time_s": 84.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -3322,6 +3331,7 @@
      "time_s": 60.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -3348,6 +3358,7 @@
      "time_s": 54.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3374,6 +3385,7 @@
      "time_s": 42.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -3400,6 +3412,7 @@
      "time_s": 47.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3426,6 +3439,7 @@
      "time_s": 93,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3452,6 +3466,7 @@
      "time_s": 53.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3478,6 +3493,7 @@
      "time_s": 32.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3504,6 +3520,7 @@
      "time_s": 34.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -3530,6 +3547,7 @@
      "time_s": 74.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -3556,6 +3574,7 @@
      "time_s": 76,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -3582,6 +3601,7 @@
      "time_s": 87.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -3608,6 +3628,7 @@
      "time_s": 55.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -3634,6 +3655,7 @@
      "time_s": 53.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -3660,6 +3682,7 @@
      "time_s": 44.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -3686,6 +3709,7 @@
      "time_s": 56.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -3712,6 +3736,7 @@
      "time_s": 32.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -3738,6 +3763,7 @@
      "time_s": 33.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3764,6 +3790,7 @@
      "time_s": 23.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3790,6 +3817,7 @@
      "time_s": 53.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3816,6 +3844,7 @@
      "time_s": 71.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -3842,6 +3871,7 @@
      "time_s": 40.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -3868,6 +3898,7 @@
      "time_s": 33.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3894,6 +3925,7 @@
      "time_s": 34.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -3920,6 +3952,7 @@
      "time_s": 97,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -3946,6 +3979,7 @@
      "time_s": 33.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -3972,6 +4006,7 @@
      "time_s": 30.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -3998,6 +4033,7 @@
      "time_s": 24.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -4024,6 +4060,7 @@
      "time_s": 19.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -4050,6 +4087,7 @@
      "time_s": 120.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -4076,6 +4114,7 @@
      "time_s": 29.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -4102,6 +4141,7 @@
      "time_s": 73.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,
@@ -4128,6 +4168,7 @@
      "time_s": 30.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -4154,6 +4195,7 @@
      "time_s": 37.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -4180,6 +4222,7 @@
      "time_s": 53.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -4206,6 +4249,7 @@
      "time_s": 44.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -4232,6 +4276,7 @@
      "time_s": 14.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -4258,6 +4303,7 @@
      "time_s": 34.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -4284,6 +4330,7 @@
      "time_s": 21.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -4310,6 +4357,7 @@
      "time_s": 23.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -4336,6 +4384,7 @@
      "time_s": 65.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -4362,6 +4411,7 @@
      "time_s": 31.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -4388,6 +4438,7 @@
      "time_s": 26.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -4414,6 +4465,7 @@
      "time_s": 28.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -4440,6 +4492,7 @@
      "time_s": 68,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -4466,6 +4519,7 @@
      "time_s": 91.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -4492,6 +4546,7 @@
      "time_s": 39.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,
@@ -4518,6 +4573,7 @@
      "time_s": 75.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -4544,6 +4600,7 @@
      "time_s": 27.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -4570,6 +4627,7 @@
      "time_s": 41.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -4596,6 +4654,7 @@
      "time_s": 57.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -4622,6 +4681,7 @@
      "time_s": 49,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -4648,6 +4708,7 @@
      "time_s": 254.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -4674,6 +4735,7 @@
      "time_s": 204.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -5363,6 +5425,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 61.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5374,6 +5437,7 @@
      "map": "victoria",
      "pass": true,
      "time_s": 71.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5385,6 +5449,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 62.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5396,6 +5461,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -5407,6 +5473,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 34,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -5418,6 +5485,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 97.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5429,6 +5497,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 27.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5440,6 +5509,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 63.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -5451,6 +5521,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 84.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5462,6 +5533,7 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 60.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -5473,6 +5545,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 54.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5484,6 +5557,7 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 42.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5495,6 +5569,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 47.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5506,6 +5581,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 93,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5517,6 +5593,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 53.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5528,6 +5605,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 32.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5539,6 +5617,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 34.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5550,6 +5629,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 74.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5561,6 +5641,7 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 76,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5572,6 +5653,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 87.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5583,6 +5665,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 55.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5594,6 +5677,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 53.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -5605,6 +5689,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 44.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5616,6 +5701,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 56.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5627,6 +5713,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 32.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5638,6 +5725,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 33.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -5649,6 +5737,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 23.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5660,6 +5749,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 53.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -5671,6 +5761,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 71.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -5682,6 +5773,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 40.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5693,6 +5785,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 33.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5704,6 +5797,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 34.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5715,6 +5809,7 @@
      "map": "victoria",
      "pass": true,
      "time_s": 97,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5726,6 +5821,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 33.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5737,6 +5833,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 30.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5748,6 +5845,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 24.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5759,6 +5857,7 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 19.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5770,6 +5869,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 120.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -5781,6 +5881,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 29.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5792,6 +5893,7 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 73.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5803,6 +5905,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 30.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5814,6 +5917,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 37.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5825,6 +5929,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 53.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5836,6 +5941,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 44.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5847,6 +5953,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 14.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5858,6 +5965,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 34.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5869,6 +5977,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 21.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5880,6 +5989,7 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 23.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5891,6 +6001,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 65.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5902,6 +6013,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 31.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -5913,6 +6025,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 26.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5924,6 +6037,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 28.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5935,6 +6049,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 68,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -5946,6 +6061,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 91.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5957,6 +6073,7 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 39.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -5968,6 +6085,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 75.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -5979,6 +6097,7 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 27.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -5990,6 +6109,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 41.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -6001,6 +6121,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 57.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -6012,6 +6133,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 49,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -6023,6 +6145,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 254.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 6,
@@ -6034,6 +6157,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 204.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 5,
@@ -9659,6 +9783,7 @@
      "time_s": 60.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -9685,6 +9810,7 @@
      "time_s": 73.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -9711,6 +9837,7 @@
      "time_s": 65.8,
      "version": 2,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -9737,6 +9864,7 @@
      "time_s": 76.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -9763,6 +9891,7 @@
      "time_s": 41.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -9789,6 +9918,7 @@
      "time_s": 116.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -9815,6 +9945,7 @@
      "time_s": 29,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -9841,6 +9972,7 @@
      "time_s": 65.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -9867,6 +9999,7 @@
      "time_s": 86.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -9893,6 +10026,7 @@
      "time_s": 62.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -9919,6 +10053,7 @@
      "time_s": 52.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -9945,6 +10080,7 @@
      "time_s": 48,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -9971,6 +10107,7 @@
      "time_s": 51.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -9997,6 +10134,7 @@
      "time_s": 108.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10023,6 +10161,7 @@
      "time_s": 56,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10049,6 +10188,7 @@
      "time_s": 33.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10075,6 +10215,7 @@
      "time_s": 42.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -10101,6 +10242,7 @@
      "time_s": 109.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -10127,6 +10269,7 @@
      "time_s": 81.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -10153,6 +10296,7 @@
      "time_s": 90.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -10179,6 +10323,7 @@
      "time_s": 56.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -10205,6 +10350,7 @@
      "time_s": 56.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -10231,6 +10377,7 @@
      "time_s": 46.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -10257,6 +10404,7 @@
      "time_s": 54.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -10283,6 +10431,7 @@
      "time_s": 36.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -10309,6 +10458,7 @@
      "time_s": 35,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10335,6 +10485,7 @@
      "time_s": 26.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10361,6 +10512,7 @@
      "time_s": 54.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10387,6 +10539,7 @@
      "time_s": 73.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -10413,6 +10566,7 @@
      "time_s": 52.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -10439,6 +10593,7 @@
      "time_s": 37.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10465,6 +10620,7 @@
      "time_s": 41.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -10491,6 +10647,7 @@
      "time_s": 99.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -10517,6 +10674,7 @@
      "time_s": 37,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10543,6 +10701,7 @@
      "time_s": 34.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -10569,6 +10728,7 @@
      "time_s": 27.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -10595,6 +10755,7 @@
      "time_s": 21.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -10621,6 +10782,7 @@
      "time_s": 121,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -10647,6 +10809,7 @@
      "time_s": 32.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -10673,6 +10836,7 @@
      "time_s": 74.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,
@@ -10699,6 +10863,7 @@
      "time_s": 31.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -10725,6 +10890,7 @@
      "time_s": 38.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -10751,6 +10917,7 @@
      "time_s": 55.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -10777,6 +10944,7 @@
      "time_s": 46,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10803,6 +10971,7 @@
      "time_s": 16.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10829,6 +10998,7 @@
      "time_s": 36.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10855,6 +11025,7 @@
      "time_s": 23.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -10881,6 +11052,7 @@
      "time_s": 25.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -10907,6 +11079,7 @@
      "time_s": 99,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -10933,6 +11106,7 @@
      "time_s": 32.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -10959,6 +11133,7 @@
      "time_s": 28.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -10985,6 +11160,7 @@
      "time_s": 30.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -11011,6 +11187,7 @@
      "time_s": 69.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -11037,6 +11214,7 @@
      "time_s": 92.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -11063,6 +11241,7 @@
      "time_s": 45.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,
@@ -11089,6 +11268,7 @@
      "time_s": 97.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -11115,6 +11295,7 @@
      "time_s": 28.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -11141,6 +11322,7 @@
      "time_s": 43.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -11167,6 +11349,7 @@
      "time_s": 60.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -11193,6 +11376,7 @@
      "time_s": 51.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -11219,6 +11403,7 @@
      "time_s": 342.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -11245,6 +11430,7 @@
      "time_s": 209.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -11938,6 +12124,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 60.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -11949,6 +12136,7 @@
      "map": "victoria",
      "pass": true,
      "time_s": 73.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -11960,6 +12148,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 65.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -11971,6 +12160,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 76.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -11982,6 +12172,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 41.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -11993,6 +12184,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 116.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12004,6 +12196,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 29,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12015,6 +12208,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 65.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -12026,6 +12220,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 86.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 6,
@@ -12037,6 +12232,7 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 62.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 7,
@@ -12048,6 +12244,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 52.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 7,
@@ -12059,6 +12256,7 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 48,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12070,6 +12268,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 51.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12081,6 +12280,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 108.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12092,6 +12292,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 56,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 6,
@@ -12103,6 +12304,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 33.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12114,6 +12316,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 42.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12125,6 +12328,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 109.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -12136,6 +12340,7 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 81.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12147,6 +12352,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 90.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12158,6 +12364,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 56.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12169,6 +12376,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 56.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 5,
@@ -12180,6 +12388,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 46.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12191,6 +12400,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 54.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -12202,6 +12412,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 36.5,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12213,6 +12424,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 35,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12224,6 +12436,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 26.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12235,6 +12448,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 54.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 6,
@@ -12246,6 +12460,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 73.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -12257,6 +12472,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 52.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12268,6 +12484,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 37.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12279,6 +12496,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 41.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12290,6 +12508,7 @@
      "map": "victoria",
      "pass": true,
      "time_s": 99.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12301,6 +12520,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 37,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12312,6 +12532,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 34.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 5,
@@ -12323,6 +12544,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 27.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12334,6 +12556,7 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 21.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12345,6 +12568,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 121,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 6,
@@ -12356,6 +12580,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 32.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12367,6 +12592,7 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 74.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12378,6 +12604,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 31.4,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12389,6 +12616,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 38.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12400,6 +12628,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 55.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -12411,6 +12640,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 46,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12422,6 +12652,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 16.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12433,6 +12664,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 36.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12444,6 +12676,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 23.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12455,6 +12688,7 @@
      "map": "edmonton",
      "pass": true,
      "time_s": 25.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12466,6 +12700,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 99,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 7,
@@ -12477,6 +12712,7 @@
      "map": "calgary",
      "pass": true,
      "time_s": 32.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12488,6 +12724,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 28.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -12499,6 +12736,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 30.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12510,6 +12748,7 @@
      "map": "ottawa",
      "pass": true,
      "time_s": 69.6,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12521,6 +12760,7 @@
      "map": "winnipeg",
      "pass": true,
      "time_s": 92.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12532,6 +12772,7 @@
      "map": "saskatoon",
      "pass": true,
      "time_s": 45.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 2,
@@ -12543,6 +12784,7 @@
      "map": "montreal",
      "pass": true,
      "time_s": 97.9,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -12554,6 +12796,7 @@
      "map": "mount_pleasant",
      "pass": true,
      "time_s": 28.7,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 0,
@@ -12565,6 +12808,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 43.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 3,
@@ -12576,6 +12820,7 @@
      "map": "halifax",
      "pass": true,
      "time_s": 60.3,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 4,
@@ -12587,6 +12832,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 51.8,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 1,
@@ -12598,6 +12844,7 @@
      "map": "kitsilano",
      "pass": true,
      "time_s": 342.1,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 16,
@@ -12609,6 +12856,7 @@
      "map": "toronto",
      "pass": true,
      "time_s": 209.2,
+     "flagged_choices": 0,
      "incident_counts": {
       "collisions": 0,
       "hard_brakes": 8,
@@ -15847,6 +16095,7 @@
      "time_s": 42.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -15873,6 +16122,7 @@
      "time_s": 49.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -15899,6 +16149,7 @@
      "time_s": 95.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -15925,6 +16176,7 @@
      "time_s": 34,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -15951,6 +16203,7 @@
      "time_s": 20.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -15977,6 +16230,7 @@
      "time_s": 75.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,
@@ -16003,6 +16257,7 @@
      "time_s": 39.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16029,6 +16284,7 @@
      "time_s": 100.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -16055,6 +16311,7 @@
      "time_s": 69.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -16081,6 +16338,7 @@
      "time_s": 28.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -16107,6 +16365,7 @@
      "time_s": 45.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16133,6 +16392,7 @@
      "time_s": 255.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16159,6 +16419,7 @@
      "time_s": 73.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -16185,6 +16446,7 @@
      "time_s": 75.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -16211,6 +16473,7 @@
      "time_s": 56.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16237,6 +16500,7 @@
      "time_s": 57.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -16263,6 +16527,7 @@
      "time_s": 46.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -16289,6 +16554,7 @@
      "time_s": 25,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16315,6 +16581,7 @@
      "time_s": 61.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 4,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16341,6 +16608,7 @@
      "time_s": 35,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16367,6 +16635,7 @@
      "time_s": 37.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -16393,6 +16662,7 @@
      "time_s": 24.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -16419,6 +16689,7 @@
      "time_s": 203.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -16445,6 +16716,7 @@
      "time_s": 100.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16471,6 +16743,7 @@
      "time_s": 58.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -16497,6 +16770,7 @@
      "time_s": 50.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -16523,6 +16797,7 @@
      "time_s": 35.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -16549,6 +16824,7 @@
      "time_s": 43.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -16575,6 +16851,7 @@
      "time_s": 99,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -16601,6 +16878,7 @@
      "time_s": 27.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -16627,6 +16905,7 @@
      "time_s": 39.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -16653,6 +16932,7 @@
      "time_s": 55.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -16679,6 +16959,7 @@
      "time_s": 15.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16705,6 +16986,7 @@
      "time_s": 32.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -16731,6 +17013,7 @@
      "time_s": 30.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16757,6 +17040,7 @@
      "time_s": 84.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -16783,6 +17067,7 @@
      "time_s": 150.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -16809,6 +17094,7 @@
      "time_s": 51.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -16835,6 +17121,7 @@
      "time_s": 68.6,
      "version": 2,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -16861,6 +17148,7 @@
      "time_s": 28.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -16887,6 +17175,7 @@
      "time_s": 31.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16913,6 +17202,7 @@
      "time_s": 78.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -16939,6 +17229,7 @@
      "time_s": 51.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -16965,6 +17256,7 @@
      "time_s": 32.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -16991,6 +17283,7 @@
      "time_s": 37,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -17017,6 +17310,7 @@
      "time_s": 128.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -17043,6 +17337,7 @@
      "time_s": 45.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -17069,6 +17364,7 @@
      "time_s": 25.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -17095,6 +17391,7 @@
      "time_s": 28.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -17121,6 +17418,7 @@
      "time_s": 91.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -17147,6 +17445,7 @@
      "time_s": 65.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -17173,6 +17472,7 @@
      "time_s": 87,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -17199,6 +17499,7 @@
      "time_s": 36.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -17225,6 +17526,7 @@
      "time_s": 77.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -17251,6 +17553,7 @@
      "time_s": 89.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -17277,6 +17580,7 @@
      "time_s": 56.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -17303,6 +17607,7 @@
      "time_s": 73.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -17329,6 +17634,7 @@
      "time_s": 44.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -17355,6 +17661,7 @@
      "time_s": 63.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -17381,6 +17688,7 @@
      "time_s": 52,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -17407,6 +17715,7 @@
      "time_s": 35.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -17433,6 +17742,7 @@
      "time_s": 40.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,
@@ -20247,6 +20557,7 @@
      "time_s": 74,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -20273,6 +20584,7 @@
      "time_s": 94.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -20299,6 +20611,7 @@
      "time_s": 46.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 3,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -20325,6 +20638,7 @@
      "time_s": 43.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 9,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -20351,6 +20665,7 @@
      "time_s": 42.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -20377,6 +20692,7 @@
      "time_s": 34.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -20403,6 +20719,7 @@
      "time_s": 32.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -20429,6 +20746,7 @@
      "time_s": 39,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -20455,6 +20773,7 @@
      "time_s": 255.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 27,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -20481,6 +20800,7 @@
      "time_s": 180,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 8,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -20507,6 +20827,7 @@
      "time_s": 72.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -20533,6 +20854,7 @@
      "time_s": 39.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -20559,6 +20881,7 @@
      "time_s": 74.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,
@@ -20585,6 +20908,7 @@
      "time_s": 31.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -20611,6 +20935,7 @@
      "time_s": 15.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -20637,6 +20962,7 @@
      "time_s": 27.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -20663,6 +20989,7 @@
      "time_s": 204.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 10,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -20689,6 +21016,7 @@
      "time_s": 28.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 8,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -20715,6 +21043,7 @@
      "time_s": 64.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -20741,6 +21070,7 @@
      "time_s": 48.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 3,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -20767,6 +21097,7 @@
      "time_s": 56.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -20793,6 +21124,7 @@
      "time_s": 42,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 9,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -20819,6 +21151,7 @@
      "time_s": 25.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 4,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -20845,6 +21178,7 @@
      "time_s": 55.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 3,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -20871,6 +21205,7 @@
      "time_s": 32.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -20897,6 +21232,7 @@
      "time_s": 84.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -20923,6 +21259,7 @@
      "time_s": 93.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 3,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -20949,6 +21286,7 @@
      "time_s": 66,
      "version": 2,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -20975,6 +21313,7 @@
      "time_s": 37.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21001,6 +21340,7 @@
      "time_s": 48.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21027,6 +21367,7 @@
      "time_s": 76.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 9,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -21053,6 +21394,7 @@
      "time_s": 25.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21079,6 +21421,7 @@
      "time_s": 117.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 12,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -21105,6 +21448,7 @@
      "time_s": 38.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "9b6ff7fddda0fe53",
      "incident_counts": {
       "collisions": 0,
@@ -21131,6 +21475,7 @@
      "time_s": 28.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -21157,6 +21502,7 @@
      "time_s": 67.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 9,
      "map_sha": "d8c3b4c3921cb359",
      "incident_counts": {
       "collisions": 0,
@@ -21183,6 +21529,7 @@
      "time_s": 72.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 4,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -21209,6 +21556,7 @@
      "time_s": 86.6,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 7,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -21235,6 +21583,7 @@
      "time_s": 56,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 5,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -21261,6 +21610,7 @@
      "time_s": 35.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -21287,6 +21637,7 @@
      "time_s": 33.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21313,6 +21664,7 @@
      "time_s": 21.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -21339,6 +21691,7 @@
      "time_s": 45.4,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21365,6 +21718,7 @@
      "time_s": 68.8,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 9,
      "map_sha": "c18b8436019517f5",
      "incident_counts": {
       "collisions": 0,
@@ -21391,6 +21745,7 @@
      "time_s": 91.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -21417,6 +21772,7 @@
      "time_s": 28.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "6ced97725cf745ba",
      "incident_counts": {
       "collisions": 0,
@@ -21443,6 +21799,7 @@
      "time_s": 51.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -21469,6 +21826,7 @@
      "time_s": 99.5,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21495,6 +21853,7 @@
      "time_s": 52.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 16,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21521,6 +21880,7 @@
      "time_s": 30.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21547,6 +21907,7 @@
      "time_s": 83.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 1,
      "map_sha": "a51694d053bc1df7",
      "incident_counts": {
       "collisions": 0,
@@ -21573,6 +21934,7 @@
      "time_s": 89.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -21599,6 +21961,7 @@
      "time_s": 57.1,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 5,
      "map_sha": "71b18c535b3fe622",
      "incident_counts": {
       "collisions": 0,
@@ -21625,6 +21988,7 @@
      "time_s": 33.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 9,
      "map_sha": "cfdd948bbe741675",
      "incident_counts": {
       "collisions": 0,
@@ -21651,6 +22015,7 @@
      "time_s": 97.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "6953284dd7bae0bb",
      "incident_counts": {
       "collisions": 0,
@@ -21677,6 +22042,7 @@
      "time_s": 24.9,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21703,6 +22069,7 @@
      "time_s": 31.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21729,6 +22096,7 @@
      "time_s": 45,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 5,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21755,6 +22123,7 @@
      "time_s": 59.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 5,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21781,6 +22150,7 @@
      "time_s": 49.7,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 13,
      "map_sha": "585df0725632b07b",
      "incident_counts": {
       "collisions": 0,
@@ -21807,6 +22177,7 @@
      "time_s": 31.3,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 2,
      "map_sha": "be12ae23627769f7",
      "incident_counts": {
       "collisions": 0,
@@ -21833,6 +22204,7 @@
      "time_s": 40.2,
      "version": 1,
      "pack": "6",
+     "flagged_choices": 0,
      "map_sha": "f881164b6b5aea9c",
      "incident_counts": {
       "collisions": 0,

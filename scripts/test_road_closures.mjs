@@ -111,7 +111,7 @@ async function drive(ctx, seconds, each = () => {}, until = () => false) {
   for (let k = 0; k < seconds * 60 && !until(); k++) {
     stepWorld(ctx, DT, ctx.world.t * 1000);
     if (ctx.autopilot.firing) await ctx.autopilot.firing;
-    if (ctx.autopilot.closureRouting) await ctx.autopilot.closureRouting;
+    if (ctx.autopilot.detourRouting) await ctx.autopilot.detourRouting;
     each();
   }
 }
@@ -614,7 +614,7 @@ await test("checkpoints: a replay from a checkpoint repeats the closure, the re-
   const step = async () => {
     stepWorld(ctx, DT, ctx.world.t * 1000);
     if (ctx.autopilot.firing) await ctx.autopilot.firing;
-    if (ctx.autopilot.closureRouting) await ctx.autopilot.closureRouting;
+    if (ctx.autopilot.detourRouting) await ctx.autopilot.detourRouting;
   };
   for (let k = 0; k < 60 * 6; k++) await step();
   recorder.record({ ...ctx, drive: null, clock }, true);

@@ -349,10 +349,6 @@ const CORE_FAIL_CATEGORY = {
   "merged out of turn": "right_of_way",
   "passed a cyclist too close": "space",
   "drove in a reserved bus lane": "steering",
-  "failed to dip high beams": "right_of_way",
-  "made a prohibited turn": "right_of_way",
-  "left a pedestrian crossover before the far curb": "right_of_way",
-  "drove past a crossing guard's stop sign": "right_of_way",
   "not parked": "parking",
 };
 const FAIL_CATEGORY = new Map([

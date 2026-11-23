@@ -387,7 +387,7 @@ await test("too close to stop when the sign goes up: the car is not held, and th
   const snap = buildSnapshot(ctx.world);
   assert.ok(snap.crossing_guard && !snap.crossing_guard.wait && snap.crossing_guard.paddle === "up");
   assert.ok(situationClauses(snap).join(" ").includes("too close to stop"));
-  ctx.world.auditGuards();
+  ctx.world.audit(1 / 60, ctx.world._road);
   assert.equal([...ctx.world.guardCalls.values()][0]?.owed, false);
 });
 

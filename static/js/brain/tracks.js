@@ -40,7 +40,6 @@ export const unflagged = (eligible) => eligible.filter((c) => !c.flagged);
 // What each road-rule check means, for a driver reading a flagged manoeuvre: what the prediction found,
 // in the words the situation clauses use. A check without an entry reads by its id.
 export const FLAG_TEXT = {
-  following_distance: "it leaves too little room to stop behind the vehicle ahead",
   bus_lane_driving: "it drives in a reserved bus lane while the lane is in effect",
   lane_change_gap: "the gap in the next lane is too small for this lane change",
   lane_change_too_late: "it changes lanes too late, too close to the turn or junction",
@@ -72,7 +71,6 @@ export const FLAG_TEXT = {
   no_room_past_tracks: "it stops on the level crossing, with no room past the tracks",
   blocks_junction: "it enters a junction it has no room to clear",
   runs_flagger_stop: "it goes past a work zone flagger showing STOP",
-  passes_crossing_guard: "it goes past a crossing guard's STOP sign",
   merges_out_of_turn: "it merges at the lane closure out of turn",
   takes_merge_turn: "it takes the turn of the car merging at the lane closure",
   into_closed_lane: "it moves into a closed lane",

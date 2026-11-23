@@ -8,6 +8,9 @@ import hashlib
 import json
 import tempfile
 import unittest
+import zlib
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,6 +24,14 @@ spec.loader.exec_module(build_results)
 
 
 class ResultsTest(unittest.TestCase):
+    def test_published_drive_keeps_measured_flagged_choices(self):
+        result = {"challenge": "flagger", "map": "kitsilano", "pass": True, "time_s": 36}
+        self.assertNotIn("flagged_choices", build_results.published_drive(result))
+        for count in (0, 3):
+            self.assertEqual(
+                build_results.published_drive({**result, "flagged_choices": count})["flagged_choices"], count
+            )
+
     @classmethod
     def setUpClass(cls):
         cls.data = build_results.build()
@@ -69,6 +80,8 @@ class ResultsTest(unittest.TestCase):
             "min_headway_s",
         )
         self.assertEqual(inputs, {key: result[key] for key in fields})
+        tagged = build_results.published_drive(dict(result, tags={"length_m": 1000, "lefts": 2}))
+        self.assertEqual(tagged["score_inputs"]["tags"], {"length_m": 1000})
         for key in (*fields, "time_s"):
             with self.subTest(key=key):
                 partial = result.copy()
@@ -110,6 +123,109 @@ class ResultsTest(unittest.TestCase):
                 self.assertEqual(build_results.main(["--check"]), 1)
             finally:
                 build_results.OUTPUT = original
+
+    def test_diff_reports_drift_without_rewriting_the_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = Path(tmp) / "results.json"
+            stale.write_text("{}\n")
+            report = StringIO()
+            with patch.object(build_results, "OUTPUT", stale), redirect_stdout(report), redirect_stderr(StringIO()):
+                self.assertEqual(build_results.main(["--diff"]), 1)
+            self.assertIn("@@ ", report.getvalue())
+            self.assertIn("-{}", report.getvalue())
+            self.assertEqual(stale.read_text(), "{}\n")
+
+    def test_validate_all_reports_bad_files_together(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, payload in (("results", "{"), ("submissions", "[]")):
+                day = root / name / "2026-11-23"
+                day.mkdir(parents=True)
+                (day / f"bad-{name}.json").write_text(payload)
+            (root / "results/2026-11-23/bad-recording.json").write_text(
+                json.dumps({"summary": {"brain": "rules"}, "results": []})
+            )
+            legacy_day = root / "results/2026-11-19"
+            legacy_day.mkdir()
+            (legacy_day / "invalid-verdict.json").write_text(
+                json.dumps({"summary": {"brain": "rules"}, "results": [{"pass": "false"}]})
+            )
+            recordings = root / "recordings"
+            recordings.mkdir()
+            corrupt = bytearray(gzip.compress(b"{}"))
+            corrupt[10] = 0xFF  # Reserved block type in the deflate payload.
+            with self.assertRaises(zlib.error):
+                gzip.decompress(corrupt)
+            (recordings / "bad-recording-2026-11-23.json.gz").write_bytes(corrupt)
+            malformed_run = root / "metadata-only.json"
+            malformed_run.write_text(json.dumps({"config": {"map": "old-map-id"}}))
+            malformed_variant = root / "invalid-heldout.json"
+            malformed_variant.write_text(
+                json.dumps(
+                    {
+                        "name": "heldout",
+                        "saved_at": "2026-11-20T12:00:00",
+                        "config": {"brain": "rules", "map": "kitsilano", "heldout": True},
+                        "summary": {},
+                        "results": [{"id": "route", "pass": "yes"}],
+                    }
+                )
+            )
+            inconsistent_run = root / "inconsistent-variant.json"
+            config = {"brain": "rules", "map": "kitsilano", "hour": 0}
+            inconsistent_run.write_text(
+                json.dumps(
+                    {
+                        "name": "inconsistent",
+                        "saved_at": "2026-11-19T12:00:00",
+                        "config": config,
+                        "summary": {},
+                        "results": [{"id": "route", "pass": True}],
+                    }
+                )
+            )
+            (recordings / "inconsistent-variant.json.gz").write_bytes(
+                gzip.compress(
+                    json.dumps(
+                        {
+                            "header": {"driver": "rules", "bench": config},
+                            "results": {"route": {"pass": False}},
+                            "drives": {},
+                        }
+                    ).encode()
+                )
+            )
+            errors = StringIO()
+            with (
+                patch.object(build_results, "RESULTS", root / "results"),
+                patch.object(build_results, "SUBMISSIONS", root / "submissions"),
+                patch.object(build_results, "RECORDINGS", recordings),
+                patch.object(
+                    build_results, "committed_runs", return_value=[malformed_run, malformed_variant, inconsistent_run]
+                ),
+                redirect_stderr(errors),
+            ):
+                self.assertEqual(build_results.main(["--validate-all"]), 1)
+            messages = errors.getvalue()
+            self.assertIn("7 error(s)", messages)
+            for name in (
+                "bad-results.json",
+                "bad-submissions.json",
+                "bad-recording.json",
+                "metadata-only.json",
+                "invalid-heldout.json",
+                "invalid-verdict.json",
+                "inconsistent-variant.json",
+            ):
+                self.assertIn(name, messages)
+
+    def test_readme_keeps_the_newest_city_run(self):
+        row = next(r for r in self.data["rows"] if r["suite"] == "city" and r["map"] == build_results.HOME_MAP)
+        newer = {**row, "date": "2099-01-01", "passed": 99}
+        older = {**row, "date": "2098-01-01", "passed": 42}
+        text = build_results.readme_cohort(self.data, [newer, older])
+        self.assertIn(f"99/{row['total']}", text)
+        self.assertNotIn(f"42/{row['total']}", text)
 
     def test_uncommitted_and_variant_runs_are_not_published(self):
         # data/runs/ is gitignored, so any saved benchmark lands there; held-out and other variant

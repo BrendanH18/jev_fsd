@@ -45,6 +45,10 @@ test("every record is whole, its option and flags its own, and every hook at a s
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
     [
+      "highBeams",
+      "guards",
+      "pxo",
+      "restrictions",
       "calming",
       "sunGlare",
       "contraflow",
@@ -62,6 +66,9 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "roadClosures",
       "collection",
       "vans",
+      "roadside",
+      "followingDistance",
+      "redTurnSigns",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -82,12 +89,19 @@ test("every record is whole, its option and flags its own, and every hook at a s
 test("the core runs every slot, and names no registered feature", () => {
   const core = CORE.map(source).join("\n");
   const dispatches = {
+    perceptionLine: source("render/perception.js"),
+    perceptionFocus: source("render/perception.js"),
     controlDirection: source("sim/features/index.js"),
     junctionPlan: source("sim/features/index.js"),
     checkpoint: source("lab/recorder.js"),
+    checkpointShare: source("lab/recorder.js"),
+    checkpointRestore: source("lab/recorder.js"),
+    decisionFields: source("sim/features/index.js"),
+    routeOptions: source("sim/features/index.js"),
+    requestReroute: source("brain/brain.js"),
   };
   for (const [name, slots] of Object.entries(R.SLOTS)) {
-    if (["metric", "prompt"].includes(name)) continue;
+    if (["metric", "prompt", "notice"].includes(name)) continue;
     for (const slot of slots) {
       const call =
         slot === "end"
@@ -96,6 +110,8 @@ test("the core runs every slot, and names no registered feature", () => {
       assert.ok(call.test(dispatches[name] ?? core), `the core runs ${name} at ${slot}`);
     }
   }
+  for (const slot of R.SLOTS.notice)
+    assert.ok(source("main.js").includes(`announceFeatureNotices("${slot}"`), `HUD notices at ${slot}`);
   for (const slot of R.SLOTS.metric) {
     assert.ok(source("bench/metrics.js").includes(`featureMetrics(world, v, "${slot}")`), `metrics at ${slot}`);
     assert.ok(source("bench/metrics.js").includes(`featureFailures(m, "${slot}")`), `failures at ${slot}`);
@@ -134,6 +150,12 @@ test("the core runs every slot, and names no registered feature", () => {
       'tailgaters.js"',
       'double-parked.js"',
       './traffic-officer.js"',
+      'crossing-guard.js"',
+      'pxo.js"',
+      'roadside.js"',
+      'turn-restrictions.js"',
+      'high-beams.js"',
+      'red-turn-signs.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -229,10 +251,67 @@ test("the core runs every slot, and names no registered feature", () => {
       ".doubleParked",
       '"wait_behind_van"',
       '"no_room_to_go_round"',
+      "snap.crossing_guard",
+      "world.crossingGuards",
+      "this.crossingGuards",
+      "guard_violations",
+      '"stop_for_crossing_guard"',
+      '"passes_crossing_guard"',
+      "snap.pxo",
+      "world.pxo",
+      "this.pxo",
+      "pxo_early_goes",
+      "snap.roadside_stop",
+      "world.roadside",
+      "this.roadside",
+      "world.followingDistance",
+      "this.followingDistance",
+      '"following_distance"',
+      "snap.turn_restriction",
+      "world.restrictions",
+      "this.restrictions",
+      "illegal_turns",
+      '"stop_for_turn_restriction"',
+      "world.highBeams",
+      "this.highBeams",
+      "glare_seconds",
+      "world.redTurnSigns",
+      "this.redTurnSigns",
+      "no_turn_on_red",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
   }
+});
+
+test("registered HUD notices keep their order, clear on absence, and own event badges", () => {
+  const badges = [];
+  const hud = { badge: (...args) => badges.push(args) };
+  const world = { driveways: {}, geese: {}, sunGlare: {} };
+  const autopilot = {
+    enabled: true,
+    snap: {
+      contraflow_cyclist: { cyclist_id: "cf-1", wait: true, relation: "oncoming" },
+      red_light_runner: { id: "car-1", wait: true },
+    },
+  };
+  const announced = new Map();
+  const show = () => R.announceFeatureNotices("beforeLeftOnRed", world, autopilot, {}, announced, hud);
+  show();
+  show();
+  assert.deepEqual(badges, [
+    ["CYCLIST COMING THE OTHER WAY · NO ROOM · WAIT", "safety", 2500],
+    ["CAR RUNNING THE RED · WAIT", "safety", 2500],
+  ]);
+  const snap = autopilot.snap;
+  autopilot.snap = {};
+  show();
+  assert.equal(announced.size, 0);
+  autopilot.snap = snap;
+  show();
+  assert.equal(badges.length, 4);
+  assert.equal(R.featureEventBadge({ type: "pothole_hit", kmh: 34.6 }), "HIT A POTHOLE AT 35 KM/H");
+  assert.equal(R.featurePerceptionRejection("passes_crossing_guard"), "Crossing guard: STOP");
 });
 
 test("the World builds each feature from its option, with its seen flag and its audit's calls", () => {
@@ -247,6 +326,11 @@ test("the World builds each feature from its option, with its seen flag and its 
     seed: 3,
     parked: 0,
     pedestrians: 0,
+    guards: true,
+    highBeams: true,
+    restrictions: true,
+    redTurnSigns: true,
+    followingDistance: true,
     sunGlare: true,
     calming: true,
     contraflow: true,
@@ -272,12 +356,13 @@ test("the World builds each feature from its option, with its seen flag and its 
       assert.equal(typeof offState === "boolean" ? offState : offState?.enabled, false, `${f.key} off by default`);
       assert.equal(
         typeof onState === "boolean" ? onState : onState?.enabled,
-        f.key === "geese" ? !!map.parkSpans?.length : true,
+        f.key === "geese" ? !!map.parkSpans?.length : !["pxo", "roadside"].includes(f.key),
         `${f.key} on with its option`,
       );
     }
     for (const w of [off, on]) {
-      assert.equal(w[f.seen], false);
+      if (f.seen) assert.equal(w[f.seen], false);
+      else assert.ok(!Object.hasOwn(w, "undefined"));
       if (f.calls) assert.ok(w[f.calls] instanceof Map);
     }
   }
@@ -411,7 +496,10 @@ test("the LLM prompt keeps each feature's line where it was", () => {
   };
   for (const f of R.FEATURES.filter((x) => x.prompt)) {
     const count = f.prompt.text.split("\n").length;
-    assert.equal(lines.filter((_, i) => lines.slice(i, i + count).join("\n") === f.prompt.text).length, 1, f.key);
+    const occurrences = f.prompt.inline
+      ? lines.filter((line) => line.endsWith(f.prompt.text))
+      : lines.filter((_, i) => lines.slice(i, i + count).join("\n") === f.prompt.text);
+    assert.equal(occurrences.length, 1, f.key);
   }
   assert.equal(at("- Driving into a low sun"), at("- An in-effect `bus_lane`") + 1);
   assert.equal(at("- Coming up to a speed hump"), at("- Driving into a low sun") + 1);
@@ -436,9 +524,11 @@ test("a record at a slot the core never runs is refused", () => {
   assert.equal(R.recordProblem(record), null);
   assert.match(R.recordProblem({ ...record, sense: { at: "nowhere", run() {} } }), /never runs/);
   assert.match(R.recordProblem({ ...record, sensing() {} }), /unknown hook/);
-  assert.match(R.recordProblem({ ...record, seen: undefined }), /no seen/);
+  assert.equal(R.recordProblem({ ...record, seen: undefined }), null);
+  assert.match(R.recordProblem({ ...record, seen: "" }), /no seen/);
   const metric = { at: "late", name: "test_violation", failure: "test failure", label: "Test violation" };
   assert.equal(R.recordProblem({ ...record, metric }), null);
+  assert.match(R.recordProblem({ ...record, seen: undefined, metric }), /no seen/);
   assert.match(R.recordProblem({ ...record, metric: { ...metric, label: "" } }), /metric has no label/);
   assert.match(R.recordProblem({ ...record, metric: { ...metric, category: "rightOfWay" } }), /unknown category/);
   assert.throws(() => R.hooks("sense", "nowhere"), /no slot/);

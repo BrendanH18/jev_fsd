@@ -16,6 +16,7 @@ Environment variables (the first three are the official TypeSafe SDK names):
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import Mapping, Optional, Tuple
@@ -98,15 +99,18 @@ class Settings:
 
     @property
     def budget_usd(self) -> float:
-        return _float(self.get("JEV_FSD_BUDGET_USD"), 1.00)
+        value = _float(self.get("JEV_FSD_BUDGET_USD"), 1.00)
+        return value if value >= 0 else 1.00
 
     @property
     def rpm(self) -> int:
-        return int(_float(self.get("JEV_FSD_RPM"), 240))
+        value = _float(self.get("JEV_FSD_RPM"), 240)
+        return int(value) if value >= 0 else 240
 
     @property
     def npcs(self) -> int:
-        return int(_float(self.get("JEV_FSD_NPCS"), 40))
+        value = _float(self.get("JEV_FSD_NPCS"), 40)
+        return int(value) if value >= 0 else 40
 
     @property
     def llm_endpoints_path(self) -> Path:
@@ -125,7 +129,9 @@ class Settings:
 
     @property
     def port(self) -> int:
-        return int(_float(self.get("PORT"), 8322))
+        value = _float(self.get("PORT"), 8322)
+        port = int(value)
+        return port if 1 <= port <= 65535 and value == port else 8322
 
 
 def parse_bbox(value: Optional[str]) -> Optional[Tuple[float, float, float, float]]:
@@ -138,7 +144,7 @@ def parse_bbox(value: Optional[str]) -> Optional[Tuple[float, float, float, floa
         parts = [float(p) for p in value.split(",")]
     except ValueError:
         return None
-    if len(parts) != 4:
+    if len(parts) != 4 or not all(math.isfinite(p) for p in parts):
         return None
     w, s, e, n = parts
     if not (-180 <= w < e <= 180 and -90 <= s < n <= 90):
@@ -147,7 +153,10 @@ def parse_bbox(value: Optional[str]) -> Optional[Tuple[float, float, float, floa
 
 
 def _float(value: Optional[str], default: float) -> float:
-    try:
-        return float(value) if value not in (None, "") else default
-    except ValueError:
+    if value in (None, "") or isinstance(value, bool):
         return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return parsed if math.isfinite(parsed) else default

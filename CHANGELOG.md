@@ -48,6 +48,15 @@
 - Register garbage trucks and their fleet scheduling, stops and crew audit through the feature interface.
 - Register traffic calming and red-light runners. Define driver preferences and legitimate stops in
   the records that own them.
+- Register seven more simulation features and move route, replay, coach, and perception integration
+  into feature hooks.
+- Harden local request validation and saved-file writes. Cache map metadata and expose local
+  health and diagnostics.
+- Analyze compressed and saved Arena runs with score summaries, matched deltas, and regression checks.
+  Improve replay drift, submission, token audit, and soak diagnostics.
+- Add leaderboard and replay controls, practice backups, drive-history management, Arena and
+  benchmark filtering, and new driving and Photo Mode controls. See the
+  [100-item November batch](docs/validation/november-improvements.md).
 
 ## 0.3.0 (20 November 2026)
 

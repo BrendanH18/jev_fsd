@@ -171,7 +171,7 @@ export async function evaluateChallenge(
       trace.measurements(world, score);
       if (mode === "lockstep" && autopilot.firing) await autopilot.firing;
       // (and a route round a closed road, so the detour comes at the same step every run: sim/road-closures.js)
-      if (mode === "lockstep" && autopilot.closureRouting) await autopilot.closureRouting;
+      if (mode === "lockstep" && autopilot.detourRouting) await autopilot.detourRouting;
       onStep?.(ctx);
       if (mode === "realtime") {
         const ahead = world.t * 1000 - (performance.now() - start);

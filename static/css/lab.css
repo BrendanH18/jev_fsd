@@ -30,7 +30,7 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .challenge-icon { color: #83d9c4; font-size: 30px; }
 .challenge-card h2 { margin-top: 16px; }
 .challenge-card-meta { color: #8da3b1; font: 11px var(--mono); text-transform: capitalize; }
-.challenge-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.challenge-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .challenge-filters label { display: grid; gap: 7px; color: #afc0cc; font-size: 12px; min-width: 0; }
 .challenge-search { grid-column: 1 / -1; }
 .challenge-filters input, .challenge-filters select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 42px; padding: 10px 12px; border: 1px solid #37515a; border-radius: 8px; background-color: #0d1922; color: var(--text); font: inherit; color-scheme: dark; }
@@ -39,9 +39,16 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .challenge-library-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
 .challenge-results { flex: 1 1 100%; margin: 0; color: #afc0cc; font-size: 12px; }
 .challenge-next { text-align: left; text-decoration: none; }
+.challenge-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .practice-badge { display: inline-block; padding: 4px 8px; border: 1px solid #ffffff26; border-radius: 20px; font-size: 11px; color: #afc0cc; }
 .practice-attempted { color: #f2ce90; border-color: #f2ce9055; }
 .practice-completed { color: #83d9c4; border-color: #83d9c455; background: #83d9c40c; }
+.beat-ai-badge { color: #ffb3b5; border-color: #ff999c66; background: #ff999c14; }
+.practice-backup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.practice-import-label { position: relative; cursor: pointer; display: inline-flex; align-items: center; }
+.practice-import-label input { position: absolute; opacity: 0; inset: 0; width: 100%; cursor: pointer; }
+.practice-backup .confirming { color: #ff999c; border-color: #ff999c88; background: #ff999c18; }
+.practice-backup-status { font-size: 11px; }
 .challenge-empty { padding: 28px 0; color: #afc0cc; }
 .challenge-empty h2 { color: var(--text); font-size: 20px; }
 .challenge-practice-note { padding: 12px; border: 1px solid #83d9c433; border-radius: 8px; color: #afc0cc; }
@@ -60,13 +67,32 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .report-events li { margin: 10px 0; overflow-wrap: anywhere; }
 .perception-panel { padding: 12px; font-size: 11px; line-height: 1.5; }
 .perception-panel p { margin: 8px 0; }
+.perception-badges { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
+.perception-badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px; background: rgba(76, 194, 255, 0.12); border: 1px solid rgba(76, 194, 255, 0.3); color: var(--text); }
+.perception-summary { color: #afc0cc; }
+.perception-more { margin-top: 6px; }
 .perception-legend { color: #83d9c4; }
 .candidate-rejections > div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); }
 .candidate-rejections b { color: #ff999c; font-weight: 500; }
-.replay-deck { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 11; width: min(600px, calc(100vw - 28px)); padding: 10px 14px; }
+.replay-deck { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 11; width: min(680px, calc(100vw - 28px)); padding: 10px 14px; }
 .replay-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; }
-.replay-controls input { width: 100%; accent-color: #83d9c4; margin: 14px 0; }
-.replay-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.replay-slider-wrap { position: relative; margin: 12px 0 10px; }
+.replay-controls input { width: 100%; accent-color: #83d9c4; margin: 0; display: block; }
+.replay-ticks { position: relative; height: 8px; margin-top: 2px; pointer-events: none; }
+.replay-tick { position: absolute; top: 0; width: 4px; height: 8px; margin-left: -2px; border-radius: 2px; background: #ff7777; }
+.replay-speed { font-size: 11px; padding: 3px 22px 3px 8px; }
+.replay-buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.comparison-delta { display: block; font-size: 10px; color: #afc0cc; font-variant-numeric: tabular-nums; }
+.comparison-delta.better { color: var(--good); }
+.comparison-delta.worse { color: var(--bad); }
+.history-trend { display: flex; flex-wrap: wrap; gap: 12px 20px; padding: 10px 14px; margin: 14px 0 10px; border: 1px solid var(--border); border-radius: 10px; background: #ffffff04; font-size: 12px; }
+.history-trend strong { color: #83d9c4; font-variant-numeric: tabular-nums; }
+.history-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 14px; }
+.history-filters input[type="search"] { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 12px; color: var(--text); background: #0d141d; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.history-row { display: flex; gap: 8px; align-items: stretch; }
+.history-row .history-entry { flex: 1 1 auto; }
+.history-delete { flex: 0 0 auto; align-self: center; }
+.history-clear.confirming { color: #ff999c; border-color: #ff999c88; background: #ff999c18; }
 body:has(.replay-deck:not([hidden])) .cluster { bottom: 68px; }
 body:has(.replay-controls:not([hidden])) .cluster { bottom: 180px; }
 /* (between 760 and 1080 px wide the cluster sits at the top: keep the deck from stretching it down) */

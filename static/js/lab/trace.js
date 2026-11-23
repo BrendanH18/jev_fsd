@@ -16,16 +16,16 @@ const CORE_AUDITS = {
   close_passes: "Passed a cyclist closer than the minimum passing distance",
   ...Object.fromEntries(countersAt("afterRestrictions")),
   ...Object.fromEntries(countersAt("afterCalming")),
-  guard_violations: "Drove past a school crossing guard's STOP sign",
-  pxo_early_goes: "Left a pedestrian crossover before the far curb",
-  illegal_turns: "Made a prohibited turn",
+  ...Object.fromEntries(countersAt("guards")),
+  ...Object.fromEntries(countersAt("pxo")),
+  ...Object.fromEntries(countersAt("turns")),
 };
 
 const AUDITS = [
   ...Object.entries(CORE_AUDITS),
   ...countersAt("beforeRunner"),
   ...COUNTER_AUDITS.filter(
-    ({ at }) => at !== "beforeRunner" && at !== "afterCalming" && at !== "afterRestrictions",
+    ({ at }) => !["beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
   ).map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;
@@ -132,10 +132,6 @@ export class EvaluationTrace {
       const count = (world.violations[key] || 0) - (this.audit[key] || 0);
       if (count > 0) this.event(key, message, world.t, { count });
       this.audit[key] = world.violations[key] || 0;
-    }
-    if (!this.glareRecorded && world.highBeamsSeen && world.violations.glare_seconds > 0.8) {
-      this.event("glare", "Failed to dip high beams", world.t);
-      this.glareRecorded = true;
     }
     for (const {
       seen,

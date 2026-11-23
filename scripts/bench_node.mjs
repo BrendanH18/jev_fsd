@@ -22,19 +22,8 @@
 // driver, map and suite from the recording, and reports whether each drive played out as recorded
 // (--check 1 also checks verdicts; --check replay checks replay fidelity alone).
 import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
+import { benchPage, jsonDifferences, parseOptions } from "./cli_tools.mjs";
 
-const args = Object.fromEntries(
-  process.argv.slice(2).reduce((out, a, i, all) => {
-    if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
-    return out;
-  }, []),
-);
-const fail = (message) => {
-  console.error(message);
-  process.exit(1);
-};
-// Every option takes a value; one without (parsed as `true`) or a misspelled one would otherwise
-// run the defaults.
 const OPTIONS = [
   "map",
   "count",
@@ -61,10 +50,61 @@ const OPTIONS = [
   "heldout",
   "track",
 ];
-for (const [name, value] of Object.entries(args)) {
-  if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
-  if (value === true) fail(`--${name} needs a value.`);
+
+const USAGE = [
+  "Usage: node --experimental-default-type=module scripts/bench_node.mjs [options]",
+  "  --map <id|W,S,E,N>        map preset id or bbox (default: kitsilano)",
+  "  --count <N>               number of routes (default: 12)",
+  "  --seed <N>                suite seed (default: 1)",
+  "  --npcs <N>                traffic car count (default: 40)",
+  "  --brain <id>              driver id: rules, cautious, jev, decision:<name>, llm:<name>",
+  "  --weather <name>          dry, fog, rain, snow (default: dry)",
+  "  --features <bare|city>    feature preset (default: bare)",
+  "  --track <guarded|open>    rule enforcement track (default: guarded)",
+  "  --park <0|1>              enable destination parking",
+  "  --hour <0..24>            simulated hour of day",
+  "  --without <a,b>           disable city features",
+  "  --cover <N>               city pairwise covering row index",
+  "  --heldout <0|1>           run the map's held-out routes",
+  "  --diagnostics <0|1>       include incident diagnostics",
+  "  --only <id,id>            run only selected scenarios",
+  "  --port <port>             local server port (default: PORT or 8331)",
+  "  --json <path>             write full JSON report",
+  "  --check <0|1|replay>      exit 1 on failure or replay drift",
+  "  --record <path[.gz]>      record model answers",
+  "  --replay <path[.gz]>      replay from a model recording",
+  "  --reserve <usd>           stop recording when remaining budget falls below USD",
+  "  --prompt-audit <path>     write prompt-size audit alongside --record/--replay",
+  "  --trace <path[.gz]>       capture a single tuned Rules trace",
+  "  --trace-from <path[.gz]>  reuse a trace's scenario",
+  "  --help, -h                show this help",
+].join("\n");
+
+function replayResultDiffs(recorded, actual, recordingModule, maxDiffs = 12) {
+  return jsonDifferences(
+    recordingModule.comparableResult(recorded),
+    recordingModule.comparableResult(actual),
+    recordingModule.canonicalJson,
+    { limit: maxDiffs },
+  );
 }
+
+const fail = (message) => {
+  console.error(message);
+  process.exit(1);
+};
+let parsed;
+try {
+  parsed = parseOptions(process.argv.slice(2), OPTIONS);
+} catch (error) {
+  fail(error.message);
+}
+if (parsed.help) {
+  console.log(USAGE);
+  process.exit(0);
+}
+const args = parsed.args;
+
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
 if (args["trace-from"] && !args.trace) fail("--trace-from needs --trace.");
 if (
@@ -131,12 +171,12 @@ if (args.replay) {
     ...(b.track ? { track: b.track } : {}),
   });
 }
-const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
-const page = await (await fetch(`${base}/bench`)).text();
+const { base, page } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
 const token = page.match(/name="jev-csrf" content="([^"]+)"/)?.[1] || "";
 globalThis.document = { querySelector: (sel) => (sel.includes("jev-csrf") ? { content: token } : null) };
 const nativeFetch = globalThis.fetch;
-globalThis.fetch = (path, opts) => nativeFetch(String(path).startsWith("/") ? base + path : path, opts);
+globalThis.fetch = (path, opts) =>
+  nativeFetch(String(path).startsWith("/") ? base + path : path, { ...opts, redirect: "error" });
 
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
@@ -333,7 +373,7 @@ for (const sc of selected) {
   if (reserve !== null) {
     const { budget_usd: budget, spent_usd: spent } = (await api("/api/status")).spend || {};
     // A zero budget disables the spend limit. Refuse to start a reserved run without a limit.
-    if (!Number.isFinite(budget) || budget <= 0 || !Number.isFinite(spent))
+    if (!Number.isFinite(budget) || budget <= 0 || !Number.isFinite(spent) || spent < 0)
       fail("--reserve needs a finite server spend limit.");
     const remaining = budget - spent;
     if (remaining < reserve) {
@@ -375,6 +415,11 @@ for (const sc of selected) {
     r.model_recording.same_result = recorded ? recordingModule.sameResult(r, recorded) : null;
     // (a drive the recording has no result for cannot be checked: drift too)
     if (r.model_recording.same_result !== true || !r.model_recording.exact) drifted.push(r.id);
+    if (r.model_recording.same_result === false) {
+      for (const line of replayResultDiffs(recorded, r, recordingModule)) {
+        console.error(`  drift ${r.id} ${line}`);
+      }
+    }
   }
   if (prompt) {
     audit.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
