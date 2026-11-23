@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { linkSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { linkSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,17 +64,17 @@ function publish({ bundle: bundlePath, submitter, out, checkout, port }) {
   if (!/^[a-z0-9][a-z0-9_-]{0,38}$/.test(submitter))
     throw new Error("Use a submitter handle with 1–39 lowercase letters, digits, hyphens or underscores.");
   const dayDir = dirname(resolve(out));
-  const submissions = dirname(dayDir);
+  const submissions = join(realpathSync(fileURLToPath(new URL("../", import.meta.url))), "data", "submissions");
   const day = basename(dayDir);
   const date = new Date(`${day}T00:00:00Z`);
   if (
-    basename(submissions) !== "submissions" ||
-    basename(dirname(submissions)) !== "data" ||
+    dirname(dayDir) !== submissions ||
     !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(day) ||
     !Number.isFinite(date.getTime()) ||
     date.toISOString().slice(0, 10) !== day
   )
     throw new Error("Write the publication under data/submissions/YYYY-MM-DD/ using a valid calendar date.");
+  if (realpathSync(dayDir) !== dayDir) throw new Error("The submission directory must be inside this checkout.");
   if (!/^[a-z0-9][a-z0-9_-]*\.json$/.test(basename(out)))
     throw new Error("Name the publication report with lowercase letters, digits, hyphens or underscores and .json.");
   const tape = `${out}.gz`;

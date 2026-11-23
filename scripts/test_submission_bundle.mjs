@@ -101,7 +101,11 @@ for (const [field, forged] of [
   assert.throws(() => verifySubmissionReport(tampered, report), /differs from the replayed report/);
 }
 const cli = fileURLToPath(new URL("./driver_submission.mjs", import.meta.url));
-for (const out of ["pilot.json", "data/submissions/2026-02-30/pilot.json"]) {
+for (const out of [
+  "pilot.json",
+  "data/submissions/2026-02-30/pilot.json",
+  "other/data/submissions/2026-11-23/pilot.json",
+]) {
   const processResult = spawnSync(
     process.execPath,
     [

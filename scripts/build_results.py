@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
-import html
 import json
 import math
 import re
@@ -862,6 +861,10 @@ def percent(value) -> str:
     return f"{text}%"
 
 
+def submission_markdown(value: str) -> str:
+    return value.translate({**{ord(ch): f"&#{ord(ch)};" for ch in r"&<>|`[]()!*_~\#"}, 13: " ", 10: " "})
+
+
 def readme_cohort(data: dict, rows: list[dict]) -> str:
     drivers = data["drivers"]
     city_rows = [r for r in rows if r["suite"] == "city"]
@@ -878,13 +881,20 @@ def readme_cohort(data: dict, rows: list[dict]) -> str:
         full = next((r for r in mine if r["suite"] == "challenges"), None)
         opened = next((r for r in mine if r["suite"] == "open"), None)
         city = {(r["map"], r["weather"]): r for r in mine if r["suite"] == "city"}
+        label = info["label"]
+        submitter = info.get("submitter")
+        if submitter:
+            label = f"{submission_markdown(label)} (submitted by @{submitter})"
         if not full and not city and not opened:
             pilot = [r for r in mine if r["suite"] == "pilot"]
             if pilot:
                 passed, total = sum(r["passed"] for r in pilot), sum(r["total"] for r in pilot)
-                pilots.append(
-                    f"{info['label']} (`{info['model']}`) {passed}/{total} ({', '.join(r['label'] for r in pilot)})"
-                )
+                labels = [r["label"] for r in pilot]
+                model = f"`{info['model']}`"
+                if submitter:
+                    labels = [submission_markdown(text) for text in labels]
+                    model = submission_markdown(info["model"]) if info["model"] else "none"
+                pilots.append(f"{label} ({model}) {passed}/{total} ({', '.join(labels)})")
             continue
         home = " · ".join(
             f"{city[(HOME_MAP, w)]['passed']}/{city[(HOME_MAP, w)]['total']}" if (HOME_MAP, w) in city else "–"
@@ -909,13 +919,8 @@ def readme_cohort(data: dict, rows: list[dict]) -> str:
         share = full.get("model_share") if full else None
         model_id = (full or opened or next(iter(city.values()))).get("model")
         model = f"`{model_id}`" if model_id else "none"
-        label = info["label"]
-        if submitter := info.get("submitter"):
-            label += f" (submitted by @{submitter})"
-            if model_id:
-                model = html.escape(model_id).translate(
-                    str.maketrans({"|": "&#124;", "`": "&#96;", "[": "&#91;", "]": "&#93;", "\r": " ", "\n": " "})
-                )
+        if submitter and model_id:
+            model = submission_markdown(model_id)
         # (a driver run on the open track alone: that run's cost, said so)
         cost = money(full["cost_usd"]) if full else f"{money(opened['cost_usd'])} (open track)" if opened else "$0"
         lines.append(

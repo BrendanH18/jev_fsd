@@ -32,6 +32,18 @@ class ResultsTest(unittest.TestCase):
             "data/results.json or README.md is stale: run uv run scripts/build_results.py",
         )
 
+    def test_submission_pilot_escapes_markdown_in_readme(self):
+        data = build_results.build()
+        malicious = "`[link](https://example.com)|<b>\n# heading"
+        driver = "submission:outside:llm:model"
+        data["drivers"][driver] = {"label": "llm:model", "model": malicious, "submitter": "outside"}
+        rows = [r for r in data["rows"] if r["suite_version"] == "legacy"]
+        rows.append({"driver": driver, "suite": "pilot", "passed": 1, "total": 1, "label": "right-on-red"})
+        readme = build_results.readme_cohort(data, rows)
+        self.assertIn("llm:model (submitted by @outside)", readme)
+        self.assertIn("&#96;&#91;link&#93;&#40;https://example.com&#41;&#124;&#60;b&#62; &#35; heading", readme)
+        self.assertNotIn(malicious, readme)
+
     def test_recording_facts_keep_all_but_the_drives(self):
         path = next(build_results.RECORDINGS.glob("jev-arena-*.json.gz"))
         full, facts = build_results.read_recording(path), build_results.recording_facts(path)
