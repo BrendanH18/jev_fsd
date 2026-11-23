@@ -60,8 +60,8 @@ working they run targeted checks with `-- CMD`: the tests that cover the code th
 as one `scripts/test_*.mjs` file, a few through `node scripts/node_checks.mjs --jobs 4 FILE...` or
 one Python file (`uv run --locked python -m unittest discover -s tests -p "test_routing.py"`), and
 lint for the languages they touched (`ruff check` and `ruff format --check`, or `npm run lint`).
-Then they push and let CI run everything; a failed CI job is reproduced on Boat with the script,
-fixed and pushed again. The plain check and `--full` are for reproducing a CI failure, for heavy
+CI runs the full suite on every pushed commit; a failed CI job is reproduced on Boat with the
+script and fixed. The plain check and `--full` are for reproducing a CI failure, for heavy
 checks that must not run on the Pi or the Mac, and for checks CI doesn't run. Everything the
 script's plain and `--full` runs do is in CI (`lint.yml`, and `demo.yml`'s Python and Node jobs).
 CI doesn't compare a seeded benchmark with the committed baseline, run WebKit, record arena
