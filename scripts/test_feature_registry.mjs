@@ -12,6 +12,7 @@ globalThis.document = { querySelector: () => null };
 const R = await import("../static/js/sim/features/index.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
+const { NpcFleet } = await import("../static/js/sim/npc.js");
 const { failures } = await import("../static/js/bench/metrics.js");
 const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
 
@@ -54,6 +55,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "puddles",
       "parkers",
       "roadClosures",
+      "collection",
       "vans",
     ],
   );
@@ -64,12 +66,21 @@ test("every record is whole, its option and flags its own, and every hook at a s
   }
   assert.deepEqual(
     R.FEATURE_OPTIONS,
-    R.FEATURES.map((f) => f.key),
+    R.FEATURES.filter((f) => !f.buildFleet).map((f) => f.key),
+  );
+  assert.deepEqual(
+    R.FLEET_FEATURES.map((f) => f.key),
+    ["collection"],
   );
 });
 
 test("the core runs every slot, and names no registered feature", () => {
   const core = CORE.map(source).join("\n");
+  const dispatches = {
+    controlDirection: source("sim/features/index.js"),
+    junctionPlan: source("sim/features/index.js"),
+    checkpoint: source("lab/recorder.js"),
+  };
   for (const [name, slots] of Object.entries(R.SLOTS)) {
     if (["metric", "prompt"].includes(name)) continue;
     for (const slot of slots) {
@@ -77,8 +88,7 @@ test("the core runs every slot, and names no registered feature", () => {
         slot === "end"
           ? new RegExp(`hook(?:s|Entries)\\("${name}"\\)`)
           : new RegExp(`hook(?:s|Entries)\\("${name}", "${slot}"\\)`);
-      const dispatches = ["controlDirection", "junctionPlan"].includes(name) ? source("sim/features/index.js") : core;
-      assert.ok(call.test(dispatches), `the core runs ${name} at ${slot}`);
+      assert.ok(call.test(dispatches[name] ?? core), `the core runs ${name} at ${slot}`);
     }
   }
   for (const slot of R.SLOTS.metric) {
@@ -94,6 +104,7 @@ test("the core runs every slot, and names no registered feature", () => {
     for (const name of [
       'contraflow.js"',
       'sun-glare.js"',
+      'collection-truck.js"',
       'sim/driveway-reversers.js"',
       './driveway-reversers.js"',
       'sim/potholes.js"',
@@ -128,6 +139,10 @@ test("the core runs every slot, and names no registered feature", () => {
       "world.sunGlare",
       "this.sunGlare",
       "glare_speeding_seconds",
+      "crew_close_passes",
+      "collectionSeen",
+      ".collection",
+      ".collect?",
       ".contra ",
       "world.contraflow",
       "this.contraflow",
@@ -232,17 +247,25 @@ test("the World builds each feature from its option, with its seen flag and its 
   });
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;
-    assert.equal(off[property].enabled, false, `${f.key} off by default`);
-    assert.equal(
-      on[property].enabled,
-      f.key === "geese" ? !!map.parkSpans?.length : true,
-      `${f.key} on with its option`,
-    );
+    if (!f.buildFleet) {
+      assert.equal(off[property].enabled, false, `${f.key} off by default`);
+      assert.equal(
+        on[property].enabled,
+        f.key === "geese" ? !!map.parkSpans?.length : true,
+        `${f.key} on with its option`,
+      );
+    }
     for (const w of [off, on]) {
       assert.equal(w[f.seen], false);
       if (f.calls) assert.ok(w[f.calls] instanceof Map);
     }
   }
+  const offFleet = new NpcFleet(off, { count: 0, bikes: 0 });
+  const onFleet = new NpcFleet(on, { count: 0, bikes: 0, collection: 1 });
+  assert.equal(offFleet.collection.target, 0);
+  assert.equal(onFleet.collection.target, 1);
+  assert.equal(offFleet.collection.trucks.length, 0);
+  assert.ok(off.crewPassed instanceof Set);
   // (off, nothing is placed and no random stream is made)
   assert.equal(off.contraflow.random, null);
   assert.equal(off.driveways.random, null);
@@ -280,6 +303,9 @@ test("metrics and failures appear only once a feature has met the car, each at i
   world.sunGlareSeen = true;
   assert.deepEqual(R.featureMetrics(world, v, "afterHeadlights"), { glare_speeding_seconds: 1.02 });
   assert.deepEqual(R.featureFailures({ glare_speeding_seconds: 1 }, "afterHeadlights"), []);
+  assert.deepEqual(R.featureMetrics(world, v, "afterCalming"), {});
+  world.collectionSeen = true;
+  assert.deepEqual(R.featureMetrics(world, v, "afterCalming"), { crew_close_passes: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), {});
   world.contraflowSeen = true;
   assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), { contraflow_conflicts: 0 });
@@ -307,6 +333,7 @@ test("metrics and failures appear only once a feature has met the car, each at i
     arrived: true,
     glare_speeding_seconds: 1.02,
     illegal_turns: 1,
+    crew_close_passes: 1,
     contraflow_conflicts: 1,
     fresh_green_conflicts: 1,
     reversing_conflicts: 1,
@@ -324,6 +351,7 @@ test("metrics and failures appear only once a feature has met the car, each at i
   assert.deepEqual(failures(m), [
     "too fast for sun glare",
     "made a prohibited turn",
+    "passed a garbage crew worker too close",
     "cut off or squeezed a contraflow cyclist",
     "entered on green ahead of a car running the red",
     "squeezed past or failed to stop for a car backing out",
@@ -403,11 +431,23 @@ test("every record loads in a fresh process, through the registry as the core lo
   }
 });
 
-test("the van simulation can load before the registry", () => {
-  const entry = new URL("../static/js/sim/double-parked.js", import.meta.url);
-  const code =
-    'globalThis.document = { querySelector: () => null }; const { DoubleParked, VAN_COUNT } = await import(process.argv[1]); if (typeof DoubleParked !== "function" || VAN_COUNT !== 1) throw new Error("van module did not load");';
-  execFileSync(process.execPath, ["--experimental-default-type=module", "--input-type=module", "-e", code, entry.href]);
+test("the van and collection simulations can load before the registry", () => {
+  for (const [module, className] of [
+    ["double-parked", "DoubleParked"],
+    ["collection-truck", "CollectionTrucks"],
+  ]) {
+    const entry = new URL(`../static/js/sim/${module}.js`, import.meta.url);
+    const code = `globalThis.document = { querySelector: () => null };
+      const module = await import(process.argv[1]);
+      if (typeof module.${className} !== "function") throw new Error("${className} did not load");`;
+    execFileSync(process.execPath, [
+      "--experimental-default-type=module",
+      "--input-type=module",
+      "-e",
+      code,
+      entry.href,
+    ]);
+  }
 });
 
 console.log(`${checks} feature registry checks passed`);

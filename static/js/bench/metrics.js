@@ -121,8 +121,7 @@ export class DriveMetrics {
       ...(world.pxoSeen ? { pxo_early_goes: v.pxo_early_goes || 0 } : {}),
       ...(world.restrictionsSeen ? { illegal_turns: v.illegal_turns || 0 } : {}),
       ...(world.calmingSeen ? { hump_hits: v.hump_hits || 0 } : {}),
-      // (only for a drive a garbage truck stopped to collect in: sim/collection-truck.js)
-      ...(world.collectionSeen ? { crew_close_passes: v.crew_close_passes || 0 } : {}),
+      ...featureMetrics(world, v, "afterCalming"),
       // (only for a drive a school crossing guard held up the STOP sign in: sim/crossing-guard.js)
       ...(world.guardsSeen ? { guard_violations: v.guard_violations || 0 } : {}),
       ...featureMetrics(world, v, "beforeRunner"),
@@ -191,7 +190,7 @@ export function failures(m) {
   if (m.illegal_turns) f.push("made a prohibited turn");
   if (m.hump_hits) f.push("took a speed hump too fast");
   if (m.pxo_early_goes) f.push("left a pedestrian crossover before the far curb");
-  if (m.crew_close_passes) f.push("passed a garbage crew worker too close");
+  f.push(...featureFailures(m, "afterCalming"));
   if (m.guard_violations) f.push("drove past a crossing guard's stop sign");
   f.push(...featureFailures(m, "beforeRunner"));
   if (m.fresh_green_conflicts) f.push("entered on green ahead of a car running the red");

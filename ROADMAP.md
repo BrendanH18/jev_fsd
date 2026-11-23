@@ -59,7 +59,7 @@ claimed before the exits it depends on.
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app | Exited 9 Nov |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it | Exited 10 Nov; 1.8 open |
 | [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Met** on 21 November with the Kitsilano dry city suite (2.5b) |
-| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 14 of 41 moved |
+| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 15 of 41 moved |
 | [4](#phase-4-a-benchmark-that-separates-drivers) | Scores tell drivers apart | Two different models get measurably different scores for a stated reason | Met 20 Nov, on one run each |
 | [5](#phase-5-release-and-presentation) | The project presents what it is | 0.3.0 cut; README leads with results | Exited 20 Nov |
 | [6](#phase-6-grow-the-world-again) | New scenarios, under the admission rule | Each one passes the [checklist](#admission-rule-for-new-scenarios) | Gated (see [order](#expansion-plan-from-20-november)) |
@@ -318,6 +318,7 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   comparisons and four published replays matched ([record](docs/feature-interface.md#the-proof)).
   Contraflow cyclists now use the registry, bringing the total to **13 of 41**.
   Low sun glare now uses the registry, bringing the total to **14 of 41**.
+  Garbage trucks are the first fleet-owned feature on the registry, bringing it to **15 of 41**.
   The remaining parking and late features are next.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
@@ -577,12 +578,14 @@ past an agreed amount.
   running (suggested: three runs of Jev and of Claude Haiku over the 62 drives on the open track, within
   [D7](#open-decisions)), then report each score with its range and which differences recur. Report
   flagged choices per decision, audited violations, emergency-brake interventions and fallbacks as
-  separate numbers. `scripts/compare_repeats.mjs` reports spread from recordings with matching
-  source and drive settings. The repeated live runs and their results are still due.
+  separate numbers. The [open-track repeat plan](docs/validation/arena-repeat-plan.md) fixes the
+  drives and repeat count. The comparison checks the plan and reports the score spread and
+  recurring failures per drive. The repeated live runs and their results are still due.
 - [ ] **7.6 Models on the held-out routes.** (S) Jev and Claude Haiku on the held-out Kitsilano
   city routes (`bench/heldout.js`), reported apart and never debugged against.
 - [ ] **7.7 The eight drifted tapes.** (S) Record Jev's eight drifted 11 November drives again on main,
   and mark DeepSeek's (no longer run, AGENTS.md) in `results.json` as replaying on `dcfc663` only.
+  The generated rows now expose the known replay revisions for the legacy tapes, including DeepSeek.
 - [x] **7.8 Version the test.** [Suite `v1`](data/suites/v1.json) pins the 60 challenges, two road
   tests, and Kitsilano's tuned and held-out city routes across four weathers. New reports, manifests
   and tapes declare their suite version. The leaderboard ranks each version separately. A change
@@ -590,6 +593,8 @@ past an agreed amount.
 - [x] **7.9 Investigate differences across routes.** Offline profiles group saved measurements by
   route geometry, verdict, parking and recorded behavior. Trace comparisons identify missing
   ticks and changed verdict fields. Repeated-run reports include each attempt's results and cost.
+  The [rate profiles](docs/reference/benchmarks.md#benchmark-profiles-by-route-cohort) add 100 views
+  that account for the distance, time or decisions recorded on each drive.
 
 Exit: a clean checkout verifies every published row on its declared tree, failed drives included, and
 a repeated comparison reports its spread.
@@ -652,6 +657,8 @@ Exit: on a set built for it, Rules, Jev and Claude Haiku differ by a stated marg
 - [ ] **10.2 A submission bundle.** (M) A versioned format (the 7.2 manifest, the recording and the
   results) and an offline verifier that replays it and checks `model_share`, the prompt hash, the tree
   and the cost. Rows submitted from outside are marked as such on the leaderboard.
+  [Bundle creation and offline verification](docs/agents.md#submit-a-verifiable-drive) are in place.
+  Publication and leaderboard attribution remain open.
 - [ ] **10.3 Where recordings live.** (M) `data/recordings/` is 12 MB, and each Claude Haiku run of the
   62 drives adds about 4.5 MB, so 7.5's repeats alone would add about 15 MB. Slim the tapes or move
   them ([D8](#open-decisions)).

@@ -114,11 +114,11 @@ the [Rules baseline](../rules-baseline.md). See the [engine trace validation](..
 
 For **exact replay of a published tape**, use the source commit and exact Node release recorded
 in its manifest (`source_commit` and `engine`). `engine_version` gives the V8 build. The
-published tapes currently use Node v22.23.4. For older tapes without a source commit, consult the
-legacy revisions in [the replay drift script](../../scripts/report_replay_drift.py) and the row's
-engine. Run the corresponding Node benchmark or arena command on that checkout and check replay
-fidelity with `--check replay` where the checkout supports it. The published-drive web player
-provides a visual replay.
+published tapes currently use Node v22.23.4. For older tapes, use `replay_source_commit` and
+`engine` in the [published row](../../data/results.json). The leaderboard supplies the matching
+runner command. Use `--check replay` on checkouts that support it. On older checkouts, look for
+the terminal line confirming that all drives played out as recorded. The published-drive web
+player provides a visual replay.
 
 ## Inspect a saved benchmark
 
@@ -142,7 +142,7 @@ The first file is the baseline. Both files need the same map, pack version, seed
 
 ### Benchmark profiles by route cohort
 
-`--list-profiles` lists 973 additional reports. Select them by ID, mix them with the original
+`--list-profiles` lists 1,073 additional reports. Select them by ID, mix them with the original
 reports, or use `--profiles` to run the entire profile catalog.
 
 ```sh
@@ -150,7 +150,7 @@ uv run python scripts/inspect_run.py --list-profiles
 uv run python scripts/inspect_run.py data/runs/20261121-075524-jev.json \
   profile-latency-p95-ms-by-signals profile-off-road-s-by-verdict
 uv run python scripts/inspect_run.py data/results/2026-11-20/claude-haiku-open.json \
-  profile-safety-brakes-by-flags
+  profile-safety-brakes-by-flags profile-flags-per-100-decisions-by-arrival
 ```
 
 Each group gives its route count, measured and unavailable counts, measured zeros, and its
@@ -161,6 +161,14 @@ flag counter goes down as unavailable. Missing grouping fields go to an unknown 
 retained events are present and none is a reroute, the rerouting group is unknown because the log
 may be truncated. Arrival counts as complete progress, and saved progress on unfinished detours
 can understate distance covered.
+
+The 100 rate profiles use each drive's recorded exposure. Collisions, at-fault collisions,
+hard brakes, lane changes, model calls and cost are reported per kilometre driven. Off-road,
+stopped and speeding times are percentages of elapsed driving time. Flagged choices are
+reported per 100 decisions. Each of the ten measures is available by planned length, signals,
+stops, lefts, rights, control mix, turn balance, arrival, parking or observed rerouting.
+A missing measurement or zero exposure leaves the rate unavailable. An unfinished drive
+with recorded exposure contributes its rate over the portion it drove.
 
 Profiles also work with `--compare` for matched seeded benchmarks. Geometry groups contain the
 same routes on both sides. Groups defined by behavior or outcomes can change membership, so use the
@@ -182,6 +190,9 @@ put the report at `data/results/<date>/<name>.json` and its tape at
 `data/recordings/<name>-<date>.json.gz`. Standard seeded rows exclude `--only` pilots and suite
 variants. `scripts/build_results.py` checks the manifests and matching tapes as it builds the
 leaderboard. Historical records through 20 November 2026 still load without a manifest.
+Their published rows carry `replay_source_commit` when there is a known revision for replay.
+In an offline Node 22.23.4 replay, all 62 drives in the November 11 DeepSeek arena tape matched
+on `dcfc663`. On `fb3ddff` the same tape matched 54 drives.
 
 For a long seeded benchmark, use `--only` to record disjoint groups of
 drives with the same full suite settings. Give each part's JSON report and
@@ -228,15 +239,14 @@ engine, track, maps and authored drives for every repeat, and keep the model
 version, prompt and provider settings fixed for each driver. The report gives each driver's
 minimum, mean and maximum driving score and pass count. It also reports
 open-track flags per decision, audit totals, drive failures by reason and by drive,
-emergency brake interventions, fallbacks and recorded cost. The `runs` list exposes the
-individual measurements and failed drives behind each driver's summary.
+emergency brake interventions, fallbacks, model share and recorded cost. The `runs` list
+has each repeat's decision and flag counts, violation totals and failed drives. The `by_drive`
+section gives the score range and failure reasons for each matched drive.
 
-For the first repeated comparison in [7.5](../../ROADMAP.md#phase-7-results-that-hold-up),
-use three complete open-track recordings each of Jev and Claude Haiku 5.5
-over the 60 challenges and both road tests. Use the same revision and Node
-version for all six. Keep Claude Haiku at low effort through the Claude
-Platform. Record the resolved Jev version before the first run and use it
-for all three recordings. Publish all completed repeats, including failures.
+For the first repeated comparison, use `--plan FILE` with the pinned
+[open-track arena plan](../validation/arena-repeat-plan.md). The option checks the named
+suite, track, drivers, repeat counts and declared model settings.
+
 ## Suite versions
 
 Suite [v1](../../data/suites/v1.json) defines the 1.0 test in three parts.

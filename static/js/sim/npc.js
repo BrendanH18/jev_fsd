@@ -75,7 +75,6 @@ import {
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
 import { legalBusLane } from "./bus-lanes.js";
 import { pathCalmLimit } from "./traffic-calming.js";
-import { CollectionTrucks, isTruck } from "./collection-truck.js";
 import { APPROACH_M, passLimit, roadsideRelation } from "./roadside.js";
 import {
   DEPART_S,
@@ -136,7 +135,7 @@ import {
   wayClear as cyclistWayClear,
 } from "./cyclist-pass.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
-import { featureObstacle, firstHookResult, hooks, isParkingTraffic } from "./features/index.js";
+import { FLEET_FEATURES, featureObstacle, firstHookResult, hooks, isParkingTraffic } from "./features/index.js";
 
 // How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
 // re-plan round them, a move inside its lane, and where it stops for them; each where that feature's own
@@ -144,9 +143,12 @@ import { featureObstacle, firstHookResult, hooks, isParkingTraffic } from "./fea
 // to the kerb ahead and stop short of their way across until the last goose is off the roadway.)
 const TRAFFIC_MANAGE = hooks("trafficManage"),
   TRAFFIC_MANAGE_BEFORE_PLOWS = hooks("trafficManage", "beforePlows"),
+  TRAFFIC_MANAGE_AFTER_PLOWS = hooks("trafficManage", "afterPlows"),
   TRAFFIC_SPAWN_BLOCKED = hooks("trafficSpawnBlocked"),
   TRAFFIC_DRIVER = hooks("trafficDriver"),
   TRAFFIC_MANEUVER = hooks("trafficManeuver"),
+  TRAFFIC_SPECIAL = hooks("trafficManeuver", "beforeSpecial"),
+  TRAFFIC_STOP = hooks("trafficStop"),
   TRAFFIC_LEADER_HOLD = hooks("trafficLeaderHold"),
   TRAFFIC_PARKING_PLAN = hooks("trafficParkingPlan"),
   TRAFFIC_START = hooks("trafficStart"),
@@ -346,7 +348,8 @@ const STREETCAR_DECEL = 1.1;
 const MAX_TRAINS = 1;
 const TRAIN_COLOR = 0x7a1d1d;
 // (a bus, school bus, streetcar or train: long, so looked for all along its body)
-const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o) || isTrain(o) || isPlow(o) || isTruck(o);
+const isLong = (o) =>
+  isBus(o) || isSchoolBus(o) || isStreetcar(o) || isTrain(o) || isPlow(o) || !!featureObstacle(o)?.long;
 
 // How far ahead of a cyclist's front wheel any part of another vehicle's body is in its way, or
 // null: within its own body (and 0.05 m) moving straight on as it is heading for the next 2 m, or
@@ -700,7 +703,6 @@ function closureLimit(lz, front) {
 
 export class NpcFleet {
   // `plows`: how many snow plows work the main streets at a time while it snows (sim/snow-plow.js).
-  // `collection`: how many garbage trucks work the quiet streets at a time, by day (sim/collection-truck.js).
   constructor(
     world,
     {
@@ -713,7 +715,7 @@ export class NpcFleet {
       trains = false,
       schoolBuses = 0,
       plows = 0,
-      collection = 0,
+      ...features
     } = {},
   ) {
     this.world = world;
@@ -772,14 +774,13 @@ export class NpcFleet {
     this.plowTarget = plows;
     this.nextPlow = world.t;
     this.plows = [];
-    // (and garbage trucks theirs, put down on the first steps by day; nothing is drawn from it unless a
-    // truck works)
-    const trucks = rng(seed * 141650939 + 43);
-    this.collection = new CollectionTrucks(this, {
-      count: collection,
-      random: trucks,
-      makePath: (map, random) => new NpcPath(map, random, { world: this.world }),
-    });
+    for (const feature of FLEET_FEATURES) {
+      this[feature.key] = feature.buildFleet(this, {
+        enabled: features[feature.key],
+        seed,
+        makePath: (map, random) => new NpcPath(map, random, { world: this.world }),
+      });
+    }
     world.npcs = this.vehicles;
   }
 
@@ -1155,7 +1156,7 @@ export class NpcFleet {
     if (this.trains.length || this.trainTarget) this.manageTrains();
     for (const manage of TRAFFIC_MANAGE_BEFORE_PLOWS) manage(world, this, dt);
     if (this.plows.length || this.plowTarget) this.managePlows();
-    if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
+    for (const manage of TRAFFIC_MANAGE_AFTER_PLOWS) manage(world, this, dt);
     for (const manage of TRAFFIC_MANAGE) manage(world, this, dt);
     const all = [world.ego, ...this.vehicles];
     const extraTraffic = TRAFFIC_ACTORS.flatMap((actors) => actors(world) ?? []);
@@ -1167,11 +1168,7 @@ export class NpcFleet {
         n.v = 0;
         continue;
       }
-      // a garbage truck standing at a stop while its crew empties the bins (sim/collection-truck.js)
-      if (n.collect?.phase === "work" && this.collection.work(n, dt)) {
-        n.a = 0;
-        continue;
-      }
+      if (TRAFFIC_SPECIAL.some((step) => step(world, this, n, dt))) continue;
       // a train on its track (sim/rail.js), braking for anything in its way that it can see
       if (isTrain(n)) {
         stepTrain(
@@ -1336,8 +1333,8 @@ export class NpcFleet {
         : null;
       // a school bus slowing to a stop, standing there with its reds flashing, and moving off
       const schoolStop = n.school ? this.schoolPlan(n, front, dt) : null;
-      // a garbage truck slowing to a stop on its round (sim/collection-truck.js)
-      const truckStop = n.collect ? this.collection.plan(n, front, dt) : null;
+      let featureStop = Infinity;
+      for (const plan of TRAFFIC_STOP) featureStop = Math.min(featureStop, plan(world, this, n, front, dt) ?? Infinity);
       // a cyclist rides the right-hand side of the lane, clear of the car doors, or the empty parking
       // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
       const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
@@ -1345,10 +1342,10 @@ export class NpcFleet {
       const pullTo = yielding && n.kind !== "bike" && !n.transit?.tram ? this.pullOverTo(n, edge, front) : 0;
       n.evShift =
         (n.evShift || 0) + Math.max(-EV_SHIFT_MPS * dt, Math.min(EV_SHIFT_MPS * dt, pullTo - (n.evShift || 0)));
-      // easing left in its lane to pass a bus standing at its stop (see busNudge); a wide
-      // collection truck also leaves that clearance beside cars parked at the kerb
-      if ((this.buses.length || n.collect) && n.kind !== "bike" && !n.transit) {
-        const to = this.busNudge(n, edge);
+      // Ease left to pass buses standing at their stops and leave room beside the kerb when needed.
+      const parkedClearance = featureObstacle(n)?.parkedClearance?.(n);
+      if ((this.buses.length || parkedClearance) && n.kind !== "bike" && !n.transit) {
+        const to = this.busNudge(n, edge, parkedClearance);
         n.nudge = (n.nudge || 0) + Math.max(-NUDGE_MPS * dt, Math.min(NUDGE_MPS * dt, to - (n.nudge || 0)));
       }
       // a work zone on its street: round the closed stretch through the other lane, aiming where the
@@ -1902,8 +1899,8 @@ export class NpcFleet {
         gap = Math.max(0.05, schoolAt);
         leadV = 0;
       }
-      if (truckStop !== null && (truckStop === "work" ? 0.05 : truckStop) < gap) {
-        gap = Math.max(0.05, truckStop === "work" ? 0.05 : truckStop);
+      if (featureStop < gap) {
+        gap = Math.max(0.05, featureStop);
         leadV = 0;
       }
       // not passing a streetcar with its doors open on the side its riders use (sim/streetcar.js)
@@ -2825,15 +2822,14 @@ export class NpcFleet {
   }
 
   // How far left of its lane's path (negative) a driver eases to pass a bus standing at its stop just
-  // ahead or beside it (see NUDGE_MPS), or 0. A collection truck also eases past parked
-  // cars whose parking jitter leaves slightly less than its usual leader margin.
-  busNudge(n, pe) {
+  // ahead or beside it (see NUDGE_MPS), or around a car parked inside its usual leader margin.
+  busNudge(n, pe, parkedClearance) {
     const e = this.map.edges.get(pe.id),
       path = n.path,
       spec = n.spec;
     const room = e.lane_width / 2 - spec.width / 2 - 0.1;
     let nudge = 0;
-    for (const bus of this.buses.concat(n.collect ? this.world.parked.near(n.x, n.y, NUDGE_LOOK_M + 15) : [])) {
+    for (const bus of this.buses.concat(parkedClearance ? this.world.parked.near(n.x, n.y, NUDGE_LOOK_M + 15) : [])) {
       const t = bus.transit;
       if (
         (!bus.parked && !(t.phase === "dwell" || t.phase === "leaving" || (t.phase === "in" && t.shift > 1))) ||
@@ -3226,7 +3222,7 @@ export class NpcFleet {
         n.school ||
         n.rail ||
         isPlow(n) ||
-        n.collect ||
+        featureObstacle(n)?.noParking?.(n) ||
         n.pull ||
         isParkingTraffic(n) ||
         n.lc ||

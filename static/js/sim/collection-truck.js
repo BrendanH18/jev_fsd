@@ -9,11 +9,11 @@
 // at the van's PASS_MPS). Between stops it drives on at TRUCK_MPS, and traffic follows it: on a street
 // with one lane each way there is no passing it on the move, and it is about to stop again.
 //
-// Opt-in: the NpcFleet option `collection` (free drives, unless `?collection=0`) puts TRUCK_COUNT to
+// Opt-in: the NpcFleet option `collection` (free drives, unless `?collection=0`) puts one truck to
 // work at a time, by day and out of fog, from their own random stream; the "Collection day" challenge
 // places one itself. With it off nothing is computed and no random stream is drawn from. The audit
 // counts the driven car passing a worker in the street closer than CREW_CLEAR_M at more than
-// CREW_PASS_MPS (`crew_close_passes`, sim/world.js), and that reaches the metrics, and fails a drive,
+// CREW_PASS_MPS (`crew_close_passes`, sim/features/collection-truck.js), and that reaches the metrics, and fails a drive,
 // only once a truck has stopped to collect in it (World.collectionSeen); going round it into the way
 // of oncoming traffic is a failure to yield, as for a van.
 //
@@ -32,7 +32,6 @@ import { current as weather } from "./weather.js";
 import { vanSites } from "./double-parked.js";
 
 export const TRUCK_NAME = "garbage truck";
-export const TRUCK_COUNT = 1;
 export const TRUCK_MPS = 15 / 3.6;
 export const DRIVE_MPS = 30 / 3.6;
 export const TRUCK_WAIT_M = 10;

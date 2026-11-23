@@ -1,6 +1,10 @@
 import { FEATURE_METRICS, FEATURES } from "../sim/features/index.js";
 
 const round = (value) => Math.round(value * 1000) / 1000;
+const auditPair = ({ name, label }) => [name, label];
+const COUNTER_AUDITS = FEATURE_METRICS.filter(({ traceType }) => !traceType);
+const countersAt = (slot) => COUNTER_AUDITS.filter(({ at }) => at === slot).map(auditPair);
+const THRESHOLD_AUDITS = FEATURES.filter(({ metric }) => metric?.traceType);
 const CORE_AUDITS = {
   amber_lights_run: "Ignored a safe amber stop or sped up to beat the light",
   collisions: "Collision",
@@ -11,20 +15,17 @@ const CORE_AUDITS = {
   merge_cut_ins: "Merged out of turn at a lane closure",
   close_passes: "Passed a cyclist closer than the minimum passing distance",
   hump_hits: "Took a speed hump too fast",
-  crew_close_passes: "Passed a garbage crew worker too close",
+  ...Object.fromEntries(countersAt("afterCalming")),
   guard_violations: "Drove past a school crossing guard's STOP sign",
   pxo_early_goes: "Left a pedestrian crossover before the far curb",
   illegal_turns: "Made a prohibited turn",
 };
 
-const auditPair = ({ name, label }) => [name, label];
-const COUNTER_AUDITS = FEATURE_METRICS.filter(({ traceType }) => !traceType);
-const THRESHOLD_AUDITS = FEATURES.filter(({ metric }) => metric?.traceType);
 const AUDITS = [
   ...Object.entries(CORE_AUDITS),
-  ...COUNTER_AUDITS.filter(({ at }) => at === "beforeRunner").map(auditPair),
+  ...countersAt("beforeRunner"),
   ["fresh_green_conflicts", "Entered on green ahead of a car running the red"],
-  ...COUNTER_AUDITS.filter(({ at }) => at !== "beforeRunner").map(auditPair),
+  ...COUNTER_AUDITS.filter(({ at }) => at !== "beforeRunner" && at !== "afterCalming").map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and

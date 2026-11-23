@@ -30,6 +30,8 @@ class ReplayDriftTest(unittest.TestCase):
         rows = json.loads(OUTPUT.read_text())["rows"]
         matrix = replay_matrix(rows)["include"]
         self.assertEqual({job["tape"] for job in matrix}, {row["recording"] for row in rows if row.get("recording")})
+        (deepseek,) = [job for job in matrix if job["tape"].endswith("/deepseek-arena-2026-11-11.json.gz")]
+        self.assertEqual(deepseek["tree"], "dcfc663dc72f2bcf709e744288a8a5c789cbc974")
 
     def test_a_manifest_selects_the_pinned_tree_and_engine(self):
         row = {
@@ -44,7 +46,12 @@ class ReplayDriftTest(unittest.TestCase):
         self.assertEqual(job["runner"], "bench_node.mjs")
 
     def test_conflicting_rows_cannot_silently_replace_a_replay_job(self):
-        row = {"recording": "data/recordings/jev-arena-2026-11-11.json.gz", "engine": "node v22.23.4", "total": 12}
+        row = {
+            "recording": "data/recordings/jev-arena-2026-11-11.json.gz",
+            "replay_source_commit": "b" * 40,
+            "engine": "node v22.23.4",
+            "total": 12,
+        }
         self.assertEqual(len(replay_matrix([row, row])["include"]), 1)
         with self.assertRaisesRegex(ValueError, "conflicting replay settings"):
             replay_matrix([row, {**row, "total": 13}])

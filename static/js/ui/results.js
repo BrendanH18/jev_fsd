@@ -310,6 +310,9 @@ function replayList(list, data) {
                 " and check out ",
                 h("code", {}, kitsilano ? KITSILANO_REPLAY_TAG : r.sourceCommit),
                 ". Replace the recording path below with its absolute path. ",
+                r.legacyReplay
+                  ? "Look for the terminal line confirming that all drives played out as recorded. "
+                  : null,
                 kitsilano
                   ? source(
                       "docs/validation/city-model-pilots.md#replay-the-city-recordings",

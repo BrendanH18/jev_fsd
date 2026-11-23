@@ -77,6 +77,35 @@ Use `--only right-on-red,flagger` for a subset, or `--set all` to include the tw
 published verdict matches the track, map and challenge. If a driver has multiple matching results,
 the check shows the latest one. The module runs as trusted JavaScript in Node.
 
+### Submit a verifiable drive
+
+Use a clean checkout of the simulator and start its local server. Put the trusted agent and all
+output in a directory outside the checkout so the run's manifest names a clean source commit.
+The arena records one track per bundle. Use `--set all` for the complete suite, or add
+`--only right-on-red` to try the workflow with one drive.
+
+```sh
+node --experimental-default-type=module scripts/arena_node.mjs \
+  --port 8322 --set all --track open --agent /tmp/my-agent.mjs \
+  --record /tmp/drive-tape.json.gz --json /tmp/drive-report.json
+node --experimental-default-type=module scripts/driver_submission.mjs pack \
+  --recording /tmp/drive-tape.json.gz --report /tmp/drive-report.json --out /tmp/drive-submission.json.gz
+node --experimental-default-type=module scripts/driver_submission.mjs verify \
+  --port 8322 --bundle /tmp/drive-submission.json.gz
+```
+
+An agent module moved outside the checkout needs imports that still point to its dependencies.
+The verifier uses the submission's arena tape and the simulator's local server. Check out the
+commit and use the Node version in the manifest. Replay requires no model credentials and
+does not import the agent's code. The same workflow supports model recordings created with
+`--brain`, `--record` and `--json` on a clean checkout.
+
+The verifier checks the suite, map layers and prompt hash against the simulator. Every recorded
+decision must match a replay request, and every replayed result must agree with the report,
+including failures, the driver and fallback shares, and the sum of recorded costs. A verified
+bundle attests to the replay of those answers and to the consistency of the recorded charges.
+Provider identity and actual billing require independent evidence.
+
 ## Decision models: Jev and others
 
 A decision model takes a state and typed questions and returns each answer with probabilities.

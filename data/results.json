@@ -15804,7 +15804,8 @@
     "data/recordings/jev-arena-2026-11-11.json.gz",
     "data/score-comparisons/jev-arena-2026-11-11.json"
    ],
-   "recording": "data/recordings/jev-arena-2026-11-11.json.gz"
+   "recording": "data/recordings/jev-arena-2026-11-11.json.gz",
+   "replay_source_commit": "dcfc663dc72f2bcf709e744288a8a5c789cbc974"
   },
   {
    "driver": "jev",
@@ -17456,7 +17457,8 @@
     "data/results/2026-11-20/jev-open.json",
     "data/recordings/jev-open-2026-11-20.json.gz"
    ],
-   "recording": "data/recordings/jev-open-2026-11-20.json.gz"
+   "recording": "data/recordings/jev-open-2026-11-20.json.gz",
+   "replay_source_commit": "a6164696eacb242a1fc01a3a6fc366b31aed8677"
   },
   {
    "driver": "jev",
@@ -20194,7 +20196,8 @@
     "data/recordings/claude-haiku-arena-2026-11-20.json.gz",
     "data/score-comparisons/claude-haiku-arena-2026-11-20.json"
    ],
-   "recording": "data/recordings/claude-haiku-arena-2026-11-20.json.gz"
+   "recording": "data/recordings/claude-haiku-arena-2026-11-20.json.gz",
+   "replay_source_commit": "a6164696eacb242a1fc01a3a6fc366b31aed8677"
   },
   {
    "driver": "llm:claude-haiku-5-5",
@@ -21854,7 +21857,8 @@
     "data/results/2026-11-20/claude-haiku-open.json",
     "data/recordings/claude-haiku-open-2026-11-20.json.gz"
    ],
-   "recording": "data/recordings/claude-haiku-open-2026-11-20.json.gz"
+   "recording": "data/recordings/claude-haiku-open-2026-11-20.json.gz",
+   "replay_source_commit": "a6164696eacb242a1fc01a3a6fc366b31aed8677"
   },
   {
    "driver": "llm:claude-haiku-5-5",
@@ -23715,7 +23719,8 @@
     "data/results/2026-11-11/deepseek-arena.json",
     "data/recordings/deepseek-arena-2026-11-11.json.gz"
    ],
-   "recording": "data/recordings/deepseek-arena-2026-11-11.json.gz"
+   "recording": "data/recordings/deepseek-arena-2026-11-11.json.gz",
+   "replay_source_commit": "dcfc663dc72f2bcf709e744288a8a5c789cbc974"
   },
   {
    "driver": "llm:deepseek",
@@ -23780,7 +23785,8 @@
     "data/results/2026-11-11/deepseek-door-zone.json",
     "data/recordings/deepseek-door-zone-2026-11-11.json.gz"
    ],
-   "recording": "data/recordings/deepseek-door-zone-2026-11-11.json.gz"
+   "recording": "data/recordings/deepseek-door-zone-2026-11-11.json.gz",
+   "replay_source_commit": "dcfc663dc72f2bcf709e744288a8a5c789cbc974"
   },
   {
    "driver": "llm:luna",
@@ -23845,7 +23851,8 @@
     "data/results/2026-11-11/luna-door-zone.json",
     "data/recordings/luna-door-zone-2026-11-11.json.gz"
    ],
-   "recording": "data/recordings/luna-door-zone-2026-11-11.json.gz"
+   "recording": "data/recordings/luna-door-zone-2026-11-11.json.gz",
+   "replay_source_commit": "dcfc663dc72f2bcf709e744288a8a5c789cbc974"
   },
   {
    "driver": "decision:liquid-d1",
@@ -23910,7 +23917,8 @@
     "data/results/2026-11-11/liquid-d1-door-zone.json",
     "data/recordings/liquid-d1-door-zone-2026-11-11.json.gz"
    ],
-   "recording": "data/recordings/liquid-d1-door-zone-2026-11-11.json.gz"
+   "recording": "data/recordings/liquid-d1-door-zone-2026-11-11.json.gz",
+   "replay_source_commit": "dcfc663dc72f2bcf709e744288a8a5c789cbc974"
   },
   {
    "driver": "llm:granite",
@@ -24001,7 +24009,8 @@
     "data/results/2026-11-11/granite-local.json",
     "data/recordings/granite-local-2026-11-11.json.gz"
    ],
-   "recording": "data/recordings/granite-local-2026-11-11.json.gz"
+   "recording": "data/recordings/granite-local-2026-11-11.json.gz",
+   "replay_source_commit": "dcfc663dc72f2bcf709e744288a8a5c789cbc974"
   }
  ]
 }

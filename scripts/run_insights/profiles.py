@@ -99,7 +99,11 @@ def distance_ratio(row):
 
 
 def per_kilometre(row, field):
-    return ratio(measurement(row, field), measurement(row, "distance_m"), scale=1000)
+    return exposure_rate(row, field, "distance_m", 1000)
+
+
+def exposure_rate(row, field, exposure, scale):
+    return ratio(measurement(row, field), measurement(row, exposure), scale)
 
 
 def control_count(row, field):
@@ -233,3 +237,32 @@ REPORTS.update(
         ),
     ]
 )
+
+# Counts and durations are hard to compare between drives of different lengths.
+# Use the exposure actually recorded, including on drives that did not finish.
+RATE_METRICS = {
+    "collisions_per_km": ("collisions", "distance_m", 1000, "collisions/km"),
+    "at_fault_per_km": ("at_fault", "distance_m", 1000, "at-fault collisions/km"),
+    "hard_brakes_per_km": ("hard_brakes", "distance_m", 1000, "brakes/km"),
+    "lane_changes_per_km": ("lane_changes", "distance_m", 1000, "changes/km"),
+    "calls_per_km": ("calls", "distance_m", 1000, "calls/km"),
+    "cost_usd_per_km": ("cost_usd", "distance_m", 1000, "USD/km"),
+    "off_road_pct": ("off_road_s", "time_s", 100, "% of drive time"),
+    "stopped_pct": ("stopped_s", "time_s", 100, "% of drive time"),
+    "speeding_pct": ("speeding_s", "time_s", 100, "% of drive time"),
+    "flags_per_100_decisions": ("flagged_choices", "decisions", 100, "choices/100 decisions"),
+}
+RATE_COHORTS = ("length", "signals", "stops", "lefts", "rights", "controls", "turns", "arrival", "parking", "rerouting")
+
+RATE_REPORTS = dict(
+    report_for(
+        name,
+        METRIC_LABELS.get(field, field.replace("_", " ")),
+        unit,
+        cohort,
+        partial(exposure_rate, field=field, exposure=exposure, scale=scale),
+    )
+    for name, (field, exposure, scale, unit) in RATE_METRICS.items()
+    for cohort in RATE_COHORTS
+)
+REPORTS.update(RATE_REPORTS)

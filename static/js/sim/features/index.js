@@ -5,8 +5,7 @@
 // loops over the records' hooks and never names these features.
 //
 // A record:
-//   key       the World option, and the World property holding what `build` returns (its `enabled` says
-//             whether the feature is on)
+//   key       the World option (fleet option when `buildFleet` is present) and the default World property
 //   property  the World property when it differs from `key`
 //   defaultCount  the free-drive default for a feature whose option is a count
 //   snapshot  default sensing fields kept in the snapshot even when the feature is inactive
@@ -14,8 +13,10 @@
 //             reaches the results, and fails a drive, only once it is set)
 //   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
+//   buildFleet(fleet, { enabled, seed, makePath })   fleet state, stored under the option key
 //   metric    { at, name, failure, label, category?, decimals?, threshold?, traceType? }: the violation,
-//             failure text, trace label and examiner category. A duration can round to `decimals` and
+//             failure text, trace label and examiner category. `eventType` supplies a world event's replay marker.
+//             A duration can round to `decimals` and
 //             fail above `threshold`. With `traceType` it emits a single named event at the threshold
 //             instead of logging every increase.
 //   obstacle  { test(o), traffic?, likePedestrian?, fixed?, predict(o, t)?, visible(world, observer, o)?, label? }:
@@ -23,6 +24,8 @@
 //             `likePedestrian` assigns fault to the ego car on impact. `fixed` treats it as scenery.
 //             `predict` and `visible` override its position in predictions and its local visibility.
 //             `oncoming(o, vehicle)` identifies an opposing rider instead of a leader or cyclist to pass.
+//             `long` uses the long-vehicle leader check. `parkedClearance(o)` eases by cars at the kerb.
+//             `noParking(o)` skips the fleet's parking scheduler.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
@@ -43,7 +46,7 @@
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
 //                                       traffic moves ("end"), with "afterOutages" between them
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, after traffic and before the people on foot move ("end")
-//   audit(world, frontOnPath?)           World.audit: "beforeCollisions" (with dt), "afterFlagger", "driveways",
+//   audit(world, frontOnPath?)           World.audit: "beforeCollisions" (with dt), "afterFlagger", "afterCalming", "driveways",
 //                                       "streetHazards", "rearTraffic", "late"
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
@@ -88,17 +91,19 @@
 //                                       "driveways", "streetHazards", "ice" (after black ice's), "rearTraffic", "parking"
 //   holdStill(snap)                     when holding still is right, or "": "driveways", "late", "parking"
 //   prompt                              { at, text }: a section of the LLM system prompt: "restrictions",
-//                                       "streetHazards", "driveways", "snowbanks", "junctions", "rearTraffic", "parking"
+//                                       "streetHazards", "driveways", "snowbanks", "junctions", "rearTraffic", "parking", "afterParking"
 //   controlDirection(world, vehicle, edgeId) direction overriding the normal signal ("end")
 //   controlAudit(world, control, edge, rc, past, entered) true if the feature audits that signal itself ("end")
 //   controlSense(world, routeControl, frontS) { direction, fields(signal) } for a visible override ("end")
 //   junctionPlan(intersection)          what the sensed override means for speed, rejection and models ("end")
 //   trafficControl(world, vehicle, edgeId) direction overriding traffic's signal, with per-car state ("end")
 //   evQueueHold(world, front)         { distance, vehicle } of a stopped queue the ego approaches ("end")
-//   trafficManage(world, fleet, dt)     update fleet-wide state before plow dispatch ("beforePlows") or before the vehicle loop ("end")
+//   trafficManage(world, fleet, dt)     update fleet-wide state before and after plow dispatch ("beforePlows", "afterPlows") or before the vehicle loop ("end")
 //   trafficDriver(world, n)             first override of a traffic driver's offset, speedFactor,
 //                                       skipFollowing, leadSpeed(leader, speed) or brake(leader, gap, accel) ("end")
-//   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("end")
+//   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
+//   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
+//   checkpoint(world, fleet)            restore references after the recorder reinstates state ("end")
 //   trafficLeaderHold(world, n, path, front) { gap, vehicle } of a virtual traffic leader ("end")
 //   trafficParkingPlan(n, standstillGap) { shift, stop, signal } for a car preparing to park ("end")
 //   trafficStart(world, n)              each vehicle step, first ("end") or before scanning signals ("beforeControl")
@@ -132,6 +137,7 @@
 import { CATEGORIES } from "../../lab/examiner-categories.js";
 import balls from "./balls.js";
 import contraflow from "./contraflow.js";
+import collection from "./collection-truck.js";
 import driveways from "./driveways.js";
 import potholes from "./potholes.js";
 import geese from "./geese.js";
@@ -159,6 +165,7 @@ export const FEATURES = [
   puddles,
   parkers,
   roadClosures,
+  collection, // A stopped truck also matches the double-parked obstacle.
   doubleParked,
 ];
 
@@ -168,7 +175,7 @@ export const SLOTS = {
   obstacles: ["end"],
   stepBeforeTraffic: ["first", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
-  audit: ["beforeCollisions", "afterFlagger", "driveways", "streetHazards", "rearTraffic", "late"],
+  audit: ["beforeCollisions", "afterFlagger", "afterCalming", "driveways", "streetHazards", "rearTraffic", "late"],
   sense: ["afterCalming", "beforeRunner", "parking", "driveways", "streetHazards", "late", "junctions", "following"],
   finishLanes: ["end"],
   limit: ["beforeRunner", "passing", "driveways", "streetHazards", "parking"],
@@ -222,12 +229,24 @@ export const SLOTS = {
     "junctions",
     "rearTraffic",
     "parking",
+    "afterParking",
   ],
-  metric: ["afterHeadlights", "beforeRunner", "driveways", "streetHazards", "rearTraffic", "late", "junctions"],
+  metric: [
+    "afterHeadlights",
+    "afterCalming",
+    "beforeRunner",
+    "driveways",
+    "streetHazards",
+    "rearTraffic",
+    "late",
+    "junctions",
+  ],
   evQueueHold: ["end"],
-  trafficManage: ["beforePlows", "end"],
+  trafficManage: ["beforePlows", "afterPlows", "end"],
   trafficDriver: ["end"],
-  trafficManeuver: ["end"],
+  trafficManeuver: ["beforeSpecial", "end"],
+  trafficStop: ["end"],
+  checkpoint: ["end"],
   trafficLeaderHold: ["end"],
   trafficParkingPlan: ["end"],
   trafficStart: ["end", "beforeControl"],
@@ -257,6 +276,7 @@ const FIELDS = [
   "seen",
   "calls",
   "build",
+  "buildFleet",
   "obstacle",
   "priority",
   "flagText",
@@ -273,6 +293,7 @@ export function recordProblem(f) {
   if (f.calls !== undefined && (typeof f.calls !== "string" || !f.calls))
     return `${f.key} has an invalid audit calls field`;
   if (typeof f.build !== "function") return `${f.key} has no build`;
+  if (f.buildFleet !== undefined && typeof f.buildFleet !== "function") return `${f.key} has an invalid buildFleet`;
   if (f.metric !== undefined) {
     for (const key of ["name", "failure", "label"]) {
       const value = f.metric?.[key];
@@ -396,7 +417,8 @@ export const featureNeedsDay = (world) => DAY.some((f) => enabled(world, f));
 export const featureNeedsUtcOffset = (world) => UTC_OFFSET.some((f) => enabled(world, f));
 
 // Every World option a registered feature takes.
-export const FEATURE_OPTIONS = FEATURES.map((f) => f.key);
+export const FEATURE_OPTIONS = FEATURES.filter((f) => !f.buildFleet).map((f) => f.key);
+export const FLEET_FEATURES = FEATURES.filter((f) => f.buildFleet);
 
 // Default snapshot fields that older readers expect even when the feature is inactive.
 export const FEATURE_SNAPSHOT_FIELDS = Object.assign({}, ...FEATURES.map((f) => f.snapshot));

@@ -150,10 +150,22 @@ test("every recording offered for replay is committed", () => {
     assert.ok(fs.existsSync(new URL(`../${r.recording}`, import.meta.url)), r.recording);
     const row = data.rows.find((row) => row.recording === r.recording);
     const runner = row.map ? "bench_node" : "arena_node";
-    assert.ok(r.command.includes(`scripts/${runner}.mjs --port 8322 --replay ${r.recording} --check replay`));
-    assert.equal(r.sourceCommit, row.map ? row.manifest?.source_commit : null);
+    assert.ok(r.command.includes(`scripts/${runner}.mjs --port 8322 --replay ${r.recording}`));
+    assert.equal(r.command.endsWith(" --check replay"), !row.replay_source_commit);
+    assert.equal(r.sourceCommit, row.manifest?.source_commit ?? row.replay_source_commit);
     assert.equal(r.engine, row.manifest?.engine || row.engine);
   }
+});
+
+test("replay instructions for manifest arena recordings pin the source and check fidelity", () => {
+  const [arena] = recordings({
+    rows: [
+      { driver: "jev", recording: "data/recordings/jev-arena.json.gz", manifest: { source_commit: "a".repeat(40) } },
+    ],
+  });
+  assert.equal(arena.sourceCommit, "a".repeat(40));
+  assert.equal(arena.legacyReplay, false);
+  assert.ok(arena.command.endsWith("jev-arena.json.gz --check replay"));
 });
 
 test("replay instructions for a city recording use the benchmark runner", () => {

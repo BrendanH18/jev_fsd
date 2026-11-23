@@ -6,9 +6,9 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Fourteen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
-officers, tailgaters, black ice, snowbanks, puddles, traffic parking, road closures, double-parked vans
-contraflow cyclists and low sun glare. Each record holds the hooks into the core pipeline and the model wording
+Fifteen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
+officers, tailgaters, black ice, snowbanks, puddles, traffic parking, road closures, double-parked vans,
+contraflow cyclists, low sun glare and garbage trucks. Each record holds the hooks into the core pipeline and the model wording
 that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
@@ -47,6 +47,9 @@ export default {
 The header of `features/index.js` lists every hook, its arguments and its slots. The World takes the
 option through `...features` in its constructor and builds every record at the end of the constructor,
 in registration order. It sets each `seen` flag to false and creates an empty map for each declared `calls` field.
+A record with `buildFleet` takes its option from the fleet. The fleet stores the result under the option
+key and supplies its seed and a path factory. The World still builds the record's audit state. The
+`checkpoint` hook restores references to the live World and fleet after a rewind.
 
 A core module asks for its hooks once, when it loads (`hooks(name, slot)`). Through an import cycle that
 can be before the records have loaded (the snowbanks record's simulation reaches `sim/npc.js`, say), so the
@@ -187,6 +190,14 @@ The guarded and open LLM system prompts and all 191 complete **Into the sun** pr
 track matched byte for byte. The Jev fixtures stayed current, and both published open-track model
 recordings of **Into the sun** replayed exactly.
 
+**Garbage trucks** were compared against `fb3ddff` in Boat with Node 22.23.5. Rules passed all
+12 routes in each Kitsilano suite at seed 1: dry bare, dry city at 15:30 and 23:30, and city fog.
+All comparable results matched before and after. The dry afternoon city run reported zero crew close
+passes on every route, with the metric present on all 12. The other three suites omitted it.
+Rules and the cautious agent each passed all 62 authored drives. Their comparable results, decision
+traces, events, examiner sheets, score inputs and both LLM system prompts matched byte for byte.
+Both published open-track recordings of **Collection day** replayed exactly.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
@@ -217,6 +228,7 @@ The record's `metric.label` supplies the trace event text. Counter events appear
 order, then registration order within each slot. For a duration metric, `decimals` controls rounding
 and `threshold` sets how many seconds the result must exceed to fail. A duration with `traceType`
 emits one named event after crossing that threshold and uses the same name for its replay marker.
+Use `eventType` when a counter audit emits its own world event with a different replay marker name.
 The examiner groups failures by `metric.category` and puts uncategorized failures under Other.
 
 So today a new feature needs its own sim module, its record, its challenge, its test and the registration
@@ -244,6 +256,10 @@ need nothing.
   driver's move before it considers its next adjustments and retains the rider's stop point.
   The `"beforeRunner"` slots keep the cyclist's candidate, rejection, model wording and result
   fields ahead of the red-light runner's.
+* **Garbage trucks.** The fleet option feeds the record's scheduler. Its stop plan runs beside the
+  other scheduled stops and its crew uses the existing double-parked obstruction. Obstacle descriptors
+  supply the moving truck's label, long-vehicle clearance checks, space beside the kerb and parking
+  eligibility. The audit retains its place after traffic calming.
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).
