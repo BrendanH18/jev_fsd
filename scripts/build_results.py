@@ -90,6 +90,29 @@ ORDER = [
 ]
 KIND_NOTES = {"jev": "decision model (TypeSafe)", "decision": "decision model", "llm": "LLM"}
 
+# Published tapes that predate source revisions in run manifests.
+LEGACY_REPLAY_SOURCES = {
+    **dict.fromkeys(
+        (
+            "jev-arena-2026-11-11.json.gz",
+            "deepseek-arena-2026-11-11.json.gz",
+            "deepseek-door-zone-2026-11-11.json.gz",
+            "granite-local-2026-11-11.json.gz",
+            "liquid-d1-door-zone-2026-11-11.json.gz",
+            "luna-door-zone-2026-11-11.json.gz",
+        ),
+        "dcfc663dc72f2bcf709e744288a8a5c789cbc974",
+    ),
+    **dict.fromkeys(
+        (
+            "jev-open-2026-11-20.json.gz",
+            "claude-haiku-arena-2026-11-20.json.gz",
+            "claude-haiku-open-2026-11-20.json.gz",
+        ),
+        "a6164696eacb242a1fc01a3a6fc366b31aed8677",
+    ),
+}
+
 
 def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
@@ -501,6 +524,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
         sources = [rel(path)]
         recording = recording_facts(recording_path) if recording_path.is_file() else None
         manifest = checked_manifest(path, published, date, recording)
+        replay_source = LEGACY_REPLAY_SOURCES.get(recording_path.name) if recording and manifest is None else None
         map_shas = {key: entry["fingerprint"] for key, entry in manifest["maps"].items()} if manifest else {}
         if recording is not None:
             header = recording["header"]
@@ -575,6 +599,7 @@ def challenge_rows(drivers: dict) -> list[dict]:
                 "sources": sources,
                 "recording": rel(recording_path) if recording_path.is_file() else None,
                 **({"manifest": manifest} if manifest else {}),
+                **({"replay_source_commit": replay_source} if replay_source else {}),
             }
         )
     return rows

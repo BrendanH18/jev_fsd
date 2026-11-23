@@ -1,5 +1,8 @@
-import { FEATURE_METRICS } from "../sim/features/index.js";
+import { FEATURE_METRICS, hooks } from "../sim/features/index.js";
 import { setNightFlash } from "../sim/night-flash.js";
+
+const CHECKPOINT = hooks("checkpoint");
+
 // In-memory checkpoints preserve prototypes, object identity, and seeded random streams.
 // Immutable map/render resources are shared; mutable driving state is copied.
 export function cloneState(value, shared = new Set(), seen = new Map()) {
@@ -156,7 +159,6 @@ export class DriveRecorder {
         "merged_out_of_turn",
         "close_pass",
         "hump_hit",
-        "crew_close_pass",
         "passed_crossing_guard",
         "pxo_early_go",
         "illegal_turn",
@@ -176,7 +178,9 @@ export class DriveRecorder {
         "closure_entry",
         "officer_violation",
       ].includes(type) ||
-      FEATURE_METRICS.some(({ traceType }) => traceType && traceType === type)
+      FEATURE_METRICS.some(({ eventType, traceType }) =>
+        eventType ? eventType === type : traceType && traceType === type,
+      )
     )
       this.markers.push({ t, type });
   }
@@ -217,10 +221,7 @@ export class DriveRecorder {
     if (target.world.balls) target.world.balls.world = target.world;
     if (target.world.geese) target.world.geese.world = target.world;
     if (target.world.snowbanks) target.world.snowbanks.world = target.world;
-    if (target.fleet.collection) {
-      target.fleet.collection.world = target.world;
-      target.fleet.collection.fleet = target.fleet;
-    }
+    for (const restore of CHECKPOINT) restore(target.world, target.fleet);
     target.world.npcs = target.fleet.vehicles;
     for (const n of target.fleet.vehicles) if (n.path?.restrictionWorld) n.path.restrictionWorld = target.world;
     Object.assign(target.autopilot, callbacks, {

@@ -63,7 +63,6 @@ import {
 } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { CALM_EARLY_M, calmingAhead, slowsFor } from "../sim/traffic-calming.js";
-import { TRUCK_NAME, isTruck } from "../sim/collection-truck.js";
 import {
   HEAR_M,
   HOLD_M as RAIL_HOLD_M,
@@ -390,10 +389,8 @@ function followingInLane(ego, route, p, lane, vehicles, frame, snap) {
             ? "open door"
             : lead.vehicle.kind === "bike"
               ? "cyclist"
-              : isTruck(lead.vehicle)
-                ? TRUCK_NAME
-                : featureObstacle(lead.vehicle)?.label ||
-                  (isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car"),
+              : featureObstacle(lead.vehicle)?.label ||
+                (isPlow(lead.vehicle) ? PLOW_NAME : lead.vehicle.parked ? "parked car" : "car"),
     };
   }
   return null;

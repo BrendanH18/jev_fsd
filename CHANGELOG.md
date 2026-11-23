@@ -34,6 +34,12 @@
 - Compare manual challenge scores with model scores measured from the same driven corridor.
 - Inspect 973 route-cohort profiles for saved drives and use 27 fixes across map imports,
   benchmark replay tooling and Arena history. See the [change inventory](docs/validation/drive-lab-improvements.md).
+- Compare 100 new rate profiles across saved route cohorts using distance driven, elapsed time
+  or decisions as the denominator.
+- Publish the known replay revisions for legacy model tapes and use them in scheduled replay checks.
+- Check arena repeats against a declared experiment and report score ranges and recurring failures per drive.
+- Package model and trusted local driver runs for offline verification without importing submitted code.
+- Register garbage trucks and their fleet scheduling, stops and crew audit through the feature interface.
 
 ## 0.3.0 (20 November 2026)
 

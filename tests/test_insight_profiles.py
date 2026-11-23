@@ -19,7 +19,8 @@ OPEN_ARENA = ROOT / "data/results/2026-11-20/claude-haiku-open.json"
 class ProfilesTests(unittest.TestCase):
     def test_new_catalog_inventory(self):
         original = {name for module in (decisions, motion, outcomes, safety) for name in module.REPORTS}
-        self.assertEqual(len(profiles.REPORTS), 973)
+        self.assertEqual(len(profiles.REPORTS), 1073)
+        self.assertEqual(len(profiles.RATE_REPORTS), 100)
         self.assertFalse(original.intersection(profiles.REPORTS))
         for name, (description, report) in profiles.REPORTS.items():
             self.assertTrue(re.fullmatch(r"profile-[a-z0-9-]+-by-[a-z-]+", name), name)
@@ -164,6 +165,35 @@ class ProfilesTests(unittest.TestCase):
         self.assertEqual(sum(group["routes"] for group in open_report["groups"].values()), 62)
         self.assertGreater(open_report["groups"]["one or more"]["measured"], 0)
         self.assertGreater(open_report["groups"]["zero"]["measured"], 0)
+        rate = "profile-flags-per-100-decisions-by-arrival"
+        rate_report = json.loads(subprocess.check_output([sys.executable, CLI, OPEN_ARENA, rate]))[rate]
+        unfinished = rate_report["groups"]["unfinished"]
+        self.assertEqual(unfinished["measured"], 1)
+        self.assertAlmostEqual(unfinished["median"], 8 / 691 * 100)
         error = subprocess.run([sys.executable, CLI, SAMPLE, report, "--profiles"], capture_output=True)
         self.assertEqual(error.returncode, 2)
         self.assertIn(b"Use report IDs", error.stderr)
+
+    def test_rate_profiles_preserve_missing_exposure_and_real_zeros(self):
+        rows = [
+            {"arrived": True, "distance_m": 500, "collisions": 2},
+            {"arrived": False, "distance_m": 25, "collisions": 0},
+            {"arrived": False, "distance_m": 0, "collisions": 0},
+            {"arrived": False, "collisions": 0},
+            {"arrived": False, "distance_m": 10},
+        ]
+        _, report = profiles.REPORTS["profile-collisions-per-km-by-arrival"]
+        result = report(rows)
+        self.assertEqual(result["unit"], "collisions/km")
+        self.assertEqual(result["groups"]["arrived"]["median"], 4)
+        unfinished = result["groups"]["unfinished"]
+        self.assertEqual((unfinished["zero"], unfinished["measured"], unfinished["unavailable"]), (1, 1, 3))
+
+    def test_rate_profiles_use_distinct_denominators(self):
+        rows = [{"distance_m": 500, "time_s": 25, "speeding_s": 5, "decisions": 40, "flagged_choices": 1}]
+        for report_id, value in (
+            ("profile-speeding-pct-by-controls", 20),
+            ("profile-flags-per-100-decisions-by-controls", 2.5),
+        ):
+            _, report = profiles.REPORTS[report_id]
+            self.assertEqual(report(rows)["groups"]["unknown"]["median"], value)

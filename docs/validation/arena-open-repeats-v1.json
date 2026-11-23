@@ -1,0 +1,14 @@
+{
+  "format": "jev-arena-repeat-plan/1",
+  "suite_version": "v1",
+  "track": "open",
+  "repeats_per_driver": 3,
+  "drivers": {
+    "jev": {},
+    "llm:claude-haiku-5-5": {
+      "model": "claude-haiku-5-5",
+      "provider_url": "https://api.anthropic.com/v1/messages",
+      "effort": "low"
+    }
+  }
+}

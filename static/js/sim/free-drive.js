@@ -13,7 +13,6 @@ import { LANE_CLOSURE_COUNT } from "./lane-closure.js";
 import { OUTAGE_COUNT } from "./outage.js";
 import { PLOW_COUNT } from "./snow-plow.js";
 import { STEP_OUT_COUNT } from "./hidden-hazards.js";
-import { TRUCK_COUNT } from "./collection-truck.js";
 import { FEATURES } from "./features/index.js";
 
 export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 } = {}) {
@@ -59,11 +58,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     redRunners: on("redrunners"),
     followingDistance: on("followingdistance"),
   };
-  // Each registered World option is enabled unless its lowercase query flag is 0.
-  for (const { key, defaultCount } of FEATURES) {
-    const enabled = on(key.toLowerCase());
-    world[key] = defaultCount === undefined ? enabled : enabled ? defaultCount : 0;
-  }
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)
     emergency: on("emergency"),
@@ -75,8 +69,12 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     schoolBuses: on("schoolbuses") && hour >= 7 && hour < 17 ? 2 : 0,
     // while it snows, a snow plow clears the main streets (`?plows=0`)
     plows: on("plows") ? PLOW_COUNT : 0,
-    // by day, a garbage truck works the quiet streets (`?collection=0`)
-    collection: on("collection") ? TRUCK_COUNT : 0,
   };
+  // Each registered option is enabled unless its lowercase query flag is 0.
+  for (const { key, defaultCount, buildFleet } of FEATURES) {
+    const enabled = on(key.toLowerCase());
+    const options = buildFleet ? fleet : world;
+    options[key] = defaultCount === undefined ? enabled : enabled ? defaultCount : 0;
+  }
   return { world, fleet };
 }

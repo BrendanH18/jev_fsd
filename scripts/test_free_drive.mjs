@@ -10,7 +10,7 @@ const { presetOptions, suiteOptions, setupScenario, FEATURE_PRESETS, CITY_HOUR }
 );
 const { MapData } = await import("../static/js/map/mapdata.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
-const { FEATURE_OPTIONS } = await import("../static/js/sim/features/index.js");
+const { FEATURE_OPTIONS, FLEET_FEATURES } = await import("../static/js/sim/features/index.js");
 
 const free = freeDriveOptions();
 const worldKeys = Object.keys(free.world).sort(),
@@ -42,6 +42,12 @@ for (const key of FEATURE_OPTIONS) {
   const off = typeof free.world[key] === "number" ? 0 : false;
   assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).world, { ...free.world, [key]: off });
   assert.deepEqual(presetOptions("city", { without: [key] }).world, { ...free.world, park: false, [key]: off });
+}
+for (const { key } of FLEET_FEATURES) {
+  const flag = key.toLowerCase();
+  const off = typeof free.fleet[key] === "number" ? 0 : false;
+  assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).fleet, { ...free.fleet, [key]: off });
+  assert.deepEqual(presetOptions("city", { without: [key] }).fleet, { ...free.fleet, [key]: off });
 }
 assert.equal(freeDriveOptions(new URLSearchParams("plows=0")).fleet.plows, 0);
 assert.equal(freeDriveOptions(new URLSearchParams("hazards=0")).world.stepOuts, 0);

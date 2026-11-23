@@ -85,7 +85,6 @@ export const doubleParkedModel = {
   },
   prompt: {
     at: "parking",
-    text: `- Choose \`wait_behind_van\` when \`situation\` says a van double-parked in the car's lane ahead cannot be gone round yet: stop behind it, and keep the car stopped there until \`situation\` says the oncoming lane is clear for the whole way round. Then the car's candidates already take it round the van through the oncoming lane; carry on round once started.
-- A garbage truck stopped in the car's lane (\`double_parked\` with \`truck\`) is gone round the same way, and also only once none of its crew is out in the street (\`double_parked.crew_in_road\`): until then choose \`wait_behind_van\`. Behind one on the move, follow it: it is about to stop again.`,
+    text: `- Choose \`wait_behind_van\` when \`situation\` says a van double-parked in the car's lane ahead cannot be gone round yet: stop behind it, and keep the car stopped there until \`situation\` says the oncoming lane is clear for the whole way round. Then the car's candidates already take it round the van through the oncoming lane; carry on round once started.`,
   },
 };

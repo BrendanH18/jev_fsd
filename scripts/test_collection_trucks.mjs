@@ -29,6 +29,8 @@ const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { DriveRecorder } = await import("../static/js/lab/recorder.js");
+const { EvaluationTrace } = await import("../static/js/lab/trace.js");
+const { featureObstacle } = await import("../static/js/sim/features/index.js");
 
 let checks = 0;
 async function test(name, fn) {
@@ -279,7 +281,9 @@ await test("passing a worker in the street within 1.5 m at speed counts once, in
   for (const collected of [true, false]) {
     const { world, fleet, ctx } = street();
     const score = new DriveScore(world, { title: "t" }),
-      metrics = new DriveMetrics(100);
+      metrics = new DriveMetrics(100),
+      trace = new EvaluationTrace(),
+      recorder = new DriveRecorder();
     let worker = null;
     if (collected) {
       const truck = standing(fleet, SITE.lo + 5, false);
@@ -306,6 +310,8 @@ await test("passing a worker in the street within 1.5 m at speed counts once, in
       const road = step(ctx);
       score.record(world, road, 1 / 60);
       metrics.record(world, null, road, 1 / 60);
+      trace.measurements(world, score);
+      for (const event of world.events) recorder.mark(world.t, event.type);
     }
     const sum = metrics.summary(world, { totals: { decisions: 0, calls: 0, tokens: 0, cost: 0 } }, true),
       report = score.snapshot();
@@ -314,6 +320,8 @@ await test("passing a worker in the street within 1.5 m at speed counts once, in
       assert.equal(sum.crew_close_passes, 1);
       assert.ok(failures(sum).includes("passed a garbage crew worker too close"));
       assert.equal(report.crew_close_passes, 1);
+      assert.equal(trace.events.filter(({ type }) => type === "crew_close_passes").length, 1);
+      assert.equal(recorder.markers.filter(({ type }) => type === "crew_close_pass").length, 1);
       assert.ok(report.tips.some((t) => /garbage truck at work/.test(t)));
     } else {
       assert.equal("crew_close_passes" in sum, false);
@@ -325,7 +333,9 @@ await test("passing a worker in the street within 1.5 m at speed counts once, in
 
 await test("with collection off there are no trucks and no crew, and nothing is reported", () => {
   const { world, fleet, ctx } = street({ collection: 0 });
+  const randomState = fleet.collection.random.getState();
   for (let i = 0; i < 60 * 20; i++) step(ctx);
+  assert.equal(fleet.collection.random.getState(), randomState);
   assert.equal(fleet.collection.trucks.length, 0);
   assert.equal(fleet.vehicles.some(isTruck), false);
   assert.equal(
@@ -414,6 +424,12 @@ await test("a truck is never retired to make room for a car pulling out, nor sen
   fleet.collection.target = 0;
   world.placeOnLane(KITS.lane("e129", 0), 20);
   const truck = standing(fleet, SITE.lo + 5);
+  assert.ok(isVan(truck), "standing truck uses the double-parked obstacle");
+  const descriptor = featureObstacle(truck);
+  assert.equal(descriptor.label, TRUCK_NAME);
+  assert.equal(descriptor.long, true);
+  assert.equal(descriptor.parkedClearance(truck), true);
+  assert.equal(descriptor.noParking(truck), true);
   // (a car pulls out far from the truck: with no other traffic, the truck is the only one it could replace)
   const car = world.parked.list
     .filter((c) => !c.stay && Math.hypot(c.x - truck.x, c.y - truck.y) > 40)

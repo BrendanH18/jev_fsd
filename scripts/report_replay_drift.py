@@ -16,29 +16,6 @@ from urllib.request import urlopen
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "data" / "results.json"
 
-# These tapes predate the source revision in the run manifest.
-LEGACY_TREES = {
-    **dict.fromkeys(
-        (
-            "jev-arena-2026-11-11.json.gz",
-            "deepseek-arena-2026-11-11.json.gz",
-            "deepseek-door-zone-2026-11-11.json.gz",
-            "granite-local-2026-11-11.json.gz",
-            "liquid-d1-door-zone-2026-11-11.json.gz",
-            "luna-door-zone-2026-11-11.json.gz",
-        ),
-        "dcfc663dc72f2bcf709e744288a8a5c789cbc974",
-    ),
-    **dict.fromkeys(
-        (
-            "jev-open-2026-11-20.json.gz",
-            "claude-haiku-arena-2026-11-20.json.gz",
-            "claude-haiku-open-2026-11-20.json.gz",
-        ),
-        "a6164696eacb242a1fc01a3a6fc366b31aed8677",
-    ),
-}
-
 
 def replay_matrix(rows: list[dict]) -> dict:
     jobs = {}
@@ -47,7 +24,7 @@ def replay_matrix(rows: list[dict]) -> dict:
         if not tape:
             continue
         manifest = row.get("manifest") or {}
-        tree = manifest.get("source_commit") or LEGACY_TREES.get(Path(tape).name)
+        tree = manifest.get("source_commit") or row.get("replay_source_commit")
         engine = manifest.get("engine") or row.get("engine")
         node = re.fullmatch(r"node v(\d+\.\d+\.\d+)", engine or "")
         if not re.fullmatch(r"[0-9a-f]{40}", tree or "") or not node:

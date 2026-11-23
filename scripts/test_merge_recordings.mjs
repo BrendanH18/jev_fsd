@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
+import suiteV1 from "../data/suites/v1.json" with { type: "json" };
 import { setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
 globalThis.document = { querySelector: () => null };
 const { ModelRecording } = await import("../static/js/brain/recording.js");
@@ -346,6 +347,120 @@ missingAnswers.drives = {};
 fs.writeFileSync(repeatTwo, missingAnswers.serialize());
 assert.throws(() => compare(repeatOne, repeatTwo), /complete arena recording/);
 console.log("✓ repeat comparison preserves per-run outcomes and costs and rejects duplicate and incomplete tapes");
+
+const plan = new URL("../docs/validation/arena-open-repeats-v1.json", import.meta.url).pathname;
+const { drives: plannedDrives } = suiteV1.arena;
+const { maps: plannedMaps } = suiteV1;
+function plannedRepeat(driver, number, { track = "open", effort = "low", ids = Object.keys(plannedDrives) } = {}) {
+  const llm = driver.startsWith("llm:");
+  const model = llm ? "claude-haiku-5-5" : "jev-test";
+  const fullHeader = {
+    ...header(ids, {
+      maps: plannedMaps,
+      track,
+      recorded_at: `2026-11-23T0${number}:00:00Z`,
+      manifest: {
+        format: "jev-run-manifest/2",
+        source_commit: "a".repeat(40),
+        source_dirty: false,
+        engine: "node v22",
+        driver,
+        track,
+      },
+    }),
+    model,
+    driver,
+    kind: llm ? "llm" : "jev",
+  };
+  const outcome = {
+    response: {
+      meta: { model },
+      ...(llm
+        ? { trace: { request: { url: "https://api.anthropic.com/v1/messages", output_config: { effort } } } }
+        : {}),
+    },
+  };
+  const results = Object.fromEntries(
+    ids.map((challenge, index) => {
+      const failed = index === 0 && number === 2;
+      return [
+        challenge,
+        {
+          challenge,
+          ...plannedDrives[challenge],
+          track,
+          mode: "lockstep",
+          pass: !failed,
+          failures: failed ? ["red light"] : [],
+          red_lights: Number(failed),
+          safety_brakes: Number(failed),
+          fallbacks: Number(failed),
+          flagged_choices: number,
+          decisions: 10,
+          model_decisions: failed ? 8 : 9,
+          local_decisions: 1,
+          fallback_decisions: Number(failed),
+        },
+      ];
+    }),
+  );
+  const tape = new ModelRecording({
+    header: fullHeader,
+    drives: Object.fromEntries(ids.map((id) => [id, { [id]: [outcome] }])),
+    results,
+  });
+  setRecordingSuiteVersion(tape, "v1");
+  const file = path.join(dir, `planned-${llm ? "haiku" : "jev"}-${number}-${track}-${effort}-${ids.length}.json`);
+  fs.writeFileSync(file, tape.serialize());
+  return file;
+}
+
+const haiku = "llm:claude-haiku-5-5";
+const jevRepeats = [1, 2, 3].map((number) => plannedRepeat("jev", number));
+const haikuRepeats = [1, 2, 3].map((number) => plannedRepeat(haiku, number));
+const planned = JSON.parse(compare("--plan", plan, ...jevRepeats, ...haikuRepeats));
+assert.equal(planned.drives_per_repeat, 62);
+assert.equal(planned.drivers.length, 2);
+for (const driver of planned.drivers) {
+  assert.equal(driver.repeats, 3);
+  assert.deepEqual(driver.flags_per_decision, { min: 0.1, mean: 0.2, max: 0.3 });
+  assert.deepEqual(driver.by_drive["door-zone"].failure_reasons, { "red light": 1 });
+  assert.deepEqual(driver.runs[1].audited_failures, { "red light": 1 });
+  assert.equal(driver.runs[1].audit_totals.red_lights, 1);
+  assert.equal(driver.runs[1].decisions, 620);
+  assert.equal(driver.runs[1].flagged_choices, 124);
+  assert.equal(driver.runs[1].fallbacks, 1);
+  assert.equal(driver.runs[1].safety_brakes, 1);
+  assert.equal(driver.runs[1].model_share, 0.898);
+}
+assert.throws(() => compare("--plan", plan, ...jevRepeats), /exactly these drivers/);
+assert.throws(
+  () => compare("--plan", plan, ...jevRepeats, ...haikuRepeats.slice(1)),
+  /repeat plan requires 3 recordings/,
+);
+assert.throws(
+  () => compare("--plan", plan, ...jevRepeats, plannedRepeat(haiku, 1, { effort: "high" }), ...haikuRepeats.slice(1)),
+  /needs the model and provider settings declared/,
+);
+const pinnedPlan = path.join(dir, "pinned-repeat-plan.json");
+const planDefinition = JSON.parse(fs.readFileSync(plan, "utf8"));
+planDefinition.source_commit = "b".repeat(40);
+fs.writeFileSync(pinnedPlan, JSON.stringify(planDefinition));
+assert.throws(
+  () => compare("--plan", pinnedPlan, ...jevRepeats, ...haikuRepeats),
+  /needs the source and engine declared/,
+);
+const subset = ["door-zone"];
+assert.throws(
+  () =>
+    compare(
+      "--plan",
+      plan,
+      ...["jev", haiku].flatMap((driver) => [1, 2, 3].map((number) => plannedRepeat(driver, number, { ids: subset }))),
+    ),
+  /must cover the complete v1 arena/,
+);
+console.log("✓ planned repeats check canonical coverage, driver counts and provider settings");
 
 fs.rmSync(dir, { recursive: true, force: true });
 console.log("\nmerge recordings checks passed");

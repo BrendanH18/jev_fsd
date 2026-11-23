@@ -1,7 +1,8 @@
 # Collection day (garbage trucks)
 
 Collection day (`static/js/sim/collection-truck.js`, `NpcFleet` option `collection`: on in free drives
-unless `?collection=0`, from its own random stream; the "Collection day" challenge places a truck itself).
+unless `?collection=0`, from its own random stream; the "Collection day" challenge places a truck itself). The [feature record](../feature-interface.md) owns the fleet scheduler,
+stop plan, crew audit and results metric, and restores the fleet references on rewind.
 By day and out of fog, one garbage truck (a rear-loader, 9.6 m long and 2.5 m wide) works the quiet streets:
 it is put down on a collection street 150 to 450 m from the car where the car cannot see it, and goes once
 it has worked 4 to 8 minutes, or is 450 m away, out of the car's sight. A collection street is a quiet
@@ -30,7 +31,7 @@ is a failure to yield, as for a van. Coaching counts close passes (`crew_close_p
 says "GARBAGE TRUCK · CREW IN THE ROAD · WAIT BEHIND IT", "GARBAGE TRUCK · ONCOMING TRAFFIC · WAIT BEHIND
 IT", "GARBAGE TRUCK · WAY CLEAR · GO ROUND IT" and "GARBAGE TRUCK · GOING ROUND · SLOWLY, BACK INTO YOUR
 LANE PAST IT". Side-loading trucks with an arm and no crew in the street, trucks reversing into lanes,
-and bins standing in the street are not modelled. The seeded benchmark and the other challenges have none.
+and bins standing in the street are not modelled. The bare benchmark has collection disabled by default.
 
 ## Agent rules
 

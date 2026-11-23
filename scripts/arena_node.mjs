@@ -7,7 +7,7 @@
 // road-tests; or all), --only id,id (just these), --port, --json out.json (a summary per drive, no
 // decision trace), --check 1 (exit with status 1 if a drive fails or a replay differs), --check replay
 // (require an exact replay regardless of the verdict), --record out.json and --replay rec.json
-// (model drivers only; docs/agents.md; a name
+// (models and trusted local agents; docs/agents.md; a name
 // ending .gz is gzipped), --reserve 0.5 (stop between drives once the server's budget runs low), --track
 // open (the open track: road-rule checks flag manoeuvres instead of removing them, brain/tracks.js; a
 // recording keeps its track), --agent local-path (load a trusted driver module),
@@ -51,10 +51,13 @@ for (const [name, value] of Object.entries(args)) {
   if (value === true) fail(`--${name} needs a value.`);
 }
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
-if (args.agent && (args.brain || args.record || args.replay))
-  fail("--agent selects a local driver. Drop --brain, --record and --replay.");
-if (args.check === "replay" && (!args.replay || args.reserve !== undefined))
-  fail("--check replay requires --replay without a budget reserve.");
+if (args.agent && (args.brain || args.replay)) fail("--agent selects a local driver. Drop --brain and --replay.");
+const checkSubmission = args.check === "submission";
+const checkReplay = args.check === "replay" || checkSubmission;
+if (checkReplay && (!args.replay || args.reserve !== undefined))
+  fail(`--check ${args.check} requires --replay without a budget reserve.`);
+if (checkSubmission && (args.only || args["browser-replay"] || args["comparison-json"]))
+  fail("--check submission verifies the entire recording without replay exports.");
 if (args["browser-replay"] && (!args.replay || !args.only || String(args.only).includes(",")))
   fail("--browser-replay needs --replay and exactly one drive selected with --only.");
 const fs = await import("node:fs"),
@@ -79,7 +82,7 @@ if (args.replay) {
     fail(`Cannot read the recording ${args.replay}: ${error.message}`);
   }
   if (typeof replayJson?.header?.driver !== "string" || !replayJson.header.arena)
-    fail(`${args.replay} is not an arena model recording.`);
+    fail(`${args.replay} is not an arena recording.`);
   const given = ["brain", "set", "track"].filter((name) => args[name] !== undefined);
   if (given.length)
     fail(`The recording sets the driver and drives: drop ${given.map((name) => `--${name}`).join(", ")}.`);
@@ -105,6 +108,9 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const { evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { agentDefinitions, registerAgent } = await import("../static/js/brain/registry.js");
 const rec = await import("../static/js/brain/recording.js");
+const { LOCAL_RECORDING_FORMAT, LocalRecording } = await import("./local_recording.mjs");
+const localTape = replayJson?.format === LOCAL_RECORDING_FORMAT || Boolean(args.agent && args.record);
+if (localTape && (browserOutput || comparisonOutput)) fail("Replay exports currently require a model recording.");
 const { arenaSuiteVersion, authoredDrive } = await import("./canonical_suite.mjs");
 const { driverScores } = await import("../static/js/bench/scores.js");
 const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).captureBrowserReplay() : null;
@@ -133,12 +139,12 @@ if (!replayJson && !agentDefinitions().some((d) => d.id === brain))
       .map((d) => d.id)
       .join(", ")}.`,
   );
-if ((args.record || args.replay) && !rec.driverKind(brain))
-  fail(`--record and --replay need a model driver (jev, decision:<name> or llm:<name>), not "${brain}".`);
+if ((args.record || args.replay) && !localTape && !rec.driverKind(brain))
+  fail(`--record and --replay need a model or custom driver, not "${brain}".`);
 
 const SETS = { challenges: CHALLENGES, "road-tests": ROAD_TESTS, all: [...CHALLENGES, ...ROAD_TESTS] };
 const set = replayJson ? replayJson.header.arena.set : String(args.set || "challenges");
-if (!SETS[set]) fail(`Unknown set "${set}": use ${Object.keys(SETS).join(", ")}.`);
+if (!Object.hasOwn(SETS, set)) fail(`Unknown set "${set}": use ${Object.keys(SETS).join(", ")}.`);
 let drives = SETS[set];
 if (replayJson) {
   // (a recorded drive whose challenge is gone or renamed fails the replay rather than being skipped;
@@ -151,7 +157,7 @@ const only = args.only ? String(args.only).split(",") : null;
 const unknown = (only || []).filter((id) => !drives.some((c) => c.id === id));
 if (unknown.length) fail(`No drive ${unknown.join(", ")} in ${set}.`);
 if (only) drives = drives.filter((c) => only.includes(c.id));
-if (args.check === "replay" && !drives.length) fail("The recording has no drives to check.");
+if (checkReplay && !drives.length) fail("The recording has no drives to check.");
 
 // The challenge maps, with every layer, as the app loads them.
 const maps = {};
@@ -162,21 +168,43 @@ const shas = Object.fromEntries(Object.entries(maps).map(([id, map]) => [id, rec
 let recording = null;
 const suite = { kind: "arena", set, drives: Object.fromEntries(drives.map((c) => [c.id, authoredDrive(c)])) };
 const manifestModule =
-  !replayJson && !args.agent && (args.json || args.record) ? await import("./run_manifest.mjs") : null;
+  checkSubmission || (!replayJson && (args.record || (!args.agent && args.json)))
+    ? await import("./run_manifest.mjs")
+    : null;
 let manifest = null;
 if (replayJson) {
   try {
-    recording = rec.ModelRecording.parse(replayJson);
+    recording = localTape ? new LocalRecording(replayJson) : rec.ModelRecording.parse(replayJson);
   } catch (error) {
     fail(`Cannot replay ${args.replay}: ${error.message}`);
   }
   const changed = Object.keys(shas).filter((id) => recording.header.maps?.[id] !== shas[id]);
   if (changed.length)
     fail(`The map data of ${changed.join(", ")} has changed since this recording was made (a rebuilt pack or layer).`);
+  if (checkSubmission) {
+    const { verifySubmissionManifest } = await import("./submission_bundle.mjs");
+    try {
+      verifySubmissionManifest(
+        recording,
+        manifestModule.runManifest({
+          driver: brain,
+          model: recording.header.model,
+          track,
+          suite,
+          maps,
+          fingerprints: shas,
+          local: localTape,
+        }),
+        drives.map((drive) => drive.id),
+      );
+    } catch (error) {
+      fail(error.message);
+    }
+  }
 } else if (manifestModule) {
   const definition = agentDefinitions().find((d) => d.id === brain);
   const endpoint = definition?.llm || definition?.decision;
-  const model = brain === "jev" ? (await api("/api/status")).decision?.jev?.model : endpoint?.model;
+  const model = localTape ? null : brain === "jev" ? (await api("/api/status")).decision?.jev?.model : endpoint?.model;
   manifest = manifestModule.runManifest({
     driver: brain,
     model,
@@ -184,19 +212,21 @@ if (replayJson) {
     suite,
     maps,
     fingerprints: shas,
+    local: localTape,
   });
-  if (args.record)
-    recording = new rec.ModelRecording({
-      header: rec.recordingHeader({
-        driver: brain,
-        brain: { endpoint },
-        model,
-        arena: { set, ids: drives.map((c) => c.id), ...(track === "open" ? { track } : {}) },
-        maps: shas,
-        manifest,
-        suite_version: CUSTOM_SUITE,
-      }),
-    });
+  if (args.record) {
+    const context = {
+      arena: { set, ids: drives.map((c) => c.id), ...(track === "open" ? { track } : {}) },
+      maps: shas,
+      manifest,
+      suite_version: CUSTOM_SUITE,
+    };
+    recording = localTape
+      ? new LocalRecording({ header: { driver: brain, model: null, engine: manifest.engine, ...context } })
+      : new rec.ModelRecording({
+          header: rec.recordingHeader({ driver: brain, brain: { endpoint }, model, ...context }),
+        });
+  }
 }
 
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
@@ -269,7 +299,9 @@ for (const challenge of drives) {
   }
   const tape = recording ? recording.tape(challenge.id, args.record ? "record" : "replay") : null;
   const recorded = replayJson?.results[challenge.id];
-  const measureInputs = replayJson ? comparisonOutput && !recorded.comparison_score_inputs : args.json || args.record;
+  const measureInputs = replayJson
+    ? (checkSubmission && recorded.comparison_score_inputs) || (comparisonOutput && !recorded.comparison_score_inputs)
+    : args.json || args.record;
   let scoreInputs;
   const r = await evaluateChallenge(maps[challenge.map], challenge, {
     brain,
@@ -282,7 +314,7 @@ for (const challenge of drives) {
         }
       : null,
   });
-  if (!recorded && scoreInputs) r.comparison_score_inputs = scoreInputs;
+  if ((!recorded || checkSubmission) && scoreInputs) r.comparison_score_inputs = scoreInputs;
   // (saved after every drive, so a run stopped part way keeps the drives it finished)
   results.push(r);
   if (args.record) {
@@ -293,6 +325,12 @@ for (const challenge of drives) {
   }
   if (replayJson) {
     r.model_recording.same_result = recorded.result_sha === resultSha(r);
+    if (
+      checkSubmission &&
+      rec.canonicalJson(recorded) !==
+        rec.canonicalJson({ ...trimmed(r), result_sha: resultSha(r), suite_version: recording.header.suite_version })
+    )
+      fail(`The recorded results for ${challenge.id} differ from the replay.`);
     if (!r.model_recording.same_result || !r.model_recording.exact) drifted.push(challenge.id);
     else if (recorded.comparison_score_inputs) r.comparison_score_inputs = recorded.comparison_score_inputs;
     else if (scoreInputs) comparisons[challenge.id] = { result_sha: recorded.result_sha, score_inputs: scoreInputs };
@@ -342,10 +380,16 @@ const exactReplay =
   drifted.length === 0 &&
   replayJson &&
   results.length === Object.keys(recording.results).length;
-if (args.check === "replay" && replayManifest?.engine === summary.engine && exactReplay) manifest = replayManifest;
+if (checkSubmission) {
+  if (replayManifest.cost_usd !== summary.cost_usd) fail("The manifest cost differs from the replay.");
+  const version = arenaSuiteVersion({ ...suite, maps: shas }, results);
+  if (![CUSTOM_SUITE, version].includes(recording.header.suite_version))
+    fail("The recording declares a different suite version.");
+}
+if (checkReplay && replayManifest?.engine === summary.engine && exactReplay) manifest = replayManifest;
 const suite_version = replayJson
   ? replaySuiteVersion(recording.header, exactReplay)
-  : args.agent || only || budgetStop
+  : (args.agent && !args.record) || only || budgetStop
     ? CUSTOM_SUITE
     : arenaSuiteVersion({ ...suite, maps: shas }, results);
 if (manifest && !replayJson) manifest.suite_version = suite_version;
@@ -382,14 +426,14 @@ if (replayJson)
       : `replay: all ${results.length} drives played out as recorded`,
   );
 const failed =
-  args.check && args.check !== "0" && args.check !== "replay"
+  args.check && args.check !== "0" && !checkReplay
     ? [...new Set([...results.filter((r) => !r.pass).map((r) => r.challenge), ...drifted])]
     : [];
 if (failed.length)
   console.error(
     `${failed.length} of ${results.length} drives failed${drifted.length ? " or did not replay as recorded" : ""}: ${failed.join(", ")}`,
   );
-const failedReplay = args.check === "replay" && drifted.length > 0;
+const failedReplay = checkReplay && drifted.length > 0;
 process.stdout.write(`${JSON.stringify({ ...summary, suite_version })}\n`, () =>
   process.exit(failed.length || failedReplay ? 1 : 0),
 );

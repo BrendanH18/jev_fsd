@@ -138,15 +138,20 @@ export function cityGrid(data, version = LEGACY_SUITE) {
 export function recordings(data) {
   return data.rows
     .filter((r) => r.recording)
-    .map((r) => ({
-      driver: r.driver,
-      suite_version: suiteVersion(r),
-      label: r.label,
-      recording: r.recording,
-      sourceCommit: r.map ? r.manifest?.source_commit : null,
-      engine: r.manifest?.engine || r.engine,
-      command: `node --experimental-default-type=module scripts/${r.map ? "bench_node" : "arena_node"}.mjs --port 8322 --replay ${r.recording} --check replay`,
-    }));
+    .map((r) => {
+      const legacyReplay = !r.manifest?.source_commit && Boolean(r.replay_source_commit);
+      const runner = r.map ? "bench_node" : "arena_node";
+      return {
+        driver: r.driver,
+        suite_version: suiteVersion(r),
+        label: r.label,
+        recording: r.recording,
+        sourceCommit: r.manifest?.source_commit ?? r.replay_source_commit,
+        engine: r.manifest?.engine || r.engine,
+        legacyReplay,
+        command: `node --experimental-default-type=module scripts/${runner}.mjs --port 8322 --replay ${r.recording}${legacyReplay ? "" : " --check replay"}`,
+      };
+    });
 }
 
 export function percentText(value) {

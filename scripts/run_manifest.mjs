@@ -34,7 +34,7 @@ function promptHash(kind, track) {
   return hashText(canonicalJson(files.map((file) => readFileSync(file, "utf8"))));
 }
 
-export function runManifest({ driver, model, track, suite, maps, fingerprints = {} }) {
+export function runManifest({ driver, model, track, suite, maps, fingerprints = {}, local = false }) {
   return {
     format: "jev-run-manifest/2",
     suite_version: CUSTOM_SUITE,
@@ -43,7 +43,7 @@ export function runManifest({ driver, model, track, suite, maps, fingerprints = 
     engine_version: process.versions.v8,
     driver,
     model: model ?? null,
-    prompt_hash: promptHash(driverKind(driver), track),
+    prompt_hash: promptHash(local ? "local" : driverKind(driver), track),
     track,
     suite,
     maps: Object.fromEntries(

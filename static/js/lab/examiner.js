@@ -353,7 +353,6 @@ const CORE_FAIL_CATEGORY = {
   "made a prohibited turn": "right_of_way",
   "took a speed hump too fast": "speed",
   "left a pedestrian crossover before the far curb": "right_of_way",
-  "passed a garbage crew worker too close": "space",
   "drove past a crossing guard's stop sign": "right_of_way",
   "entered on green ahead of a car running the red": "observation",
   "not parked": "parking",

@@ -16,7 +16,7 @@ import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopM
 import { boxGap, obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
-import { Crowd, PED, PEDESTRIANS } from "./pedestrians.js";
+import { Crowd, PEDESTRIANS } from "./pedestrians.js";
 import { Visibility } from "./visibility.js";
 import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
@@ -64,7 +64,6 @@ import {
   stopKey,
 } from "./work-zone.js";
 import { HIT_OVER_MPS, deviceOf, slowsFor } from "./traffic-calming.js";
-import { CREW_CLEAR_M, CREW_PASS_MPS, crewNear } from "./collection-truck.js";
 import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
 import {
   EGO_ID,
@@ -103,6 +102,7 @@ const HIDES = hooks("hides"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
+const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
 const CONTROL_AUDIT = hooks("controlAudit");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -393,10 +393,6 @@ export class World {
     this.calming = !!calming;
     this.calmingSeen = false;
     this.calmingAxle = new Map();
-    // garbage trucks (sim/collection-truck.js): whether one has stopped to collect this drive, and the
-    // crew the car has passed too close (each counted once)
-    this.collectionSeen = false;
-    this.crewPassed = new Set();
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -1077,7 +1073,7 @@ export class World {
     if (this.pxo) auditPxo(this);
     if (this.restrictions) auditRestrictions(this);
     if (this.calming) this.auditCalming();
-    if (this.collectionSeen) this.auditCrew();
+    for (const audit of AUDIT_AFTER_CALMING) audit(this);
     if (this.crossingGuards.enabled) this.auditGuards();
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this, frontOnPath);
     for (const audit of AUDIT_STREET_HAZARDS) audit(this);
@@ -1176,33 +1172,6 @@ export class World {
       }
     }
     for (const id of this.calmingAxle.keys()) if (!seen.has(id)) this.calmingAxle.delete(id);
-  }
-
-  // Passing a garbage truck's crew (sim/collection-truck.js): the car's body, moving at more than
-  // CREW_PASS_MPS, coming closer than CREW_CLEAR_M to a worker counts once a worker.
-  auditCrew() {
-    const ego = this.ego;
-    if (ego.v <= CREW_PASS_MPS) return;
-    const front = ego.spec.length - ego.spec.rearOverhang,
-      rear = ego.spec.rearOverhang,
-      half = ego.spec.width / 2;
-    for (const p of crewNear(this, ego.x, ego.y, 12)) {
-      if (this.crewPassed.has(p.id) || p.frozen > 0) continue;
-      const l = ego.toLocal(p.x, p.y),
-        dx = Math.max(0, -rear - l.ahead, l.ahead - front),
-        dy = Math.max(0, Math.abs(l.right) - half);
-      const clear = Math.hypot(dx, dy) - PED.width / 2;
-      if (clear >= CREW_CLEAR_M) continue;
-      this.crewPassed.add(p.id);
-      this.violations.crew_close_passes = (this.violations.crew_close_passes || 0) + 1;
-      this.events.push({
-        type: "crew_close_pass",
-        worker: p.id,
-        truck: p.truck,
-        clearance_m: Math.round(Math.max(0, clear) * 10) / 10,
-        kmh: Math.round(ego.v * 36) / 10,
-      });
-    }
   }
 
   // At a lane closure: merging out of turn, merging early, and not letting someone in (see AUDIT_EARLY_M).
