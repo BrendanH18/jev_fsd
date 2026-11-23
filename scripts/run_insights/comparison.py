@@ -150,12 +150,16 @@ def route_changes(left, right):
     return changes
 
 
-def assess_regression(left, right):
+def assess_regression(left, right, routes=None):
     """Compare observed verdicts, audit labels and counters over matched rows."""
     passed_delta = collision_delta = violation_delta = 0
     verdict_pairs = label_pairs = collision_pairs = traffic_counter_pairs = 0
     missing_traffic_counts = {}
     new_audit_failures = []
+    increased_violations = []
+    skipped = {
+        key: (routes or {}).get(key, []) for key in ("baseline_only", "comparison_only", "missing_tags", "changed_tags")
+    }
     for before, after in zip(left, right, strict=True):
         if type(before.get("pass")) is bool and type(after.get("pass")) is bool:
             verdict_pairs += 1
@@ -177,16 +181,19 @@ def assess_regression(left, right):
             if first is not None and second is not None:
                 traffic_counter_pairs += 1
                 violation_delta += second - first
+                if second > first:
+                    increased_violations.append({"id": before.get("id"), "field": field, "increase": second - first})
             elif first is not None or second is not None or field in REQUIRED_VIOLATION_COUNTS:
                 missing_traffic_counts[field] = missing_traffic_counts.get(field, 0) + 1
     return {
-        "regressed": passed_delta < 0 or collision_delta > 0 or violation_delta > 0 or bool(new_audit_failures),
+        "regressed": passed_delta < 0 or collision_delta > 0 or bool(increased_violations or new_audit_failures),
         "deltas": {
             "passed": passed_delta if verdict_pairs else None,
             "collisions": collision_delta if collision_pairs else None,
             "violations": violation_delta if traffic_counter_pairs else None,
         },
         "new_audit_failures": new_audit_failures,
+        "increased_violations": increased_violations,
         "coverage": {
             "matched_routes": len(left),
             "verdict_pairs": verdict_pairs,
@@ -194,9 +201,11 @@ def assess_regression(left, right):
             "collision_count_pairs": collision_pairs,
             "comparable_traffic_counters": traffic_counter_pairs,
             "missing_traffic_counts": missing_traffic_counts,
+            **skipped,
             "incomplete": not left
             or min(verdict_pairs, label_pairs, collision_pairs) < len(left)
-            or bool(missing_traffic_counts),
+            or bool(missing_traffic_counts)
+            or any(skipped.values()),
         },
     }
 

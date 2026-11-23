@@ -644,19 +644,17 @@ export class DriveReport {
 
     const renderList = () => {
       const terms = norm(state.query).trim().split(/\s+/).filter(Boolean);
-      const filtered = history
-        .map((r, index) => ({ r, index }))
-        .filter(({ r }) => {
-          if (state.type === "challenge" && !r.config?.challenge) return false;
-          if (state.type === "free" && r.config?.challenge) return false;
-          if (state.city && r.map !== state.city) return false;
-          if (state.driver && r.driver !== state.driver) return false;
-          if (!terms.length) return true;
-          const hay = norm(`${r.title} ${r.map} ${r.driver} ${r.status}`);
-          return terms.every((t) => hay.includes(t));
-        });
+      const filtered = history.filter((r) => {
+        if (state.type === "challenge" && !r.config?.challenge) return false;
+        if (state.type === "free" && r.config?.challenge) return false;
+        if (state.city && r.map !== state.city) return false;
+        if (state.driver && r.driver !== state.driver) return false;
+        if (!terms.length) return true;
+        const hay = norm(`${r.title} ${r.map} ${r.driver} ${r.status}`);
+        return terms.every((t) => hay.includes(t));
+      });
 
-      const qualified = filtered.map(({ r }) => r).filter((r) => r.qualified && Number.isFinite(r.score));
+      const qualified = filtered.filter((r) => r.qualified && Number.isFinite(r.score));
       const avg = qualified.length
         ? Math.round(qualified.reduce((acc, r) => acc + r.score, 0) / qualified.length)
         : null;
@@ -684,7 +682,7 @@ export class DriveReport {
         return;
       }
       listWrap.replaceChildren(
-        ...filtered.map(({ r, index }) =>
+        ...filtered.map((r) =>
           h(
             "div",
             { class: "history-row" },
@@ -711,9 +709,18 @@ export class DriveReport {
                 "aria-label": `Delete ${r.title}`,
                 title: "Delete drive",
                 onclick: () => {
-                  history.splice(index, 1);
-                  writeHistory(history);
-                  statusEl.textContent = `Deleted "${r.title}".`;
+                  const latest = readHistory();
+                  const record = JSON.stringify(r);
+                  const index = latest.findIndex((drive) => JSON.stringify(drive) === record);
+                  if (index !== -1) {
+                    latest.splice(index, 1);
+                    if (!writeHistory(latest)) {
+                      statusEl.textContent = "Could not save the updated history.";
+                      return;
+                    }
+                  }
+                  history = latest;
+                  statusEl.textContent = index === -1 ? "That drive is already gone." : `Deleted "${r.title}".`;
                   renderList();
                 },
               },

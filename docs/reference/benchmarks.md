@@ -215,7 +215,9 @@ uv run python scripts/inspect_run.py baseline.json --compare candidate.json --pa
 
 `--only-failures`, repeatable `--route`, and `--cohort` restrict the input. `--top` limits ranked
 lists in the output. JSON is the default. The regression check reports evidence coverage and
-exits 2 for fewer passes, more measured collisions or violations, or newly reported audit failures.
+exits 2 for fewer passes, more measured collisions, an increased violation counter, or a new
+audit failure. It exits 3 when selected routes or measurements could not be compared and
+the matched evidence showed no regression.
 
 ### Hard city slice
 

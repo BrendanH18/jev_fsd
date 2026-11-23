@@ -381,10 +381,24 @@ class InspectRunTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             a = Path(directory) / "a.json"
             b = Path(directory) / "b.json"
-            row = {"id": "s1-1", "tags": tags, "pass": False, "collisions": 0, "red_lights": 1}
+            row = {
+                "id": "s1-1",
+                "tags": tags,
+                "pass": False,
+                "collisions": 0,
+                "red_lights": 1,
+                "stop_signs": 3,
+                "failed_to_yield": 0,
+                "failures": [],
+            }
             a.write_text(json.dumps({"config": cfg, "results": [row]}))
             b.write_text(
-                json.dumps({"config": {**cfg, "weather": "snow", "npcs": 50}, "results": [{**row, "red_lights": 2}]})
+                json.dumps(
+                    {
+                        "config": {**cfg, "weather": "snow", "npcs": 50},
+                        "results": [{**row, "red_lights": 2, "stop_signs": 1}],
+                    }
+                )
             )
             vreg = subprocess.run(
                 [sys.executable, CLI, a, "--compare", b, "suite-verdicts", "--fail-on-regression"],
@@ -393,6 +407,10 @@ class InspectRunTests(unittest.TestCase):
             )
             self.assertEqual(vreg.returncode, 2)
             vdata = json.loads(vreg.stdout)
+            self.assertEqual(vdata["regression"]["deltas"]["violations"], -1)
+            self.assertEqual(
+                vdata["regression"]["increased_violations"], [{"id": "s1-1", "field": "red_lights", "increase": 1}]
+            )
             self.assertEqual(
                 vdata["condition_differences"],
                 {
@@ -410,9 +428,42 @@ class InspectRunTests(unittest.TestCase):
             )
             self.assertEqual(duration_only.returncode, 0)
 
+            # A missing route or counter makes the gate inconclusive in both reporting modes.
+            b.write_text(json.dumps({"config": cfg, "results": [{**row, "id": "s1-2"}]}))
+            for mode in ("--summary", "suite-verdicts"):
+                missing = subprocess.run(
+                    [sys.executable, CLI, a, "--compare", b, mode, "--fail-on-regression"],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(missing.returncode, 3)
+                coverage = json.loads(missing.stdout)["regression"]["coverage"]
+                self.assertEqual(coverage["baseline_only"], ["s1-1"])
+                self.assertEqual(coverage["comparison_only"], ["s1-2"])
+
+            b.write_text(json.dumps({"config": cfg, "results": [{**row, "collisions": None}]}))
+            missing = subprocess.run(
+                [sys.executable, CLI, a, "--compare", b, "--fail-on-regression", "--summary"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(missing.returncode, 3)
+            self.assertEqual(json.loads(missing.stdout)["regression"]["coverage"]["collision_count_pairs"], 0)
+
         # --fail-on-regression without --compare fails cleanly.
         bad = subprocess.run([sys.executable, CLI, SAMPLE, "--fail-on-regression"], capture_output=True)
         self.assertEqual(bad.returncode, 2)
+
+    def test_csv_preserves_formula_like_route_id_as_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            run = json.loads(SAMPLE.read_text())
+            run["results"][0]["id"] = " =1+1"
+            run["results"][1]["id"] = "line one\rline two"
+            path.write_text(json.dumps(run))
+            output = subprocess.check_output([sys.executable, CLI, path, "scores-ranked", "--format", "csv"])
+            route_ids = [row["id"] for row in csv.DictReader(io.StringIO(output.decode(), newline="")) if row["id"]]
+            self.assertCountEqual(route_ids, ["' =1+1", "line one\rline two"])
 
     def test_regression_gate_uses_audit_labels_when_arena_counters_are_missing(self):
         with tempfile.TemporaryDirectory() as directory:

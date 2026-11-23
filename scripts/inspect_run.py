@@ -202,6 +202,12 @@ def _cell(value):
     return str(value)
 
 
+def _csv_cell(value):
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return _cell(value)
+
+
 def _dict_rows_section(title, items):
     if not items:
         return (title, ["status"], [{"status": "none"}])
@@ -310,6 +316,8 @@ def _build_sections(data, *, is_summary=False, is_compare=False):
             sections.append(_dict_rows_section("regression", [stats]))
             if regression["new_audit_failures"]:
                 sections.append(_dict_rows_section("new audit failures", regression["new_audit_failures"]))
+            if regression["increased_violations"]:
+                sections.append(_dict_rows_section("increased violation counts", regression["increased_violations"]))
         if is_summary:
             sections.append(_dict_rows_section("deltas", [data["deltas"]]))
             for side in ("baseline", "comparison"):
@@ -392,10 +400,10 @@ def format_output(data, fmt, *, is_summary=False, is_compare=False):
                 if header not in all_headers:
                     all_headers.append(header)
             for row in rows:
-                flat_rows.append({"section": title, **{h: _cell(row.get(h)) for h in headers}})
+                flat_rows.append({"section": _csv_cell(title), **{h: _csv_cell(row.get(h)) for h in headers}})
         buffer = io.StringIO()
-        writer = csv.DictWriter(buffer, fieldnames=all_headers, lineterminator="\n")
-        writer.writeheader()
+        writer = csv.DictWriter(buffer, fieldnames=all_headers, lineterminator="\n", quoting=csv.QUOTE_ALL)
+        writer.writerow({header: _csv_cell(header) for header in all_headers})
         writer.writerows(flat_rows)
         return buffer.getvalue().rstrip("\n")
     raise ValueError(f"unsupported format: {fmt}")
@@ -433,7 +441,7 @@ def main():
     parser.add_argument(
         "--fail-on-regression",
         action="store_true",
-        help="with --compare, exit 2 for fewer passes, increased collision or violation counts, or new audit failures",
+        help="with --compare, exit 2 for a regression or 3 when coverage is incomplete",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--list", action="store_true", help="list original report IDs and descriptions")
@@ -532,10 +540,10 @@ def main():
                     only_failures=args.only_failures,
                 )
                 if args.fail_on_regression:
-                    _, _, left_matched, right_matched = comparison.match_routes(
+                    routes, _, left_matched, right_matched = comparison.match_routes(
                         args.run.name, config, rows, args.compare.name, other_config, other_rows
                     )
-                    regression = comparison.assess_regression(left_matched, right_matched)
+                    regression = comparison.assess_regression(left_matched, right_matched, routes)
                 output = scores.build_comparison_summary(
                     (args.run.name, config, rows),
                     (args.compare.name, other_config, other_rows),
@@ -577,10 +585,10 @@ def main():
                     only_failures=args.only_failures,
                 )
                 if args.fail_on_regression:
-                    _, _, left_matched, right_matched = comparison.match_routes(
+                    routes, _, left_matched, right_matched = comparison.match_routes(
                         args.run.name, config, rows, args.compare.name, other_config, other_rows
                     )
-                    regression = comparison.assess_regression(left_matched, right_matched)
+                    regression = comparison.assess_regression(left_matched, right_matched, routes)
                 baseline = args.run.name, config, rows
                 other = args.compare.name, other_config, other_rows
                 output = comparison.compare(baseline, other, selected, paired)
@@ -609,6 +617,8 @@ def main():
         parser.error(f"invalid numeric measurement: {exc}")
     if regression and regression["regressed"]:
         sys.exit(2)
+    if regression and regression["coverage"]["incomplete"]:
+        sys.exit(3)
 
 
 if __name__ == "__main__":

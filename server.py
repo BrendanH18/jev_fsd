@@ -13,6 +13,7 @@ jev/security.py so other websites cannot drive this server or spend your credits
 
 from __future__ import annotations
 
+import errno
 import gzip
 import json
 import math
@@ -63,6 +64,9 @@ RESULTS_FILE = PROJECT_ROOT / "data" / "results.json"
 MAX_BODY_BYTES = 1024 * 1024
 # A model recording keeps every answer of a benchmark run (static/js/brain/recording.js).
 MAX_RECORDING_BYTES = 32 * 1024 * 1024
+# The largest bundled legacy recording expands to about 448 MiB.
+MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+_save_lock = threading.Lock()
 RECORDING_FORMAT = "jev-model-recording/1"
 
 settings = Settings()
@@ -101,7 +105,24 @@ def _atomic_write_text(path: Path, text: str) -> None:
             fh.write(text)
             fh.flush()
             os.fsync(fh.fileno())
-        os.link(tmp_path, path)
+        try:
+            os.link(tmp_path, path)
+        except OSError as error:
+            if error.errno not in (
+                errno.EPERM,
+                errno.EINVAL,
+                errno.ENOSYS,
+                errno.ENOTSUP,
+                errno.EOPNOTSUPP,
+                errno.EXDEV,
+            ):
+                raise
+            # A server still serializes publication on filesystems without hard links.
+            with _save_lock:
+                if path.exists():
+                    raise FileExistsError(path) from error
+                os.replace(tmp_path, path)
+                tmp_path = None
     finally:
         if tmp_path is not None:
             os.unlink(tmp_path)
@@ -120,8 +141,11 @@ def _save_artifact(path, encode):
 
 def _read_json_file(path: Path):
     if path.name.endswith(".json.gz"):
-        with gzip.open(path, "rt", encoding="utf-8") as fh:
-            return json.load(fh)
+        with gzip.open(path, "rb") as fh:
+            data = fh.read(MAX_ARCHIVE_BYTES + 1)
+        if len(data) > MAX_ARCHIVE_BYTES:
+            raise ValueError("Recording exceeds the decoded size limit")
+        return json.loads(data)
     return json.loads(path.read_text(encoding="utf-8"))
 
 

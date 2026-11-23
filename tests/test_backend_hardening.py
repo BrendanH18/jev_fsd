@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import gzip
 import http.client
 import json
@@ -13,6 +14,7 @@ import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
@@ -51,6 +53,12 @@ def _start_test_server(test_case: unittest.TestCase):
     test_case.addCleanup(httpd.server_close)
     test_case.addCleanup(httpd.shutdown)
     return httpd
+
+
+def _enter_context(test_case, context):
+    stack = ExitStack()
+    test_case.addCleanup(stack.close)
+    return stack.enter_context(context)
 
 
 class ContentLengthTests(unittest.TestCase):
@@ -232,7 +240,7 @@ class ApiRouteValidationTests(unittest.TestCase):
     def setUp(self):
         pack = synthetic_pack()
         self.entry = {"pack": pack, "router": Router(pack), "bbox": PRESET_BBOXES["kitsilano"], "error": None}
-        self.enterContext(patch.object(server, "load_map", return_value=self.entry))
+        _enter_context(self, patch.object(server, "load_map", return_value=self.entry))
 
     def test_invalid_coordinates_and_parameters_raise_bad_request(self):
         good_from = {"x": -120.0, "y": -180.0, "heading": 0.0}
@@ -326,7 +334,7 @@ class EndpointCheckTests(unittest.TestCase):
     def _endpoint(self, reply):
         mock = MockLLM(reply)
         self.addCleanup(mock.close)
-        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = Path(_enter_context(self, tempfile.TemporaryDirectory()))
         (tmp / "llm.json").write_text(json.dumps({"endpoints": [{"name": "ep", "base_url": mock.url, "model": "x"}]}))
         settings = Settings(environ={"JEV_FSD_LLM_ENDPOINTS": str(tmp / "llm.json")}, env_file=tmp / ".env")
         return llm.LlmRegistry(settings, SpendGuard(10.0, 100)).get("ep")
@@ -381,7 +389,7 @@ class LlmFormatLockTests(unittest.TestCase):
 
         mock = MockLLM(picky)
         self.addCleanup(mock.close)
-        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = Path(_enter_context(self, tempfile.TemporaryDirectory()))
         (tmp / "llm.json").write_text(
             json.dumps({"endpoints": [{"name": "ep", "base_url": mock.url, "model": "x", "rpm": 0}]})
         )
@@ -434,7 +442,7 @@ class LoadMapConcurrencyTests(unittest.TestCase):
             patch.object(server, "build_pack", side_effect=slow_build_pack),
         ):
             for name in layer_builders:
-                self.enterContext(patch.object(server, name, return_value=None))
+                _enter_context(self, patch.object(server, name, return_value=None))
             with ThreadPoolExecutor(max_workers=8) as pool:
                 entries = list(pool.map(lambda _: server.load_map("kitsilano"), range(8)))
         self.assertEqual(calls, 1)
@@ -524,6 +532,12 @@ class RecordingsAndRunsResilienceTests(unittest.TestCase):
 
                 loaded = server.api_recordings({}, {"name": ["20261121-compressed"]})
                 self.assertEqual(loaded["header"]["driver"], "compressed")
+                with patch.object(server, "MAX_ARCHIVE_BYTES", 10):
+                    self.assertNotIn(
+                        "20261121-compressed", [r["name"] for r in server.api_recordings({}, {})["recordings"]]
+                    )
+                    with self.assertRaises(server.BadRequest):
+                        server.api_recordings({}, {"name": ["20261121-compressed"]})
                 loaded_ext = server.api_recordings({}, {"name": ["20261121-compressed.json.gz"]})
                 self.assertEqual(loaded_ext["header"]["driver"], "compressed")
                 legacy = server.api_recordings({}, {"name": ["20261120-plain.json"]})
@@ -631,8 +645,8 @@ class DrivesSeenCellsTests(unittest.TestCase):
     """#31: suggested_drives() uses O(1) seen_cells set with deterministic output."""
 
     def test_suggested_drives_deterministic_and_distinct(self):
-        entry = server.load_map("kitsilano")
-        router = entry["router"]
+        path = server.MAPS_DIR / "623b012bc8b5.v6.pack.json"
+        router = Router(json.loads(path.read_text()))
         lane = next(ln for ln in router.lanes.values() if ln["length"] > 70)
         pts = lane["pts"]
         mid = pts[len(pts) // 2]
@@ -698,6 +712,7 @@ class AtomicWritesTests(unittest.TestCase):
             with (
                 patch.multiple(server, PROJECT_ROOT=root, RUNS_DIR=root / "runs"),
                 patch.object(server.time, "strftime", return_value="same-start-time"),
+                patch.object(os, "link", side_effect=OSError(errno.EOPNOTSUPP, "Hard links unavailable")),
                 ThreadPoolExecutor(max_workers=6) as pool,
             ):
                 responses = list(pool.map(save, range(6)))

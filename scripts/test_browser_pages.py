@@ -126,7 +126,7 @@ DEBRIEF_REPLAY = """async () => {
   app.world.paused = false; app.advance(8);
   app.drive.incident('test', 'Test incident');
   app.advance(2); app.finishDrive('finished');
-  const { readHistory } = await import('/js/sim/drive-score.js');
+  const { readHistory, saveDrive } = await import('/js/sim/drive-score.js');
   const report = readHistory()[0], incident = report.incidents[0], frames = app.recorder.frames;
   const eventTime = frames[0].t - frames[0].state.drive.elapsed + incident.at_s;
   app.driveReport.dialog.querySelector('details').open = true;
@@ -144,13 +144,20 @@ DEBRIEF_REPLAY = """async () => {
   app.driveReport.showHistory(); app.driveReport.dialog.querySelector('.history-entry').click();
   const history = app.driveReport.dialog.textContent.includes('Replay unavailable')
     && !app.driveReport.dialog.querySelector('.incident-replay');
+  app.driveReport.showHistory();
+  const deleteDrive = app.driveReport.dialog.querySelector('.history-delete');
+  saveDrive({ ...report, title: 'Drive saved while history was open' });
+  deleteDrive.click();
+  const keptNewDrive = readHistory()[0]?.title === 'Drive saved while history was open'
+    && app.driveReport.dialog.querySelector('.history-entry').textContent.includes('Drive saved while history was open');
   app.recorder.reset(); app.driveReport.show(report);
   const replaced = app.driveReport.dialog.textContent.includes('Replay unavailable')
     && !app.driveReport.dialog.querySelector('.incident-replay');
   return [{ name: 'Real report opens paused replay before incident', ok: replay,
     detail: JSON.stringify({ focused, eventTime, chosen }) },
     { name: 'A stale incident button revalidates after branching', ok: revalidated },
-    { name: 'History and replaced recordings do not seek discarded events', ok: history && replaced }];
+    { name: 'History and replaced recordings do not seek discarded events', ok: history && replaced },
+    { name: 'Deleting a drive retains newer history entries', ok: keptNewDrive }];
   } finally {
     app.view.render = render;
   }
