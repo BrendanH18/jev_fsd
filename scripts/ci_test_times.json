@@ -147,6 +147,7 @@
     "test_speed_zones.mjs": 1.3,
     "test_static_collision.mjs": 0.2,
     "test_streetcars.mjs": 24.3,
+    "test_submission_bundle.mjs": 0.1,
     "test_sun_glare.mjs": 6.4,
     "test_tailgaters.mjs": 11.9,
     "test_traffic_backoff.mjs": 0.1,

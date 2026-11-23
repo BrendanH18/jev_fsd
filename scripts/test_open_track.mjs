@@ -131,9 +131,9 @@ await test("the tracks, and every check the filter can fail has words for a mode
   // (what the scrape also finds: candidate ids, law and collision kinds, rider relations, event and metric names)
   const notChecks =
     /^(?:stop|wait|keep|change|creep|pull|let|ease|slow|go|yield|follow|pass|move|turn|hold|reverse)_|^(?:hard_brake|rear_end|turning_in|turning_off)$|_(?:conflicts|hits|entries|overspeed|splashed|violation)$/;
-  const metrics = new Set(FEATURES.flatMap(({ metric }) => (metric ? [metric.name] : [])));
+  const auditIds = new Set(FEATURES.flatMap(({ metric }) => (metric ? [metric.name, metric.eventType] : [])));
   const missing = [...ids].filter(
-    (id) => id !== "collision" && !FLAG_TEXT[id] && !metrics.has(id) && !notChecks.test(id),
+    (id) => id !== "collision" && !FLAG_TEXT[id] && !auditIds.has(id) && !notChecks.test(id),
   );
   assert.deepEqual(missing, [], "a rejection without words");
   assert.equal(flagText("runs_red"), FLAG_TEXT.runs_red);
