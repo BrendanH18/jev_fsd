@@ -2,6 +2,7 @@
 
 from functools import partial
 from math import isfinite
+from sys import float_info
 
 from . import outcomes, safety
 
@@ -164,7 +165,7 @@ def percentile(values, fraction):
         return values[lower]
     weight = position - lower
     diff = values[upper] - values[lower]
-    if isfinite(diff):
+    if -float_info.max <= diff <= float_info.max:
         return values[lower] + diff * weight
     return values[lower] * (1 - weight) + values[upper] * weight
 
@@ -173,7 +174,7 @@ def _mean(values):
     if not values:
         return None
     total = sum(values)
-    if isfinite(total):
+    if type(total) is int or isfinite(total):
         return total / len(values)
     return sum(v / len(values) for v in values)
 

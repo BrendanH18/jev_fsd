@@ -633,8 +633,11 @@ export class DriveReport {
           clearArmed = false;
           clearBtn.textContent = "Clear history";
           clearBtn.classList.remove("confirming");
+          if (!writeHistory([])) {
+            statusEl.textContent = "Could not clear drive history.";
+            return;
+          }
           history = [];
-          writeHistory(history);
           statusEl.textContent = "Drive history cleared.";
           renderList();
         },

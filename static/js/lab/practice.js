@@ -292,11 +292,14 @@ export function saveRoadTest(test, report, sheet, storage) {
 }
 
 export function exportPracticeBackup(storage) {
+  const practice = readPractice(storage);
+  const roadTests = readRoadTests(storage);
+  if (!practice.available || !roadTests.available) return null;
   return {
     format: PRACTICE_BACKUP_FORMAT,
     exported_at: new Date().toISOString(),
-    practice: readPractice(storage).records,
-    road_tests: readRoadTests(storage).records,
+    practice: practice.records,
+    road_tests: roadTests.records,
   };
 }
 

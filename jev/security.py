@@ -44,8 +44,9 @@ def split_host(host_header: str) -> tuple:
         name, rest = host, ""
     if not rest:
         return name, None
-    if rest.startswith(":") and len(rest) > 1 and rest[1:].isascii() and rest[1:].isdigit():
-        parsed = int(rest[1:])
+    digits = rest[1:].lstrip("0")
+    if rest.startswith(":") and len(digits) <= 5 and digits.isascii() and digits.isdigit():
+        parsed = int(digits)
         if 1 <= parsed <= 65535:
             return name, parsed
     return name, -1

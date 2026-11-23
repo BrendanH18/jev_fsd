@@ -502,7 +502,11 @@ def published_drive(result: dict, map_sha: str | None = None, comparison: dict |
         k: result[k] for k in ("collisions", "hard_brakes", "safety_brakes") if finite_number(result.get(k))
     }
     if has_score_inputs(result):
-        drive["score_inputs"] = {k: result[k] for k in ("arrived", *SCORE_NUMERIC, *SCORE_NULLABLE)}
+        score_inputs = {k: result[k] for k in ("arrived", *SCORE_NUMERIC, *SCORE_NULLABLE)}
+        tags = result.get("tags")
+        if isinstance(tags, dict) and finite_number(tags.get("length_m")):
+            score_inputs["tags"] = {"length_m": tags["length_m"]}
+        drive["score_inputs"] = score_inputs
     inputs = result.get("comparison_score_inputs")
     if comparison is not None:
         if not result.get("result_sha") or comparison.get("result_sha") != result["result_sha"] or inputs is not None:
@@ -599,6 +603,10 @@ def _build_challenge_row(
 ) -> dict:
     date, name = path.parent.name, path.stem
     summary, results = published["summary"], published["results"]
+    if not isinstance(results, list) or any(
+        not isinstance(row, dict) or not isinstance(row.get("pass"), bool) for row in results
+    ):
+        raise ValueError(f"{rel(path)} needs a results list with boolean verdicts")
     driver = summary["brain"]
     # (the guarded track, every earlier record's, or the open one: static/js/brain/tracks.js)
     track = summary.get("track") or "guarded"
@@ -766,7 +774,9 @@ def _validated_run(path: Path, *, validate_filtered=False):
     recording_path = RECORDINGS / f"{path.stem}.json.gz"
     recording = recording_facts(recording_path) if recording_path.is_file() else None
     manifest = checked_manifest(path, run, run["saved_at"][:10], recording)
-    if excluded or (variant and version != CUSTOM_SUITE):  # Numbered held-out results are reported apart.
+    # Numbered held-out results are reported apart.
+    skip = excluded or (variant and version != CUSTOM_SUITE)
+    if skip and not validate_filtered:
         return None
     if recording is not None:
         header = recording["header"]
@@ -778,6 +788,8 @@ def _validated_run(path: Path, *, validate_filtered=False):
             or published_verdicts != recorded_verdicts
         ):
             raise ValueError(f"{rel(recording_path)} disagrees with the driver, config or verdicts in {rel(path)}")
+    if skip:
+        return None
     preset = config.get("features") or "bare"
     group = (
         config.get("brain"),

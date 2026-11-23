@@ -17,11 +17,25 @@ const setup = () => {
   const t = setup();
   t.autopilot.detourRouting = Promise.resolve().then(() => {
     t.world.route = { length: 900 };
+    return t.world.route;
   });
   t.step();
   t.step();
   await settle();
   assert.deepEqual(t.got, [1100]);
+}
+{
+  // An unrelated route replaces the old one while a closure request is pending.
+  const t = setup();
+  let finish;
+  t.autopilot.detourRouting = new Promise((resolve) => {
+    finish = resolve;
+  });
+  t.step();
+  t.world.route = { length: 900 };
+  finish();
+  await settle();
+  assert.deepEqual(t.got, []);
 }
 {
   // one that finds no route, then an unrelated re-plan: no extension

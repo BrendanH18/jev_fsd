@@ -465,6 +465,70 @@ class InspectRunTests(unittest.TestCase):
             route_ids = [row["id"] for row in csv.DictReader(io.StringIO(output.decode(), newline="")) if row["id"]]
             self.assertCountEqual(route_ids, ["' =1+1", "line one\rline two"])
 
+    def test_safety_top_limits_route_details_without_changing_counts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            rows = [
+                {"id": "most-affected", "red_lights": 2, "off_road_s": 2, "distance_m": 500},
+                {"id": "also-affected", "red_lights": 1, "off_road_s": 1, "distance_m": 500},
+            ]
+            path.write_text(json.dumps({"results": rows}))
+            command = [
+                sys.executable,
+                CLI,
+                path,
+                "safety-signals",
+                "safety-overview",
+                "safety-exposure",
+                "--top",
+                "1",
+            ]
+            output = json.loads(subprocess.check_output(command))
+            for report in ("safety-overview", "safety-exposure"):
+                incidents = output[report]["off_road_incidents"]
+                self.assertEqual(incidents["triggered_routes"], 2)
+                self.assertEqual([r["id"] for r in incidents["affected_routes"]], ["most-affected"])
+            csv_text = subprocess.check_output([*command, "--format", "csv"], text=True)
+            report_rows = list(csv.DictReader(io.StringIO(csv_text)))
+            signals = [r for r in report_rows if r["section"] == "safety-signals: affected routes"]
+            self.assertEqual([r["id"] for r in signals], ["most-affected"])
+            aggregate = next(r for r in report_rows if r["section"] == "safety-signals" and r["field"] == "red_lights")
+            self.assertEqual(aggregate["affected_routes"], "2")
+
+    def test_reports_handle_finite_measurements_at_numeric_limits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "results": [
+                            {
+                                "id": "a",
+                                "time_s": 10**308,
+                                "distance_m": 5e-324,
+                                "red_lights": 1,
+                                "latency_p50_ms": 1e-308,
+                                "latency_p95_ms": 1e308,
+                            },
+                            {"id": "b", "time_s": 10**308, "distance_m": 5e-324, "red_lights": 0},
+                        ]
+                    }
+                )
+            )
+            command = [
+                sys.executable,
+                CLI,
+                path,
+                "motion-duration",
+                "scores-ranked",
+                "safety-overview",
+                "latency-tail-inflation",
+            ]
+            output = json.loads(subprocess.check_output(command))
+            self.assertEqual(output["motion-duration"]["summary"]["mean"], 1e308)
+            self.assertEqual(output["latency-tail-inflation"], [])
+            self.assertIsNone(output["safety-overview"]["hazards"]["red_lights"]["per_km"])
+
     def test_regression_gate_uses_audit_labels_when_arena_counters_are_missing(self):
         with tempfile.TemporaryDirectory() as directory:
             before = Path(directory) / "before.json"

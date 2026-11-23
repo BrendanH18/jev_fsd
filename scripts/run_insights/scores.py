@@ -28,7 +28,10 @@ def _round(value, digits=1):
     if type(value) not in (int, float) or not isfinite(value):
         return None
     factor = 10**digits
-    result = _math_round(value * factor) / factor
+    scaled = float(value) * factor
+    if not isfinite(scaled):
+        return value
+    result = _math_round(scaled) / factor
     return 0.0 if result == 0 else result
 
 
@@ -89,6 +92,7 @@ def raw_scores(row):
 
 def drive_scores(row):
     s = raw_scores(row)
+    km = s["length_m"] / 1000
     return {
         "progress": _round(s["progress"], 3),
         "pace": _round(s["pace"]),
@@ -96,7 +100,7 @@ def drive_scores(row):
         "margin": _round(s["margin"]),
         "score": _round(s["score"]),
         "time_lost_s": _round(s["time_lost_s"]),
-        "time_lost_s_per_km": _round(s["time_lost_s"] / (s["length_m"] / 1000)) if s["length_m"] > 0 else None,
+        "time_lost_s_per_km": _round(s["time_lost_s"] / km) if km > 0 else None,
     }
 
 

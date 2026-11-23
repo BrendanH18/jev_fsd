@@ -126,10 +126,9 @@ export function watchClosureReplans(autopilot, world, metrics, onDetour) {
     const pending = autopilot.detourRouting;
     if (!pending || pending === seen) return;
     seen = pending;
-    const before = world.route;
     pending.then(
-      () => {
-        if (world.route && world.route !== before) onDetour(metrics.distance + world.route.length);
+      (installed) => {
+        if (installed && world.route === installed) onDetour(metrics.distance + installed.length);
       },
       () => {},
     );

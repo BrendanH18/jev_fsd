@@ -18,8 +18,9 @@ weighted score.
 
 **Scores and held-out routes.** So that two drivers that both pass can still be ranked, the table, the
 arena and the Node scripts also show each drive's progress, pace, comfort, margin kept and time lost
-and a combined score, computed from the saved fields when shown (`bench/scores.js`). The **held-out
-routes** box (`--heldout 1` in `bench_node.mjs` and `soak.mjs`) runs routes no fix was tuned against,
+and a combined score, computed from the saved fields when shown (`bench/scores.js`). Published lab
+scores use the planned route length when the source has one and the driven distance otherwise.
+The **held-out routes** box (`--heldout 1` in `bench_node.mjs` and `soak.mjs`) runs routes no fix was tuned against,
 reported apart. Formulas and the held-out policy are in the [Rules baseline](../rules-baseline.md).
 
 **Guarded and open tracks.** By default (the **guarded** track) the shared safety filter removes every

@@ -142,6 +142,7 @@ class SecurityHostPortTests(unittest.TestCase):
             "localhost:0",
             "localhost:65536",
             "localhost:99999",
+            "localhost:" + "9" * 5000,
             "localhost:-1",
             "localhost:8322/path",
             "localhost:\u00b2",
@@ -257,12 +258,14 @@ class ApiRouteValidationTests(unittest.TestCase):
             {"from": good_from, "to": {"x": 0, "y": False}},
             {"from": good_from, "to": good_to, "k": "many"},
             {"from": good_from, "to": good_to, "k": True},
+            {"from": good_from, "to": good_to, "k": 2.5},
             {"from": good_from, "to": good_to, "hour": "noon"},
             {"from": good_from, "to": good_to, "hour": math.nan},
             {"from": good_from, "to": good_to, "hour": math.inf},
             {"from": good_from, "to": good_to, "hour": True},
             {"from": good_from, "to": good_to, "weekday": "monday"},
             {"from": good_from, "to": good_to, "weekday": False},
+            {"from": good_from, "to": good_to, "weekday": 1.9},
         ]
         for body in bad_bodies:
             with self.subTest(body=body):
@@ -403,7 +406,8 @@ class LlmFormatLockTests(unittest.TestCase):
 
         with ThreadPoolExecutor(max_workers=6) as pool:
             results = list(pool.map(worker, range(12)))
-        self.assertTrue(all(fmt in ("json_schema", "none") for fmt in results))
+        self.assertEqual(results[::2], ["none"] * 6)
+        self.assertTrue(all(fmt in ("json_schema", "none") for fmt in results[1::2]))
         self.assertEqual(ep.public()["response_format"], "none")
 
 
@@ -471,12 +475,16 @@ class MapCatalogCacheTests(unittest.TestCase):
 
             with patch.object(maps.json, "loads", side_effect=counting_loads):
                 first = maps.catalog(maps_dir)
+                kits_1 = next(m for m in first if m["id"] == "kitsilano")
+                kits_1["preview"][0]["pts"][0].clear()
+                kits_1["extent"].clear()
                 second = maps.catalog(maps_dir)
                 self.assertEqual(parse_count, 1)
-                kits_1 = next(m for m in first if m["id"] == "kitsilano")
                 kits_2 = next(m for m in second if m["id"] == "kitsilano")
                 self.assertTrue(kits_1["cached"])
                 self.assertEqual(kits_1["stats"], kits_2["stats"])
+                self.assertTrue(kits_2["preview"][0]["pts"][0])
+                self.assertEqual(kits_2["extent"], pack["extent"])
 
                 # Modify pack file (different size & mtime_ns) -> cache must invalidate.
                 updated = {**pack, "buildings": pack["buildings"] + [{"footprint": [[0, 0], [1, 0], [1, 1]], "h": 8}]}
@@ -516,7 +524,7 @@ class RecordingsAndRunsResilienceTests(unittest.TestCase):
             (rec_dir / "20261120-plain.json.json").write_text(json.dumps(self._recording_payload("legacy")))
             with gzip.open(rec_dir / "20261121-compressed.json.gz", "wt", encoding="utf-8") as fh:
                 json.dump(self._recording_payload("compressed"), fh)
-            (rec_dir / "20261121-compressed.json").write_text("{broken json")
+            (rec_dir / "20261121-compressed.json").write_text("[" * 2500 + "0" + "]" * 2500)
             (rec_dir / "20261122-bad.json").write_text("{broken json")
             (rec_dir / "20261123-bad.json.gz").write_bytes(b"not a gzip file")
             # Truncated gzip header/body triggers EOFError/zlib.error
@@ -547,6 +555,9 @@ class RecordingsAndRunsResilienceTests(unittest.TestCase):
                     server.api_recordings({}, {"name": ["20261123-bad"]})
                 with self.assertRaises(server.BadRequest):
                     server.api_recordings({}, {"name": ["..bad"]})
+                (rec_dir / "trip..v2.json").write_text(json.dumps(self._recording_payload()))
+                self.assertIn("trip..v2", [r["name"] for r in server.api_recordings({}, {})["recordings"]])
+                self.assertEqual(server.api_recordings({}, {"name": ["trip..v2"]})["format"], server.RECORDING_FORMAT)
 
     def test_bench_runs_listing_skips_corrupt_and_non_object_files(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -557,12 +568,15 @@ class RecordingsAndRunsResilienceTests(unittest.TestCase):
             )
             (runs_dir / "20261121-corrupt.json").write_text("{not json")
             (runs_dir / "20261122-array.json").write_text("[1, 2, 3]")
+            (runs_dir / "20261123-nested.json").write_text("[" * 2500 + "0" + "]" * 2500)
 
             with patch.object(server, "RUNS_DIR", runs_dir):
                 listed = server.api_bench_runs({}, {})["runs"]
                 self.assertEqual([r["name"] for r in listed], ["20261120-good"])
                 with self.assertRaises(server.BadRequest):
                     server.api_bench_runs({}, {"name": ["20261121-corrupt"]})
+                with self.assertRaises(server.BadRequest):
+                    server.api_bench_runs({}, {"name": ["20261123-nested"]})
 
 
 class RouterRestrictionIndexTests(unittest.TestCase):
@@ -698,6 +712,16 @@ class AtomicWritesTests(unittest.TestCase):
                         server._atomic_write_text(target, '{"ok": true}')
                 self.assertFalse(target.exists())
                 self.assertEqual(list(target.parent.glob("*.tmp")), [])
+
+                # A long Unicode name fits the target, and cleanup can't undo publication.
+                target = root / f"{'𐐀' * 60}.json"
+                with (
+                    patch.object(os, "unlink", side_effect=PermissionError("cleanup")),
+                    patch.object(server, "log") as log,
+                ):
+                    server._atomic_write_text(target, '{"ok": true}')
+                self.assertEqual(json.loads(target.read_text()), {"ok": True})
+                log.assert_called_once()
 
     def test_concurrent_benchmark_saves_keep_distinct_payloads(self):
         with tempfile.TemporaryDirectory() as tmp:

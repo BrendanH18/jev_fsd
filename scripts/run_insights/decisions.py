@@ -128,11 +128,11 @@ def _cost_concentration(rows):
 
 
 def _tail_inflation(rows):
-    out = [
-        {"id": row.get("id"), "p95_over_p50": _ratio(row["latency_p95_ms"], row["latency_p50_ms"])}
-        for row in _measured(rows, "latency_p95_ms", "latency_p50_ms")
-        if row["latency_p50_ms"] > 0
-    ]
+    out = []
+    for row in _measured(rows, "latency_p95_ms", "latency_p50_ms"):
+        ratio = _ratio(row["latency_p95_ms"], row["latency_p50_ms"])
+        if ratio is not None and isfinite(ratio):
+            out.append({"id": row.get("id"), "p95_over_p50": ratio})
     out.sort(key=lambda item: (-item["p95_over_p50"], *_route_sort_key(item["id"])))
     return {
         "routes": out,

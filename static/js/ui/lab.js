@@ -608,6 +608,10 @@ export class DriveLab {
     });
     const exportProgress = () => {
       const payload = exportPracticeBackup();
+      if (!payload) {
+        backupStatus.textContent = "Could not read saved practice progress.";
+        return;
+      }
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       const url = URL.createObjectURL(
         new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" }),
@@ -952,7 +956,7 @@ export class DriveLab {
         0,
         this.recorder.frames.findLastIndex((f) => f.t <= marker.t + 1e-9),
       );
-      this.seek(Math.max(currentIndex + 1, exactIndex));
+      this.seek(Math.min(this.recorder.frames.length - 1, Math.max(currentIndex + 1, exactIndex)));
     }
   }
   branch(driver) {

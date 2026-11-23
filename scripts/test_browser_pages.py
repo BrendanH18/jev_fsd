@@ -272,6 +272,26 @@ def check_snapshot_form(page):
     assert payload["state"] == {"label": "displayed"}
     assert payload["questions"] == {"vector": "displayed"}
     print("Inspector snapshot kept the displayed decision", flush=True)
+    copied = page.evaluate("""() => {
+        let text;
+        const writeText = navigator.clipboard.writeText;
+        navigator.clipboard.writeText = (value) => { text = value; };
+        try {
+          window.showSnapshotDecision('awaiting another paint');
+          document.querySelector('#copy-json').click();
+          document.querySelector('#pin-decision').click();
+          return JSON.parse(text);
+        } finally {
+          navigator.clipboard.writeText = writeText;
+        }
+    }""")
+    assert copied == {"label": "newer"}
+    page.locator('#panel [data-tab="questions"]').click()
+    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('vector')")
+    assert "newer" in page.locator("#panel-body").inner_text()
+    page.locator("#pin-decision").click()
+    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('awaiting another paint')")
+    print("Inspector copy and pin use the displayed decision", flush=True)
 
 
 def check_incident_comparison(page):

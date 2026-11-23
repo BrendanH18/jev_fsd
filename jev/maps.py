@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import stat
 import threading
+from copy import deepcopy
 from pathlib import Path
 from typing import Optional
 
@@ -200,8 +201,8 @@ def catalog(maps_dir: Path) -> list:
                 "bbox": list(bbox),
                 "cached": meta is not None,
                 "stats": dict(meta["stats"]) if meta else {},
-                "extent": meta["extent"] if meta else None,
-                "preview": meta["preview"] if meta else [],
+                "extent": deepcopy(meta["extent"]) if meta else None,
+                "preview": deepcopy(meta["preview"]) if meta else [],
             }
         )
     return result

@@ -132,8 +132,8 @@ physics steps for smoother motion. Physics, sensing and scoring still use fixed-
 Hood view adds windshield trim, rain beads and two sweeping wipers, with optional acceleration
 and cornering motion. Procedural audio (`static/js/ui/drive-audio.js`) synthesizes motor, road,
 rain and tire sounds, indicator clicks, a horn, emergency sirens and streetcar gongs with no
-downloaded audio files. It starts only after enabling **Sound**, runs at a fixed master gain
-(0.4, smoothly ramped; there is no separate volume slider), and automatically fades to silence
+downloaded audio files. It starts only after enabling **Sound**. The **Volume** slider adjusts
+the master gain up to 0.4, and audio automatically fades to silence
 whenever the world is paused or the browser tab moves into the background (`world.paused || document.hidden`).
 Manual indicators cancel after a completed turn or 12 seconds, and a speed warning highlights
 speeding.

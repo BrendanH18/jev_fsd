@@ -80,6 +80,8 @@ class ResultsTest(unittest.TestCase):
             "min_headway_s",
         )
         self.assertEqual(inputs, {key: result[key] for key in fields})
+        tagged = build_results.published_drive(dict(result, tags={"length_m": 1000, "lefts": 2}))
+        self.assertEqual(tagged["score_inputs"]["tags"], {"length_m": 1000})
         for key in (*fields, "time_s"):
             with self.subTest(key=key):
                 partial = result.copy()
@@ -143,6 +145,11 @@ class ResultsTest(unittest.TestCase):
             (root / "results/2026-11-23/bad-recording.json").write_text(
                 json.dumps({"summary": {"brain": "rules"}, "results": []})
             )
+            legacy_day = root / "results/2026-11-19"
+            legacy_day.mkdir()
+            (legacy_day / "invalid-verdict.json").write_text(
+                json.dumps({"summary": {"brain": "rules"}, "results": [{"pass": "false"}]})
+            )
             recordings = root / "recordings"
             recordings.mkdir()
             corrupt = bytearray(gzip.compress(b"{}"))
@@ -164,23 +171,51 @@ class ResultsTest(unittest.TestCase):
                     }
                 )
             )
+            inconsistent_run = root / "inconsistent-variant.json"
+            config = {"brain": "rules", "map": "kitsilano", "hour": 0}
+            inconsistent_run.write_text(
+                json.dumps(
+                    {
+                        "name": "inconsistent",
+                        "saved_at": "2026-11-19T12:00:00",
+                        "config": config,
+                        "summary": {},
+                        "results": [{"id": "route", "pass": True}],
+                    }
+                )
+            )
+            (recordings / "inconsistent-variant.json.gz").write_bytes(
+                gzip.compress(
+                    json.dumps(
+                        {
+                            "header": {"driver": "rules", "bench": config},
+                            "results": {"route": {"pass": False}},
+                            "drives": {},
+                        }
+                    ).encode()
+                )
+            )
             errors = StringIO()
             with (
                 patch.object(build_results, "RESULTS", root / "results"),
                 patch.object(build_results, "SUBMISSIONS", root / "submissions"),
                 patch.object(build_results, "RECORDINGS", recordings),
-                patch.object(build_results, "committed_runs", return_value=[malformed_run, malformed_variant]),
+                patch.object(
+                    build_results, "committed_runs", return_value=[malformed_run, malformed_variant, inconsistent_run]
+                ),
                 redirect_stderr(errors),
             ):
                 self.assertEqual(build_results.main(["--validate-all"]), 1)
             messages = errors.getvalue()
-            self.assertIn("5 error(s)", messages)
+            self.assertIn("7 error(s)", messages)
             for name in (
                 "bad-results.json",
                 "bad-submissions.json",
                 "bad-recording.json",
                 "metadata-only.json",
                 "invalid-heldout.json",
+                "invalid-verdict.json",
+                "inconsistent-variant.json",
             ):
                 self.assertIn(name, messages)
 

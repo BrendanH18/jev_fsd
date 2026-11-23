@@ -619,7 +619,9 @@ export class Autopilot {
           this.executing = null;
           this.lastStart = -Infinity;
         }
+        const installed = world.route;
         this.onEvent({ type: "reroute", count: res.routes.length });
+        return installed;
       }
     } catch (err) {
       if (epoch === this.epoch) this.onEvent({ type: "error", error: err.message });

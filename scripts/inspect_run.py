@@ -166,8 +166,11 @@ def _truncate_report(payload, limit):
         return {**payload, "routes": payload["routes"][:limit]}
     if isinstance(payload.get("pairs"), list):
         return {**payload, "pairs": payload["pairs"][:limit]}
-    if isinstance(payload.get("ranked_hazards"), list):
-        return {**payload, "ranked_hazards": payload["ranked_hazards"][:limit]}
+    if "off_road_incidents" in payload:
+        truncated = {**payload, "off_road_incidents": _truncate_report(payload["off_road_incidents"], limit)}
+        if "ranked_hazards" in payload:
+            truncated["ranked_hazards"] = payload["ranked_hazards"][:limit]
+        return truncated
     if isinstance(payload.get("affected_routes"), list):
         return {**payload, "affected_routes": payload["affected_routes"][:limit]}
     if payload and all(isinstance(v, dict) and "affected_routes" in v for v in payload.values()):
@@ -279,10 +282,15 @@ def _report_sections(title, payload):
             {"family": family, "measured_routes": info["measured_routes"], "triggered_routes": info["triggered_routes"]}
             for family, info in payload["by_family"].items()
         ]
-        return [
+        sections = [
             _dict_rows_section(f"{title}: ranked hazards", payload["ranked_hazards"]),
             _dict_rows_section(f"{title}: families", families),
         ]
+        if payload["off_road_incidents"]["affected_routes"]:
+            sections.append(
+                _dict_rows_section(f"{title}: off-road incidents", payload["off_road_incidents"]["affected_routes"])
+            )
+        return sections
     if payload and all(isinstance(v, dict) and "affected_routes" in v for v in payload.values()):
         rows = [
             {
@@ -291,11 +299,15 @@ def _report_sections(title, payload):
                 "measured_routes": info.get("measured_routes"),
                 "unmeasured_routes": info.get("unmeasured_routes"),
                 "total": info.get("total"),
-                "affected_routes": len(info.get("affected_routes", [])),
+                "affected_routes": info["triggered_routes"],
             }
             for field, info in payload.items()
         ]
-        return [_dict_rows_section(title, rows)]
+        affected = [{"field": field, **entry} for field, info in payload.items() for entry in info["affected_routes"]]
+        sections = [_dict_rows_section(title, rows)]
+        if affected:
+            sections.append(_dict_rows_section(f"{title}: affected routes", affected))
+        return sections
     if "counts" in payload and isinstance(payload["counts"], dict):
         rows = [{"label": label, "count": count} for label, count in payload["counts"].items()]
         return [_dict_rows_section(title, rows)]

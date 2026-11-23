@@ -167,11 +167,12 @@ async function verify({ recording, report }, { checkout, port, timeout }) {
   }
 }
 
-async function publish({ bundle: bundlePath, submitter, out, checkout, port, timeout }) {
+async function publish({ bundle: bundlePath, submitter, out: requestedPath, checkout, port, timeout }) {
   parseTimeout(timeout);
   if (!/^[a-z0-9][a-z0-9_-]{0,38}$/.test(submitter))
     throw new Error("Use a submitter handle with 1–39 lowercase letters, digits, hyphens or underscores.");
-  const dayDir = dirname(resolve(out));
+  const out = resolve(requestedPath);
+  const dayDir = dirname(out);
   const submissions = join(realpathSync(fileURLToPath(new URL("../", import.meta.url))), "data", "submissions");
   const day = basename(dayDir);
   const date = new Date(`${day}T00:00:00Z`);
@@ -195,7 +196,7 @@ async function publish({ bundle: bundlePath, submitter, out, checkout, port, tim
   await verify(bundle, { checkout, port, timeout });
   mkdirSync(dayDir, { recursive: true });
   if (realpathSync(dayDir) !== dayDir) throw new Error("The submission directory must be inside this checkout.");
-  const staging = mkdtempSync(join(dirname(out), ".jev-submission-"));
+  const staging = mkdtempSync(join(dayDir, ".jev-submission-"));
   const stagedTape = join(staging, "recording.json.gz");
   const stagedReport = join(staging, "report.json");
   try {

@@ -116,6 +116,7 @@ def _report(fields, rows):
             "unit": unit,
             "measured_routes": measured,
             "unmeasured_routes": len(rows) - measured,
+            "triggered_routes": len(affected),
             "total": round(total, 6) if measured else None,
             "affected_routes": sorted(
                 affected,
@@ -154,6 +155,7 @@ def _field_exposure(rows, field, unit, family):
             paired_total += value
             measured_m += distance
     measured_km = measured_m / 1000
+    rate = paired_total / measured_km if measured_km > 0 else None
     return {
         "family": family,
         "unit": unit,
@@ -162,7 +164,7 @@ def _field_exposure(rows, field, unit, family):
         "triggered_routes": triggered,
         "total": round(total, 6) if measured else None,
         "measured_km": round(measured_km, 4) if measured_m > 0 else None,
-        "per_km": round(paired_total / measured_km, 6) if measured_km > 0 else None,
+        "per_km": round(rate, 6) if rate is not None and isfinite(rate) else None,
     }
 
 

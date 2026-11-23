@@ -83,6 +83,7 @@ export class Panel {
 
   togglePin(force) {
     this.pinned = force === undefined ? !this.pinned : !!force;
+    if (this.pinned && this.displayed) this.last = this.displayed;
     if (this.pinButton) {
       this.pinButton.classList.toggle("on", this.pinned);
       this.pinButton.setAttribute("aria-pressed", String(this.pinned));
@@ -192,6 +193,7 @@ export class Panel {
     this.dirty = false;
     const d = this.last;
     this.displayed = d;
+    this.displayedTab = this.tab;
     if (!d) {
       this.body.replaceChildren(h("pre", {}, "No decision yet. Set a destination and press J."));
       return;
@@ -294,25 +296,22 @@ export class Panel {
   }
 
   async copyJson() {
-    const d = this.last;
+    const d = this.displayed;
     if (!d) return;
+    const tab = this.displayedTab;
     const payload =
-      this.tab === "state"
+      tab === "state"
         ? d.state
-        : this.tab === "questions"
+        : tab === "questions"
           ? llmRequest(d) || d.questions
-          : this.tab === "answers"
+          : tab === "answers"
             ? { motion: d.motion, chosenId: d.chosenId, answers: d.answers }
             : { meta: d.meta, flags: d.flags, totals: this.autopilot.totals };
-    this.hud.badge(
-      (await copyText(JSON.stringify(payload, null, 2))) ? `copied ${this.tab} JSON` : "copy failed",
-      "",
-      900,
-    );
+    this.hud.badge((await copyText(JSON.stringify(payload, null, 2))) ? `copied ${tab} JSON` : "copy failed", "", 900);
   }
 
   async copyCurl() {
-    const d = this.last;
+    const d = this.displayed;
     if (!d) return;
     // LLM and decision endpoints record their (credential-free) URL and key variable in the trace.
     const request = d.trace?.request?.url ? d.trace.request : null;

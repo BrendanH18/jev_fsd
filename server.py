@@ -96,7 +96,7 @@ def _atomic_write_text(path: Path, text: str) -> None:
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
-            prefix=".%s." % path.name,
+            prefix=".save-",
             suffix=".tmp",
             dir=str(path.parent),
             delete=False,
@@ -125,7 +125,10 @@ def _atomic_write_text(path: Path, text: str) -> None:
                 tmp_path = None
     finally:
         if tmp_path is not None:
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError as error:
+                log(f"Could not clean up temporary artifact {tmp_path}: {error}")
 
 
 def _save_artifact(path, encode):
@@ -338,8 +341,8 @@ def api_route(body, _query):
         raise BadRequest("from {x, y, heading?} and to {x, y} with finite coordinates are required")
     raw_k = body.get("k")
     try:
-        if isinstance(raw_k, bool):
-            raise TypeError("boolean is not k")
+        if isinstance(raw_k, bool) or (isinstance(raw_k, float) and not raw_k.is_integer()):
+            raise TypeError("k is not an integer")
         k = max(1, min(int(1 if raw_k is None else raw_k), 3))
     except (TypeError, ValueError, OverflowError):
         raise BadRequest("k must be an integer")
@@ -354,8 +357,8 @@ def api_route(body, _query):
         raise BadRequest("hour must be a finite number")
     raw_weekday = body.get("weekday", 0)
     try:
-        if isinstance(raw_weekday, bool):
-            raise TypeError("boolean is not weekday")
+        if isinstance(raw_weekday, bool) or (isinstance(raw_weekday, float) and not raw_weekday.is_integer()):
+            raise TypeError("weekday is not an integer")
         weekday = int(raw_weekday)
     except (TypeError, ValueError, OverflowError):
         raise BadRequest("weekday must be an integer")
@@ -529,7 +532,7 @@ def api_bench_runs(_body, query):
             raise BadRequest("No run named %s" % safe)
         try:
             return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             raise BadRequest("Run %s could not be read" % safe)
     runs = []
     for path in sorted(RUNS_DIR.glob("*.json"), reverse=True):
@@ -537,7 +540,7 @@ def api_bench_runs(_body, query):
             break
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             continue
         if not isinstance(data, dict):
             continue
@@ -634,10 +637,14 @@ def _recording_candidates(name):
         yield RECORDINGS_DIR / f"{name}.gz"
 
 
+def _recording_basename(name):
+    return bool(name) and not name.startswith(".") and all(ch.isalnum() or ch in "-_." for ch in name)
+
+
 def _load_recording_data(path):
     try:
         data = _read_json_file(path)
-    except (OSError, ValueError, EOFError, zlib.error):
+    except (OSError, ValueError, EOFError, RecursionError, zlib.error):
         return None
     return data if isinstance(data, dict) else None
 
@@ -646,12 +653,11 @@ def api_recordings(_body, query):
     """Recordings, newest first, with their headers (?name=<recording> returns one in full)."""
     name = (query.get("name") or [""])[0]
     if name:
-        safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_.")
-        if not safe or safe.startswith(".") or ".." in safe:
-            raise BadRequest("No recording named %s" % safe)
+        if not _recording_basename(name):
+            raise BadRequest("Invalid recording name")
         found = False
         fallback = None
-        for path in _recording_candidates(safe):
+        for path in _recording_candidates(name):
             if not path.is_file():
                 continue
             found = True
@@ -663,8 +669,8 @@ def api_recordings(_body, query):
         if fallback is not None:
             return fallback
         if found:
-            raise BadRequest("Recording %s could not be read" % safe)
-        raise BadRequest("No recording named %s" % safe)
+            raise BadRequest("Recording %s could not be read" % name)
+        raise BadRequest("No recording named %s" % name)
     recordings = []
     if RECORDINGS_DIR.is_dir():
         paths = sorted(
@@ -679,7 +685,7 @@ def api_recordings(_body, query):
         if len(recordings) >= 50:
             break
         rec_name = _recording_name(path)
-        if rec_name in seen:
+        if rec_name in seen or not _recording_basename(rec_name):
             continue
         data = _load_recording_data(path)
         if data is not None and data.get("format") == RECORDING_FORMAT:
