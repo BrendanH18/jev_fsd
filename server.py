@@ -152,6 +152,14 @@ def _read_json_file(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _load_saved_object(path: Path):
+    try:
+        data = _read_json_file(path)
+    except (OSError, ValueError, EOFError, RecursionError, zlib.error):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _recording_name(path: Path) -> str:
     if path.name.endswith(".json.gz"):
         return path.name[: -len(".json.gz")]
@@ -530,19 +538,16 @@ def api_bench_runs(_body, query):
         path = RUNS_DIR / ("%s.json" % safe)
         if not safe or not path.is_file():
             raise BadRequest("No run named %s" % safe)
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, RecursionError):
+        data = _load_saved_object(path)
+        if data is None:
             raise BadRequest("Run %s could not be read" % safe)
+        return data
     runs = []
     for path in sorted(RUNS_DIR.glob("*.json"), reverse=True):
         if len(runs) >= 30:
             break
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, RecursionError):
-            continue
-        if not isinstance(data, dict):
+        data = _load_saved_object(path)
+        if data is None:
             continue
         runs.append(
             {
@@ -641,14 +646,6 @@ def _recording_basename(name):
     return bool(name) and not name.startswith(".") and all(ch.isalnum() or ch in "-_." for ch in name)
 
 
-def _load_recording_data(path):
-    try:
-        data = _read_json_file(path)
-    except (OSError, ValueError, EOFError, RecursionError, zlib.error):
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def api_recordings(_body, query):
     """Recordings, newest first, with their headers (?name=<recording> returns one in full)."""
     name = (query.get("name") or [""])[0]
@@ -661,7 +658,7 @@ def api_recordings(_body, query):
             if not path.is_file():
                 continue
             found = True
-            data = _load_recording_data(path)
+            data = _load_saved_object(path)
             if data is not None and data.get("format") == RECORDING_FORMAT:
                 return data
             if fallback is None:
@@ -687,7 +684,7 @@ def api_recordings(_body, query):
         rec_name = _recording_name(path)
         if rec_name in seen or not _recording_basename(rec_name):
             continue
-        data = _load_recording_data(path)
+        data = _load_saved_object(path)
         if data is not None and data.get("format") == RECORDING_FORMAT:
             seen.add(rec_name)
             drives = data.get("drives")

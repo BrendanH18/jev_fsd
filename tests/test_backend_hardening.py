@@ -573,10 +573,11 @@ class RecordingsAndRunsResilienceTests(unittest.TestCase):
             with patch.object(server, "RUNS_DIR", runs_dir):
                 listed = server.api_bench_runs({}, {})["runs"]
                 self.assertEqual([r["name"] for r in listed], ["20261120-good"])
-                with self.assertRaises(server.BadRequest):
-                    server.api_bench_runs({}, {"name": ["20261121-corrupt"]})
-                with self.assertRaises(server.BadRequest):
-                    server.api_bench_runs({}, {"name": ["20261123-nested"]})
+                good = server.api_bench_runs({}, {"name": ["20261120-good"]})
+                self.assertEqual(good["summary"], {"ok": 1})
+                for name in ("20261121-corrupt", "20261122-array", "20261123-nested"):
+                    with self.subTest(name=name), self.assertRaises(server.BadRequest):
+                        server.api_bench_runs({}, {"name": [name]})
 
 
 class RouterRestrictionIndexTests(unittest.TestCase):
