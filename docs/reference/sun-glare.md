@@ -1,4 +1,7 @@
-# Low sun glare (`sim/sun-glare.js`)
+# Low sun glare
+
+The [feature record](../feature-interface.md) wires `sim/sun-glare.js` into the World, sensing,
+traffic, model prompts, and the driving audit.
 
 `World` option `sunGlare` is on in free drives unless `?sunglare=0`, and in the **Into the sun**
 challenge (`sunGlare: true`). With it off nothing in the module runs, `World.visibility.glare`
@@ -32,8 +35,7 @@ reports `sun_glare` (`severity`, `sight_m`, `ceiling_mps`, the sun's azimuth and
 far off the heading it is) and caps `snap.limit`; the target speed names "sun glare". Rules and
 the cautious agent follow the capped target; model state includes `sun_glare` and a situation
 clause tells Jev and LLM drivers to keep to the ceiling, leave room and expect unseen signals and
-crossings. Traffic heading into the sun caps its desired speed at the same ceiling (cyclists
-excepted). The memo in `egoGlare` keys on everything glare depends on, so checkpoints restore it.
+crossings. Ordinary motor traffic heading into the sun caps its desired speed at the same ceiling. The memo in `egoGlare` keys on everything glare depends on, so checkpoints restore it.
 
 **Audit.** `auditSunGlare` counts `glare_speeding_seconds`, the time more than 1 m/s over the
 ceiling, after a 1 s reaction plus the time to slow from the current speed at comfort braking

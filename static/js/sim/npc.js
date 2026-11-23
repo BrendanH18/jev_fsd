@@ -136,7 +136,6 @@ import {
   wayClear as cyclistWayClear,
 } from "./cyclist-pass.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
-import { npcGlareCeiling } from "./sun-glare.js";
 import { featureObstacle, firstHookResult, hooks, isParkingTraffic } from "./features/index.js";
 
 // How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
@@ -160,6 +159,7 @@ const TRAFFIC_BYPASS = hooks("trafficBypass"),
   TRAFFIC_LANE = hooks("trafficLane", "laneMoves"),
   TRAFFIC_KEEP = hooks("trafficLane", "late"),
   TRAFFIC_YIELD = hooks("trafficYield"),
+  ORDINARY_TRAFFIC_SPEED = hooks("trafficSpeed", "ordinary"),
   TRAFFIC_SPEED = hooks("trafficSpeed"),
   TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import {
@@ -181,9 +181,9 @@ import {
 
 const IDM = { aMax: 1.5, b: 2.0, s0: 2.0, T: 1.2 };
 
-function featureTrafficSpeed(world, n, front) {
+function featureTrafficSpeed(world, n, front, speeds = TRAFFIC_SPEED) {
   let limit = Infinity;
-  for (const speed of TRAFFIC_SPEED) limit = Math.min(limit, speed(world, n, front));
+  for (const speed of speeds) limit = Math.min(limit, speed(world, n, front));
   return limit;
 }
 const UNSIGNED_NEAR_M = 15;
@@ -2002,9 +2002,6 @@ export class NpcFleet {
         this.world.followingDistance && n.lead && n.kind !== "bike" && !driverOverride?.skipFollowing
           ? followingPolicy(n, { gap_m: n.lead.gap, speed: n.lead.v, vehicle: leader }).safe_speed_mps
           : Infinity;
-      // (and, with sun glare on, heading into a low sun, no faster than it can stop within what it sees:
-      // sim/sun-glare.js)
-      const vGlare = this.world.sunGlare && n.kind !== "bike" ? npcGlareCeiling(this.world, n) : Infinity;
       const v0 = Math.min(
         isPlow(n) ? n.v0 : n.v0 * weather.speed,
         limit * (n.transit || n.school ? 0.95 : (driverOverride?.speedFactor ?? 1.05)) * weather.speed,
@@ -2015,7 +2012,7 @@ export class NpcFleet {
         n.pull ? 5 : Infinity,
         vCalm,
         vFollow,
-        vGlare,
+        featureTrafficSpeed(world, n, front, ORDINARY_TRAFFIC_SPEED),
         featureLimit,
         featureTrafficSpeed(world, n, front),
       );

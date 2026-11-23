@@ -1,3 +1,4 @@
+import { FEATURE_METRICS } from "../sim/features/index.js";
 import { setNightFlash } from "../sim/night-flash.js";
 // In-memory checkpoints preserve prototypes, object identity, and seeded random streams.
 // Immutable map/render resources are shared; mutable driving state is copied.
@@ -169,13 +170,13 @@ export class DriveRecorder {
         "snowbank_conflict",
         "pedestrian_splashed",
         "glare",
-        "sun_glare",
         "safety",
         "brake_check",
         "parking_conflict",
         "closure_entry",
         "officer_violation",
-      ].includes(type)
+      ].includes(type) ||
+      FEATURE_METRICS.some(({ traceType }) => traceType && traceType === type)
     )
       this.markers.push({ t, type });
   }

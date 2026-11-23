@@ -1,6 +1,5 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
 import { auditRunner, createRunners } from "./red-light-runner.js";
-import { auditSunGlare, glareRange } from "./sun-glare.js";
 import { setNightFlash, flashState } from "./night-flash.js";
 import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -84,6 +83,7 @@ import {
   FEATURES,
   controlDirection,
   featureNeedsDay,
+  featureNeedsUtcOffset,
   featureObstacle,
   firstHookResult,
   hooks,
@@ -93,6 +93,7 @@ import { CrossingGuards, STOP_M as GUARD_STOP_M, frontToCentre, stopKey as guard
 
 // The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
 const OBSTACLES_NEAR = hooks("obstacles");
+const AUDIT_BEFORE_COLLISIONS = hooks("audit", "beforeCollisions");
 const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_STREET_HAZARDS = hooks("audit", "streetHazards");
 const AUDIT_REAR_TRAFFIC = hooks("audit", "rearTraffic");
@@ -276,7 +277,6 @@ export class World {
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
-  // `sunGlare`: a low sun ahead dazzles drivers, who slow to what they can see (sim/sun-glare.js).
   // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
@@ -308,7 +308,6 @@ export class World {
       amberLights = false,
       followingDistance = false,
       redRunners = false,
-      sunGlare = false,
       ...features
     } = {},
   ) {
@@ -328,12 +327,6 @@ export class World {
     this.pxoLines = new Map();
     this.seed = seed;
     this.visibility = new Visibility(map);
-    // low sun glare (sim/sun-glare.js): whether a low sun ahead dazzles drivers (shortening the car's
-    // sight towards it), whether it has dazzled the car this drive, and the audit's allowance
-    this.sunGlare = !!sunGlare;
-    this.sunGlareSeen = false;
-    this.sunGlareCall = null;
-    if (this.sunGlare) this.visibility.glare = (observer, x, y) => glareRange(this, observer, x, y);
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
@@ -442,7 +435,7 @@ export class World {
     for (const f of FEATURES) {
       this[f.property ?? f.key] = f.build(this, { enabled: features[f.key] ?? false, seed, map });
       this[f.seen] = false;
-      this[f.calls] = new Map();
+      if (f.calls) this[f.calls] = new Map();
     }
   }
 
@@ -602,7 +595,7 @@ export class World {
     this.cyclistPass = null;
     this.guardCalls?.clear();
     this.runnerCall = null;
-    for (const f of FEATURES) this[f.calls]?.clear();
+    for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn])
       for (const slot of p?.slots || []) if (slot.reserved?.owner === this.ego) slot.reserved = null;
@@ -657,16 +650,15 @@ export class World {
     return !!hit;
   }
 
-  // (with sun glare on, the clock may also carry the `day` of the year and a `utc_offset`, for the sun:
-  // sim/sun-glare.js; and the `day` for a registered feature that reads it: sim/features/index.js)
+  // Keep extra clock fields only while a registered feature uses them.
   setClock(clock) {
     this.clock = clock
       ? {
           hour: clock.hour,
           sun_deg: clock.sun_deg,
           ...(clock.weekday !== undefined ? { weekday: clock.weekday } : {}),
-          ...((this.sunGlare || featureNeedsDay(this)) && clock.day !== undefined ? { day: clock.day } : {}),
-          ...(this.sunGlare && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}),
+          ...(featureNeedsDay(this) && clock.day !== undefined ? { day: clock.day } : {}),
+          ...(featureNeedsUtcOffset(this) && clock.utc_offset !== undefined ? { utc_offset: clock.utc_offset } : {}),
         }
       : null;
   }
@@ -724,7 +716,7 @@ export class World {
   audit(dt, road) {
     this.events.length = 0;
     if (this.highBeams) auditHighBeams(this, dt);
-    if (this.sunGlare) auditSunGlare(this, dt);
+    for (const audit of AUDIT_BEFORE_COLLISIONS) audit(this, dt);
     if (this.auditStatic(dt)) Object.assign(road, this.roadInfo());
     const egoBox = this.ego.obb();
     for (const n of this.obstaclesNear(this.ego.x, this.ego.y, 12)) {

@@ -6,9 +6,9 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Thirteen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
+Fourteen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
 officers, tailgaters, black ice, snowbanks, puddles, traffic parking, road closures, double-parked vans
-and contraflow cyclists. Each record holds the hooks into the core pipeline and the model wording
+contraflow cyclists and low sun glare. Each record holds the hooks into the core pipeline and the model wording
 that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
@@ -46,7 +46,7 @@ export default {
 
 The header of `features/index.js` lists every hook, its arguments and its slots. The World takes the
 option through `...features` in its constructor and builds every record at the end of the constructor,
-in registration order, with its `seen` flag false and its `calls` an empty map.
+in registration order. It sets each `seen` flag to false and creates an empty map for each declared `calls` field.
 
 A core module asks for its hooks once, when it loads (`hooks(name, slot)`). Through an import cycle that
 can be before the records have loaded (the snowbanks record's simulation reaches `sim/npc.js`, say), so the
@@ -176,6 +176,17 @@ Rules passed 12/12 and the cautious agent 9/12 on Kitsilano city. On Montréal c
 9/12 and the cautious agent 8/12. The contraflow metric appeared on four Rules and six cautious
 Montréal routes.
 
+**Low sun glare** was compared against `9c29525` in Boat with Node 22.23.5. All 36 dry
+Rules benchmark drives matched, including 12 each on Kitsilano bare, Kitsilano city and Calgary
+city at 18:00, all at seed 1. Glare was recorded on 10 Calgary routes, with zero seconds of
+glare speeding on each. Rules and the cautious agent each passed all 60 challenges and both
+road tests. Their results, decision traces, events, examiner sheets and score inputs matched.
+The comparison excluded wall time, decision latency and run provenance.
+
+The guarded and open LLM system prompts and all 191 complete **Into the sun** prompts on each
+track matched byte for byte. The Jev fixtures stayed current, and both published open-track model
+recordings of **Into the sun** replayed exactly.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
@@ -202,9 +213,11 @@ Free drives and the city benchmark enable every registered feature by default. U
 option key with `--without` and its lowercase form in the URL. For example, disable road closures
 with `--without roadClosures` or `?roadclosures=0`. `scripts/test_free_drive.mjs` checks both paths.
 
-The record's `metric.label` supplies the trace event text. Simultaneous registered violations appear
-in metric slot order, then registration order within each slot. The examiner groups the metric's
-failure under `metric.category` when present and under Other otherwise.
+The record's `metric.label` supplies the trace event text. Counter events appear in metric slot
+order, then registration order within each slot. For a duration metric, `decimals` controls rounding
+and `threshold` sets how many seconds the result must exceed to fail. A duration with `traceType`
+emits one named event after crossing that threshold and uses the same name for its replay marker.
+The examiner groups failures by `metric.category` and puts uncategorized failures under Other.
 
 So today a new feature needs its own sim module, its record, its challenge, its test and the registration
 line, plus entries in the presentation and driver files above. The core simulation and decision pipeline
@@ -262,6 +275,9 @@ need nothing.
   Candidates can handle a special lane offer and adjust the stop-at-line law. Prediction skips the
   close follower and checks braking against the gentlest otherwise eligible candidate before the
   existing post-simulation hooks can lift their rejections.
+* **Low sun glare.** The record keeps the clock's `day` and `utc_offset` while enabled and installs
+  the glare visibility callback. The ordinary-traffic speed hook excludes cyclists. The driving audit
+  still runs before the collision checks and keeps its reaction allowance in the checkpoint.
 * **Hooks still to add.** Driver preferences (Rules, the cautious agent), the coach, the HUD and
   renderers, checkpoint fixes and the re-plan, as in the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are

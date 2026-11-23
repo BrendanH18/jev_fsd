@@ -58,7 +58,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     amberLights: on("amberlights"),
     redRunners: on("redrunners"),
     followingDistance: on("followingdistance"),
-    sunGlare: on("sunglare"),
   };
   // Each registered World option is enabled unless its lowercase query flag is 0.
   for (const { key, defaultCount } of FEATURES) {

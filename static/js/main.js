@@ -290,7 +290,7 @@ export async function boot() {
     );
   if (world.calming) view.scene.add(buildCalming(map));
   // a low sun's flare and haze, where the world has sun glare (sim/sun-glare.js)
-  const sunGlareView = world.sunGlare ? new SunGlareView(view.scene) : null;
+  const sunGlareView = world.sunGlare.enabled ? new SunGlareView(view.scene) : null;
   // and the contraflow lanes, sharrows and signs of one-way streets cyclists ride both ways, where the
   // world has them ride (sim/contraflow.js)
   if (world.contraflow.enabled) view.scene.add(buildContraflow(map));
@@ -442,7 +442,7 @@ export async function boot() {
     // (a sun glare challenge's clock has its date and time zone, and the sky draws that day's sun:
     // sim/sun-glare.js)
     const sunDay =
-      world.sunGlare && world.clock?.day !== undefined
+      world.sunGlare.enabled && world.clock?.day !== undefined
         ? { day: world.clock.day, utcOffset: world.clock.utc_offset ?? pack.origin.lon / 15 }
         : {};
     const a = atmosphereFor(hour, world.weather, {
@@ -461,7 +461,7 @@ export async function boot() {
   // (and, with sun glare on, so does the sun: a challenge's date and time zone stay; a free drive has the
   // sky's sun, at the city's offset: sim/sun-glare.js)
   const sunClock = () =>
-    !world.sunGlare
+    !world.sunGlare.enabled
       ? {}
       : world.clock?.day !== undefined
         ? {
