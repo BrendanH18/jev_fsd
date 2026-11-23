@@ -6,10 +6,10 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Fifteen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
+Seventeen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
 officers, tailgaters, black ice, snowbanks, puddles, traffic parking, road closures, double-parked vans,
-contraflow cyclists, low sun glare and garbage trucks. Each record holds the hooks into the core pipeline and the model wording
-that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
+contraflow cyclists, low sun glare, garbage trucks, traffic calming and red-light runners. Each record
+holds its core pipeline hooks and model wording.
 
 ## A record
 
@@ -47,6 +47,7 @@ export default {
 The header of `features/index.js` lists every hook, its arguments and its slots. The World takes the
 option through `...features` in its constructor and builds every record at the end of the constructor,
 in registration order. It sets each `seen` flag to false and creates an empty map for each declared `calls` field.
+A record's `build` can return a boolean for a feature whose only setting is on or off.
 A record with `buildFleet` takes its option from the fleet. The fleet stores the result under the option
 key and supplies its seed and a path factory. The World still builds the record's audit state. The
 `checkpoint` hook restores references to the live World and fleet after a rewind.
@@ -198,6 +199,20 @@ Rules and the cautious agent each passed all 62 authored drives. Their comparabl
 traces, events, examiner sheets, score inputs and both LLM system prompts matched byte for byte.
 Both published open-track recordings of **Collection day** replayed exactly.
 
+**Traffic calming, red-light runners and driver hooks** were compared against an archived
+`97a3142` tree in Boat with Node 22.23.5. Rules and the cautious agent each passed all 62
+authored drives on both trees. All comparable result fields matched, including the decision
+traces, events, examiner sheets and driven-corridor measurements, excluding wall time and run
+provenance. Both trees also matched and passed all 30 Kitsilano Rules benchmark attempts at seed
+1. The comparison covered the 12 dry bare and 12 dry city routes, three rainy city routes and three
+city routes in fog at 23:30. The speed-hump metric appeared on four dry and one foggy city route.
+The red-light runner metric appeared on one dry city route.
+
+The guarded and open LLM system prompts matched byte for byte. The published Jev and Claude Haiku
+open-track recordings of **Over the humps** and **Fresh green** all replayed exactly. The registry,
+free-drive, traffic-calming, red-light-runner, open-track and following-policy checks passed. The
+Jev fixtures stayed current and all 39 offline requests passed.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
@@ -214,7 +229,6 @@ A registered feature still has these integration points outside its own files:
 | Where | What | Hook needed |
 |---|---|---|
 | `lab/challenges.js` | the challenge entry and its installer/step | ROADMAP 3.5 (one file per challenge) |
-| `brain/rules.js`, `agents/cautious.js`, `brain/safety.js` | the drivers' preferences: a stop flag, a cost for its candidate, the cautious agent's pick | `rules` (stop, cost), `cautious` |
 | `brain/brain.js`, `bench/runner.js`, `lab/evaluation.js`, `lab/recorder.js` | road closures' re-plan round a closure (`avoid`, `closureRouting`) and checkpoint fixes (geese' `world` back-reference, potholes shared between checkpoints) | `reroute`, `checkpoint` |
 | `sim/drive-score.js` | the coach: its seen flag, incident text, score penalty, tip and report field | `coach` |
 | `main.js`, `render/*.js`, `render/perception.js`, `ui/lab.js` | drawing it, the HUD notice and badge, the perception overlay's line and rejection label | `view`, `notice`, `perception` |
@@ -231,9 +245,13 @@ emits one named event after crossing that threshold and uses the same name for i
 Use `eventType` when a counter audit emits its own world event with a different replay marker name.
 The examiner groups failures by `metric.category` and puts uncategorized failures under Other.
 
-So today a new feature needs its own sim module, its record, its challenge, its test and the registration
-line, plus entries in the presentation and driver files above. The core simulation and decision pipeline
-need nothing.
+Rules reads `rulesStop` and `rulesCost` from the feature records. The cautious agent reads `cautious` at
+four points in its candidate precedence, along with `cautiousStop` for its speed target and `cautiousDrive`
+for a manoeuvre whose law already brings the car to a stop. The deadlock detector uses `legitimateStop`
+when the car is waiting for a feature.
+
+A new feature needs its own sim module, record, challenge, test and registration line, plus applicable
+entries in the presentation files above.
 
 ## Moving the rest (3.2)
 
@@ -260,6 +278,14 @@ need nothing.
   other scheduled stops and its crew uses the existing double-parked obstruction. Obstacle descriptors
   supply the moving truck's label, long-vehicle clearance checks, space beside the kerb and parking
   eligibility. The audit retains its place after traffic calming.
+* **Traffic calming.** The record owns the front-axle crossing audit, the speed ceilings for the ego
+  car and ordinary traffic, and the associated reason, metrics and model text. Its audit runs before
+  the garbage crew audit, and its model wording retains its order relative to low sun glare.
+* **Red-light runners.** The record observes ordinary signal approaches through `auditSignal` after
+  the amber observation. Traffic reads the committed vehicle's speed ceiling before checking the
+  signal, then asks `trafficSignalProceed` about waiving a red or amber stop and `trafficSignalHold`
+  about waiting at a green. The runner rejection, metrics and wording follow contraflow within the
+  same pipeline slots.
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).
@@ -294,7 +320,7 @@ need nothing.
 * **Low sun glare.** The record keeps the clock's `day` and `utc_offset` while enabled and installs
   the glare visibility callback. The ordinary-traffic speed hook excludes cyclists. The driving audit
   still runs before the collision checks and keeps its reaction allowance in the checkpoint.
-* **Hooks still to add.** Driver preferences (Rules, the cautious agent), the coach, the HUD and
-  renderers, checkpoint fixes and the re-plan, as in the table above.
+* **Hooks still to add.** The coach, the HUD and renderers, checkpoint fixes and the re-plan, as in
+  the table above.
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are
   mostly the core's own logic and loops over hooks, and can be broken up.

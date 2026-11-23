@@ -25,6 +25,12 @@ export function resultVersions(data) {
 export const suiteLabel = (version) =>
   version === LEGACY_SUITE ? "Legacy results" : version === CUSTOM_SUITE ? "Custom runs" : `Suite ${version}`;
 
+export function driverDisplayName(data, id) {
+  const driver = data.drivers[id];
+  const name = driver?.label || id;
+  return driver?.submitter ? `${name} (submitted by @${driver.submitter})` : name;
+}
+
 function rankedRows(data, version) {
   return version === CUSTOM_SUITE ? [] : data.rows.filter((row) => suiteVersion(row) === version);
 }
@@ -134,7 +140,7 @@ export function cityGrid(data, version = LEGACY_SUITE) {
   };
 }
 
-// Model drives that replay with no key, one command each.
+// Recorded drives that replay with no key, one command each.
 export function recordings(data) {
   return data.rows
     .filter((r) => r.recording)

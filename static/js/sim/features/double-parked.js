@@ -155,6 +155,9 @@ function vanSpeed(dp) {
 }
 
 export default {
+  rulesStop: (snap) => snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5,
+  legitimateStop: (snap) => snap?.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8,
+  rulesCost: (c) => (c.id === "wait_behind_van" ? -6 : 0),
   key: "vans",
   property: "doubleParked",
   defaultCount: defaultVanCount(),

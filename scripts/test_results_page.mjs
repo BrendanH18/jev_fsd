@@ -11,6 +11,7 @@ const {
   challengeMatrix,
   compatibleChallengeDrive,
   cityGrid,
+  driverDisplayName,
   recordings,
   fractionText,
   percentText,
@@ -114,6 +115,24 @@ test("the matrix keeps the newest full run per driver on each track", () => {
     rules,
   );
   assert.equal(matrix.drivers.filter((id) => id === "rules").length, 1);
+});
+
+test("submissions keep their attribution without replacing a built-in run", () => {
+  const published = data.rows.find((r) => r.suite === "challenges" && r.driver === "jev");
+  const id = "submission:outside-team:jev";
+  const submission = { ...published, driver: id, submitter: "outside-team", suite_version: "v1" };
+  const mixed = {
+    ...data,
+    drivers: { ...data.drivers, [id]: { label: "Jev", submitter: "outside-team" } },
+    rows: [submission, ...data.rows],
+  };
+  assert.equal(driverDisplayName(mixed, "jev"), "Jev");
+  assert.equal(driverDisplayName(mixed, id), "Jev (submitted by @outside-team)");
+  assert.ok(challengeMatrix(mixed, "challenges", "v1").drivers.includes(id));
+  assert.equal(
+    challengeMatrix(mixed).runs.find((r) => r.driver === "jev"),
+    published,
+  );
 });
 
 test("manual comparison finds the newest guarded drive with the same map data and challenge version", () => {

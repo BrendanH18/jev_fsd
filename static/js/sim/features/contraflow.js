@@ -184,6 +184,10 @@ function contraflowClause(c) {
 }
 
 export default {
+  rulesStop: (snap) => snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 1.5,
+  legitimateStop: (snap) => snap?.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 8,
+  cautious: (snap, eligible) =>
+    snap.contraflow_cyclist?.wait ? eligible.find((c) => c.id === "yield_to_contraflow_cyclist") : null,
   key: "contraflow",
   seen: "contraflowSeen",
   calls: "contraflowCalls",

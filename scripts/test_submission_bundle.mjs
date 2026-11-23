@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { LocalRecording } from "./local_recording.mjs";
 import {
   readSubmission,
@@ -97,5 +99,29 @@ for (const [field, forged] of [
 ]) {
   const tampered = { ...report, results: [{ ...report.results[0], [field]: forged }] };
   assert.throws(() => verifySubmissionReport(tampered, report), /differs from the replayed report/);
+}
+const cli = fileURLToPath(new URL("./driver_submission.mjs", import.meta.url));
+for (const out of [
+  "pilot.json",
+  "data/submissions/2026-02-30/pilot.json",
+  "other/data/submissions/2026-11-23/pilot.json",
+]) {
+  const processResult = spawnSync(
+    process.execPath,
+    [
+      "--experimental-default-type=module",
+      cli,
+      "publish",
+      "--submitter",
+      "outside-driver",
+      "--bundle",
+      "missing.json.gz",
+      "--out",
+      out,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(processResult.status, 1);
+  assert.match(processResult.stderr, /under data\/submissions\/YYYY-MM-DD/);
 }
 console.log("Submission tapes verify local decisions, share and cost, and reject drift or tampered provenance.");

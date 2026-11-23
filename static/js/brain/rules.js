@@ -5,6 +5,11 @@ import { beamChoice } from "../sim/high-beams.js";
 import { desiredSpeed, waitsItsTurn } from "./sensors.js";
 import { comfort } from "../sim/vehicle.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
+import { hooks, junctionPlan } from "../sim/features/index.js";
+
+const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
+const FEATURE_STOP = hooks("rulesStop");
+const FEATURE_COST = hooks("rulesCost");
 
 // Passing a cyclist through the oncoming lane (sim/cyclist-pass.js) costs this to start, so the car
 // passes only for a clear gain; and staying behind one it cannot pass yet gains this.
@@ -19,26 +24,16 @@ export class RulesBrain {
   decideSync(snap, eligible) {
     // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
     const i = snap.intersection;
+    const directive = junctionPlan(i);
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     const v = snap.ego.v;
     let stop = !!snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12;
-    // (a road closed ahead with no detour yet, at the point the car stops for it: sim/road-closures.js)
-    if (snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 1.5) stop = true;
+    if (STOP_BEFORE_SIGNAL.some((shouldStop) => shouldStop(snap, eligible))) stop = true;
     if (i) {
       const brakeDist = (v * v) / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
-      // (a police officer directing traffic there decides, not the light: sim/traffic-officer.js; still rolling
-      // up to the line, waiting for the officer brakes gently to a stop there by itself)
-      if (
-        i.officer?.direction === "stop" &&
-        !i.entered &&
-        i.bumper_to_line_m < 1.5 &&
-        i.bumper_to_line_m > -1 &&
-        (v < 0.5 || !eligible.some((c) => c.id === "wait_for_officer"))
-      )
-        stop = true;
       if (
         i.control === "signal" &&
-        !i.officer &&
+        !directive &&
         (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") &&
         !(i.right_on_red?.go || i.left_on_red?.go) &&
         !i.entered &&
@@ -57,21 +52,9 @@ export class RulesBrain {
     if (snap.pxo?.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
-    // (a cyclist riding against the one-way, at the point the car waits for it: sim/contraflow.js)
-    if (snap.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 1.5) stop = true;
-    // (a car running the red across the car's way as its light is green: sim/red-light-runner.js)
-    if (snap.red_light_runner?.wait && snap.red_light_runner.bumper_to_stop_m < 1.5) stop = true;
-    // (a car backing out of a driveway into the lane, at the point the car stops for it: sim/driveway-reversers.js)
-    if (snap.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 1.5) stop = true;
-    // (Canada geese crossing, at the point the car stops for them: sim/geese.js)
-    if (snap.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 1.5) stop = true;
-    // (an oncoming car's turn through a stretch narrowed by snowbanks, where the car waits: sim/snowbanks.js)
-    if (snap.snowbank?.narrowing?.wait && snap.snowbank.narrowing.bumper_to_stop_m < 1.5) stop = true;
-    // (a car ahead parallel parking, at its hold line or inside the room it needs: sim/parkers.js)
-    if (snap.parking_ahead?.wait && snap.parking_ahead.bumper_to_stop_m < 1.5) stop = true;
+    if (FEATURE_STOP.some((shouldStop) => shouldStop(snap, eligible))) stop = true;
     if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 1.5) stop = true;
-    if (snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5) stop = true;
     if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) stop = true;
     // (parking, the space is the destination: sim/parallel-park.js)
     if (snap.nav?.arrived && snap.parking?.mode !== "in") stop = true;
@@ -116,7 +99,7 @@ export class RulesBrain {
         c.id === "stop_at_line" &&
         i &&
         !i.entered &&
-        !i.officer &&
+        !directive &&
         ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) ||
           (i.signal === "yellow" && i.amber?.stop !== false) ||
           i.signal === "unknown" ||
@@ -129,7 +112,6 @@ export class RulesBrain {
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
       if (c.id === "stop_for_pedestrian") cost -= 6;
       if (c.id === "stop_for_turn_restriction") cost -= 30;
-      if (c.id === "stop_for_closure") cost -= 30;
       if (
         c.id === "stop_for_oncoming" ||
         c.id === "stop_for_cyclist" ||
@@ -142,37 +124,12 @@ export class RulesBrain {
         c.id === "wait_short_of_junction" ||
         c.id === "stop_for_flagger" ||
         c.id === "stop_for_crossing_guard" ||
-        c.id === "wait_behind_van" ||
         c.id === "wait_to_merge" ||
         c.id === "let_merge_in"
       )
         cost -= 6;
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
-      if (c.id === "wait_for_runner") cost -= 12;
-      if (c.id === "yield_to_reversing" && snap.reversing_vehicle?.wait) cost -= 6;
-      // easing round a pothole inside the lane, where there is room, rather than driving over it
-      // (sim/potholes.js)
-      if (c.id === "ease_round_pothole" && snap.pothole?.room) cost -= 1.5;
-      // easing left inside the lane round a puddle with someone near it, rather than slowing below its
-      // splash speed to go through it (sim/puddles.js)
-      if (c.id === "ease_round_puddle" && snap.puddle_splash?.room) cost -= 1.5;
-      // (a ball rolled into the street: slowing, ready for a child running out after it, sim/ball-chase.js;
-      // once someone is crossing ahead, stopping for them comes first)
-      if (c.id === "slow_for_ball" && !snap.pedestrian) cost -= 4;
-      if (c.id === "wait_for_geese" && snap.geese_crossing?.wait) cost -= 6;
-      // a tailgater close behind (sim/tailgaters.js): over to the right to let it by, outweighing the
-      // cost of the change and of leaving the route's lane; or, with no lane there, easing off a little
-      if (c.id === "let_tailgater_pass") cost -= 8;
-      if (c.id === "ease_off_for_tailgater") cost -= 5;
-      // (black ice seen ahead: easing off early, to cross it steadily, sim/black-ice.js)
-      if (c.id === "slow_for_ice" && snap.black_ice) cost -= 2;
-      if (c.id === "wait_for_oncoming_narrowing") cost -= 6;
-      // (a car ahead parallel parking: stop well back and wait, sim/parkers.js)
-      if (c.id === "wait_for_parker" && snap.parking_ahead?.wait) cost -= 6;
-      // a police officer directing traffic at the junction ahead (sim/traffic-officer.js): held, stop at the
-      // line, even on a green; waved through, go, even on a red
-      if (c.id === "wait_for_officer") cost -= 12;
-      if (c.id === "go_on_officer_wave") cost -= 1;
+      for (const adjust of FEATURE_COST) cost += adjust(c, snap);
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
       if (c.id === "pull_over") cost -= 15;

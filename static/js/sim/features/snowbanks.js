@@ -42,6 +42,11 @@ function snowbankClauses({ narrowing: n, corner: k }) {
 }
 
 export default {
+  rulesStop: (snap) => snap.snowbank?.narrowing?.wait && snap.snowbank?.narrowing.bumper_to_stop_m < 1.5,
+  legitimateStop: (snap) => snap?.snowbank?.narrowing?.wait && snap.snowbank?.narrowing.bumper_to_stop_m < 8,
+  rulesCost: (c) => (c.id === "wait_for_oncoming_narrowing" ? -6 : 0),
+  cautious: (snap, eligible) =>
+    snap.snowbank?.narrowing?.wait ? eligible.find((c) => c.id === "wait_for_oncoming_narrowing") : null,
   key: "snowbanks",
   seen: "snowbanksSeen",
   calls: "snowbankCalls",

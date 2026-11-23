@@ -23,6 +23,10 @@ function geeseClause(g) {
 }
 
 export default {
+  rulesStop: (snap) => snap.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 1.5,
+  legitimateStop: (snap) => snap?.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 8,
+  rulesCost: (c, snap) => (c.id === "wait_for_geese" && snap.geese_crossing?.wait ? -6 : 0),
+  cautious: (snap, eligible) => (snap.geese_crossing?.wait ? eligible.find((c) => c.id === "wait_for_geese") : null),
   key: "geese",
   seen: "geeseSeen",
   calls: "geeseCalls",

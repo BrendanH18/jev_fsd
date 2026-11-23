@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   suite:
-    name: ${{ matrix.features }} world, ${{ matrix.weather }}
+    name: ${{ matrix.hard && 'Hard city slice' || format('{0} world, {1}', matrix.features, matrix.weather) }}
     runs-on: ubuntu-24.04
     # On Namespace's runners, weekly and manual city legs took about 20 min and city snow over 30;
     # pushes and pull requests run dry only, the city leg in about 10 min. GitHub's standard runner
@@ -47,6 +47,8 @@ jobs:
             weather: rain
           - scheduled: false
             weather: snow
+        include:
+          - { features: hard-city, hard: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -63,9 +65,20 @@ jobs:
           for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8331/bench && exit 0; sleep 1; done
           cat server.log; exit 1
       - name: Rules, Kitsilano, suite seed 1
+        if: ${{ !matrix.hard }}
         run: >
           node --experimental-default-type=module scripts/bench_node.mjs --port 8331 --map kitsilano
           --features ${{ matrix.features }} --weather ${{ matrix.weather }} --check 1
+      - name: Rules, fixed hard city slice
+        if: ${{ matrix.hard }}
+        run: >
+          node --experimental-default-type=module scripts/soak.mjs --port 8331
+          --mode hard --json hard-city.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() && matrix.hard }}
+        with:
+          name: hard-city
+          path: hard-city.json
       - name: Server log
         if: failure()
         run: tail -n 200 server.log

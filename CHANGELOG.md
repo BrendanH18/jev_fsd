@@ -36,10 +36,18 @@
   benchmark replay tooling and Arena history. See the [change inventory](docs/validation/drive-lab-improvements.md).
 - Compare 100 new rate profiles across saved route cohorts using distance driven, elapsed time
   or decisions as the denominator.
+- Measure per-route changes with 100 matched rate reports that keep baseline cohorts fixed and
+  count missing measurements on each side.
+- Run the five-drive hard city slice in benchmark CI, with night, fog, snow and destination parking
+  cases pinned to their map and route fingerprints.
 - Publish the known replay revisions for legacy model tapes and use them in scheduled replay checks.
 - Check arena repeats against a declared experiment and report score ranges and recurring failures per drive.
 - Package model and trusted local driver runs for offline verification without importing submitted code.
+- Publish verified outside-driver results with attribution, tape checksums and links to offline replay.
+- Shrink new model recordings by rebuilding duplicated Anthropic prompts and metadata on replay.
 - Register garbage trucks and their fleet scheduling, stops and crew audit through the feature interface.
+- Register traffic calming and red-light runners. Define driver preferences and legitimate stops in
+  the records that own them.
 
 ## 0.3.0 (20 November 2026)
 

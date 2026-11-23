@@ -114,19 +114,16 @@ export class DriveMetrics {
       ...(world.closuresSeen ? { merge_cut_ins: v.merge_cut_ins || 0 } : {}),
       // (only for a drive in which traffic passes cyclists: sim/cyclist-pass.js)
       ...(world.passCyclists ? { close_passes: v.close_passes || 0 } : {}),
-      // (only for a drive that crossed a speed hump with calming on: sim/traffic-calming.js)
       ...(world.busLanesSeen ? { bus_lane_driving: v.bus_lane_driving || 0 } : {}),
       ...(world.highBeamsSeen ? { glare_seconds: r(v.glare_seconds || 0, 2) } : {}),
       ...featureMetrics(world, v, "afterHeadlights"),
       ...(world.pxoSeen ? { pxo_early_goes: v.pxo_early_goes || 0 } : {}),
       ...(world.restrictionsSeen ? { illegal_turns: v.illegal_turns || 0 } : {}),
-      ...(world.calmingSeen ? { hump_hits: v.hump_hits || 0 } : {}),
+      ...featureMetrics(world, v, "afterRestrictions"),
       ...featureMetrics(world, v, "afterCalming"),
       // (only for a drive a school crossing guard held up the STOP sign in: sim/crossing-guard.js)
       ...(world.guardsSeen ? { guard_violations: v.guard_violations || 0 } : {}),
       ...featureMetrics(world, v, "beforeRunner"),
-      // (only for a drive a red-light runner committed near the car in: sim/red-light-runner.js)
-      ...(world.redRunnersSeen ? { fresh_green_conflicts: v.fresh_green_conflicts || 0 } : {}),
       // (and the registered features' metrics, each only for a drive in which the feature met the car:
       // sim/features/index.js; the car coming near a pothole, say)
       ...featureMetrics(world, v, "driveways"),
@@ -188,12 +185,11 @@ export function failures(m) {
   if (m.glare_seconds > 0.8) f.push("failed to dip high beams");
   f.push(...featureFailures(m, "afterHeadlights"));
   if (m.illegal_turns) f.push("made a prohibited turn");
-  if (m.hump_hits) f.push("took a speed hump too fast");
+  f.push(...featureFailures(m, "afterRestrictions"));
   if (m.pxo_early_goes) f.push("left a pedestrian crossover before the far curb");
   f.push(...featureFailures(m, "afterCalming"));
   if (m.guard_violations) f.push("drove past a crossing guard's stop sign");
   f.push(...featureFailures(m, "beforeRunner"));
-  if (m.fresh_green_conflicts) f.push("entered on green ahead of a car running the red");
   f.push(...featureFailures(m, "driveways"));
   f.push(...featureFailures(m, "streetHazards"));
   f.push(...featureFailures(m, "rearTraffic"));

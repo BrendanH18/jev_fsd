@@ -26,6 +26,11 @@ function parkerClause(a) {
 }
 
 export default {
+  rulesStop: (snap) => snap.parking_ahead?.wait && snap.parking_ahead.bumper_to_stop_m < 1.5,
+  legitimateStop: (snap) =>
+    snap?.parking_ahead?.wait && snap.parking_ahead.bumper_to_stop_m > -1 && snap.parking_ahead.bumper_to_stop_m < 8,
+  rulesCost: (c, snap) => (c.id === "wait_for_parker" && snap.parking_ahead?.wait ? -6 : 0),
+  cautious: (snap, eligible) => (snap.parking_ahead?.wait ? eligible.find((c) => c.id === "wait_for_parker") : null),
   key: "parkers",
   seen: "parkersSeen",
   calls: "parkerCalls",

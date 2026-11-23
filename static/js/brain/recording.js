@@ -33,6 +33,7 @@ import { OPEN_SYSTEM_PROMPT, SYSTEM_PROMPT } from "./llm-prompt.js";
 
 export const RECORDING_FORMAT = "jev-model-recording/1";
 const BODY = "$body"; // a trace field that only echoed the request: rebuilt from it on replay
+const META = "$meta"; // provider metadata also present in the stored response
 
 // JSON with object keys sorted, so equal values always give the same text. Like JSON.stringify,
 // undefined members are dropped and non-finite numbers become null.
@@ -322,8 +323,21 @@ function untilAborted(promise, signal) {
   ]);
 }
 
-// The server's JSON as kept: without the tick and epoch it echoes, and with trace.request fields
-// that only repeat the request body (the LLM's messages, Jev's state) marked to be rebuilt from it.
+// The Messages API separates system text from chat messages and wraps it for caching. This mirrors
+// anthropic_payload in jev/llm.py. Store an echo only when the provider trace matches it exactly.
+function anthropicPrompt(messages) {
+  const system = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  return {
+    messages: messages.filter((m) => m.role !== "system").map(({ role, content }) => ({ role, content })),
+    ...(system ? { system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] } : {}),
+  };
+}
+
+// The server's JSON as kept: without the echoed tick and epoch, and with trace.request fields that
+// repeat the request body (including Anthropic's transformed prompt) marked to rebuild on replay.
 function storedResponse(res, body) {
   const { tick, epoch, ...kept } = JSON.parse(JSON.stringify(res ?? null)) ?? {};
   const request = kept.trace?.request;
@@ -332,7 +346,18 @@ function storedResponse(res, body) {
       if (k in body && v !== null && typeof v === "object" && canonicalJson(v) === canonicalJson(body[k]))
         request[k] = BODY;
     }
+    if (Array.isArray(request.system) && Array.isArray(body.messages)) {
+      const echoed = Object.entries(anthropicPrompt(body.messages))
+        .filter(([key, value]) => Array.isArray(request[key]) && canonicalJson(request[key]) === canonicalJson(value))
+        .map(([key]) => key);
+      if (echoed.length) {
+        kept.trace.anthropic_prompt = echoed;
+        for (const key of echoed) delete request[key];
+      }
+    }
   }
+  if (kept.trace?.meta && kept.meta && canonicalJson(kept.trace.meta) === canonicalJson(kept.meta))
+    kept.trace.meta = META;
   return kept;
 }
 function restoredResponse(stored, body) {
@@ -340,7 +365,14 @@ function restoredResponse(stored, body) {
   const request = res.trace?.request;
   if (request && typeof request === "object") {
     for (const [k, v] of Object.entries(request)) if (v === BODY) request[k] = JSON.parse(JSON.stringify(body[k]));
+    if (Array.isArray(res.trace.anthropic_prompt) && Array.isArray(body.messages)) {
+      const prompt = anthropicPrompt(body.messages);
+      for (const [key, value] of Object.entries(prompt))
+        if (res.trace.anthropic_prompt.includes(key)) request[key] = value;
+      delete res.trace.anthropic_prompt;
+    }
   }
+  if (res.trace?.meta === META) res.trace.meta = JSON.parse(JSON.stringify(res.meta));
   return { tick: body.tick, epoch: body.epoch, ...res };
 }
 

@@ -209,6 +209,54 @@ await test("a call cancelled by a new epoch replays as cancelled, and only when 
   }
 });
 
+await test("Anthropic prompt and metadata echoes are saved once and replayed with the original trace", async () => {
+  const recording = new ModelRecording({
+    header: recordingHeader({ driver: "llm:stub", brain: { endpoint: ENDPOINT } }),
+  });
+  const messages = [
+    { role: "system", content: "Driving rules" },
+    { role: "system", content: "Reply format" },
+    { role: "user", content: "Intersection ahead" },
+  ];
+  const request = {
+    model: "test-haiku",
+    messages: [messages[2]],
+    system: [{ type: "text", text: "Driving rules\n\nReply format", cache_control: { type: "ephemeral" } }],
+    output_config: { effort: "low" },
+  };
+  const modified = { ...request, system: [{ ...request.system[0], cache_control: { type: "ephemeral", ttl: "1h" } }] };
+  const body = { messages, tick: 3, epoch: 4 };
+  const path = "/api/llm/decide";
+  const meta = { model: "test-haiku", input_tokens: 47 };
+  const response = {
+    answer: { motion: "stop" },
+    meta,
+    trace: {
+      request,
+      meta,
+      response: { content: [{ type: "text", text: '{"motion":"stop"}' }], usage: { input_tokens: 47, cost: 0.01 } },
+    },
+  };
+  const replies = [
+    response,
+    { ...response, trace: { ...response.trace, request: modified, meta: { ...meta, source: "provider" } } },
+  ];
+  const tape = recording.tape("d", "record");
+  for (const reply of replies) assert.equal(await tape.record({}, () => Promise.resolve(reply), path, body), reply);
+
+  const serialized = recording.serialize();
+  assert.ok(!serialized.includes("Intersection ahead"));
+  const saved = ModelRecording.parse(serialized);
+  const outcomes = Object.values(saved.drives.d)[0];
+  assert.deepEqual(outcomes[0].response.trace.request, { model: "test-haiku", output_config: { effort: "low" } });
+  assert.equal(outcomes[0].response.trace.meta, "$meta");
+  assert.deepEqual(outcomes[1].response.trace.request.system, modified.system);
+  const replay = saved.tape("d", "replay");
+  for (const reply of replies)
+    assert.deepEqual(await replay.replay({}, path, { ...body, tick: 10 }), { tick: 10, epoch: 4, ...reply });
+  assert.equal(replay.exact, true);
+});
+
 const suite = await buildSuite(map, { count: BENCH.count, seed: BENCH.seed });
 assert.equal(suite.length, 1);
 const sc = suite[0];

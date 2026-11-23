@@ -19,6 +19,7 @@ import {
   HOME_MAP,
   resultVersions,
   suiteLabel,
+  driverDisplayName,
 } from "../lab/results.js";
 import { CUSTOM_SUITE, LEGACY_SUITE, suiteVersion } from "../bench/suite-version.js";
 
@@ -35,6 +36,7 @@ const sources = (row) =>
 const verdict = (row, text) =>
   h("span", { class: row ? (row.passed === row.total ? "pass" : "fail") : "muted", title: sources(row) || null }, text);
 const seconds = (s) => (s === null || s === undefined ? "" : `${Math.round(s)} s`);
+const submissionSource = (row) => (row?.submitter ? h("small", {}, source(row.sources[0], "Submission report")) : null);
 
 function summaryTable(data, { drivers, pilots }) {
   const maps = data.maps || {};
@@ -83,6 +85,7 @@ function summaryTable(data, { drivers, pilots }) {
                 ? h("small", {}, `failed ${d.challenges.failed.map((f) => challenge(f.id)?.title || f.id).join(", ")}`)
                 : null,
               d.challenges ? h("small", {}, d.challenges.date) : null,
+              submissionSource(d.challenges),
             ),
             h(
               "td",
@@ -92,6 +95,7 @@ function summaryTable(data, { drivers, pilots }) {
                 ? h("small", {}, `failed ${d.open.failed.map((f) => challenge(f.id)?.title || f.id).join(", ")}`)
                 : null,
               d.open ? h("small", {}, `${d.open.flagged_choices ?? 0} flagged choices · ${d.open.date}`) : null,
+              submissionSource(d.open),
             ),
             h(
               "td",
@@ -124,7 +128,12 @@ function summaryTable(data, { drivers, pilots }) {
                 : verdict(null, "not run"),
             ),
             h("td", {}, d.challenges && d.challenges.model_share !== undefined ? percentText(d.share) : "n/a"),
-            h("td", {}, moneyText(d.cost), d.costTrack ? h("small", {}, "open track") : null),
+            h(
+              "td",
+              { title: (d.challenges || d.open)?.cost_basis },
+              moneyText(d.cost),
+              d.costTrack ? h("small", {}, "open track") : null,
+            ),
           ),
         ),
       ),
@@ -136,7 +145,7 @@ function summaryTable(data, { drivers, pilots }) {
           "One-challenge pilots: ",
           pilots.map((p, i) => [
             i ? "; " : "",
-            h("strong", {}, p.label),
+            h("strong", {}, driverDisplayName(data, p.id)),
             ` (${p.model}) ${p.passed}/${p.total} on `,
             p.rows.flatMap((r) => r.drives.map((d) => challenge(d.id)?.title || d.id)).join(", "),
             ((cost) => (cost ? `, ${moneyText(cost)} billed` : ", no cost"))(
@@ -150,7 +159,6 @@ function summaryTable(data, { drivers, pilots }) {
 
 function challengeTable(matrix, data) {
   if (!matrix.runs.length) return h("p", { class: "muted" }, "No run published yet.");
-  const label = (id) => data.drivers[id]?.label || id;
   return h(
     "div",
     { class: "table-wrap panel" },
@@ -164,7 +172,7 @@ function challengeTable(matrix, data) {
           "tr",
           {},
           h("th", {}, "Challenge"),
-          ...matrix.drivers.map((id) => h("th", {}, label(id))),
+          ...matrix.drivers.map((id) => h("th", {}, driverDisplayName(data, id))),
           h("th", {}, "Try it"),
         ),
       ),
@@ -224,7 +232,6 @@ function challengeTable(matrix, data) {
 }
 
 function cityTable(grid, data) {
-  const label = (id) => data.drivers[id]?.label || id;
   return h(
     "div",
     { class: "table-wrap panel" },
@@ -234,7 +241,13 @@ function cityTable(grid, data) {
       h(
         "thead",
         {},
-        h("tr", {}, h("th", {}, "Map"), h("th", {}, "Weather"), ...grid.drivers.map((id) => h("th", {}, label(id)))),
+        h(
+          "tr",
+          {},
+          h("th", {}, "Map"),
+          h("th", {}, "Weather"),
+          ...grid.drivers.map((id) => h("th", {}, driverDisplayName(data, id))),
+        ),
       ),
       h(
         "tbody",
@@ -298,7 +311,7 @@ function replayList(list, data) {
         return h(
           "li",
           {},
-          h("strong", {}, data.drivers[r.driver]?.label || r.driver),
+          h("strong", {}, driverDisplayName(data, r.driver)),
           ` · ${suiteLabel(r.suite_version)} · ${r.label} · `,
           source(r.recording),
           r.sourceCommit
@@ -357,8 +370,11 @@ async function main() {
                 h(
                   "li",
                   {},
-                  `${data.drivers[row.driver]?.label || row.driver} · ${row.label} · ${fractionText(row)} · ${row.date} · `,
-                  row.sources.map((path) => source(path)),
+                  `${driverDisplayName(data, row.driver)} · ${row.label} · ${row.track} · ${fractionText(row)} · ${row.date}`,
+                  row.sources.flatMap((path, i) => [
+                    " · ",
+                    source(path, row.submitter ? (i ? "Recording" : "Report") : path),
+                  ]),
                 ),
               ),
             )

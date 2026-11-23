@@ -6,6 +6,9 @@ import { obbOverlap } from "../sim/collision.js";
 import { CAR } from "../sim/vehicle.js";
 import { CLEARING_M, waitsItsTurn } from "./sensors.js";
 import { reversing } from "../sim/parallel-park.js";
+import { hooks } from "../sim/features/index.js";
+
+const LEGITIMATE_STOP = hooks("legitimateStop");
 
 // Within this many metres of the destination a stop is not a deadlock, and a car that cannot get
 // any closer because something is parked in the way has arrived.
@@ -90,10 +93,6 @@ export class DeadlockDetector {
           snap.intersection.signal !== "green" &&
           snap.intersection.bumper_to_line_m < 12 &&
           snap.intersection.bumper_to_line_m > -CLEARING_M) ||
-          // (held by a police officer directing traffic, on any light: sim/traffic-officer.js)
-          (snap.intersection.officer?.direction === "stop" &&
-            snap.intersection.bumper_to_line_m < 12 &&
-            snap.intersection.bumper_to_line_m > -CLEARING_M) ||
           // A left-turn stop can stay in sensing after its stop memory is cleared. Once well past
           // its line it is no longer a reason to hold; an actual oncoming conflict still is below.
           (snap.intersection.control === "stop" &&
@@ -122,15 +121,7 @@ export class DeadlockDetector {
       (snap?.junction_box && snap.junction_box.bumper_to_stop_m < 8) ||
       (snap?.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 8) ||
       (snap?.crossing_guard?.wait && snap.crossing_guard.bumper_to_stop_m < 8) ||
-      (snap?.contraflow_cyclist?.wait && snap.contraflow_cyclist.bumper_to_stop_m < 8) ||
-      (snap?.red_light_runner?.wait && snap.red_light_runner.bumper_to_stop_m < 8) ||
-      (snap?.reversing_vehicle?.wait && snap.reversing_vehicle.bumper_to_stop_m < 8) ||
-      (snap?.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 8) ||
-      (snap?.snowbank?.narrowing?.wait && snap.snowbank.narrowing.bumper_to_stop_m < 8) ||
-      (snap?.parking_ahead?.wait &&
-        snap.parking_ahead.bumper_to_stop_m < 8 &&
-        snap.parking_ahead.bumper_to_stop_m > -1) ||
-      (snap?.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8) ||
+      LEGITIMATE_STOP.some((hold) => hold(snap, CLEARING_M)) ||
       (snap && snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 8) ||
       // (behind a cyclist that has stopped, at the gap it keeps to one it cannot pass yet)
       (snap?.cyclist_pass && !snap.cyclist_pass.go && snap.cyclist_pass.gap_m < snap.cyclist_pass.follow_gap_m + 4) ||

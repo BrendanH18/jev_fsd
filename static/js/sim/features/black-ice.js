@@ -44,6 +44,9 @@ function iceClause(a, k, ahead) {
 }
 
 export default {
+  rulesCost: (c, snap) => (c.id === "slow_for_ice" && snap.black_ice ? -2 : 0),
+  cautious: (snap, eligible) =>
+    snap.black_ice && !snap.following ? eligible.find((c) => c.id === "slow_for_ice") : null,
   key: "ice",
   seen: "iceSeen",
   calls: "iceCalls",

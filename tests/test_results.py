@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import gzip
+import hashlib
 import json
 import tempfile
 import unittest
@@ -29,6 +31,18 @@ class ResultsTest(unittest.TestCase):
             0,
             "data/results.json or README.md is stale: run uv run scripts/build_results.py",
         )
+
+    def test_submission_pilot_escapes_markdown_in_readme(self):
+        data = build_results.build()
+        malicious = "`[link](https://example.com)|<b>\n# heading"
+        driver = "submission:outside:llm:model"
+        data["drivers"][driver] = {"label": "llm:model", "model": malicious, "submitter": "outside"}
+        rows = [r for r in data["rows"] if r["suite_version"] == "legacy"]
+        rows.append({"driver": driver, "suite": "pilot", "passed": 1, "total": 1, "label": "right-on-red"})
+        readme = build_results.readme_cohort(data, rows)
+        self.assertIn("llm:model (submitted by @outside)", readme)
+        self.assertIn("&#96;&#91;link&#93;&#40;https://example.com&#41;&#124;&#60;b&#62; &#35; heading", readme)
+        self.assertNotIn(malicious, readme)
 
     def test_recording_facts_keep_all_but_the_drives(self):
         path = next(build_results.RECORDINGS.glob("jev-arena-*.json.gz"))
@@ -420,6 +434,92 @@ class ResultsTest(unittest.TestCase):
             build_results.challenge_rows = original
         first = next(r for r in rows if r["driver"] == "rules" and r["suite"] == "challenges")
         self.assertEqual((first["date"], first["passed"]), ("2099-01-01", 0))
+
+    def test_outside_submission_attributes_a_replayable_failure_and_rejects_source_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            submissions = root / "data/submissions"
+            path = submissions / "2099-01-01/outside-test.json"
+            tape = path.with_suffix(".json.gz")
+            path.parent.mkdir(parents=True)
+            sha = "a" * 16
+            drive_id = "right-on-red"
+            drive = {"seed": 1, "version": 1, "map": "kitsilano"}
+            result = {
+                **drive,
+                "challenge": drive_id,
+                "suite_version": "custom",
+                "pass": False,
+                "failures": ["red light"],
+                "cost_usd": 0,
+                "decisions": 4,
+                "model_share": 0.75,
+            }
+            summary = {
+                "brain": "outside-agent",
+                "set": "all",
+                "engine": "node v22.23.5",
+                "cost_usd": 0,
+                "track": "open",
+                "drives": 1,
+                "passed": 0,
+            }
+            manifest = {
+                "format": build_results.MANIFEST_FORMAT,
+                "suite_version": "custom",
+                "source_commit": "b" * 40,
+                "source_dirty": False,
+                "engine": summary["engine"],
+                "engine_version": "12.4",
+                "driver": summary["brain"],
+                "model": None,
+                "prompt_hash": sha,
+                "track": summary["track"],
+                "suite": {"kind": "arena", "set": "all", "drives": {drive_id: drive}},
+                "maps": {"kitsilano": {"pack_version": "6", "fingerprint": sha, "components": {"roads": sha}}},
+                "cost_usd": 0,
+            }
+            raw = {
+                "format": "jev-local-recording/1",
+                "header": {
+                    "manifest": manifest,
+                    "driver": manifest["driver"],
+                    "engine": summary["engine"],
+                    "suite_version": "custom",
+                    "arena": {"set": "all", "ids": [drive_id], "track": "open"},
+                    "maps": {"kitsilano": sha},
+                },
+                "drives": {drive_id: {}},
+                "results": {drive_id: result},
+            }
+            original = gzip.compress(json.dumps(raw).encode())
+            tape.write_bytes(original)
+            published = {
+                "format": "jev-published-submission/1",
+                "submitter": "outside-team",
+                "recording_sha256": hashlib.sha256(original).hexdigest(),
+                "report": {"suite_version": "custom", "manifest": manifest, "summary": summary, "results": [result]},
+            }
+            path.write_text(json.dumps(published))
+            with patch.multiple(build_results, ROOT=root, RESULTS=root / "unused", SUBMISSIONS=submissions):
+                drivers = {}
+                [row] = build_results.challenge_rows(drivers)
+                self.assertEqual(row["driver"], "submission:outside-team:outside-agent")
+                self.assertEqual(row["submitter"], "outside-team")
+                self.assertEqual(row["submitted_driver"], "outside-agent")
+                self.assertEqual((row["suite_version"], row["suite"], row["track"]), ("custom", "pilot", "open"))
+                self.assertEqual(drivers[row["driver"]]["about"], "External submission by @outside-team")
+                self.assertEqual(row["recording"], "data/submissions/2099-01-01/outside-test.json.gz")
+                self.assertEqual(row["failed"], [{"id": drive_id, "map": "kitsilano", "failures": ["red light"]}])
+                self.assertEqual((row["passed"], row["total"]), (0, 1))
+                self.assertEqual(row["model_share"], 0.75)
+                published["report"]["results"][0]["model_share"] = 1
+                path.write_text(json.dumps(published))
+                with self.assertRaisesRegex(ValueError, "disagree on per-drive data"):
+                    build_results.challenge_rows({})
+                tape.write_bytes(original + b"changed")
+                with self.assertRaisesRegex(ValueError, "checksum has changed"):
+                    build_results.challenge_rows({})
 
     def test_every_bundled_map_has_a_name(self):
         self.assertEqual(set(build_results.MAP_NAMES), set(PRESET_BBOXES))

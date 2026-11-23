@@ -1,5 +1,4 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
-import { auditRunner, createRunners } from "./red-light-runner.js";
 import { setNightFlash, flashState } from "./night-flash.js";
 import { auditHighBeams, wellLit } from "./high-beams.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
@@ -63,7 +62,6 @@ import {
   paddle,
   stopKey,
 } from "./work-zone.js";
-import { HIT_OVER_MPS, deviceOf, slowsFor } from "./traffic-calming.js";
 import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
 import {
   EGO_ID,
@@ -104,6 +102,8 @@ const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
 const CONTROL_AUDIT = hooks("controlAudit");
+const AUDIT_SIGNAL = hooks("auditSignal");
+const RESET_CONTACT = hooks("resetContact");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -272,8 +272,7 @@ export class World {
   // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
   // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
   // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
-  // `calming`: traffic and the driven car slow for speed humps, tables, cushions and bumps, and the audit
-  // counts hard hits (sim/traffic-calming.js). `scrambles`: signals with a scramble crossing run their
+  // `scrambles`: signals with a scramble crossing run their
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
@@ -295,7 +294,6 @@ export class World {
       stepOuts = 0,
       closures = 0,
       passCyclists = false,
-      calming = false,
       scrambles = false,
       guards = false,
       busLanes = false,
@@ -307,16 +305,10 @@ export class World {
       redTurnSigns = false,
       amberLights = false,
       followingDistance = false,
-      redRunners = false,
       ...features
     } = {},
   ) {
     this.map = map;
-    // red-light runners (sim/red-light-runner.js): whether traffic now and then runs a late amber or a
-    // fresh red, whether one has committed near the car this drive, and the junction the audit watches
-    this.redRunners = createRunners({ enabled: redRunners, seed });
-    this.redRunnersSeen = false;
-    this.runnerCall = null;
     this.followingDistance = !!followingDistance;
     this.amberLights = !!amberLights;
     this.amberLightsSeen = false;
@@ -380,8 +372,6 @@ export class World {
     this.passCyclists = !!passCyclists;
     this.bikePasses = new Map();
     this.cyclistPass = null;
-    // speed humps and the like (sim/traffic-calming.js): whether anyone slows for them; whether the car
-    // has crossed one this drive; and, for each near it, how far ahead of its front axle it was last tick
     this.busLanes = !!busLanes;
     this.busLanesSeen = false;
     this.leftOnRed = !!leftOnRed;
@@ -390,9 +380,6 @@ export class World {
     this.restrictions = !!restrictions;
     this.restrictionsSeen = false;
     this.restrictionEdge = null;
-    this.calming = !!calming;
-    this.calmingSeen = false;
-    this.calmingAxle = new Map();
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -558,7 +545,6 @@ export class World {
     this.ego.latAccel = 0;
     this._previousStaticPose = poseOf(this.ego);
     this.staticContacts.clear();
-    this.calmingAxle?.clear();
     this.pxoLines?.clear();
     this.restrictionEdge = null;
     this._lastFront = null;
@@ -590,7 +576,7 @@ export class World {
     this.bikePasses?.clear();
     this.cyclistPass = null;
     this.guardCalls?.clear();
-    this.runnerCall = null;
+    for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
     for (const p of [this.park, this.parkedIn])
@@ -848,25 +834,11 @@ export class World {
             )
           : null;
       if (amber && !crossed) this.amberLightsSeen = true;
-      // a car running the red across the car's way as it enters on green (sim/red-light-runner.js)
-      const runner =
-        this.redRunners.enabled && control.type === "signal" && !handled
-          ? auditRunner(
-              this,
-              control.id,
-              edge.id,
-              rc?.turn || "straight",
-              rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
-              past,
-            )
-          : null;
+      if (control.type === "signal" && !handled)
+        for (const audit of AUDIT_SIGNAL) audit(this, control, edge, rc, past, entered);
       if (entered && handled) this.giveWay = null;
       if (entered && !handled) {
         if (control.type === "signal") {
-          if (runner) {
-            this.violations.fresh_green_conflicts = (this.violations.fresh_green_conflicts || 0) + 1;
-            this.events.push({ type: "fresh_green_conflict", with: runner.vehicle.id ?? null });
-          }
           const amberViolation =
             amberSignal === "yellow" &&
             amber &&
@@ -1072,7 +1044,6 @@ export class World {
     if (this.busLanes) auditBusLanes(this, dt);
     if (this.pxo) auditPxo(this);
     if (this.restrictions) auditRestrictions(this);
-    if (this.calming) this.auditCalming();
     for (const audit of AUDIT_AFTER_CALMING) audit(this);
     if (this.crossingGuards.enabled) this.auditGuards();
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this, frontOnPath);
@@ -1142,36 +1113,6 @@ export class World {
       pass.ahead = rel.ahead_m;
       this.plowPass.set(n.id, pass);
     }
-  }
-
-  // Crossing a speed hump, table, cushion or bump with the front axle faster than its speed plus
-  // HIT_OVER_MPS is a hard hit (sim/traffic-calming.js): counted once a device a crossing, going
-  // forward over it.
-  auditCalming() {
-    const ego = this.ego,
-      near = this.map.calmingGrid?.get(`${Math.floor(ego.x / 20)},${Math.floor(ego.y / 20)}`) || [];
-    const axle = ego.spec.wheelbase,
-      seen = new Set();
-    for (const { device, h, w } of near) {
-      const dx = device.x - ego.x,
-        dy = device.y - ego.y,
-        c = Math.cos(ego.psi),
-        sn = Math.sin(ego.psi);
-      const ahead = dx * c + dy * sn,
-        across = Math.abs(dx * sn - dy * c);
-      // (on the street, going along it, not across it)
-      if (across > w + 1 || Math.abs(Math.cos(ego.psi - h)) < 0.7) continue;
-      seen.add(device.id);
-      const before = this.calmingAxle.get(device.id);
-      this.calmingAxle.set(device.id, ahead - axle);
-      if (before === undefined || !(before > 0 && ahead - axle <= 0) || ego.v <= 0) continue;
-      this.calmingSeen = true;
-      if (slowsFor(ego.spec, device) && ego.v > deviceOf(device).mps + HIT_OVER_MPS) {
-        this.violations.hump_hits = (this.violations.hump_hits || 0) + 1;
-        this.events.push({ type: "hump_hit", device: device.id, kind: device.kind, kmh: Math.round(ego.v * 36) / 10 });
-      }
-    }
-    for (const id of this.calmingAxle.keys()) if (!seen.has(id)) this.calmingAxle.delete(id);
   }
 
   // At a lane closure: merging out of turn, merging early, and not letting someone in (see AUDIT_EARLY_M).

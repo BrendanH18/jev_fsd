@@ -106,6 +106,27 @@ including failures, the driver and fallback shares, and the sum of recorded cost
 bundle attests to the replay of those answers and to the consistency of the recorded charges.
 Provider identity and actual billing require independent evidence.
 
+### Publish a verified submission
+
+For maintainers, check out the manifest's source commit from the project's trusted history, start
+its local server, and use the Node version named by the manifest. From the current project
+checkout, run the publication command with the clean replay checkout and the submitter's agreed
+public handle. It runs the same offline verifier before writing the report and its matching tape.
+
+```sh
+mkdir -p data/submissions/2026-11-23
+node --experimental-default-type=module scripts/driver_submission.mjs publish \
+  --port 8322 --checkout /tmp/jev-replay-checkout --bundle /tmp/drive-submission.json.gz \
+  --submitter driving-team --out data/submissions/2026-11-23/my-driver-open.json
+uv run scripts/build_results.py
+```
+
+Review the contents before committing the generated `.json` and `.json.gz` source files and
+the updated leaderboard. Publish only recordings that the submitter has agreed to share. The
+leaderboard marks the submitting handle and links to the report and recording. A full canonical
+suite appears alongside other entries for that suite. Subsets and drives made outside the pinned
+suite appear under **Custom runs**.
+
 ## Decision models: Jev and others
 
 A decision model takes a state and typed questions and returns each answer with probabilities.
@@ -449,8 +470,17 @@ fields. Each outcome is kept as it came: the server's JSON with its meta (model,
 latency), including answers rejected as invalid; an HTTP error with its status; a timeout; or a
 call cancelled because a new epoch (a fresh route) made it stale. A timeout replays at once as the
 same timeout fallback, not re-timed. The same request asked twice in a drive keeps both answers,
-in order. Trace fields that only echo the request (the LLM's messages) are stored once, in the
-key's request, and rebuilt on replay.
+in order. A recording marks trace fields that echo the browser request and rebuilds them from
+that request on replay. This also covers Anthropic's separated chat messages and cached system
+prompt when they exactly match the provider's transformation. Provider settings, raw replies,
+usage and any trace field that differs from the browser request stay in the recording. A trace
+with the same metadata as the stored response reuses that metadata on replay. Older tapes still
+replay with their stored trace fields.
+
+On copies of the published Claude Haiku tapes, this reduced gzip size from 4,332,721 to
+721,771 bytes for the guarded arena, 4,623,949 to 738,540 bytes for the open arena, and
+6,967,608 to 1,107,473 bytes for Kitsilano dry city. The 12-drive city copy takes 29,002,569
+bytes as plain JSON, within the browser's 32 MiB recording save limit.
 
 **Drift is visible.** A request the recording has no answer for fails with `not in recording:
 <key>`, which counts as a Rules fallback in the drive's results. Each result carries

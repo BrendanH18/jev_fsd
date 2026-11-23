@@ -408,23 +408,6 @@ export function sampleCandidates(snap, world) {
       });
     }
     for (const add of CANDIDATES.beforeRunner) add(featureCtx, out);
-    // A car running the red across the car's way as its light is green (sim/red-light-runner.js): wait
-    // at the line until it has cleared the junction.
-    const rr = snap.red_light_runner;
-    if (rr?.wait && rr.bumper_to_stop_m > 0.3) {
-      out.push({
-        id: "wait_for_runner",
-        laneUntil,
-        law: inLane({
-          kind: "lane",
-          offset: nudge,
-          vTarget: Math.min(approach, Math.max(v, 2)),
-          stopAtRoute: stopAt(rr.stop_s_route - FRONT - 0.5),
-        }),
-        steer: "hold lane",
-        speed: "stop at the line and let the car running the red clear the junction",
-      });
-    }
     for (const add of CANDIDATES.driveways) add(featureCtx, out);
     for (const add of CANDIDATES.streetHazards) add(featureCtx, out);
     for (const add of CANDIDATES.rearTraffic) add(featureCtx, out);
@@ -913,8 +896,6 @@ export function simulateAll(candidates, snap, world) {
   const cyclistClearance = world.passCyclists
     ? (cp?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit))
     : CYCLIST_CLEARANCE_M;
-  // a car running the red across the car's way (sim/red-light-runner.js): the line the car waits at
-  const runnerStop = snap.red_light_runner?.wait ? snap.red_light_runner.stop_s_route : null;
   // what the registered features check along every forward sim (sim/features/index.js): a checker each, or
   // none, by the place its rejection takes among the others
   const sims = {};
@@ -965,7 +946,6 @@ export function simulateAll(candidates, snap, world) {
       pastHold = false,
       closePass = false,
       meets = false,
-      passesRunner = false,
       collision = null,
       followerHit = null,
       staticHit = null,
@@ -1030,8 +1010,6 @@ export function simulateAll(candidates, snap, world) {
         if (oncoming && s + FRONT > oncoming.yield_s_route + ONCOMING_STOP_M - 0.5) cutsOff = true;
         // likewise turning right across a cyclist's line of travel
         if (hook && s + FRONT > hook.yield_s_route + HOOK_STOP_M - 0.5) hooks = true;
-        // (and here: across the line is into the junction)
-        if (runnerStop !== null && s + FRONT > runnerStop + 0.2) passesRunner = true;
         // (and where the registered features' checks look along the route: sim/features/index.js)
         for (const x of routeChecks) x.along(s, FRONT, car);
         // (1.5 m past it, as a short stop overshoots)
@@ -1242,7 +1220,6 @@ export function simulateAll(candidates, snap, world) {
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";
     else if ((reject = rejectBy(sims.beforeRunner, c)));
-    else if (passesRunner && c.law.kind !== "hard_brake") reject = "enters_ahead_of_red_light_runner";
     else if ((reject = rejectBy(sims.driveways, c)));
     else if ((reject = rejectBy(sims.streetHazards, c)));
     else if ((reject = rejectBy(sims.beforeEmergency, c)));

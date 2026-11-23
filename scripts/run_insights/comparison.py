@@ -77,7 +77,7 @@ def describe(name, config):
     return {"file": name, "config": values}
 
 
-def compare(baseline, other, reports):
+def compare(baseline, other, reports, paired_reports=None):
     left_name, left_config, left_rows = baseline
     right_name, right_config, right_rows = other
     validate_suite(left_config, right_config)
@@ -112,7 +112,10 @@ def compare(baseline, other, reports):
         },
         "outcome_changes": changes,
         "reports": {
-            name: {"baseline": report(left_matched), "comparison": report(right_matched)}
-            for name, report in reports.items()
+            **{
+                name: {"baseline": report(left_matched), "comparison": report(right_matched)}
+                for name, report in reports.items()
+            },
+            **{name: report(left_matched, right_matched) for name, report in (paired_reports or {}).items()},
         },
     }

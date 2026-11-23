@@ -47,7 +47,7 @@ def main():
         if catalog.keys() & module.REPORTS.keys():
             raise RuntimeError("Duplicate report ID")
         catalog.update(module.REPORTS)
-    available = {**catalog, **profiles.REPORTS}
+    available = {**catalog, **profiles.REPORTS, **profiles.PAIRED_RATES}
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", nargs="?", type=Path, help="saved benchmark JSON file")
     parser.add_argument("reports", nargs="*", help="report IDs (default: all original reports)")
@@ -56,29 +56,37 @@ def main():
     mode.add_argument("--list", action="store_true", help="list original report IDs and descriptions")
     mode.add_argument("--list-profiles", action="store_true", help="list cohort profile IDs and descriptions")
     mode.add_argument("--profiles", action="store_true", help="run all cohort profiles")
+    mode.add_argument("--list-paired-rates", action="store_true", help="list matched rate report IDs and descriptions")
+    mode.add_argument("--paired-rates", action="store_true", help="run all matched rate reports with --compare")
     args = parser.parse_intermixed_args()
-    if args.list or args.list_profiles:
-        listed = catalog if args.list else profiles.REPORTS
+    if args.list or args.list_profiles or args.list_paired_rates:
+        listed = catalog if args.list else profiles.PAIRED_RATES if args.list_paired_rates else profiles.REPORTS
         width = 36 if args.list else max(map(len, listed))
         for key, (description, _) in sorted(listed.items()):
             print(f"{key:{width}} {description}")
         return
     if args.run is None:
-        parser.error("provide a saved run or use --list or --list-profiles")
+        parser.error("provide a saved run or use --list, --list-profiles or --list-paired-rates")
     if args.profiles and args.reports:
         parser.error("--profiles runs the whole profile catalog. Use report IDs to select individual reports.")
+    if args.paired_rates and args.reports:
+        parser.error("--paired-rates runs the whole matched rate catalog. Use report IDs to select individual reports.")
     for key in args.reports:
         if key not in available:
-            parser.error(f"unknown report {key!r}. See --list and --list-profiles.")
-    default = profiles.REPORTS if args.profiles else catalog
-    selected = {key: available[key][1] for key in args.reports or sorted(default)}
+            parser.error(f"unknown report {key!r}. See --list, --list-profiles and --list-paired-rates.")
+    default = profiles.PAIRED_RATES if args.paired_rates else profiles.REPORTS if args.profiles else catalog
+    keys = args.reports or sorted(default)
+    selected = {key: available[key][1] for key in keys if key not in profiles.PAIRED_RATES}
+    paired = {key: available[key][1] for key in keys if key in profiles.PAIRED_RATES}
+    if paired and args.compare is None:
+        parser.error("matched rate reports require --compare")
     try:
         config, rows = load_run(args.run)
         if args.compare is not None:
             other_config, other_rows = load_run(args.compare)
             baseline = args.run.name, config, rows
             other = args.compare.name, other_config, other_rows
-            reports = comparison.compare(baseline, other, selected)
+            reports = comparison.compare(baseline, other, selected, paired)
         else:
             reports = {key: report(rows) for key, report in selected.items()}
     except ValueError as exc:
