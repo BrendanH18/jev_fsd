@@ -41,6 +41,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
     [
+      "contraflow",
       "driveways",
       "balls",
       "potholes",
@@ -88,6 +89,7 @@ test("the core runs every slot, and names no registered feature", () => {
   for (const path of CORE) {
     const text = source(path);
     for (const name of [
+      'contraflow.js"',
       'sim/driveway-reversers.js"',
       './driveway-reversers.js"',
       'sim/potholes.js"',
@@ -117,6 +119,13 @@ test("the core runs every slot, and names no registered feature", () => {
       assert.equal(imports.length, 0, `${path} imports ${name}`);
     }
     for (const field of [
+      "snap.contraflow_cyclist",
+      ".contra ",
+      "world.contraflow",
+      "this.contraflow",
+      "cfShift",
+      "contraflow_conflicts",
+      '"yield_to_contraflow_cyclist"',
       "snap.reversing_vehicle",
       "snap.ball_in_road",
       "snap.parking_ahead",
@@ -191,12 +200,14 @@ test("the World builds each feature from its option, with its seen flag and its 
   const pack = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.v6.pack.json", root)));
   pack.parks = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.parks.v1.json", root)));
   pack.driveways = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.driveways.v1.json", root)));
+  pack.contraflow = JSON.parse(fs.readFileSync(new URL("bb9df59633e0.contraflow.v1.json", root)));
   const map = new MapData(pack);
   const off = new World(map, { seed: 3, parked: 0, pedestrians: 0 });
   const on = new World(map, {
     seed: 3,
     parked: 0,
     pedestrians: 0,
+    contraflow: true,
     driveways: true,
     balls: true,
     potholes: true,
@@ -224,6 +235,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     }
   }
   // (off, nothing is placed and no random stream is made)
+  assert.equal(off.contraflow.random, null);
   assert.equal(off.driveways.random, null);
   assert.equal(off.balls.random, null);
   assert.equal(off.parkers.random, null);
@@ -255,6 +267,9 @@ test("metrics and failures appear only once a feature has met the car, each at i
     officersSeen: true,
   };
   const v = { wildlife_conflicts: 2 };
+  assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), {});
+  world.contraflowSeen = true;
+  assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), { contraflow_conflicts: 0 });
   assert.deepEqual(R.featureMetrics(world, v, "driveways"), {});
   assert.deepEqual(R.featureMetrics(world, v, "streetHazards"), { wildlife_conflicts: 2 });
   assert.deepEqual(R.featureMetrics(world, v, "rearTraffic"), { ice_overspeed: 0, pedestrians_splashed: 0 });
@@ -277,6 +292,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
   assert.deepEqual(Object.keys(R.featureMetrics(world, v, "late")), ["parking_conflicts", "closure_entries"]);
   const m = {
     arrived: true,
+    contraflow_conflicts: 1,
+    fresh_green_conflicts: 1,
     reversing_conflicts: 1,
     pothole_hits: 1,
     ball_warnings_ignored: 1,
@@ -290,6 +307,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
     officer_violations: 1,
   };
   assert.deepEqual(failures(m), [
+    "cut off or squeezed a contraflow cyclist",
+    "entered on green ahead of a car running the red",
     "squeezed past or failed to stop for a car backing out",
     "hit a pothole too fast",
     "ignored a ball rolling into the street",
@@ -318,6 +337,8 @@ test("the LLM prompt keeps each feature's line where it was", () => {
   assert.equal(at("- A garbage truck stopped"), at("- Choose `wait_behind_van`") + 1);
   assert.equal(at("- Behind a cyclist"), at("- A garbage truck stopped") + 1);
   assert.equal(at("When road_closed.on_route"), at("When turn_restriction.banned") + 1);
+  assert.equal(at("- On a one-way street"), at("- Choose `wait_short_of_junction`") + 1);
+  assert.equal(at("- When the car's light turns green"), at("- On a one-way street") + 1);
   assert.equal(at("- A ball rolling into the street"), at("- When the car's light turns green") + 1);
   assert.equal(at("- Watch driveways for reversing lights"), at("- A ball rolling into the street") + 1);
   assert.equal(at("- Watch for potholes"), at("- Watch driveways for reversing lights") + 1);

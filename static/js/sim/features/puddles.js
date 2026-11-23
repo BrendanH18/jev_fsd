@@ -209,7 +209,7 @@ export default {
   // earlier move inside the lane, round a pothole say, is under way), and otherwise slow below its splash
   // speed, wherever in the lane it is going (`moves`: where each earlier move is heading).
   trafficLane: {
-    at: "contraflow",
+    at: "laneMoves",
     run(world, n, front, busy, dt, { offset, moves }) {
       const pdBusy = busy || moves.some((m) => m.easing) || Math.abs(offset) > 0.05;
       const pd =

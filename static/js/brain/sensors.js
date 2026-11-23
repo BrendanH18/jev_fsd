@@ -28,7 +28,7 @@ import { headlights } from "../sim/high-beams.js";
 import { pxoAhead } from "../sim/pxo.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
-import { cumulative, headingAt, onStreet, pointAt, projectPoint } from "../map/mapdata.js";
+import { headingAt, onStreet, pointAt, projectPoint } from "../map/mapdata.js";
 import { current as weather } from "../sim/weather.js";
 import { DAYLIGHT_RANGE_M } from "../sim/visibility.js";
 import { approachTo, outranks, PEEK_AT_M } from "../sim/priority.js";
@@ -115,16 +115,6 @@ import {
   sightFor as cyclistSight,
   wayClear as cyclistWayClear,
 } from "../sim/cyclist-pass.js";
-import {
-  ENTRY_LOOK_M,
-  comingOut,
-  contraLine,
-  contraflowOf,
-  entryHold,
-  riderConflict,
-  roomRight,
-} from "../sim/contraflow.js";
-import { minPassM } from "../sim/cyclist-pass.js";
 import { sunGlareSensing } from "../sim/sun-glare.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
@@ -169,6 +159,7 @@ import {
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
 const SENSE = {
   parking: hooks("sense", "parking"),
+  beforeRunner: hooks("sense", "beforeRunner"),
   following: hooks("sense", "following"),
   driveways: hooks("sense", "driveways"),
   streetHazards: hooks("sense", "streetHazards"),
@@ -177,6 +168,7 @@ const SENSE = {
 };
 const LIMIT = {
   passing: hooks("limit", "passing"),
+  beforeRunner: hooks("limit", "beforeRunner"),
   driveways: hooks("limit", "driveways"),
   streetHazards: hooks("limit", "streetHazards"),
   parking: hooks("limit", "parking"),
@@ -187,11 +179,13 @@ const TARGET = {
   driveways: hooks("target", "driveways"),
   streetHazards: hooks("target", "streetHazards"),
   beforeEmergency: hooks("target", "beforeEmergency"),
+  beforeRunner: hooks("target", "beforeRunner"),
 };
 const FINISH_LANES = hooks("finishLanes");
 const LANE_OFFER = hooks("laneOffer");
 const HAZARD = {
   parking: hooks("hazard", "parking"),
+  beforeRunner: hooks("hazard", "beforeRunner"),
   driveways: hooks("hazard", "driveways"),
   streetHazards: hooks("hazard", "streetHazards"),
   rearTraffic: hooks("hazard", "rearTraffic"),
@@ -202,7 +196,7 @@ const TURN_PACE = hooks("turnPace");
 // (and the move inside its lane a registered feature has it make, over toward the middle between
 // snowbanks, say; where it stops short of for an emergency vehicle; and what hides a street from it)
 const FOLLOWING_EXCLUSION = hooks("followingExclusion");
-const DETOURS = hooks("detour", "contraflow"),
+const DETOURS = hooks("detour"),
   PASSING_DETOURS = hooks("detour", "parking"),
   EV_STOP = hooks("evStop"),
   BLOCKS_VIEW = hooks("blocksView");
@@ -459,7 +453,6 @@ export function buildSnapshot(world, executing = null) {
     snow_plow: null,
     cyclist_pass: null,
     crossing_guard: null,
-    contraflow_cyclist: null,
     parking: null,
     blind_spot: null,
     rear_follower: null,
@@ -770,9 +763,7 @@ export function buildSnapshot(world, executing = null) {
     snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
     snap.cyclist_pass = cyclistPass(world, p, lane, executing);
     snap.crossing_guard = crossingGuard(world, frontS);
-    // (contraflow cyclists, with that option on: sim/contraflow.js)
-    if (world.contraflow?.riders.length)
-      snap.contraflow_cyclist = contraflowCyclist(world, p, frontS, lane, road, executing);
+    for (const sense of SENSE.beforeRunner) sense(world, snap, { p, frontS, lane, road, executing, stopSpeedFor });
     // (a car running the red across the car's way as its light is green, with that option on:
     // sim/red-light-runner.js)
     if (world.redRunners?.enabled && snap.intersection?.control === "signal" && !junctionPlan(snap.intersection)) {
@@ -808,13 +799,11 @@ export function buildSnapshot(world, executing = null) {
     // the car reaches before its planned path has cleared that lane.
     // (follow along the way the car will go round an obstruction)
     // (and round a cyclist, through the oncoming lane: see cyclistPass)
-    // (and over to the right for a contraflow cyclist coming the other way: see contraflowCyclist)
     const detour =
       snap.work_zone?.detour ||
       snap.lane_closure?.detour ||
       featurePassingDetour(snap) ||
       snap.cyclist_pass?.detour ||
-      snap.contraflow_cyclist?.detour ||
       featureDetour(snap) ||
       null;
     const frame = (s) => route.frameMove(p.s, s) - detourAt(detour, s);
@@ -909,9 +898,7 @@ export function buildSnapshot(world, executing = null) {
     snap.sun_glare = sunGlareSensing(world);
     if (snap.sun_glare) snap.limit = Math.min(snap.limit, snap.sun_glare.ceiling_mps);
   }
-  // (and coming up to a contraflow street it cannot see into yet: sim/contraflow.js)
-  if (snap.contraflow_cyclist?.entry_limit_mps != null)
-    snap.limit = Math.min(snap.limit, snap.contraflow_cyclist.entry_limit_mps);
+  for (const limit of LIMIT.beforeRunner) limit(snap);
   for (const limit of LIMIT.driveways) limit(snap);
   for (const limit of LIMIT.streetHazards) limit(snap);
   // (and going round a cyclist, at the pass speed)
@@ -2033,142 +2020,6 @@ function cyclistPass(world, p, lane, executing) {
   };
 }
 
-// A cyclist riding against a one-way street that allows it (sim/contraflow.js, `World` option
-// `contraflow`) that the car must look out for, as far as it can see: the one it must wait for first,
-// and how far right it moves for one coming the other way. `relation`: "turning_in" (it is coming out of
-// the street the car is about to turn or go straight into: the car waits short of the junction),
-// "oncoming" (coming the other way along the car's street, with less than the minimum passing distance
-// even moved over: the car stops, moved over, until it has gone by), "turning_off" (the car, on such a
-// street, would cross its way at the junction ahead, as a left turn crosses oncoming traffic), or
-// "crossing" (the car would cross its way coming out of the street). `wait`: the car stops with its
-// front at `stop_s_route` (route arc length) until the conflict is over (sim/contraflow.js
-// riderConflict); never once it could no longer stop there (it carries on). `detour` moves the car
-// right (sim/controller.js detourAt) while one comes the other way within reach, kept from the law that
-// moves it until it is by. Or null.
-function contraflowCyclist(world, p, frontS, lane, road, executing) {
-  const { ego, route, map } = world;
-  const limit = road.limit || 11.2,
-    min = minPassM(limit);
-  const room = (r) => {
-    const i = route.laneEdgeAt(r);
-    return roomRight(map.edges.get(route.edges[i]), route.laneInfo(i).idx, ego.spec);
-  };
-  const edgeAt = map.edges.get(route.edges[route.edgeIndexAt(frontS)]);
-  const onContra = !!(edgeAt && contraflowOf(map, edgeAt.id));
-  // (the contraflow streets the route goes into, still ahead of the car's front)
-  const entries = [];
-  for (let i = 0; i < route.edges.length; i++) {
-    const start = route.edgeStarts[i];
-    if (start > frontS + 60) break;
-    if (start > frontS - 2 && contraflowOf(map, route.edges[i]))
-      entries.push({ id: route.edges[i], start, hold: entryHold(map, route.edges[i], start) });
-  }
-  let best = null,
-    shift = 0,
-    shiftFor = null;
-  for (const n of world.contraflow.riders) {
-    if (Math.abs(n.x - ego.x) > 90 || Math.abs(n.y - ego.y) > 90 || !world.sees(ego, n)) continue;
-    const c = riderConflict(n, route, {
-      front: frontS,
-      spec: ego.spec,
-      v: ego.v,
-      lat: lane.center,
-      room,
-      vMax: Math.min(limit, 8),
-      clearance: min,
-    });
-    if (!c) continue;
-    if ((c.shift || 0) > shift) {
-      shift = c.shift;
-      shiftFor = n;
-    }
-    if (c.at === null) continue;
-    // where it waits: short of the junction, about to enter the street the cyclist is coming out of, or
-    // short of where it would meet or cross it; the first of those it can still stop at
-    const at = c.at - (c.meet ? 3 : 1),
-      stop = (ego.v * ego.v) / (2 * Math.min(4, comfort().hardDecel)) - 0.3;
-    const holds = entries
-      .filter((en) => comingOut(n, en.id) && frontS < en.start && en.hold < at + 0.01)
-      .map((en) => ({ at: en.hold, relation: "turning_in" }))
-      .concat([{ at, relation: c.meet ? "oncoming" : onContra ? "turning_off" : "crossing" }])
-      .sort((x, y) => x.at - y.at);
-    const hold = holds.find((h) => ego.v < 0.5 || h.at - frontS > stop);
-    // (too late to stop short of it: the car has committed and carries on)
-    if (hold && (!best || hold.at < best.at)) best = { n, c, at: hold.at, relation: hold.relation };
-  }
-  // (a contraflow street ahead the car cannot yet see into, ENTRY_LOOK_M along the cyclists' line: it
-  // comes up to where it would wait no faster than it could stop there, creeping the last of the way,
-  // as at a blind junction, until it can see whether one is coming)
-  let entryLimit = null;
-  for (const en of entries) {
-    if (en.hold <= frontS - 0.5) continue;
-    const e = map.edges.get(en.id),
-      line = contraLine(e, contraflowOf(map, e.id).side),
-      cum = cumulative(line),
-      len = cum[cum.length - 1];
-    const [x, y] = pointAt(line, cum, Math.max(0, len - Math.min(ENTRY_LOOK_M, len)));
-    if (world.visibility.canSee(ego, x, y)) continue;
-    // (gently, with room to spare: the cyclist may come into sight only at the corner)
-    const vl = stopSpeedFor(Math.max(0, en.hold - frontS - 2), 0.6 * comfort().decel) + 1;
-    if (entryLimit === null || vl < entryLimit) entryLimit = vl;
-  }
-  const exec = executing?.law?.detour?.id?.startsWith?.("cf:") ? executing.law.detour : null;
-  let detour = null;
-  if (shift > 0.05) {
-    const id = `cf:${shiftFor.id}`,
-      from = exec?.id === id ? exec.from : p.s,
-      full = Math.max(from + 1, from + Math.max(6, 2 * ego.v));
-    const q = route.project(shiftFor.x, shiftFor.y, p.index);
-    const back = Math.max(full, (q ? q.s : frontS) + ego.spec.rearOverhang + 2);
-    detour = { id, from, full, back, to: back + 10, shift: Math.round(shift * 100) / 100 };
-  } else if (exec && p.s < exec.to) detour = exec;
-  if (!best && !detour)
-    return entryLimit === null
-      ? null
-      : {
-          id: null,
-          cyclist_id: null,
-          relation: "entering",
-          street: map.edges.get(entries[0].id)?.name || "",
-          lane_kind: contraflowOf(map, entries[0].id)?.kind || "shared",
-          wait: false,
-          stop_s_route: null,
-          bumper_to_stop_m: null,
-          yield_s_route: null,
-          min_pass_m: min,
-          shift_m: 0,
-          room_m: Math.round(room(frontS) * 100) / 100,
-          detour: null,
-          entry_limit_mps: entryLimit,
-        };
-  // (stopped, it waits where it is)
-  const stopS = best ? Math.max(best.at, frontS) : null;
-  const wait = !!best;
-  const n = best?.n || shiftFor || world.contraflow.riders.find((r) => `cf:${r.id}` === detour.id);
-  if (!n) return null;
-  const e = map.edges.get(n.path.segs.find((g) => g.contra)?.id);
-  return {
-    id: n.id,
-    cyclist_id: n.id,
-    relation: best ? best.relation : "oncoming",
-    street: e?.name || "",
-    lane_kind: e ? contraflowOf(map, e.id)?.kind || "shared" : "shared",
-    gap_m: Math.max(0, Math.hypot(n.x - ego.x, n.y - ego.y) - ego.spec.length + ego.spec.rearOverhang),
-    speed: n.v,
-    eta_s: best ? best.c.eta_s : null,
-    need_s: best ? best.c.need_s : null,
-    wait,
-    stop_s_route: wait ? stopS : null,
-    bumper_to_stop_m: wait ? stopS - frontS : null,
-    yield_s_route: best ? best.at : null,
-    min_pass_m: min,
-    shift_m: detour ? detour.shift : 0,
-    room_m: Math.round(room(frontS) * 100) / 100,
-    detour,
-    entry_limit_mps: entryLimit,
-  };
-}
-
 // The speed to go round a cyclist at (see cyclistPass): the pass speed, or, short of being across, the
 // speed from which the car slows to it gently by then.
 function cyclistPassSpeed(cp) {
@@ -3011,17 +2862,7 @@ export function desiredSpeed(snap) {
       reasons.push("cyclist on the right");
     }
   }
-  // a cyclist riding against the one-way (sim/contraflow.js): stop where the car waits for it
-  const cf = snap.contraflow_cyclist;
-  if (cf?.wait) {
-    const vc = cf.bumper_to_stop_m < 1.0 ? 0 : stopSpeedFor(cf.bumper_to_stop_m - 0.5, decel);
-    if (vc < v) {
-      v = vc;
-      reasons.push(
-        cf.relation === "oncoming" ? "cyclist coming the other way: no room" : "cyclist riding against the one-way",
-      );
-    }
-  }
+  for (const cap of TARGET.beforeRunner) v = cap(snap, v, reasons, targetCtx);
   // a car running the red across the car's way (sim/red-light-runner.js): wait at the line
   const rr = snap.red_light_runner;
   if (rr?.wait) {
@@ -3287,7 +3128,10 @@ export function hazardFlags(snap) {
   if (snap.snow_plow) f.push("snow plow");
   if (snap.cyclist_pass) f.push("cyclist ahead");
   if (snap.crossing_guard) f.push("crossing guard");
-  if (snap.contraflow_cyclist) f.push("contraflow cyclist");
+  for (const flag of HAZARD.beforeRunner) {
+    const label = flag(snap);
+    if (label) f.push(label);
+  }
   if (snap.red_light_runner) f.push("red-light runner");
   for (const flag of HAZARD.driveways) {
     const x = flag(snap);

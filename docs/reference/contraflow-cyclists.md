@@ -11,7 +11,8 @@ rebuilds only the layer. `server.py`, `scripts/build_demo.py` and the Node tests
 others; `MapData.contraflow` maps edge id to record.
 
 `World` option `contraflow` (free drives unless `?contraflow=0`; challenges with `contraflow: true`)
-creates `World.contraflow` (`sim/contraflow.js` `ContraflowRiders`). It puts up to three riders down on
+is registered in `sim/features/contraflow.js` and creates `World.contraflow`
+(`sim/contraflow.js` `ContraflowRiders`). It puts up to three riders down on
 contraflow streets 40 to 260 m from the car, from its own random stream (`seed * 122949823 + 47`), and
 another 6 to 20 s after one rides off (340 m away, or at the end of its way). A rider rides the street's
 contraflow blocks in turn (`RiderPath`), 0.6 m in from the asphalt's (or parking lane's) edge on the
@@ -41,7 +42,7 @@ and how far right to move for one coming the other way (within 45 m). Before ent
 street the rider is coming out of (within 60 m of the junction), the wait is 1.5 m short of the
 crossing street's asphalt instead (`entryHold`). Traffic (`sim/npc.js`, `trafficYield`) eases right at
 0.7 m/s and holds there; riders coming the other way are not leaders. The driven car's sensing
-(`brain/sensors.js contraflowCyclist`) reports `contraflow_cyclist`: `relation` (`turning_in`,
+(`sim/features/contraflow.js contraflowCyclist`) reports `contraflow_cyclist`: `relation` (`turning_in`,
 `oncoming`, `turning_off`, `crossing`), `wait`, `stop_s_route`, `shift_m` and a `detour` (`cf:<id>`)
 that moves it right, kept from the executing law until it is by. The car waits at the first of the
 entry and conflict holds it can still stop at (from 0.5 m/s, where it is); past both it has committed.
