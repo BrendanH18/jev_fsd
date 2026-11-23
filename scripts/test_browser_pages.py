@@ -483,6 +483,10 @@ def check(url, chromium=None, groups=GROUPS):
 
             for endpoint in ("**/api/results", "**/demo-data/results.json"):
                 page.route(endpoint, lambda route: route.fulfill(status=503))
+            # Reload to clear the in-page results cache while keeping the saved road test.
+            page.reload(wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+            page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+            page.evaluate("() => { window.__jev.view.render = () => {}; }")
             page.evaluate("""async () => {
               const { readHistory } = await import('/js/sim/drive-score.js');
               window.__jev.driveReport.show(readHistory()[0]);
