@@ -267,9 +267,11 @@ test("the World builds each feature from its option, with its seen flag and its 
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;
     if (!f.buildFleet) {
-      assert.equal(off[property].enabled ?? off[property], false, `${f.key} off by default`);
+      const offState = off[property],
+        onState = on[property];
+      assert.equal(typeof offState === "boolean" ? offState : offState?.enabled, false, `${f.key} off by default`);
       assert.equal(
-        on[property].enabled ?? on[property],
+        typeof onState === "boolean" ? onState : onState?.enabled,
         f.key === "geese" ? !!map.parkSpans?.length : true,
         `${f.key} on with its option`,
       );
