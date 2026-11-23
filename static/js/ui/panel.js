@@ -77,6 +77,8 @@ export class Panel {
       o.tabIndex = selected ? 0 : -1;
       if (selected && focus) o.focus();
     }
+    // Keep the selected tab and its content in sync when live decisions are throttled.
+    this.lastRender = -Infinity;
     this.dirty = true;
     this.render();
   }

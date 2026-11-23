@@ -280,14 +280,16 @@ def check_snapshot_form(page):
           window.showSnapshotDecision('awaiting another paint');
           document.querySelector('#copy-json').click();
           document.querySelector('#pin-decision').click();
-          return JSON.parse(text);
+          const state = JSON.parse(text);
+          document.querySelector('#panel [data-tab="state"]').click();
+          document.querySelector('#panel [data-tab="questions"]').click();
+          document.querySelector('#copy-json').click();
+          return [state, JSON.parse(text)];
         } finally {
           navigator.clipboard.writeText = writeText;
         }
     }""")
-    assert copied == {"label": "newer"}
-    page.locator('#panel [data-tab="questions"]').click()
-    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('vector')")
+    assert copied == [{"label": "newer"}, {"vector": "newer"}], copied
     assert "newer" in page.locator("#panel-body").inner_text()
     page.locator("#pin-decision").click()
     page.wait_for_function("document.querySelector('#panel-body').textContent.includes('awaiting another paint')")
