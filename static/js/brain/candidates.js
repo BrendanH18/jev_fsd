@@ -39,6 +39,7 @@ const PREDICTION_IGNORE = hooks("predictionIgnore");
 const SETTLE = hooks("candidateSettle");
 const CANDIDATES = {
   restrictions: hooks("candidates", "restrictions"),
+  beforeRunner: hooks("candidates", "beforeRunner"),
   driveways: hooks("candidates", "driveways"),
   streetHazards: hooks("candidates", "streetHazards"),
   junctions: hooks("candidates", "junctions"),
@@ -51,6 +52,7 @@ const ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
   first: hooks("sim", "first"),
+  beforeRunner: hooks("sim", "beforeRunner"),
   driveways: hooks("sim", "driveways"),
   streetHazards: hooks("sim", "streetHazards"),
   beforeEmergency: hooks("sim", "beforeEmergency"),
@@ -147,21 +149,12 @@ export function sampleCandidates(snap, world) {
   // (and, in a lane that is closed ahead, across into the open lane at the merge point: see laneClosure)
   // (round a cyclist, through the oncoming lane, only `pass_cyclist` goes, at the pass speed the way
   // round was worked out for, and `hard_brake` keeps to it: see cyclistPass)
-  // (and over to the right for a contraflow cyclist coming the other way: see contraflowCyclist)
-  const featurePass = featurePassingDetour(snap);
-  const detour = snap.work_zone?.detour
-    ? { detour: snap.work_zone.detour }
-    : snap.lane_closure?.detour
-      ? { detour: snap.lane_closure.detour }
-      : featurePass
-        ? { detour: featurePass }
-        : snap.contraflow_cyclist?.detour && !snap.cyclist_pass?.detour
-          ? { detour: snap.contraflow_cyclist.detour }
-          : // (and the move a registered feature has the car make in its lane, over toward the middle between
-            // snowbanks, say: brain/sensors.js featureDetour)
-            featureDetour(snap) && !snap.cyclist_pass?.detour
-            ? { detour: featureDetour(snap) }
-            : {};
+  const detourPlan =
+    snap.work_zone?.detour ||
+    snap.lane_closure?.detour ||
+    featurePassingDetour(snap) ||
+    (!snap.cyclist_pass?.detour && featureDetour(snap));
+  const detour = detourPlan ? { detour: detourPlan } : {};
   const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
   const inLane = (law) => ({
     ...law,
@@ -414,27 +407,7 @@ export function sampleCandidates(snap, world) {
         speed: "stop and wait for oncoming traffic before turning",
       });
     }
-    // A cyclist riding against a one-way street (sim/contraflow.js): wait for it short of the junction
-    // or its way, or, meeting it with no room to pass, stopped and moved over until it is by.
-    const cf = snap.contraflow_cyclist;
-    if (cf?.wait && cf.bumper_to_stop_m > 0.3) {
-      // (a metre short of where it waits, never speeding up on the way: it is close as a rule, the
-      // cyclist having come into sight late round a corner)
-      out.push({
-        id: "yield_to_contraflow_cyclist",
-        laneUntil,
-        law: inLane({
-          kind: "lane",
-          vTarget: Math.min(approach, Math.max(v, 2)),
-          stopAtRoute: stopAt(cf.stop_s_route - FRONT - 1),
-        }),
-        steer: cf.detour ? "move over to the right" : "hold lane",
-        speed:
-          cf.relation === "oncoming"
-            ? "stop, moved over, and let the cyclist coming the other way go by"
-            : "stop and let the cyclist riding against the one-way go by",
-      });
-    }
+    for (const add of CANDIDATES.beforeRunner) add(featureCtx, out);
     // A car running the red across the car's way as its light is green (sim/red-light-runner.js): wait
     // at the line until it has cleared the junction.
     const rr = snap.red_light_runner;
@@ -940,19 +913,16 @@ export function simulateAll(candidates, snap, world) {
   const cyclistClearance = world.passCyclists
     ? (cp?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit))
     : CYCLIST_CLEARANCE_M;
-  // a contraflow cyclist (sim/contraflow.js): where the car waits for it, and the room it leaves one it
-  // meets, moving (the minimum passing distance)
-  const cfWait = snap.contraflow_cyclist?.wait ? snap.contraflow_cyclist.stop_s_route : null;
-  const cfClearance = snap.contraflow_cyclist?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit);
   // a car running the red across the car's way (sim/red-light-runner.js): the line the car waits at
   const runnerStop = snap.red_light_runner?.wait ? snap.red_light_runner.stop_s_route : null;
   // what the registered features check along every forward sim (sim/features/index.js): a checker each, or
   // none, by the place its rejection takes among the others
   const sims = {};
   for (const [slot, list] of Object.entries(SIMS))
-    sims[slot] = list.map((prepare) => prepare(world, snap)).filter(Boolean);
+    sims[slot] = list.map((prepare) => prepare(world, snap, npcs)).filter(Boolean);
   const checks = [
     ...sims.first,
+    ...sims.beforeRunner,
     ...sims.driveways,
     ...sims.streetHazards,
     ...sims.beforeEmergency,
@@ -995,8 +965,6 @@ export function simulateAll(candidates, snap, world) {
       pastHold = false,
       closePass = false,
       meets = false,
-      cfCut = false,
-      cfMeet = false,
       passesRunner = false,
       collision = null,
       followerHit = null,
@@ -1062,8 +1030,6 @@ export function simulateAll(candidates, snap, world) {
         if (oncoming && s + FRONT > oncoming.yield_s_route + ONCOMING_STOP_M - 0.5) cutsOff = true;
         // likewise turning right across a cyclist's line of travel
         if (hook && s + FRONT > hook.yield_s_route + HOOK_STOP_M - 0.5) hooks = true;
-        // (and here: half a metre past where it waits is still short of the cyclist's way)
-        if (cfWait !== null && s + FRONT > cfWait + 0.5) cfCut = true;
         // (and here: across the line is into the junction)
         if (runnerStop !== null && s + FRONT > runnerStop + 0.2) passesRunner = true;
         // (and where the registered features' checks look along the route: sim/features/index.js)
@@ -1147,9 +1113,7 @@ export function simulateAll(candidates, snap, world) {
             minClearance = Math.min(minClearance, Math.max(0, side - box.halfWidth - ob.halfWidth));
           // passing a cyclist needs the minimum passing distance: a metre (and with passing cyclists on,
           // 1.5 m above 50 km/h)
-          // (a contraflow cyclist coming the other way is met, not passed: moving, the car leaves it the
-          // minimum passing distance too, sim/contraflow.js)
-          const meeting = o.n.contra && Math.abs(wrap(o.n.psi - car.psi)) > (Math.PI * 2) / 3;
+          const meeting = o.feature?.oncoming?.(o.n, car);
           if (
             o.n.kind === "bike" &&
             !meeting &&
@@ -1157,14 +1121,7 @@ export function simulateAll(candidates, snap, world) {
             side - box.halfWidth - ob.halfWidth < cyclistClearance
           )
             closePass = true;
-          if (
-            meeting &&
-            car.v > 1 &&
-            Math.abs(ahead) < box.halfLength + ob.halfLength &&
-            side - box.halfWidth - ob.halfWidth < cfClearance - 0.1
-          )
-            cfMeet = true;
-          for (const check of nearbyChecks) check.near(car, box, o.n, ob);
+          for (const check of nearbyChecks) check.near(car, box, o.n, ob, ahead, side, meeting);
           // going round a cyclist with its far side across the centre line, meeting a vehicle coming the
           // other way in its way (sim/cyclist-pass.js)
           if (
@@ -1284,8 +1241,7 @@ export function simulateAll(candidates, snap, world) {
     else if (pedCross && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_pedestrian";
     else if (cutsOff && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_oncoming";
     else if (hooks && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_cyclist";
-    else if (cfCut && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_contraflow_cyclist";
-    else if (cfMeet && c.law.kind !== "hard_brake") reject = "passes_contraflow_cyclist_too_close";
+    else if ((reject = rejectBy(sims.beforeRunner, c)));
     else if (passesRunner && c.law.kind !== "hard_brake") reject = "enters_ahead_of_red_light_runner";
     else if ((reject = rejectBy(sims.driveways, c)));
     else if ((reject = rejectBy(sims.streetHazards, c)));

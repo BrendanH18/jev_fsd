@@ -356,7 +356,6 @@ const CORE_FAIL_CATEGORY = {
   "left a pedestrian crossover before the far curb": "right_of_way",
   "passed a garbage crew worker too close": "space",
   "drove past a crossing guard's stop sign": "right_of_way",
-  "cut off or squeezed a contraflow cyclist": "space",
   "entered on green ahead of a car running the red": "observation",
   "not parked": "parking",
 };

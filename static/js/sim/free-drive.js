@@ -52,8 +52,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     busLanes: on("buslanes"),
     pxo: on("pxo"),
     restrictions: on("restrictions"),
-    // cyclists riding against the traffic on one-way streets that allow it (`?contraflow=0`)
-    contraflow: on("contraflow"),
     highBeams: on("highbeams"),
     leftOnRed: on("leftonred"),
     redTurnSigns: on("redturnsigns"),

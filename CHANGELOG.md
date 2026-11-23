@@ -17,7 +17,7 @@
 - Measure city pilot prompts, reserve budget between drives and compare repeated arena recordings offline.
 - Register police officers through the feature interface.
 - Register tailgaters and derive free-drive switches from the feature registry.
-- Register double-parked delivery vans through the feature interface.
+- Register double-parked delivery vans and contraflow cyclists through the feature interface.
 - Define registered feature audit labels and examiner categories alongside their metrics.
 - Run agent checks in one reusable Boat sandbox per worktree, started from a warm snapshot.
 - Check a local driver on both tracks and use dedicated issue templates for map and driving problems.

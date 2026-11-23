@@ -112,7 +112,7 @@ export default {
     },
   },
   // (over toward the middle between snowbanks)
-  detour: { at: "contraflow", run: (snap) => snap.snowbank?.narrowing?.detour },
+  detour: (snap) => snap.snowbank?.narrowing?.detour,
   // (through a narrowed stretch, and up to a corner a snowbank hides)
   limit: {
     at: "streetHazards",

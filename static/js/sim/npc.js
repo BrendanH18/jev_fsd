@@ -23,10 +23,6 @@ import { turnBanned } from "./turn-restrictions.js";
 // the oncoming lane, the minimum passing distance clear, once that lane is clear (sim/cyclist-pass.js).
 // With `guards` on, everyone stops short of a school crosswalk while its crossing guard holds up the
 // STOP sign, until the guard and every child are off the road (sim/crossing-guard.js).
-// With `contraflow` on, drivers look both ways for cyclists riding against a one-way street that allows
-// it: they wait short of the junction for one coming out of the street they turn into, wait for one as
-// for oncoming traffic, and move over for one coming the other way along it, stopping where that leaves
-// less than the minimum passing distance until it has gone by (sim/contraflow.js).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, SNOW_PLOW, comfort } from "./vehicle.js";
 import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
@@ -140,9 +136,8 @@ import {
   wayClear as cyclistWayClear,
 } from "./cyclist-pass.js";
 import { LOOK_M as GUARD_LOOK_M, STOP_M as GUARD_STOP_M } from "./crossing-guard.js";
-import { trafficYield as contraflowYield } from "./contraflow.js";
 import { npcGlareCeiling } from "./sun-glare.js";
-import { firstHookResult, hooks, isParkingTraffic } from "./features/index.js";
+import { featureObstacle, firstHookResult, hooks, isParkingTraffic } from "./features/index.js";
 
 // How traffic takes the registered features (sim/features/index.js): spotted on its way each step, a
 // re-plan round them, a move inside its lane, and where it stops for them; each where that feature's own
@@ -160,7 +155,9 @@ const TRAFFIC_MANAGE = hooks("trafficManage"),
   TRAFFIC_CONTROL = hooks("trafficControl"),
   TRAFFIC_REPLAN = hooks("trafficReplan");
 const TRAFFIC_BYPASS = hooks("trafficBypass"),
-  TRAFFIC_LANE = hooks("trafficLane", "contraflow"),
+  TRAFFIC_ACTORS = hooks("trafficActors"),
+  BEFORE_LANE_MOVES = hooks("trafficLane", "beforeLaneMoves"),
+  TRAFFIC_LANE = hooks("trafficLane", "laneMoves"),
   TRAFFIC_KEEP = hooks("trafficLane", "late"),
   TRAFFIC_YIELD = hooks("trafficYield"),
   TRAFFIC_SPEED = hooks("trafficSpeed"),
@@ -295,8 +292,6 @@ const HOOK_MARGIN_S = 1.5;
 const HOOK_TURN_MPS = 6;
 const BODY_LOOK_M = 8;
 const BODY_AHEAD_M = 2;
-// How fast a driver moves over for a contraflow cyclist coming the other way (sim/contraflow.js).
-const CF_SHIFT_MPS = 0.7;
 // Giving way to an emergency vehicle (sim/emergency.js): a driver eases over at up to 0.8 m/s and
 // stops within its stopping distance braking at 1.5 m/s^2 (3.5 m/s^2 for one coming toward it or
 // across its way; at least 4 m on), short of the next junction
@@ -1163,8 +1158,7 @@ export class NpcFleet {
     if (this.collection.trucks.length || this.collection.target) this.collection.manage(dt);
     for (const manage of TRAFFIC_MANAGE) manage(world, this, dt);
     const all = [world.ego, ...this.vehicles];
-    // (contraflow cyclists, with that option on: sim/contraflow.js)
-    const riders = world.contraflow?.riders || [];
+    const extraTraffic = TRAFFIC_ACTORS.flatMap((actors) => actors(world) ?? []);
     for (const n of [...this.vehicles]) {
       // (with road closures on, say, every driver's way keeps out of a closed block)
       for (const start of TRAFFIC_START) start(world, n);
@@ -1192,7 +1186,7 @@ export class NpcFleet {
       }
       if (isEmergencyVehicle(n)) {
         if (n.siren) {
-          this.emergencyStep(n, dt, riders.length ? all.concat(riders) : all);
+          this.emergencyStep(n, dt, extraTraffic.length ? all.concat(extraTraffic) : all);
           continue;
         }
         // Stood down: return to ordinary lane driving and junction priority. Keeping the
@@ -1382,14 +1376,12 @@ export class NpcFleet {
         bypassShift +
         lzShift;
       if (cyc) offset += n.cpShift;
-      // a contraflow cyclist (sim/contraflow.js): move over to the right for one coming the other way,
-      // and wait where it must for one to go by, or out of a street it turns into
-      const cf = riders.length && n.kind !== "bike" && !n.transit?.tram ? contraflowYield(world, n, front) : null;
-      if (cf || n.cfShift) {
-        n.cfShift =
-          (n.cfShift || 0) +
-          Math.max(-CF_SHIFT_MPS * dt, Math.min(CF_SHIFT_MPS * dt, (cf?.shift || 0) - (n.cfShift || 0)));
-        offset += n.cfShift;
+      const earlyMoves = [];
+      for (const run of BEFORE_LANE_MOVES) {
+        const move = run(world, n, front, false, dt, { offset, moves: earlyMoves });
+        if (!move) continue;
+        if (move.shift !== undefined) offset += move.shift;
+        earlyMoves.push(move);
       }
       // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
       // while changing lanes or going round something), and its speed ceiling for it; each is handed where
@@ -1460,12 +1452,11 @@ export class NpcFleet {
       for (const o of all.concat(
         world.parked.near(n.x, n.y, LOOK_M),
         world.parked.doorsNear(n.x, n.y, LOOK_M),
-        riders,
+        extraTraffic,
       )) {
         if (o === n) continue;
-        // (a contraflow cyclist coming the other way is met, not followed: see contraflowYield)
-        if (o.contra && Math.abs(wrap(o.psi - n.psi)) > (Math.PI * 2) / 3) continue;
         if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
+        if (extraTraffic.length && featureObstacle(o)?.oncoming?.(o, n)) continue;
         // (going round a work zone's closed stretch, not up to it)
         if (wz?.detour && o === wz.zone.closure) continue;
         // (nor, from the closed lane, the lane closure's)
@@ -1534,7 +1525,7 @@ export class NpcFleet {
         for (const o of all.concat(
           world.parked.near(n.x, n.y, BODY_LOOK_M + 6),
           world.parked.doorsNear(n.x, n.y, BODY_LOOK_M + 6),
-          riders,
+          extraTraffic,
         )) {
           if (o === n || Math.abs(o.x - n.x) > BODY_LOOK_M + 6 || Math.abs(o.y - n.y) > BODY_LOOK_M + 6) continue;
           const g = bodyOnPath(n, o, front, proj.lateral, offset);
@@ -1554,7 +1545,7 @@ export class NpcFleet {
           reach = spec.length + BUS_BODY_LOOK_M + 6,
           nose = spec.length - spec.rearOverhang - 1;
         const close = all
-          .concat(world.parked.near(n.x, n.y, reach), riders)
+          .concat(world.parked.near(n.x, n.y, reach), extraTraffic)
           .filter(
             (o) =>
               o !== n &&
@@ -1961,17 +1952,10 @@ export class NpcFleet {
         gap = Math.max(0.05, forGuard);
         leadV = 0;
       }
-      // for a contraflow cyclist, where it must wait (once it could stop there: otherwise it carries on)
-      if (cf?.hold != null) {
-        const g = cf.hold - front;
-        if (g > -1 && g < gap && g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1) {
-          gap = Math.max(0.05, g);
-          leadV = 0;
-        }
-      }
       // where a registered feature's line has it stop: between snowbanks, say, short of the one-car stretch
       // until it is its turn (once it could stop there: otherwise it has the way)
-      for (const { hold } of keepMoves) {
+      earlyMoves.push(...keepMoves);
+      for (const { hold } of earlyMoves) {
         if (hold == null) continue;
         const g = hold - front;
         if (g > -1 && g < gap && g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1) {

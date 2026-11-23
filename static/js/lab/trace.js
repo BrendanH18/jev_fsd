@@ -15,10 +15,15 @@ const CORE_AUDITS = {
   guard_violations: "Drove past a school crossing guard's STOP sign",
   pxo_early_goes: "Left a pedestrian crossover before the far curb",
   illegal_turns: "Made a prohibited turn",
-  contraflow_conflicts: "Cut off or squeezed a cyclist riding against the one-way",
-  fresh_green_conflicts: "Entered on green ahead of a car running the red",
 };
-const AUDITS = [...Object.entries(CORE_AUDITS), ...FEATURE_METRICS.map(({ name, label }) => [name, label])];
+
+const auditPair = ({ name, label }) => [name, label];
+const AUDITS = [
+  ...Object.entries(CORE_AUDITS),
+  ...FEATURE_METRICS.filter(({ at }) => at === "beforeRunner").map(auditPair),
+  ["fresh_green_conflicts", "Entered on green ahead of a car running the red"],
+  ...FEATURE_METRICS.filter(({ at }) => at !== "beforeRunner").map(auditPair),
+];
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and
 // source, and its fallback error and hazard flags when it has any. A run of such records with the same

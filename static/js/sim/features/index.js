@@ -22,6 +22,7 @@
 //             an obstacle supplied by the feature. `traffic` allows it in the traffic sensing pass.
 //             `likePedestrian` assigns fault to the ego car on impact. `fixed` treats it as scenery.
 //             `predict` and `visible` override its position in predictions and its local visibility.
+//             `oncoming(o, vehicle)` identifies an opposing rider instead of a leader or cyclist to pass.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
@@ -35,12 +36,13 @@
 // hooks without `at` run at the slot "end". Once every feature is a record (ROADMAP 3.2), registration
 // order alone can place them and the slots can go.
 //
-// Hooks (and their slots in the core):
+// Hooks (and their slots in the core): "beforeRunner" keeps sensing, candidate checks, wording and
+// metrics before the red-light runner's corresponding code. SLOTS lists every supported position.
 //   obstacles(world, x, y, r)          World.obstaclesNear, after the others ("end")
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
 //                                       traffic moves ("end"), with "afterOutages" between them
-//   stepAfterTraffic(world, fleet, dt)  sim/step.js, after contraflow and before the people on foot move ("end")
-//   audit(world)                        World.audit: "afterFlagger", "driveways", "streetHazards", "rearTraffic", "late"
+//   stepAfterTraffic(world, fleet, dt)  sim/step.js, after traffic and before the people on foot move ("end")
+//   audit(world, frontOnPath?)           World.audit: "afterFlagger", "driveways", "streetHazards", "rearTraffic", "late"
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
 //   evKerb(world, road, front)          the emergency audit's furthest right the car can be asked to pull
@@ -56,7 +58,7 @@
 //                                       "rearTraffic", "late"
 //   followingExclusion(snap)           id of a vehicle treated as a stop instead of a follow target ("end")
 //   detour(snap)                        a move round an obstruction ("parking") or inside the lane
-//                                       after a contraflow cyclist's ("contraflow"), or null
+//                                       in registration order ("end"), or null
 //   evStop(world, route, frontS, v, stop, decel)  where the car stops for an emergency vehicle, kept short
 //                                       of where the feature has it keep out ("end")
 //   blocksView(world, from, to)         true: it blocks the car's view along a street from a junction ("end")
@@ -69,10 +71,11 @@
 //   pullOverDetour(snap, detour, stopS) true: pulling over for an emergency vehicle to stop at `stopS`
 //                                       drops the lane's `detour` ("end")
 //   brakeDetour(ctx)                    the move `hard_brake` keeps to, or null ("end")
-//   sim(world, snap)                    the forward sims: null, or a checker { wheels, start(), afterLaw(car,
+//   sim(world, snap, predictions)       the forward sims: null, or a checker { wheels, start(), afterLaw(car,
 //                                       wheelsBefore, t), along(s, front, car), near(car, box, obstacle,
-//                                       predictedBox), reject(c), settle(candidates) }
-//                                       whose rejection comes at its slot: "first", "driveways", "streetHazards", beforeEmergency", "parking", "end";
+//                                       predictedBox, ahead, side, meeting), reject(c), settle(candidates) }
+//                                       whose rejection comes at its slot: "first", "beforeRunner", "driveways",
+//                                       "streetHazards", "beforeEmergency", "parking" or "end";
 //                                       `settle` runs after `candidateSettle` and may let a rejection stand down
 //   predictionIgnore(snap, obstacle)   true to skip an obstacle in the forward simulations ("end")
 //   candidateSettle(snap, candidates)  apply checks that compare candidates after all are judged ("end")
@@ -101,13 +104,15 @@
 //   trafficSpawnBlocked(world, x, y)   true when a traffic spawn is too close to an obstruction ("end")
 //   trafficBypass(world, n, front, all, defaultDriver) first bypass or wait for an obstruction: { shift,
 //                                       lineAt(s), ignore, waitGap, limit } at the pursuit point ("end")
+//   trafficActors(world)               road users outside the fleet, also considered by traffic
 //   trafficLane(world, n, front, busy, dt, { offset, moves, pursuit })  { result, shift, aim, now, easing }:
-//                                       a move inside the lane ("contraflow", or "late" for a line it keeps
+//                                       a move inside the lane ("beforeLaneMoves", "laneMoves", or "late" for a line it keeps
 //                                       to), handed where the vehicle keeps in its lane so far (`offset`) and
 //                                       what the earlier hooks at that slot returned (`moves`): `shift` is
 //                                       added to its offset now, `result.limit` caps its speed, `aim` is where
 //                                       the move is heading and `now` where it has got to (metres right of the
-//                                       lane's centre), `easing` that it is moving off the middle. At
+//                                       lane's centre), `easing` that it is moving off the middle.
+//                                       "beforeLaneMoves" offsets apply first and may return a `hold`. At
 //                                       "late" it is also handed `pursuit()`, the arc length its steering
 //                                       aims at, and returns `hold` (where it stops), `lineAt(s)` (how much further
 //                                       the line moves by arc length s) and `kept(lat)` (how far `lat` is from
@@ -123,6 +128,7 @@
 // (scripts/test_feature_registry.mjs checks each record loads after it).
 import { CATEGORIES } from "../../lab/examiner-categories.js";
 import balls from "./balls.js";
+import contraflow from "./contraflow.js";
 import driveways from "./driveways.js";
 import potholes from "./potholes.js";
 import geese from "./geese.js";
@@ -136,6 +142,7 @@ import roadClosures from "./road-closures.js";
 import doubleParked from "./double-parked.js";
 
 export const FEATURES = [
+  contraflow,
   driveways,
   balls,
   potholes,
@@ -157,11 +164,11 @@ export const SLOTS = {
   stepBeforeTraffic: ["first", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
   audit: ["afterFlagger", "driveways", "streetHazards", "rearTraffic", "late"],
-  sense: ["parking", "driveways", "streetHazards", "late", "junctions", "following"],
+  sense: ["beforeRunner", "parking", "driveways", "streetHazards", "late", "junctions", "following"],
   finishLanes: ["end"],
-  limit: ["passing", "driveways", "streetHazards", "parking"],
-  target: ["restrictions", "driveways", "streetHazards", "beforeEmergency", "parking"],
-  hazard: ["parking", "driveways", "streetHazards", "rearTraffic", "late"],
+  limit: ["beforeRunner", "passing", "driveways", "streetHazards", "parking"],
+  target: ["beforeRunner", "restrictions", "driveways", "streetHazards", "beforeEmergency", "parking"],
+  hazard: ["beforeRunner", "parking", "driveways", "streetHazards", "rearTraffic", "late"],
   laneOffer: ["end"],
   laneChangeCandidate: ["end"],
   lineStop: ["end"],
@@ -173,17 +180,26 @@ export const SLOTS = {
   junctionPlan: ["end"],
   trafficControl: ["end"],
   turnPace: ["end"],
-  candidates: ["restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"],
+  candidates: ["beforeRunner", "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"],
   adjust: ["streetHazards", "end"],
   brakeDetour: ["end"],
-  sim: ["first", "driveways", "streetHazards", "beforeEmergency", "parking", "end"],
-  state: ["restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"],
+  sim: ["beforeRunner", "first", "driveways", "streetHazards", "beforeEmergency", "parking", "end"],
+  state: ["beforeRunner", "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"],
   outcome: ["ids"],
   slowOutcome: ["lane", "end"],
-  clause: ["restrictions", "driveways", "streetHazards", "ice", "rearTraffic", "parking"],
-  holdStill: ["driveways", "late", "parking"],
-  prompt: ["restrictions", "streetHazards", "driveways", "snowbanks", "junctions", "rearTraffic", "parking"],
-  metric: ["driveways", "streetHazards", "rearTraffic", "late", "junctions"],
+  clause: ["beforeRunner", "restrictions", "driveways", "streetHazards", "ice", "rearTraffic", "parking"],
+  holdStill: ["beforeRunner", "driveways", "late", "parking"],
+  prompt: [
+    "beforeRunner",
+    "restrictions",
+    "streetHazards",
+    "driveways",
+    "snowbanks",
+    "junctions",
+    "rearTraffic",
+    "parking",
+  ],
+  metric: ["beforeRunner", "driveways", "streetHazards", "rearTraffic", "late", "junctions"],
   evQueueHold: ["end"],
   trafficManage: ["beforePlows", "end"],
   trafficDriver: ["end"],
@@ -192,7 +208,8 @@ export const SLOTS = {
   trafficParkingPlan: ["end"],
   trafficStart: ["end", "beforeControl"],
   trafficReplan: ["end"],
-  trafficLane: ["contraflow", "late"],
+  trafficActors: ["end"],
+  trafficLane: ["beforeLaneMoves", "laneMoves", "late"],
   trafficYield: ["end"],
   trafficSpeed: ["end"],
   trafficPullOut: ["end"],
@@ -204,7 +221,7 @@ export const SLOTS = {
   followingExclusion: ["end"],
   trafficBypass: ["end"],
   trafficSpawnBlocked: ["end"],
-  detour: ["parking", "contraflow"],
+  detour: ["parking", "end"],
   pullOverDetour: ["end"],
 };
 // The fields of a record that are not hooks.

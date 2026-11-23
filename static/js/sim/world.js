@@ -80,7 +80,6 @@ import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 import { egoPassing, oncomingPassConflict, minPassM } from "./cyclist-pass.js";
-import { ContraflowRiders, auditContraflow } from "./contraflow.js";
 import {
   FEATURES,
   controlDirection,
@@ -277,9 +276,7 @@ export class World {
   // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // `guards`: school crossing guards walk children across the marked crosswalks in school zones while
   // the zones are in effect, and everyone stops for their STOP sign (sim/crossing-guard.js).
-  // `contraflow`: cyclists ride against the traffic on one-way streets that allow it, and everyone looks
-  // both ways for them (sim/contraflow.js). `sunGlare`: a low sun ahead dazzles drivers, who slow to
-  // what they can see (sim/sun-glare.js).
+  // `sunGlare`: a low sun ahead dazzles drivers, who slow to what they can see (sim/sun-glare.js).
   // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
@@ -305,7 +302,6 @@ export class World {
       pxo = false,
       restrictions = false,
       nightFlash = false,
-      contraflow = false,
       highBeams = false,
       leftOnRed = false,
       redTurnSigns = false,
@@ -441,11 +437,6 @@ export class World {
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     this.crossingGuards = new CrossingGuards(this, { enabled: guards, seed });
-    // contraflow cyclists (sim/contraflow.js): whether they ride, whether one has ridden near the car this
-    // drive, and the ones the car has met or cut off
-    this.contraflow = new ContraflowRiders(this, { enabled: contraflow, seed });
-    this.contraflowSeen = false;
-    this.contraflowCalls = new Map();
     // each registered feature (sim/features/index.js): what it builds, whether it has met the car this
     // drive, and its audit's calls
     for (const f of FEATURES) {
@@ -463,11 +454,7 @@ export class World {
       const m = r + Math.max(5, n.spec?.length || 0);
       return Math.abs(n.x - x) < m && Math.abs(n.y - y) < m;
     });
-    const all = out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
-    // (and contraflow cyclists, with that option on: sim/contraflow.js)
-    const out2 = this.contraflow?.riders.length ? all.concat(this.contraflow.near(x, y, r)) : all;
-    // (and what the registered features put in the road: sim/features/index.js)
-    let obstacles = out2;
+    let obstacles = out.concat(this.parked.near(x, y, r), this.parked.doorsNear(x, y, r), this.crowd.near(x, y, r));
     for (const near of OBSTACLES_NEAR) {
       const more = near(this, x, y, r);
       if (more) obstacles = obstacles.concat(more);
@@ -614,7 +601,6 @@ export class World {
     this.bikePasses?.clear();
     this.cyclistPass = null;
     this.guardCalls?.clear();
-    this.contraflowCalls?.clear();
     this.runnerCall = null;
     for (const f of FEATURES) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
@@ -1101,8 +1087,7 @@ export class World {
     if (this.calming) this.auditCalming();
     if (this.collectionSeen) this.auditCrew();
     if (this.crossingGuards.enabled) this.auditGuards();
-    if (this.contraflow.enabled) auditContraflow(this, frontOnPath);
-    for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this);
+    for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this, frontOnPath);
     for (const audit of AUDIT_STREET_HAZARDS) audit(this);
     for (const audit of AUDIT_REAR_TRAFFIC) audit(this);
     for (const audit of AUDIT_LATE) audit(this);

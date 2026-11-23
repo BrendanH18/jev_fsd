@@ -6,9 +6,10 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Twelve features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police officers,
-tailgaters, black ice, snowbanks, puddles, traffic parking, road closures and double-parked vans. Each record holds the hooks
-into the core pipeline and the model wording that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
+Thirteen features have moved: driveway reversers, ball chase, spring potholes, Canada geese, police
+officers, tailgaters, black ice, snowbanks, puddles, traffic parking, road closures, double-parked vans
+and contraflow cyclists. Each record holds the hooks into the core pipeline and the model wording
+that used to sit in `brain/state.js` and `brain/llm-prompt.js`.
 
 ## A record
 
@@ -162,6 +163,19 @@ The guarded and open LLM prompts were byte-identical, the Jev fixtures stayed cu
 **Round the van** and **Collection day** drives replayed exactly from both published open-track
 recordings (Jev and Claude Haiku).
 
+**Contraflow cyclists** were compared against `e2d97a8` in Boat with Node 22.23.5. Rules
+and the cautious agent each passed all 62 authored drives on both trees. Their results,
+decision traces, events, examiner sheets and comparison score inputs matched apart from
+timings. Both drivers reported `contraflow_conflicts: 0` in **Both ways**. Jev and Claude Haiku's
+published open-track recordings of that challenge replayed exactly. The guarded and open
+LLM prompts matched byte for byte, and the Jev fixtures stayed current.
+
+All 72 dry benchmark attempts matched apart from timings and run provenance. The comparison
+used seed 1 with 12 routes per suite for each driver. Both passed all 12 Kitsilano bare routes.
+Rules passed 12/12 and the cautious agent 9/12 on Kitsilano city. On Montréal city, Rules passed
+9/12 and the cautious agent 8/12. The contraflow metric appeared on four Rules and six cautious
+Montréal routes.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
@@ -211,6 +225,12 @@ need nothing.
   that puddles used went once snowbanks moved. Tailgaters register before ice, snowbanks, puddles and
   parkers. The shared `"rearTraffic"` slot keeps their audits, metrics, candidate insertion and model
   text in the established order. Each pipeline still calls the slot where those hooks belong.
+* **Contraflow cyclists.** The `trafficActors` hook supplies riders outside the fleet to its clearance
+  and following checks. The obstacle descriptor identifies when a rider is coming the other way, so
+  a driver handles the encounter as oncoming traffic. The `"beforeLaneMoves"` slot applies the
+  driver's move before it considers its next adjustments and retains the rider's stop point.
+  The `"beforeRunner"` slots keep the cyclist's candidate, rejection, model wording and result
+  fields ahead of the red-light runner's.
 * **Same proof each time.** Record the bare and city Kitsilano suites and every challenge before and
   after, and diff every field but the timings (the harness used here dumps `comparableResult` of each
   `evaluateChallenge` result, decision trace and events included).

@@ -217,7 +217,7 @@ export default {
   // Traffic: ease over inside the lane where that takes both wheels clear of it (not while changing lanes
   // or going round something: `busy`), and otherwise slow to drive over it.
   trafficLane: {
-    at: "contraflow",
+    at: "laneMoves",
     run(world, n, front, busy, dt) {
       const ph =
         world.potholes?.list.length && n.kind !== "bike" && !n.transit?.tram ? npcPothole(world, n, front) : null;

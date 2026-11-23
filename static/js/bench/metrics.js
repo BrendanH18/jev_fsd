@@ -126,8 +126,7 @@ export class DriveMetrics {
       ...(world.collectionSeen ? { crew_close_passes: v.crew_close_passes || 0 } : {}),
       // (only for a drive a school crossing guard held up the STOP sign in: sim/crossing-guard.js)
       ...(world.guardsSeen ? { guard_violations: v.guard_violations || 0 } : {}),
-      // (only for a drive a contraflow cyclist rode near the car in: sim/contraflow.js)
-      ...(world.contraflowSeen ? { contraflow_conflicts: v.contraflow_conflicts || 0 } : {}),
+      ...featureMetrics(world, v, "beforeRunner"),
       // (only for a drive a red-light runner committed near the car in: sim/red-light-runner.js)
       ...(world.redRunnersSeen ? { fresh_green_conflicts: v.fresh_green_conflicts || 0 } : {}),
       // (and the registered features' metrics, each only for a drive in which the feature met the car:
@@ -195,7 +194,7 @@ export function failures(m) {
   if (m.pxo_early_goes) f.push("left a pedestrian crossover before the far curb");
   if (m.crew_close_passes) f.push("passed a garbage crew worker too close");
   if (m.guard_violations) f.push("drove past a crossing guard's stop sign");
-  if (m.contraflow_conflicts) f.push("cut off or squeezed a contraflow cyclist");
+  f.push(...featureFailures(m, "beforeRunner"));
   if (m.fresh_green_conflicts) f.push("entered on green ahead of a car running the red");
   f.push(...featureFailures(m, "driveways"));
   f.push(...featureFailures(m, "streetHazards"));

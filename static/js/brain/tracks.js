@@ -57,8 +57,6 @@ export const FLAG_TEXT = {
   fails_to_yield_to_pedestrian: "it does not stop for a pedestrian crossing",
   fails_to_yield_to_oncoming: "it turns across oncoming traffic that has the right of way",
   fails_to_yield_to_cyclist: "it turns right across a cyclist on its right",
-  fails_to_yield_to_contraflow_cyclist: "it cuts off a cyclist riding against the one-way",
-  passes_contraflow_cyclist_too_close: "it passes a cyclist riding against the one-way too close",
   enters_ahead_of_red_light_runner: "it enters on the green in front of a car running its red",
   passes_reversing_vehicle_too_close: "it passes a car backing out of a driveway too close",
   passes_ball_gap_too_fast: "it passes where a ball rolled out too fast to stop for a child following it",
