@@ -20,6 +20,7 @@
 - Register double-parked delivery vans through the feature interface.
 - Define registered feature audit labels and examiner categories alongside their metrics.
 - Run agent checks in one reusable Boat sandbox per worktree, started from a warm snapshot.
+- Let CI run the full check suite; agents run targeted Boat checks while working and report them at hand-off.
 - Check a local driver on both tracks and use dedicated issue templates for map and driving problems.
 - Compare an unchanged manual challenge or road-test attempt with published drivers and see measured
   benchmark scores from the challenge leaderboard.
