@@ -17,6 +17,7 @@ import { flagText } from "./tracks.js";
 // own code used to be.
 const STATE = {
   restrictions: hooks("state", "restrictions"),
+  afterCalming: hooks("state", "afterCalming"),
   driveways: hooks("state", "driveways"),
   beforeRunner: hooks("state", "beforeRunner"),
   streetHazards: hooks("state", "streetHazards"),
@@ -29,6 +30,7 @@ const OUTCOME_BY_ID = hooks("outcome", "ids"),
   SLOW_OUTCOME_LAST = hooks("slowOutcome");
 const CLAUSE = {
   restrictions: hooks("clause", "restrictions"),
+  afterCalming: hooks("clause", "afterCalming"),
   driveways: hooks("clause", "driveways"),
   beforeRunner: hooks("clause", "beforeRunner"),
   streetHazards: hooks("clause", "streetHazards"),
@@ -160,16 +162,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(c.over ? { over: true } : { starts_in_m: r1(Math.max(0, c.starts_in_m)) }),
     };
   }
-  if (snap.sun_glare) {
-    const g = snap.sun_glare;
-    state.sun_glare = {
-      severity: g.severity,
-      sight_m: g.sight_m,
-      speed_ceiling: r1(g.ceiling_mps),
-      sun_elevation_deg: g.sun_elevation_deg,
-      sun_off_heading_deg: g.off_heading_deg,
-    };
-  }
+  for (const add of STATE.afterCalming) add(snap, state);
   if (snap.lane && snap.lane.lanes > 1) {
     const l = snap.lane;
     state.lanes = {
@@ -886,13 +879,7 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
         : `A ${c.name} lies across the street ${Math.round(Math.max(0, c.starts_in_m))} m ahead: slow to ${kmh} km/h by the time the car reaches it, and keep to that over it; taken faster it jolts the car and everyone in it. \`car.target_speed\` already does.`,
     );
   }
-  if (snap.sun_glare) {
-    const g = snap.sun_glare,
-      kmh = Math.round(g.ceiling_mps * 3.6);
-    out.push(
-      `The car is driving into a low sun (${g.sun_elevation_deg}° above the horizon, ${g.off_heading_deg}° off its heading): glare washes out signals and people ahead, so the car sees only about ${g.sight_m} m that way. Keep to ${kmh} km/h or less, the speed it can stop from within that, and look for signals and people early (\`car.target_speed\` already does): prefer a candidate whose \`end_speed\` is at or below it, and leave more room.`,
-    );
-  }
+  pushClauses(out, CLAUSE.afterCalming, snap);
   if (snap.right_hook) out.push(rightHookClause(snap.right_hook));
   pushClauses(out, CLAUSE.beforeRunner, snap);
   if (snap.red_light_runner) out.push(runnerClause(snap.red_light_runner));

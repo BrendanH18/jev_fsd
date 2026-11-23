@@ -350,7 +350,6 @@ const CORE_FAIL_CATEGORY = {
   "passed a cyclist too close": "space",
   "drove in a reserved bus lane": "steering",
   "failed to dip high beams": "right_of_way",
-  "too fast for sun glare": "speed",
   "made a prohibited turn": "right_of_way",
   "took a speed hump too fast": "speed",
   "left a pedestrian crossover before the far curb": "right_of_way",

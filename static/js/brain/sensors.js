@@ -115,7 +115,6 @@ import {
   sightFor as cyclistSight,
   wayClear as cyclistWayClear,
 } from "../sim/cyclist-pass.js";
-import { sunGlareSensing } from "../sim/sun-glare.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
 // Passing a snow plow, the car's route ahead must be in view as far as it looks for that (the 60 m of
@@ -159,6 +158,7 @@ import {
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
 const SENSE = {
   parking: hooks("sense", "parking"),
+  afterCalming: hooks("sense", "afterCalming"),
   beforeRunner: hooks("sense", "beforeRunner"),
   following: hooks("sense", "following"),
   driveways: hooks("sense", "driveways"),
@@ -175,6 +175,7 @@ const LIMIT = {
 };
 const TARGET = {
   parking: hooks("target", "parking"),
+  beforeCurve: hooks("target", "beforeCurve"),
   restrictions: hooks("target", "restrictions"),
   driveways: hooks("target", "driveways"),
   streetHazards: hooks("target", "streetHazards"),
@@ -893,11 +894,7 @@ export function buildSnapshot(world, executing = null) {
   for (const limit of LIMIT.passing) limit(snap);
   // (and coming up to a speed hump or the like, and over it: sim/traffic-calming.js)
   if (snap.traffic_calming) snap.limit = Math.min(snap.limit, calmingSpeed(snap.traffic_calming));
-  // (and driving into a low sun, no faster than it can stop within what it can see: sim/sun-glare.js)
-  if (world.sunGlare) {
-    snap.sun_glare = sunGlareSensing(world);
-    if (snap.sun_glare) snap.limit = Math.min(snap.limit, snap.sun_glare.ceiling_mps);
-  }
+  for (const sense of SENSE.afterCalming) sense(world, snap);
   for (const limit of LIMIT.beforeRunner) limit(snap);
   for (const limit of LIMIT.driveways) limit(snap);
   for (const limit of LIMIT.streetHazards) limit(snap);
@@ -2683,11 +2680,7 @@ export function desiredSpeed(snap) {
       reasons.push("limited visibility");
     }
   }
-  // a low sun ahead (sim/sun-glare.js): `limit` is already down to the speed to stop within the glare
-  if (snap.sun_glare && snap.sun_glare.ceiling_mps <= v + 0.05) {
-    v = Math.min(v, snap.sun_glare.ceiling_mps);
-    reasons.push("sun glare");
-  }
+  for (const target of TARGET.beforeCurve) v = target(snap, v, reasons, targetCtx);
   if (snap.route && snap.routeProj) {
     const curve = curveProfileSpeed(snap.route, snap.routeProj.s);
     if (curve.v < v) {

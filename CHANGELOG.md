@@ -18,6 +18,7 @@
 - Register police officers through the feature interface.
 - Register tailgaters and derive free-drive switches from the feature registry.
 - Register double-parked delivery vans and contraflow cyclists through the feature interface.
+- Register low sun glare through the feature interface.
 - Define registered feature audit labels and examiner categories alongside their metrics.
 - Run agent checks in one reusable Boat sandbox per worktree, started from a warm snapshot.
 - Let CI run the full check suite; agents run targeted Boat checks while working and report them at hand-off.

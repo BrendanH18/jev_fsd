@@ -1,4 +1,4 @@
-import { FEATURE_METRICS } from "../sim/features/index.js";
+import { FEATURE_METRICS, FEATURES } from "../sim/features/index.js";
 
 const round = (value) => Math.round(value * 1000) / 1000;
 const CORE_AUDITS = {
@@ -18,11 +18,13 @@ const CORE_AUDITS = {
 };
 
 const auditPair = ({ name, label }) => [name, label];
+const COUNTER_AUDITS = FEATURE_METRICS.filter(({ traceType }) => !traceType);
+const THRESHOLD_AUDITS = FEATURES.filter(({ metric }) => metric?.traceType);
 const AUDITS = [
   ...Object.entries(CORE_AUDITS),
-  ...FEATURE_METRICS.filter(({ at }) => at === "beforeRunner").map(auditPair),
+  ...COUNTER_AUDITS.filter(({ at }) => at === "beforeRunner").map(auditPair),
   ["fresh_green_conflicts", "Entered on green ahead of a car running the red"],
-  ...FEATURE_METRICS.filter(({ at }) => at !== "beforeRunner").map(auditPair),
+  ...COUNTER_AUDITS.filter(({ at }) => at !== "beforeRunner").map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;
 // A decision no event links to is kept as a compact choice record: its id, time, choice, motion and
@@ -57,6 +59,7 @@ export class EvaluationTrace {
     this.truncated = false;
     this.nextId = 1;
     this.audit = {};
+    this.thresholdAudits = new Set();
     this.hardBrakes = 0;
     this.offRoadRecorded = false;
   }
@@ -132,9 +135,14 @@ export class EvaluationTrace {
       this.event("glare", "Failed to dip high beams", world.t);
       this.glareRecorded = true;
     }
-    if (!this.sunGlareRecorded && world.sunGlareSeen && world.violations.glare_speeding_seconds > 1) {
-      this.event("sun_glare", "Drove too fast to stop within sight in sun glare", world.t);
-      this.sunGlareRecorded = true;
+    for (const {
+      seen,
+      metric: { name, label, threshold, traceType },
+    } of THRESHOLD_AUDITS) {
+      if (world[seen] && world.violations[name] > threshold && !this.thresholdAudits.has(name)) {
+        this.event(traceType, label, world.t);
+        this.thresholdAudits.add(name);
+      }
     }
     if (score.followingEnabled && score.closeFollowing >= 1 && !this.followingRecorded) {
       this.event("following_gap", "Following gap remained short after time to react", world.t);

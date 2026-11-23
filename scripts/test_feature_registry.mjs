@@ -41,6 +41,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
   assert.deepEqual(
     R.FEATURES.map((f) => f.key),
     [
+      "sunGlare",
       "contraflow",
       "driveways",
       "balls",
@@ -57,8 +58,10 @@ test("every record is whole, its option and flags its own, and every hook at a s
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
-  for (const field of ["key", "seen", "calls"])
-    assert.equal(new Set(R.FEATURES.map((f) => f[field])).size, R.FEATURES.length, `each ${field} is one feature's`);
+  for (const field of ["key", "seen", "calls"]) {
+    const names = R.FEATURES.map((f) => f[field]).filter(Boolean);
+    assert.equal(new Set(names).size, names.length, `each ${field} is one feature's`);
+  }
   assert.deepEqual(
     R.FEATURE_OPTIONS,
     R.FEATURES.map((f) => f.key),
@@ -90,6 +93,7 @@ test("the core runs every slot, and names no registered feature", () => {
     const text = source(path);
     for (const name of [
       'contraflow.js"',
+      'sun-glare.js"',
       'sim/driveway-reversers.js"',
       './driveway-reversers.js"',
       'sim/potholes.js"',
@@ -120,6 +124,10 @@ test("the core runs every slot, and names no registered feature", () => {
     }
     for (const field of [
       "snap.contraflow_cyclist",
+      "snap.sun_glare",
+      "world.sunGlare",
+      "this.sunGlare",
+      "glare_speeding_seconds",
       ".contra ",
       "world.contraflow",
       "this.contraflow",
@@ -207,6 +215,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     seed: 3,
     parked: 0,
     pedestrians: 0,
+    sunGlare: true,
     contraflow: true,
     driveways: true,
     balls: true,
@@ -231,7 +240,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     );
     for (const w of [off, on]) {
       assert.equal(w[f.seen], false);
-      assert.ok(w[f.calls] instanceof Map);
+      if (f.calls) assert.ok(w[f.calls] instanceof Map);
     }
   }
   // (off, nothing is placed and no random stream is made)
@@ -266,7 +275,11 @@ test("metrics and failures appear only once a feature has met the car, each at i
     roadClosuresSeen: true,
     officersSeen: true,
   };
-  const v = { wildlife_conflicts: 2 };
+  const v = { wildlife_conflicts: 2, glare_speeding_seconds: 1.016 };
+  assert.deepEqual(R.featureMetrics(world, v, "afterHeadlights"), {});
+  world.sunGlareSeen = true;
+  assert.deepEqual(R.featureMetrics(world, v, "afterHeadlights"), { glare_speeding_seconds: 1.02 });
+  assert.deepEqual(R.featureFailures({ glare_speeding_seconds: 1 }, "afterHeadlights"), []);
   assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), {});
   world.contraflowSeen = true;
   assert.deepEqual(R.featureMetrics(world, v, "beforeRunner"), { contraflow_conflicts: 0 });
@@ -292,6 +305,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
   assert.deepEqual(Object.keys(R.featureMetrics(world, v, "late")), ["parking_conflicts", "closure_entries"]);
   const m = {
     arrived: true,
+    glare_speeding_seconds: 1.02,
+    illegal_turns: 1,
     contraflow_conflicts: 1,
     fresh_green_conflicts: 1,
     reversing_conflicts: 1,
@@ -307,6 +322,8 @@ test("metrics and failures appear only once a feature has met the car, each at i
     officer_violations: 1,
   };
   assert.deepEqual(failures(m), [
+    "too fast for sun glare",
+    "made a prohibited turn",
     "cut off or squeezed a contraflow cyclist",
     "entered on green ahead of a car running the red",
     "squeezed past or failed to stop for a car backing out",
@@ -334,6 +351,8 @@ test("the LLM prompt keeps each feature's line where it was", () => {
     const count = f.prompt.text.split("\n").length;
     assert.equal(lines.filter((_, i) => lines.slice(i, i + count).join("\n") === f.prompt.text).length, 1, f.key);
   }
+  assert.equal(at("- Driving into a low sun"), at("- An in-effect `bus_lane`") + 1);
+  assert.equal(at("- Coming up to a speed hump"), at("- Driving into a low sun") + 1);
   assert.equal(at("- A garbage truck stopped"), at("- Choose `wait_behind_van`") + 1);
   assert.equal(at("- Behind a cyclist"), at("- A garbage truck stopped") + 1);
   assert.equal(at("When road_closed.on_route"), at("When turn_restriction.banned") + 1);

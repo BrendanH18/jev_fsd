@@ -147,7 +147,7 @@ export function glareCeiling(sight, front) {
 // Glare on vehicle `car` (heading `car.psi`): { severity, sight_m, ceiling_mps, off_deg,
 // sun_azimuth_deg, sun_elevation_deg }, or null when the sun does not dazzle it.
 export function glareFor(world, car = world.ego) {
-  if (!world.sunGlare || weather.name !== "dry" || world.visibility.night > 0.5) return null;
+  if (!world.sunGlare.enabled || weather.name !== "dry" || world.visibility.night > 0.5) return null;
   const sun = sunOf(world);
   if (!sun || sun.elevation_deg <= 0 || sun.elevation_deg >= GLARE_MAX_ELEVATION_DEG) return null;
   const off = Math.abs(wrapDeg(bearingOf(car.psi) - sun.azimuth_deg));
@@ -175,7 +175,7 @@ const egoMemo = new WeakMap();
 export function egoGlare(world) {
   const ego = world.ego,
     c = world.clock;
-  const key = `${ego.psi}|${c?.hour}|${c?.day}|${c?.utc_offset}|${weather.name}|${world.visibility.night}|${world.sunGlare}`;
+  const key = `${ego.psi}|${c?.hour}|${c?.day}|${c?.utc_offset}|${weather.name}|${world.visibility.night}|${world.sunGlare.enabled}`;
   const memo = egoMemo.get(world);
   if (memo?.key === key) return memo.glare;
   const glare = glareFor(world, ego);
@@ -238,7 +238,7 @@ export function auditSunGlare(world, dt) {
 
 // What the HUD tells the driver: { key, text, slow }, or null.
 export function sunGlareNotice(world) {
-  if (!world.sunGlare) return null;
+  if (!world.sunGlare.enabled) return null;
   const g = egoGlare(world);
   if (!g) return null;
   const kmh = Math.round(g.ceiling_mps * 3.6),

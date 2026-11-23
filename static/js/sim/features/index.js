@@ -12,12 +12,12 @@
 //   snapshot  default sensing fields kept in the snapshot even when the feature is inactive
 //   seen      the World flag that says the feature has met the driven car this drive (its audit's metric
 //             reaches the results, and fails a drive, only once it is set)
-//   calls     the World map of the audit's calls, cleared when the car is moved by hand
+//   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
-//   metric    { at, name, failure, label, category? }: the violation counted, the failure text, the
-//             trace event label and the examiner category (defaults to "other"). The slots order
-//             these metrics, failures and trace events: "driveways", "streetHazards", "rearTraffic",
-//             "late" and "junctions".
+//   metric    { at, name, failure, label, category?, decimals?, threshold?, traceType? }: the violation,
+//             failure text, trace label and examiner category. A duration can round to `decimals` and
+//             fail above `threshold`. With `traceType` it emits a single named event at the threshold
+//             instead of logging every increase.
 //   obstacle  { test(o), traffic?, likePedestrian?, fixed?, predict(o, t)?, visible(world, observer, o)?, label? }:
 //             an obstacle supplied by the feature. `traffic` allows it in the traffic sensing pass.
 //             `likePedestrian` assigns fault to the ego car on impact. `fixed` treats it as scenery.
@@ -28,6 +28,7 @@
 //   motion    (snap) => whether the model must be asked to stop or drive
 //   parkingTraffic(n)  whether this traffic is entering a parking bay
 //   day       true: while it is on, the World's clock keeps the `day` of the year (World.setClock)
+//   utcOffset true: while it is on, the World's clock keeps `utc_offset`
 //   and the hooks below.
 //
 // A hook is a function, or { at, run } to run it at a slot. The core runs each hook where the feature's
@@ -42,7 +43,8 @@
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
 //                                       traffic moves ("end"), with "afterOutages" between them
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, after traffic and before the people on foot move ("end")
-//   audit(world, frontOnPath?)           World.audit: "afterFlagger", "driveways", "streetHazards", "rearTraffic", "late"
+//   audit(world, frontOnPath?)           World.audit: "beforeCollisions" (with dt), "afterFlagger", "driveways",
+//                                       "streetHazards", "rearTraffic", "late"
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
 //   evKerb(world, road, front)          the emergency audit's furthest right the car can be asked to pull
@@ -120,7 +122,8 @@
 //   trafficYield(world, n, front)       { hold, limit, canStop, controls }: where it stops, its ceiling, and
 //                                       how the driver handles the car (`controls(vehicle, steer, accel, dt)`,
 //                                       while not braking harder than comfortable) ("end")
-//   trafficSpeed(world, n, front)       a speed ceiling for both ordinary and emergency traffic ("end")
+//   trafficSpeed(world, n, front)       a speed ceiling for ordinary traffic ("ordinary"),
+//                                       or both ordinary and emergency traffic ("end")
 //   trafficPullOut(world, n)            false: a car parked at the kerb must not pull out yet ("end")
 
 // Import a record through this registry (or a core module), never on its own: the snowbanks record's simulation
@@ -140,8 +143,10 @@ import puddles from "./puddles.js";
 import parkers from "./parkers.js";
 import roadClosures from "./road-closures.js";
 import doubleParked from "./double-parked.js";
+import sunGlare from "./sun-glare.js";
 
 export const FEATURES = [
+  sunGlare,
   contraflow,
   driveways,
   balls,
@@ -163,11 +168,11 @@ export const SLOTS = {
   obstacles: ["end"],
   stepBeforeTraffic: ["first", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
-  audit: ["afterFlagger", "driveways", "streetHazards", "rearTraffic", "late"],
-  sense: ["beforeRunner", "parking", "driveways", "streetHazards", "late", "junctions", "following"],
+  audit: ["beforeCollisions", "afterFlagger", "driveways", "streetHazards", "rearTraffic", "late"],
+  sense: ["afterCalming", "beforeRunner", "parking", "driveways", "streetHazards", "late", "junctions", "following"],
   finishLanes: ["end"],
   limit: ["beforeRunner", "passing", "driveways", "streetHazards", "parking"],
-  target: ["beforeRunner", "restrictions", "driveways", "streetHazards", "beforeEmergency", "parking"],
+  target: ["beforeRunner", "restrictions", "beforeCurve", "driveways", "streetHazards", "beforeEmergency", "parking"],
   hazard: ["beforeRunner", "parking", "driveways", "streetHazards", "rearTraffic", "late"],
   laneOffer: ["end"],
   laneChangeCandidate: ["end"],
@@ -184,12 +189,31 @@ export const SLOTS = {
   adjust: ["streetHazards", "end"],
   brakeDetour: ["end"],
   sim: ["beforeRunner", "first", "driveways", "streetHazards", "beforeEmergency", "parking", "end"],
-  state: ["beforeRunner", "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"],
+  state: [
+    "beforeRunner",
+    "restrictions",
+    "afterCalming",
+    "driveways",
+    "streetHazards",
+    "junctions",
+    "rearTraffic",
+    "parking",
+  ],
   outcome: ["ids"],
   slowOutcome: ["lane", "end"],
-  clause: ["beforeRunner", "restrictions", "driveways", "streetHazards", "ice", "rearTraffic", "parking"],
+  clause: [
+    "beforeRunner",
+    "restrictions",
+    "afterCalming",
+    "driveways",
+    "streetHazards",
+    "ice",
+    "rearTraffic",
+    "parking",
+  ],
   holdStill: ["beforeRunner", "driveways", "late", "parking"],
   prompt: [
+    "afterBusLanes",
     "beforeRunner",
     "restrictions",
     "streetHazards",
@@ -199,7 +223,7 @@ export const SLOTS = {
     "rearTraffic",
     "parking",
   ],
-  metric: ["beforeRunner", "driveways", "streetHazards", "rearTraffic", "late", "junctions"],
+  metric: ["afterHeadlights", "beforeRunner", "driveways", "streetHazards", "rearTraffic", "late", "junctions"],
   evQueueHold: ["end"],
   trafficManage: ["beforePlows", "end"],
   trafficDriver: ["end"],
@@ -211,7 +235,7 @@ export const SLOTS = {
   trafficActors: ["end"],
   trafficLane: ["beforeLaneMoves", "laneMoves", "late"],
   trafficYield: ["end"],
-  trafficSpeed: ["end"],
+  trafficSpeed: ["ordinary", "end"],
   trafficPullOut: ["end"],
   hides: ["end"],
   blocksView: ["end"],
@@ -239,13 +263,15 @@ const FIELDS = [
   "motion",
   "parkingTraffic",
   "day",
+  "utcOffset",
 ];
 
 // What is wrong with record `f`, or null: a missing field, an unknown hook, or a hook at a slot the core
 // never runs.
 export function recordProblem(f) {
-  for (const k of ["key", "seen", "calls"])
-    if (typeof f[k] !== "string" || !f[k]) return `${f.key || "a record"} has no ${k}`;
+  for (const k of ["key", "seen"]) if (typeof f[k] !== "string" || !f[k]) return `${f.key || "a record"} has no ${k}`;
+  if (f.calls !== undefined && (typeof f.calls !== "string" || !f.calls))
+    return `${f.key} has an invalid audit calls field`;
   if (typeof f.build !== "function") return `${f.key} has no build`;
   if (f.metric !== undefined) {
     for (const key of ["name", "failure", "label"]) {
@@ -338,14 +364,22 @@ export const featureMotion = (snap) => MOTION.some((m) => m(snap));
 // The metrics of the features at `slot` that have met the car this drive.
 export function featureMetrics(world, violations, slot) {
   const out = {};
-  for (const f of recordsAt("metric", slot)) if (world[f.seen]) out[f.metric.name] = violations[f.metric.name] || 0;
+  for (const {
+    seen,
+    metric: { name, decimals },
+  } of recordsAt("metric", slot)) {
+    if (!world[seen]) continue;
+    const value = violations[name] || 0;
+    const scale = 10 ** decimals;
+    out[name] = decimals === undefined ? value : Number.isFinite(value) ? Math.round(value * scale) / scale : null;
+  }
   return out;
 }
 
 // The failure texts of the features at `slot`, for a drive's metrics `m`.
 export const featureFailures = (m, slot) =>
   recordsAt("metric", slot)
-    .filter((f) => m[f.metric.name])
+    .filter(({ metric: { name, threshold } }) => (threshold === undefined ? m[name] : m[name] > threshold))
     .map((f) => f.metric.failure);
 
 // The LLM system prompt's lines at `slot`, each with its newline.
@@ -356,7 +390,10 @@ export const promptLines = (slot) =>
 
 // Whether a registered feature that is on reads the day of the year from the World's clock.
 const DAY = FEATURES.filter((f) => f.day);
-export const featureNeedsDay = (world) => DAY.some((f) => !!world[f.key]?.enabled);
+const UTC_OFFSET = FEATURES.filter((f) => f.utcOffset);
+const enabled = (world, f) => world[f.property ?? f.key]?.enabled;
+export const featureNeedsDay = (world) => DAY.some((f) => enabled(world, f));
+export const featureNeedsUtcOffset = (world) => UTC_OFFSET.some((f) => enabled(world, f));
 
 // Every World option a registered feature takes.
 export const FEATURE_OPTIONS = FEATURES.map((f) => f.key);

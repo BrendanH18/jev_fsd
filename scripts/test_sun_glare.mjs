@@ -22,6 +22,7 @@ const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { CautiousAgent } = await import("../static/js/agents/cautious.js");
 const { DriveMetrics, failures } = await import("../static/js/bench/metrics.js");
 const { DriveRecorder } = await import("../static/js/lab/recorder.js");
+const { EvaluationTrace } = await import("../static/js/lab/trace.js");
 const { Route } = await import("../static/js/map/route.js");
 const G = await import("../static/js/sim/sun-glare.js");
 
@@ -257,7 +258,7 @@ await test("the challenge is deterministic, on a long straight westbound avenue 
   assert.equal(JSON.stringify(a), JSON.stringify(b));
   assert.equal(a.tags.length_m > 350, true);
   const ctx = setupChallenge(map, lesson);
-  assert.equal(ctx.world.sunGlare, true);
+  assert.equal(ctx.world.sunGlare.enabled, true);
   assert.equal(ctx.world.clock.day, 281);
   assert.equal(ctx.world.clock.utc_offset, -6);
   assert.equal(ctx.world.route.controls.filter((c) => c.control.type === "signal").length, 2);
@@ -304,9 +305,13 @@ await test("a driver who ignores the glare fails the drive", async () => {
     { world, autopilot } = ctx;
   autopilot.setEnabled(false);
   const metrics = new DriveMetrics(world.route.length);
+  const trace = new EvaluationTrace();
+  const recorder = new DriveRecorder();
   for (let k = 0; k < 14 * 60; k++) {
     const road = stepWorld({ ...ctx, input: { throttle: world.ego.v < 13.5 } }, 1 / 60, world.t * 1000);
     metrics.record(world, null, road, 1 / 60);
+    trace.measurements(world, {});
+    for (const { type } of world.events) recorder.mark(world.t, type);
   }
   const summary = metrics.summary(world, autopilot, false);
   assert.equal(
@@ -315,6 +320,13 @@ await test("a driver who ignores the glare fails the drive", async () => {
     `${summary.glare_speeding_seconds}`,
   );
   assert.equal(failures(summary).includes("too fast for sun glare"), true);
+  const events = trace.events.filter(({ type }) => type === "sun_glare" || type === "glare_speeding_seconds");
+  assert.deepEqual(
+    events.map(({ type }) => type),
+    ["sun_glare"],
+  );
+  assert.equal(events[0].message, "Drove too fast to stop within sight in sun glare");
+  assert.equal(recorder.markers.filter(({ type }) => type === "sun_glare").length, 1);
 });
 
 await test("replay restores the glare and repeats the same drive", async () => {
@@ -347,7 +359,7 @@ await test("replay restores the glare and repeats the same drive", async () => {
 await test("with the option off nothing is computed, drawn or reported", async () => {
   const off = { ...lesson, sunGlare: false };
   const ctx = setupChallenge(map, off);
-  assert.equal(ctx.world.sunGlare, false);
+  assert.equal(ctx.world.sunGlare.enabled, false);
   assert.equal(ctx.world.visibility.glare, null);
   assert.equal("day" in ctx.world.clock || "utc_offset" in ctx.world.clock, false, "the clock keeps its old shape");
   const result = await evaluateChallenge(map, off);
