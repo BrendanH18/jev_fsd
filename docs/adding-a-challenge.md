@@ -121,8 +121,8 @@ Run each with Node 22 and `--experimental-default-type=module`, one at a time; a
 Boat with `scripts/boat-check.sh -- CMD`. CI runs every Node check, the fixture check and the model
 recordings on the pushed commit, so while working run the feature's own test and
 `scripts/test_drive_lab.mjs` and leave the rest to CI. CI doesn't compare unchanged results with
-the baseline or record the arena storage figure; those stay to do before hand-off. Verify the saved
-model case live only when the owner asks ([checking work](../AGENTS.md#checking-work)).
+the baseline; that stays to do before hand-off. Verify the saved model case live only when the
+owner asks ([checking work](../AGENTS.md#checking-work)).
 
 - **The feature's own test** (`scripts/test_<feature>.mjs`): the challenge passes with `rules` and
   `cautious` (`evaluateChallenge(...).pass`), a driver who makes the mistake the lesson warns about
@@ -132,7 +132,7 @@ model case live only when the owner asks ([checking work](../AGENTS.md#checking-
   that survives being saved to arena history. It takes about two minutes, close to CI's per-script
   limit; split a slow check out rather than raise the limit.
 - **Arena storage**: `test_drive_lab.mjs` prints the share of the history budget two arena runs take
-  and fails over it. Record the new figure ([below](#arena-storage)).
+  and fails over it, so CI enforces the cap ([figures](#arena-storage)).
 - **Jev fixtures**: `scripts/build_jev_fixtures.mjs --check`, after any change to sensing,
   candidates or question wording.
 - **Model recordings**: `scripts/test_model_recording.mjs` replays a committed recording that

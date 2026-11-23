@@ -64,8 +64,8 @@ CI runs the full suite on every pushed commit; a failed CI job is reproduced on 
 script and fixed. The plain check and `--full` are for reproducing a CI failure, for heavy
 checks that must not run on the Pi or the Mac, and for checks CI doesn't run. Everything the
 script's plain and `--full` runs do is in CI (`lint.yml`, and `demo.yml`'s Python and Node jobs).
-CI doesn't compare a seeded benchmark with the committed baseline, run WebKit, record arena
-storage figures or verify Jev live, so those stay required before hand-off when a change calls
+CI doesn't compare a seeded benchmark with the committed baseline, run WebKit or verify Jev
+live, so those stay required before hand-off when a change calls
 for them ([Checking work](../../AGENTS.md#checking-work)). The hand-off report names the targeted
 checks that ran and says that CI runs the full check.
 
