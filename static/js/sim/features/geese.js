@@ -1,5 +1,6 @@
 // Canada geese crossing the road (sim/geese.js) as a feature record (sim/features/index.js,
 // docs/feature-interface.md).
+import { geeseNotice } from "../geese.js";
 import { r1 } from "../../common.js";
 import { Geese, auditGeese, geeseCrossing, geeseYield, isGoose } from "../geese.js";
 
@@ -23,11 +24,69 @@ function geeseClause(g) {
 }
 
 export default {
+  checkpoint(world) {
+    if (world.geese) world.geese.world = world;
+  },
   rulesStop: (snap) => snap.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 1.5,
   legitimateStop: (snap) => snap?.geese_crossing?.wait && snap.geese_crossing.bumper_to_stop_m < 8,
   rulesCost: (c, snap) => (c.id === "wait_for_geese" && snap.geese_crossing?.wait ? -6 : 0),
   cautious: (snap, eligible) => (snap.geese_crossing?.wait ? eligible.find((c) => c.id === "wait_for_geese") : null),
   key: "geese",
+  coach: {
+    init: () => ({
+      geese: false,
+      wildlifeConflicts: 0,
+    }),
+    seen: "geese",
+    events: {
+      wildlife_conflict(score, ev) {
+        score.wildlifeConflicts++;
+        score.incident(
+          "wildlife_conflict",
+          ev.reason === "hit" ? "Hit a goose crossing the road" : "Drove on too close to geese crossing the road",
+          {
+            goose: ev.with,
+            gaggle: ev.gaggle,
+            ...(ev.clearance_m !== undefined ? { clearance_m: ev.clearance_m } : {}),
+          },
+        );
+      },
+    },
+    reports: [
+      { at: "end", order: 11, read: (score) => (score.geese ? { wildlife_conflicts: score.wildlifeConflicts } : {}) },
+    ],
+    deductions: [{ at: "safety", order: 7, counter: "wildlifeConflicts", weight: 20 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 12,
+        when: (score) => score.wildlifeConflicts,
+        text: "Geese and their goslings cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them or creep toward them.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 5,
+    duration: 2500,
+    read: (world, autopilot) =>
+      world.geese.enabled ? geeseNotice(autopilot.enabled ? autopilot.snap : null, world) : null,
+    style: (line) => (line.wait ? "safety" : ""),
+  },
+  eventBadges: {
+    wildlife_conflict: (event) => (event.reason === "hit" ? "HIT A GOOSE" : "DROVE ON TOO CLOSE TO THE GEESE"),
+  },
+  perceptionLine(snap) {
+    const gc = snap.geese_crossing;
+    const text = gc
+      ? `${gc.geese} geese ${gc.phase === "about_to_cross" ? "by the road" : "crossing"} ${Math.round(gc.gap_m)} m ahead: ${gc.wait ? `wait for the last one${gc.bumper_to_stop_m > 0.5 ? `, stop in ${Math.round(gc.bumper_to_stop_m)} m` : ""}` : `slow to ${Math.round(gc.limit_mps * 3.6)} km/h`}`
+      : null;
+    return text ? { order: 25, label: "Geese", text } : null;
+  },
+  perceptionFocus: (snap, o) => snap.geese_crossing && o.gaggle === snap.geese_crossing.id,
+  perceptionRejections: {
+    drives_into_geese: "Geese crossing",
+  },
   seen: "geeseSeen",
   calls: "geeseCalls",
   build: (world, { enabled, seed }) => new Geese(world, { enabled, seed }),

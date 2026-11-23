@@ -16,8 +16,11 @@
       <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
       <label title="Guarded: the safety filter removes every manoeuvre that fails a road-rule check. Open: it flags them instead, and the driver's own judgment decides">Track <select id="arena-track"><option value="guarded">Guarded · the filter removes rule breaks</option><option value="open">Open · the filter flags them, the driver decides</option></select></label>
       <label><input type="checkbox" id="arena-road-tests"> Include road tests (longer drives)</label>
+      <label>Challenge subset <select id="arena-subset"><option value="">All challenges</option><option value="custom">Choose individual drives</option></select></label>
+      <label id="arena-custom-wrap" hidden>Drives <select id="arena-custom" multiple size="5"></select></label>
       <button id="arena-run" class="toggle on">Run evaluation</button><button id="arena-export" class="toggle" disabled>Export results</button>
       <p id="arena-status" role="status">Loading the arena…</p>
+      <progress id="arena-progress" aria-label="Evaluation progress" hidden></progress>
       <details><summary>Add a trusted local agent</summary><label>Module path <input id="agent-module" placeholder="./js/agents/my-agent.js"></label><button id="arena-load" class="toggle">Load agent</button><p>Export a default definition with id, label and create(). JavaScript runs in this browser. See <a href="https://github.com/BrendanH18/jev_fsd/blob/main/docs/agents.md">the adapter guide</a>.</p></details>
     </section>
     <section class="panel arena-history" aria-labelledby="history-heading">
@@ -35,7 +38,15 @@
       <p id="comparison-status" role="status">Choose a saved baseline to compare matching challenge conditions.</p>
       <div id="arena-summary" class="summary-grid"></div>
     </section>
-    <section aria-label="Evaluation results"><div class="table-wrap panel"><table><thead><tr><th>Agent / challenge</th><th>Outcome</th><th>Score</th><th title="Mean of pace, comfort and margin kept, times progress (bench/scores.js)">Ranking score</th><th>Time</th><th>Incidents</th><th>Hard brakes</th><th>p50</th><th>Cost</th></tr></thead><tbody id="arena-results"><tr><td colspan="9">Run an evaluation to see measured results.</td></tr></tbody></table></div></section>
+    <section aria-label="Evaluation results">
+      <div class="arena-table-tools">
+        <label>Search <input type="search" id="arena-search" placeholder="Agent or challenge"></label>
+        <label>Agent <select id="arena-filter-agent"><option value="">All agents</option></select></label>
+        <label>Outcome <select id="arena-filter-outcome"><option value="">All outcomes</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="stopped">Stopped</option></select></label>
+        <button id="arena-csv" class="toggle" disabled>Export CSV</button>
+      </div>
+      <div class="table-wrap panel"><table><thead id="arena-columns"></thead><tbody id="arena-results"><tr><td colspan="9">Run an evaluation to see measured results.</td></tr></tbody></table></div>
+    </section>
     <p class="arena-note">These are local simulator results, not a verified public leaderboard. A pass requires arrival with no collision, red light, missed stop or failed yield, and less than one second off-road. The coaching score is a separate measure. Exported runs include challenge, map-pack and clock versions.</p>
     <section id="arena-details" class="panel run-details" aria-labelledby="details-heading" hidden>
       <h2 id="details-heading" tabindex="-1">Run details</h2><div id="details-content"></div>

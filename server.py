@@ -13,19 +13,23 @@ jev/security.py so other websites cannot drive this server or spend your credits
 
 from __future__ import annotations
 
+import gzip
 import json
-import mimetypes
 import math
+import mimetypes
 import os
 import secrets
 import sys
+import tempfile
+import threading
 import time
 import traceback
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from jev import decide, decision, decision_setup, llm, llm_setup, security
+from jev import VERSION, decide, decision, decision_setup, llm, llm_setup, security
 from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
 from jev.config import MAPS_DIR, PROJECT_ROOT, RECORDINGS_DIR, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
 from jev.osm import fetch
@@ -46,7 +50,6 @@ from jev.routing import Router
 from jev.maps import catalog, map_identity
 from jev.drives import suggested_drives
 
-VERSION = "0.3.0"
 STATIC = PROJECT_ROOT / "static"
 PAGES = {
     "/": "index.html",
@@ -68,6 +71,9 @@ llm_registry = llm.LlmRegistry(settings, client.guard)  # shares Jev's budget an
 decision_registry = decision.DecisionRegistry(settings, client.guard)
 SESSION_TOKEN = security.new_token()
 _maps: dict = {}  # bbox key -> {"pack", "router", "error"}
+_maps_lock = threading.Lock()
+_map_locks: dict = {}  # bbox key -> threading.Lock
+_STARTED_AT = time.monotonic()
 
 
 class BadRequest(Exception):
@@ -76,6 +82,55 @@ class BadRequest(Exception):
 
 def log(msg: str) -> None:
     sys.stderr.write("  %s  %s\n" % (time.strftime("%H:%M:%S"), msg))
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Publish a complete file under a new name without overwriting another save."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix=".%s." % path.name,
+            suffix=".tmp",
+            dir=str(path.parent),
+            delete=False,
+        ) as fh:
+            tmp_path = fh.name
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.link(tmp_path, path)
+    finally:
+        if tmp_path is not None:
+            os.unlink(tmp_path)
+
+
+def _save_artifact(path, encode):
+    destination = path
+    while True:
+        try:
+            _atomic_write_text(destination, encode(destination))
+        except FileExistsError:
+            destination = path.with_name(f"{path.stem}-{secrets.token_hex(4)}{path.suffix}")
+        else:
+            return destination
+
+
+def _read_json_file(path: Path):
+    if path.name.endswith(".json.gz"):
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            return json.load(fh)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _recording_name(path: Path) -> str:
+    if path.name.endswith(".json.gz"):
+        return path.name[: -len(".json.gz")]
+    if path.name.endswith(".json"):
+        return path.name[: -len(".json")]
+    return path.stem
 
 
 # Maps
@@ -87,66 +142,105 @@ def load_map(bbox_text: str = "") -> dict:
     entry = _maps.get(key)
     if entry:
         return entry
-    entry = {"bbox": bbox, "pack": None, "router": None, "error": None}
-    try:
-        entry["pack"] = build_pack(bbox, MAPS_DIR, log=log)
-        # bus routes and stops, kept beside the pack (from the raw OSM download when there is one)
-        transit = build_transit(bbox, MAPS_DIR, entry["pack"], log=log)
-        if transit:
-            entry["pack"] = {**entry["pack"], "transit": transit}
-        # marked crosswalks between junctions, kept beside the pack in the same way
-        crossings = build_crossings(bbox, MAPS_DIR, entry["pack"], log=log)
-        if crossings:
-            entry["pack"] = {**entry["pack"], "crossings": crossings}
-        # school and playground zones, likewise
-        zones = build_zones(bbox, MAPS_DIR, entry["pack"], log=log)
-        if zones:
-            entry["pack"] = {**entry["pack"], "zones": zones}
-        # railway tracks and their level crossings with the streets, likewise
-        rail = build_rail(bbox, MAPS_DIR, entry["pack"], log=log)
-        if rail:
-            entry["pack"] = {**entry["pack"], "rail": rail}
-        # speed humps, tables, cushions and bumps, likewise
-        buslanes = build_buslanes(bbox, MAPS_DIR, entry["pack"], log=log)
-        if buslanes:
-            entry["pack"] = {**entry["pack"], "buslanes": buslanes}
-        calming = build_calming(bbox, MAPS_DIR, entry["pack"], log=log)
-        if calming:
-            entry["pack"] = {**entry["pack"], "calming": calming}
-        # and the signals with an all-walk scramble phase, likewise
-        scrambles = build_scrambles(bbox, MAPS_DIR, entry["pack"], log=log)
-        if scrambles:
-            entry["pack"] = {**entry["pack"], "scrambles": scrambles}
-        restriction_layer = build_restrictions(bbox, MAPS_DIR, entry["pack"], log=log)
-        if restriction_layer:
-            entry["pack"] = {**entry["pack"], "restrictions": restriction_layer}
-        # and the one-way streets cyclists may ride both ways, likewise
-        contraflow = build_contraflow(bbox, MAPS_DIR, entry["pack"], log=log)
-        if contraflow:
-            entry["pack"] = {**entry["pack"], "contraflow": contraflow}
-        # and the driveways cars back out of, likewise
-        driveways = build_driveways(bbox, MAPS_DIR, entry["pack"], log=log)
-        if driveways:
-            entry["pack"] = {**entry["pack"], "driveways": driveways}
-        # and the parks and water geese cross the street beside, likewise
-        parks = build_parks(bbox, MAPS_DIR, entry["pack"], log=log)
-        if parks:
-            entry["pack"] = {**entry["pack"], "parks": parks}
-        # and the bridges black ice forms on first, likewise
-        bridges = build_bridges(bbox, MAPS_DIR, entry["pack"], log=log)
-        if bridges:
-            entry["pack"] = {**entry["pack"], "bridges": bridges}
-        # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
-        offset = map_identity(bbox).get("utc_offset")
-        if offset is not None:
-            entry["pack"] = {**entry["pack"], "utc_offset": offset}
-    except fetch.FetchError as err:
-        log("map: %s; using the synthetic grid" % err)
-        entry["error"] = str(err)
-        entry["pack"] = synthetic_pack()
-    entry["router"] = Router(entry["pack"])
-    _maps[key] = entry
-    return entry
+    with _maps_lock:
+        entry = _maps.get(key)
+        if entry:
+            return entry
+        lock = _map_locks.setdefault(key, threading.Lock())
+    with lock:
+        entry = _maps.get(key)
+        if entry:
+            return entry
+        entry = {"bbox": bbox, "pack": None, "router": None, "error": None}
+        try:
+            entry["pack"] = build_pack(bbox, MAPS_DIR, log=log)
+            # bus routes and stops, kept beside the pack (from the raw OSM download when there is one)
+            transit = build_transit(bbox, MAPS_DIR, entry["pack"], log=log)
+            if transit:
+                entry["pack"] = {**entry["pack"], "transit": transit}
+            # marked crosswalks between junctions, kept beside the pack in the same way
+            crossings = build_crossings(bbox, MAPS_DIR, entry["pack"], log=log)
+            if crossings:
+                entry["pack"] = {**entry["pack"], "crossings": crossings}
+            # school and playground zones, likewise
+            zones = build_zones(bbox, MAPS_DIR, entry["pack"], log=log)
+            if zones:
+                entry["pack"] = {**entry["pack"], "zones": zones}
+            # railway tracks and their level crossings with the streets, likewise
+            rail = build_rail(bbox, MAPS_DIR, entry["pack"], log=log)
+            if rail:
+                entry["pack"] = {**entry["pack"], "rail": rail}
+            # speed humps, tables, cushions and bumps, likewise
+            buslanes = build_buslanes(bbox, MAPS_DIR, entry["pack"], log=log)
+            if buslanes:
+                entry["pack"] = {**entry["pack"], "buslanes": buslanes}
+            calming = build_calming(bbox, MAPS_DIR, entry["pack"], log=log)
+            if calming:
+                entry["pack"] = {**entry["pack"], "calming": calming}
+            # and the signals with an all-walk scramble phase, likewise
+            scrambles = build_scrambles(bbox, MAPS_DIR, entry["pack"], log=log)
+            if scrambles:
+                entry["pack"] = {**entry["pack"], "scrambles": scrambles}
+            restriction_layer = build_restrictions(bbox, MAPS_DIR, entry["pack"], log=log)
+            if restriction_layer:
+                entry["pack"] = {**entry["pack"], "restrictions": restriction_layer}
+            # and the one-way streets cyclists may ride both ways, likewise
+            contraflow = build_contraflow(bbox, MAPS_DIR, entry["pack"], log=log)
+            if contraflow:
+                entry["pack"] = {**entry["pack"], "contraflow": contraflow}
+            # and the driveways cars back out of, likewise
+            driveways = build_driveways(bbox, MAPS_DIR, entry["pack"], log=log)
+            if driveways:
+                entry["pack"] = {**entry["pack"], "driveways": driveways}
+            # and the parks and water geese cross the street beside, likewise
+            parks = build_parks(bbox, MAPS_DIR, entry["pack"], log=log)
+            if parks:
+                entry["pack"] = {**entry["pack"], "parks": parks}
+            # and the bridges black ice forms on first, likewise
+            bridges = build_bridges(bbox, MAPS_DIR, entry["pack"], log=log)
+            if bridges:
+                entry["pack"] = {**entry["pack"], "bridges": bridges}
+            # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
+            offset = map_identity(bbox).get("utc_offset")
+            if offset is not None:
+                entry["pack"] = {**entry["pack"], "utc_offset": offset}
+        except fetch.FetchError as err:
+            log("map: %s; using the synthetic grid" % err)
+            entry["error"] = str(err)
+            entry["pack"] = synthetic_pack()
+        entry["router"] = Router(entry["pack"])
+        with _maps_lock:
+            _maps[key] = entry
+        return entry
+
+
+def api_health(_body, _query):
+    """Lightweight liveness check without triggering a cold map load."""
+    return {"ok": True, "version": VERSION}
+
+
+def api_diagnostics(_body, _query):
+    """Read-only server health and runtime snapshot without exposing secrets or triggering cold map loads."""
+    with _maps_lock:
+        cached_maps = sorted(_maps.keys())
+    return {
+        "ok": True,
+        "version": VERSION,
+        "uptime_s": round(max(0.0, time.monotonic() - _STARTED_AT), 1),
+        "cached_maps": cached_maps,
+        "map_count": len(cached_maps),
+        "endpoints": {
+            "jev": {
+                "configured": client.configured,
+                "key_source": client.key_source,
+                "model": client.model,
+                "backend": client.backend,
+            },
+            "llm": llm_registry.public(),
+            "decision": decision_registry.public(),
+        },
+        "spend": client.guard.snapshot(),
+    }
 
 
 def api_status(_body, query):
@@ -196,30 +290,64 @@ def api_drives(body, _query):
 
 
 def api_route(body, _query):
-    entry = load_map(str(body.get("bbox") or ""))
-    start, goal = body.get("from") or {}, body.get("to") or {}
+    raw_start, raw_goal = body.get("from"), body.get("to")
+    if not isinstance(raw_start, dict) or not isinstance(raw_goal, dict):
+        raise BadRequest("from {x, y, heading?} and to {x, y} with finite coordinates are required")
     try:
+        sx, sy = raw_start["x"], raw_start["y"]
+        sh = raw_start.get("heading")
+        gx, gy = raw_goal["x"], raw_goal["y"]
+        if any(isinstance(v, bool) for v in (sx, sy, sh, gx, gy)):
+            raise TypeError("boolean is not a coordinate")
         start = {
-            "x": float(start["x"]),
-            "y": float(start["y"]),
-            "heading": float(start["heading"]) if start.get("heading") is not None else None,
+            "x": float(sx),
+            "y": float(sy),
+            "heading": float(sh) if sh is not None else None,
         }
-        goal = {"x": float(goal["x"]), "y": float(goal["y"])}
-    except (KeyError, TypeError, ValueError):
-        raise BadRequest("from {x, y, heading?} and to {x, y} are required")
-    k = max(1, min(int(body.get("k") or 1), 3))
+        goal = {"x": float(gx), "y": float(gy)}
+        coords = [start["x"], start["y"], goal["x"], goal["y"]]
+        if start["heading"] is not None:
+            coords.append(start["heading"])
+        if not all(math.isfinite(v) for v in coords):
+            raise ValueError("coordinates must be finite")
+    except (KeyError, TypeError, ValueError, OverflowError):
+        raise BadRequest("from {x, y, heading?} and to {x, y} with finite coordinates are required")
+    raw_k = body.get("k")
+    try:
+        if isinstance(raw_k, bool):
+            raise TypeError("boolean is not k")
+        k = max(1, min(int(1 if raw_k is None else raw_k), 3))
+    except (TypeError, ValueError, OverflowError):
+        raise BadRequest("k must be an integer")
+    raw_hour = body.get("hour", 15.5)
+    try:
+        if isinstance(raw_hour, bool):
+            raise TypeError("boolean is not hour")
+        hour = float(raw_hour)
+        if not math.isfinite(hour):
+            raise ValueError("hour must be finite")
+    except (TypeError, ValueError, OverflowError):
+        raise BadRequest("hour must be a finite number")
+    raw_weekday = body.get("weekday", 0)
+    try:
+        if isinstance(raw_weekday, bool):
+            raise TypeError("boolean is not weekday")
+        weekday = int(raw_weekday)
+    except (TypeError, ValueError, OverflowError):
+        raise BadRequest("weekday must be an integer")
     # (edges no route may enter: a block closed for an event, static/js/sim/road-closures.js)
     avoid = body.get("avoid") or []
     if not isinstance(avoid, list) or len(avoid) > 200 or not all(isinstance(a, str) and len(a) <= 64 for a in avoid):
         raise BadRequest("avoid must be a list of edge ids")
+    entry = load_map(str(body.get("bbox") or ""))
     started = time.perf_counter()
     routes = entry["router"].routes(
         start,
         goal,
         k=k,
         restrictions=bool(body.get("restrictions")),
-        hour=float(body.get("hour", 15.5)),
-        weekday=int(body.get("weekday", 0)),
+        hour=hour,
+        weekday=weekday,
         avoid=avoid,
     )
     return {"routes": routes, "compute_ms": round((time.perf_counter() - started) * 1000, 1)}
@@ -324,8 +452,6 @@ def api_snapshot_save(body, _query):
         raise BadRequest(str(err))
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     path = SNAPSHOTS_DIR / ("%s.json" % safe)
-    if path.exists():
-        path = SNAPSHOTS_DIR / ("%s-%s.json" % (safe, secrets.token_hex(2)))
     payload = {
         "name": safe,
         "state": req["state"],
@@ -333,7 +459,7 @@ def api_snapshot_save(body, _query):
         "expect": body.get("expect") or {},
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
-    path.write_text(json.dumps(payload, indent=2))
+    path = _save_artifact(path, lambda _: json.dumps(payload, indent=2))
     return {"saved": str(path.relative_to(PROJECT_ROOT))}
 
 
@@ -357,17 +483,14 @@ def api_bench_save(body, _query):
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = RUNS_DIR / ("%s-%s.json" % (stamp, brain))
-    if path.exists():
-        path = RUNS_DIR / ("%s-%s-%s.json" % (stamp, brain, secrets.token_hex(2)))
     payload = {
         **({"suite_version": declared} if declared is not None else {}),
-        "name": path.stem,
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "config": config,
         "summary": body["summary"],
         "results": body["results"],
     }
-    path.write_text(json.dumps(payload, indent=1))
+    path = _save_artifact(path, lambda dest: json.dumps({**payload, "name": dest.stem}, indent=1))
     return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
 
 
@@ -378,14 +501,21 @@ def api_bench_runs(_body, query):
     if name:
         safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_")
         path = RUNS_DIR / ("%s.json" % safe)
-        if not path.is_file():
+        if not safe or not path.is_file():
             raise BadRequest("No run named %s" % safe)
-        return json.loads(path.read_text())
-    runs = []
-    for path in sorted(RUNS_DIR.glob("*.json"), reverse=True)[:30]:
         try:
-            data = json.loads(path.read_text())
-        except ValueError:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise BadRequest("Run %s could not be read" % safe)
+    runs = []
+    for path in sorted(RUNS_DIR.glob("*.json"), reverse=True):
+        if len(runs) >= 30:
+            break
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
             continue
         runs.append(
             {
@@ -443,9 +573,8 @@ def api_recording_save(body, _query):
     RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = RECORDINGS_DIR / ("%s-%s.json" % (stamp, driver))
-    if path.exists():
-        path = RECORDINGS_DIR / ("%s-%s-%s.json" % (stamp, driver, secrets.token_hex(2)))
-    path.write_text(_recording_text(header, results, scenarios, drives))
+    text = _recording_text(header, results, scenarios, drives)
+    path = _save_artifact(path, lambda _: text)
     return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
 
 
@@ -472,24 +601,72 @@ def _recording_text(header, results, scenarios, drives):
     )
 
 
+def _recording_candidates(name):
+    yield RECORDINGS_DIR / f"{name}.json"
+    yield RECORDINGS_DIR / f"{name}.json.gz"
+    if name.endswith((".json", ".json.gz")):
+        yield RECORDINGS_DIR / name
+    if name.endswith(".json"):
+        yield RECORDINGS_DIR / f"{name}.gz"
+
+
+def _load_recording_data(path):
+    try:
+        data = _read_json_file(path)
+    except (OSError, ValueError, EOFError, zlib.error):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def api_recordings(_body, query):
     """Recordings, newest first, with their headers (?name=<recording> returns one in full)."""
     name = (query.get("name") or [""])[0]
     if name:
         safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_.")
-        path = RECORDINGS_DIR / ("%s.json" % safe)
-        if not safe or safe.startswith(".") or not path.is_file():
+        if not safe or safe.startswith(".") or ".." in safe:
             raise BadRequest("No recording named %s" % safe)
-        return json.loads(path.read_text())
+        found = False
+        fallback = None
+        for path in _recording_candidates(safe):
+            if not path.is_file():
+                continue
+            found = True
+            data = _load_recording_data(path)
+            if data is not None and data.get("format") == RECORDING_FORMAT:
+                return data
+            if fallback is None:
+                fallback = data
+        if fallback is not None:
+            return fallback
+        if found:
+            raise BadRequest("Recording %s could not be read" % safe)
+        raise BadRequest("No recording named %s" % safe)
     recordings = []
-    for path in sorted(RECORDINGS_DIR.glob("*.json"), reverse=True)[:50] if RECORDINGS_DIR.is_dir() else []:
-        try:
-            data = json.loads(path.read_text())
-        except ValueError:
+    if RECORDINGS_DIR.is_dir():
+        paths = sorted(
+            list(RECORDINGS_DIR.glob("*.json")) + list(RECORDINGS_DIR.glob("*.json.gz")),
+            key=lambda p: (_recording_name(p), p.name.endswith(".json")),
+            reverse=True,
+        )
+    else:
+        paths = []
+    seen = set()
+    for path in paths:
+        if len(recordings) >= 50:
+            break
+        rec_name = _recording_name(path)
+        if rec_name in seen:
             continue
-        if isinstance(data, dict) and data.get("format") == RECORDING_FORMAT:
+        data = _load_recording_data(path)
+        if data is not None and data.get("format") == RECORDING_FORMAT:
+            seen.add(rec_name)
+            drives = data.get("drives")
             recordings.append(
-                {"name": path.stem, "header": data.get("header"), "drives": sorted(data.get("drives") or {})}
+                {
+                    "name": rec_name,
+                    "header": data.get("header"),
+                    "drives": sorted(drives) if isinstance(drives, dict) else [],
+                }
             )
     return {"recordings": recordings}
 
@@ -502,6 +679,8 @@ def api_results(_body, _query):
 
 
 ROUTES = {
+    ("GET", "/api/health"): api_health,
+    ("GET", "/api/diagnostics"): api_diagnostics,
     ("GET", "/api/status"): api_status,
     ("GET", "/api/map"): api_map,
     ("GET", "/api/maps"): api_maps,
@@ -571,7 +750,20 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         query = parse_qs(parsed.query)
-        length = int(self.headers.get("Content-Length") or 0)
+        raw_lengths = self.headers.get_all("Content-Length") if hasattr(self.headers, "get_all") else None
+        if raw_lengths and len(raw_lengths) > 1:
+            return self._send(400, {"error": "Invalid Content-Length"})
+        raw_length = self.headers.get("Content-Length")
+        if raw_length is None:
+            length = 0
+        else:
+            value = raw_length.strip()
+            if not value.isascii() or not value.isdecimal():
+                return self._send(400, {"error": "Invalid Content-Length"})
+            try:
+                length = int(value)
+            except ValueError:
+                return self._send(400, {"error": "Invalid Content-Length"})
         reason = security.check_request(method, self.headers, SESSION_TOKEN, self.port, has_body=length > 0)
         if reason:
             return self._send(403, {"error": security.REASONS[reason], "reason": reason})

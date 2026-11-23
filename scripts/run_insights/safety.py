@@ -79,6 +79,13 @@ QUESTIONS = {
 }
 
 
+INCIDENT_FIELDS = ("t", "street", "edge", "speed", "value", "x", "y", "with", "kind")
+
+
+def _valid_nonneg(value):
+    return type(value) in (int, float) and value >= 0 and (not isinstance(value, float) or isfinite(value))
+
+
 def _report(fields, rows):
     summaries = {}
     for field, unit in fields.items():
@@ -87,7 +94,7 @@ def _report(fields, rows):
         affected = []
         for index, row in enumerate(rows):
             value = row.get(field)
-            if type(value) not in (int, float) or value < 0 or (isinstance(value, float) and not isfinite(value)):
+            if not _valid_nonneg(value):
                 continue
             measured += 1
             total += value
@@ -100,7 +107,7 @@ def _report(fields, rows):
                 # The runner saves at most eight samples per audit, sometimes on
                 # consecutive simulation steps. The counter supplies the total.
                 entry["samples"] = [
-                    {key: incident[key] for key in ("t", "street", "edge", "speed", "value") if key in incident}
+                    {key: incident[key] for key in INCIDENT_FIELDS if key in incident}
                     for incident in incidents
                     if isinstance(incident, dict) and incident.get("audit") == AUDIT_KEYS.get(field, field)
                 ]
@@ -110,9 +117,127 @@ def _report(fields, rows):
             "measured_routes": measured,
             "unmeasured_routes": len(rows) - measured,
             "total": round(total, 6) if measured else None,
-            "affected_routes": sorted(affected, key=lambda entry: -entry["value"]),
+            "affected_routes": sorted(
+                affected,
+                key=lambda entry: (
+                    -entry["value"],
+                    entry["id"] is None,
+                    "" if entry["id"] is None else str(entry["id"]),
+                ),
+            ),
         }
     return summaries
 
 
+def _all_hazard_families():
+    families = [(name.removeprefix("safety-"), fields) for name, (_, fields) in QUESTIONS.items()]
+    families.append(("off-road", {"off_road_s": "seconds"}))
+    return families
+
+
+def _field_exposure(rows, field, unit, family):
+    measured = 0
+    triggered = 0
+    total = 0.0
+    paired_total = 0.0
+    measured_m = 0.0
+    for row in rows:
+        value = row.get(field)
+        if not _valid_nonneg(value):
+            continue
+        measured += 1
+        total += value
+        if value > 0:
+            triggered += 1
+        distance = row.get("distance_m")
+        if _valid_nonneg(distance) and distance > 0:
+            paired_total += value
+            measured_m += distance
+    measured_km = measured_m / 1000
+    return {
+        "family": family,
+        "unit": unit,
+        "measured_routes": measured,
+        "unmeasured_routes": len(rows) - measured,
+        "triggered_routes": triggered,
+        "total": round(total, 6) if measured else None,
+        "measured_km": round(measured_km, 4) if measured_m > 0 else None,
+        "per_km": round(paired_total / measured_km, 6) if measured_km > 0 else None,
+    }
+
+
+def _total_km(rows):
+    distances = [row["distance_m"] for row in rows if _valid_nonneg(row.get("distance_m"))]
+    return round(sum(distances) / 1000, 4) if distances else None
+
+
+def safety_overview(rows):
+    hazards = {}
+    families_triggered = 0
+    for family, fields in _all_hazard_families():
+        family_hit = False
+        for field, unit in fields.items():
+            entry = _field_exposure(rows, field, unit, family)
+            hazards[field] = entry
+            if entry["triggered_routes"] > 0:
+                family_hit = True
+        if family_hit:
+            families_triggered += 1
+    off_road = _report({"off_road_s": "seconds"}, rows)["off_road_s"]
+    return {
+        "routes": len(rows),
+        "total_km": _total_km(rows),
+        "families_measured": sum(
+            1 for _, fields in _all_hazard_families() if any(hazards[field]["measured_routes"] > 0 for field in fields)
+        ),
+        "families_triggered": families_triggered,
+        "fields_triggered": sum(1 for entry in hazards.values() if entry["triggered_routes"] > 0),
+        "hazards": hazards,
+        "off_road_incidents": off_road,
+    }
+
+
+def safety_exposure(rows):
+    by_family = {}
+    ranked = []
+    for family, fields in _all_hazard_families():
+        family_fields = {}
+        measured_indices = set()
+        triggered_indices = set()
+        for field, unit in fields.items():
+            entry = _field_exposure(rows, field, unit, family)
+            family_fields[field] = {key: value for key, value in entry.items() if key != "family"}
+            if entry["triggered_routes"] > 0:
+                ranked.append({"field": field, **entry})
+            for index, row in enumerate(rows):
+                value = row.get(field)
+                if _valid_nonneg(value):
+                    measured_indices.add(index)
+                    if value > 0:
+                        triggered_indices.add(index)
+        by_family[family] = {
+            "measured_routes": len(measured_indices),
+            "triggered_routes": len(triggered_indices),
+            "fields": family_fields,
+        }
+    ranked.sort(key=lambda item: (-item["triggered_routes"], item["field"]))
+    return {
+        "routes": len(rows),
+        "total_km": _total_km(rows),
+        "by_family": by_family,
+        "ranked_hazards": ranked,
+        "off_road_incidents": _report({"off_road_s": "seconds"}, rows)["off_road_s"],
+    }
+
+
 REPORTS = {name: (description, partial(_report, fields)) for name, (description, fields) in QUESTIONS.items()}
+EXTENDED_REPORTS = {
+    "safety-overview": (
+        "Aggregate measured routes, triggered routes, totals, per-km exposure and off-road incidents across all hazards.",
+        safety_overview,
+    ),
+    "safety-exposure": (
+        "Per-family and per-km hazard exposure summary ranked by triggered routes, including off-road incidents.",
+        safety_exposure,
+    ),
+}

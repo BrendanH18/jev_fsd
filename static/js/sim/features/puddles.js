@@ -1,4 +1,5 @@
 // Puddles at the kerb (sim/puddles.js) as a feature record (sim/features/index.js, docs/feature-interface.md).
+import { puddleNotice } from "../puddles.js";
 import { r1 } from "../../common.js";
 import { current as weather } from "../weather.js";
 import { wheelPoints } from "../potholes.js";
@@ -31,7 +32,13 @@ function puddleClause(h, ahead) {
   return `${lead} There is no room to keep the wheels out of it without leaving the lane, so slow to ${Math.round(h.speed_mps * 3.6)} km/h by the time the front wheels reach it and keep to that until the rear wheels are through (\`car.target_speed\` already does).${more}`;
 }
 
+const PUDDLE_COACH =
+  "Puddle by the kerb, people beside it. Ease left in your lane, or slow right down, so you don’t splash them.";
+
 export default {
+  checkpointShare(world, shared) {
+    if (world.puddles?.enabled) shared.add(world.puddles);
+  },
   rulesCost: (c, snap) => (c.id === "ease_round_puddle" && snap.puddle_splash?.room ? -1.5 : 0),
   cautious: {
     at: "afterAmber",
@@ -41,6 +48,65 @@ export default {
         : null,
   },
   key: "puddles",
+  coach: {
+    init: () => ({
+      puddles: false,
+      splashes: 0,
+    }),
+    seen: "puddles",
+    events: {
+      pedestrian_splashed(score, ev) {
+        score.splashes++;
+        score.incident("pedestrian_splashed", `Splashed a pedestrian from a puddle at ${Math.round(ev.kmh)} km/h`, {
+          puddle: ev.puddle,
+          person: ev.person,
+          kmh: ev.kmh,
+          splash_kmh: ev.splash_kmh,
+        });
+      },
+    },
+    reports: [
+      { at: "end", order: 16, read: (score) => (score.puddles ? { pedestrians_splashed: score.splashes } : {}) },
+    ],
+    deductions: [{ at: "post", order: 1, counter: "splashes", weight: 20, category: "legality" }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 5,
+        when: (score) => score.splashes,
+        text: "In the rain, watch for puddles by the kerb, at corners and over drains, and for people on the sidewalk or waiting at a bus stop beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down, below about 20 km/h, until you're through. Splashing someone is careless driving.",
+      },
+    ],
+    guidance: [
+      {
+        at: "beforeSample",
+        order: 1,
+        read: (score, { world, normal }) => (normal && score.lastTtc >= 1.5 && world.puddleWarn ? PUDDLE_COACH : ""),
+      },
+      { at: "afterSample", order: 1, read: (_score, { world }) => (world.puddleWarn ? PUDDLE_COACH : "") },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 10,
+    duration: 2500,
+    read: (world, autopilot, views) =>
+      views.puddles ? puddleNotice(world, autopilot.enabled ? autopilot.snap : null) : null,
+    style: (line) => (line.slow ? "safety" : ""),
+  },
+  eventBadges: {
+    pedestrian_splashed: (event) => `SPLASHED A PEDESTRIAN AT ${Math.round(event.kmh)} KM/H`,
+  },
+  perceptionLine(snap) {
+    const pd = snap.puddle_splash;
+    const text = pd
+      ? `Puddle by the kerb ${pd.starts_in_m > 0 ? `${Math.round(pd.starts_in_m)} m ahead` : "under the car"}, ${pd.people === 1 ? "someone" : `${pd.people} people`} beside it: ${pd.room ? (pd.shift_m ? `ease ${Math.abs(pd.shift_m).toFixed(1)} m ${pd.shift_m < 0 ? "left" : "right"} in the lane` : "the wheels miss it") : `${Math.round(pd.speed_mps * 3.6)} km/h through it`}`
+      : null;
+    return text ? { order: 23, label: "Puddle", text } : null;
+  },
+  perceptionRejections: {
+    splashes_pedestrian: "Puddle: would splash someone",
+  },
   seen: "puddlesSeen",
   calls: "puddleCalls",
   // where they stand, whether it has rained this drive (they lie on until it snows), and who the car is

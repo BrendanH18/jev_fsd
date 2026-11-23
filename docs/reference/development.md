@@ -1,7 +1,8 @@
 # Development
 
 ```sh
-uv run python -m unittest discover tests
+uv run python -m unittest discover -s tests
+node scripts/node_checks.mjs                                  # every scripts/test_*.mjs in parallel (pass --jobs N or specific files)
 node --experimental-default-type=module scripts/test_drive_score.mjs
 node --experimental-default-type=module scripts/test_drive_controls.mjs
 node --experimental-default-type=module scripts/test_replay.mjs

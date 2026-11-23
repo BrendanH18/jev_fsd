@@ -6,7 +6,7 @@ globalThis.document = { querySelector: () => null };
 const { watchClosureReplans } = await import("../static/js/bench/runner.js");
 const settle = () => new Promise((r) => setTimeout(r, 0));
 const setup = () => {
-  const autopilot = { closureRouting: null },
+  const autopilot = { detourRouting: null },
     world = { route: { length: 500 } },
     metrics = { distance: 200 },
     got = [];
@@ -15,7 +15,7 @@ const setup = () => {
 {
   // a closure re-plan that replaces the route: driven + new route
   const t = setup();
-  t.autopilot.closureRouting = Promise.resolve().then(() => {
+  t.autopilot.detourRouting = Promise.resolve().then(() => {
     t.world.route = { length: 900 };
   });
   t.step();
@@ -26,10 +26,10 @@ const setup = () => {
 {
   // one that finds no route, then an unrelated re-plan: no extension
   const t = setup();
-  t.autopilot.closureRouting = Promise.resolve();
+  t.autopilot.detourRouting = Promise.resolve();
   t.step();
   await settle();
-  t.autopilot.closureRouting = null;
+  t.autopilot.detourRouting = null;
   t.world.route = { length: 800 };
   t.step();
   await settle();
@@ -38,7 +38,7 @@ const setup = () => {
 {
   // one that fails
   const t = setup();
-  t.autopilot.closureRouting = Promise.reject(new Error("offline"));
+  t.autopilot.detourRouting = Promise.reject(new Error("offline"));
   t.step();
   await settle();
   assert.deepEqual(t.got, []);

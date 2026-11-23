@@ -20,6 +20,7 @@ import urllib.request
 from collections import deque
 from typing import Any, Dict, Optional
 
+from . import VERSION
 from .config import Settings
 
 try:  # the official SDK needs Python >= 3.10
@@ -265,7 +266,7 @@ class JevClient:
                 headers={
                     "Authorization": "Bearer " + (self.api_key or ""),
                     "Content-Type": "application/json",
-                    "User-Agent": "jev-fsd/0.3.0 (stdlib)",
+                    "User-Agent": "jev-fsd/%s (stdlib)" % VERSION,
                 },
             )
             try:

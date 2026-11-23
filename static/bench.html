@@ -21,6 +21,7 @@
         <option value="jev">Jev (TypeSafe)</option>
       </select>
     </label>
+    <label>map <select id="bench-map"></select></label>
     <label>scenarios <input id="count" type="number" min="1" max="60" value="12"></label>
     <label>traffic <input id="npcs" type="number" min="0" max="120" value="40"></label>
     <label>suite seed <input id="seed" type="number" min="1" value="1"></label>
@@ -55,12 +56,18 @@
       </select>
     </label>
     <label>compare with <select id="compare"><option value="">none</option></select></label>
+    <label>view saved run <select id="saved-run"><option value="">choose a run</option></select></label>
     <button id="run" class="toggle on">Run</button>
     <span id="status" class="muted"></span>
   </section>
 
   <section id="summary" class="cards"></section>
   <p id="comparison-note" class="muted" role="status" hidden></p>
+  <div class="bench-table-tools">
+    <label><input id="bench-failures" type="checkbox"> Failures only</label>
+    <button id="bench-csv" class="toggle" disabled>Export CSV</button>
+    <button id="bench-json" class="toggle" disabled>Export JSON</button>
+  </div>
   <section class="panel table-wrap">
     <table id="results">
       <thead></thead>

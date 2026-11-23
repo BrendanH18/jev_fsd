@@ -36,6 +36,7 @@ export const TOUCH_BUTTONS = Object.freeze([
   { action: "camera", label: "View", title: "Next camera (C)" },
   { action: "pause", label: "Pause", title: "Pause (P)" },
   { action: "reset", label: "Reset", title: "Reset to lane (R)" },
+  { action: "horn", label: "Horn", title: "Horn (H)" },
 ]);
 
 export class TouchControls {
@@ -44,7 +45,7 @@ export class TouchControls {
     this.steerPointer = null;
     this.steerStart = 0;
     this.steer = 0;
-    this.pedals = { throttle: new Set(), brake: new Set() };
+    this.pedals = { throttle: new Set(), brake: new Set(), hardBrake: new Set() };
     this.knob = h("span", { class: "touch-steer-knob", "aria-hidden": "true" }, "◀ ▶");
     this.wheel = h(
       "div",
@@ -91,11 +92,16 @@ export class TouchControls {
         b.label,
       ),
     );
+    this.pedalEls.hardBrake = h(
+      "button",
+      { type: "button", class: "touch-button", "aria-label": "Hold hard brake", "aria-pressed": "false" },
+      "Hard brake",
+    );
     this.el = h(
       "div",
       { id: "touch-controls", class: "touch-controls", role: "group", "aria-label": "Touch driving controls" },
       this.wheel,
-      h("div", { class: "touch-buttons" }, this.buttons),
+      h("div", { class: "touch-buttons" }, this.buttons, this.pedalEls.hardBrake),
       h("div", { class: "touch-pedals" }, this.pedalEls.brake, this.pedalEls.throttle),
     );
     this.el.addEventListener("contextmenu", (ev) => ev.preventDefault());
@@ -182,7 +188,7 @@ export class TouchControls {
       steer: this.steer,
       throttle: this.pedals.throttle.size ? 1 : 0,
       brake: this.pedals.brake.size ? 1 : 0,
-      hardBrake: false,
+      hardBrake: this.pedals.hardBrake.size > 0,
     };
   }
 }

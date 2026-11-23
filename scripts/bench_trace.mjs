@@ -2,11 +2,25 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 const VERSION = 1;
 const STATE_TOLERANCE = 1e-9;
+const USAGE = [
+  "Usage: node --experimental-default-type=module scripts/bench_trace.mjs [options] LEFT.json[.gz] RIGHT.json[.gz]",
+  "  --check          exit with status 1 if traces diverge beyond tolerance, decisions, length, or result",
+  "  --tolerance <N>  numeric state tolerance (default 1e-9)",
+  "  --summary        include aggregate max position, heading, and speed drift across all ticks",
+  "  --window <k>     include k context ticks before and after the first divergence",
+  "  --help, -h       show this help",
+].join("\n");
 
 const pose = ({ x, y, psi, v }) => ({ x, y, heading: psi, speed: v });
+
+function readTraceFile(path) {
+  const raw = readFileSync(path);
+  return JSON.parse(path.endsWith(".gz") ? gunzipSync(raw).toString("utf8") : raw.toString("utf8"));
+}
 
 function traceSettings(config, mapSha) {
   const { engine: _engine, ...settings } = config;
@@ -31,7 +45,8 @@ export function captureTrace(config, mapSha, scenario) {
     },
     write(path, result) {
       const { pass, arrived, time_s } = result;
-      writeFileSync(path, JSON.stringify({ ...trace, result: { pass, arrived, time_s } }));
+      const text = JSON.stringify({ ...trace, result: { pass, arrived, time_s } });
+      writeFileSync(path, path.endsWith(".gz") ? gzipSync(text, { level: 9 }) : text);
     },
   };
 }
@@ -58,12 +73,50 @@ function difference(left, right, tolerance, path = "") {
   return { path, left: left ?? null, right: right ?? null };
 }
 
+function emptyDriftStats() {
+  return {
+    maxPositionDrift: 0,
+    maxPositionTick: null,
+    maxHeadingDrift: 0,
+    maxHeadingTick: null,
+    maxSpeedDrift: 0,
+    maxSpeedTick: null,
+  };
+}
+
+function recordPoseDrift(stats, a, b, tick) {
+  if (!a || !b) return;
+  if (Number.isFinite(a.x) && Number.isFinite(b.x)) {
+    const dx = a.x - b.x;
+    const dy = Number.isFinite(a.y) && Number.isFinite(b.y) ? a.y - b.y : 0;
+    const pos = Math.hypot(dx, dy);
+    if (pos > stats.maxPositionDrift) {
+      stats.maxPositionDrift = pos;
+      stats.maxPositionTick = tick;
+    }
+  }
+  if (Number.isFinite(a.heading) && Number.isFinite(b.heading)) {
+    const heading = Math.abs(a.heading - b.heading);
+    if (heading > stats.maxHeadingDrift) {
+      stats.maxHeadingDrift = heading;
+      stats.maxHeadingTick = tick;
+    }
+  }
+  if (Number.isFinite(a.speed) && Number.isFinite(b.speed)) {
+    const speed = Math.abs(a.speed - b.speed);
+    if (speed > stats.maxSpeedDrift) {
+      stats.maxSpeedDrift = speed;
+      stats.maxSpeedTick = tick;
+    }
+  }
+}
+
 export function readTraceScenario(path, destination, config, mapSha) {
   const sourceFile = statSync(path);
   const destinationFile = statSync(destination, { throwIfNoEntry: false });
   if (destinationFile?.dev === sourceFile.dev && destinationFile.ino === sourceFile.ino)
     throw new Error("--trace-from and --trace need different files.");
-  const trace = JSON.parse(readFileSync(path, "utf8"));
+  const trace = readTraceFile(path);
   if (trace?.version !== VERSION || typeof trace.inputs?.scenario?.id !== "string")
     throw new Error("Invalid benchmark trace.");
   const { scenario, ...settings } = trace.inputs;
@@ -72,7 +125,10 @@ export function readTraceScenario(path, destination, config, mapSha) {
   return scenario;
 }
 
-export function compareTraces(left, right) {
+export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summary = false, window = null } = {}) {
+  if (!Number.isFinite(tolerance) || tolerance < 0) throw new Error("Tolerance must be a finite nonnegative number.");
+  if (window !== null && (!Number.isSafeInteger(window) || window < 0))
+    throw new Error("Window must be a nonnegative integer.");
   for (const trace of [left, right]) {
     if (
       trace?.version !== VERSION ||
@@ -91,41 +147,123 @@ export function compareTraces(left, right) {
   let exactState = null;
   let stateOverTolerance = null;
   let decision = null;
+  const egoDrift = summary ? emptyDriftStats() : null;
+  const trafficDrift = summary ? emptyDriftStats() : null;
+  let ticksOverTolerance = 0;
   const shared = Math.min(left.steps.length, right.steps.length);
   for (let tick = 0; tick < shared; tick++) {
     const { decision: aDecision, ...aState } = left.steps[tick];
     const { decision: bDecision, ...bState } = right.steps[tick];
     const exact = exactState ? null : difference(aState, bState, 0);
     if (exact) exactState = { tick, ...exact };
-    const state = stateOverTolerance ? null : difference(aState, bState, STATE_TOLERANCE);
-    if (state) stateOverTolerance = { tick, ...state };
+    const state = !stateOverTolerance || summary ? difference(aState, bState, tolerance) : null;
+    if (state) {
+      if (!stateOverTolerance) stateOverTolerance = { tick, ...state };
+      if (summary) ticksOverTolerance++;
+    }
     const choice = decision ? null : difference(aDecision, bDecision, 0, "decision");
     if (choice) decision = { tick, ...choice };
-    if (exactState && stateOverTolerance && decision) break;
+    if (summary) {
+      recordPoseDrift(egoDrift, aState.ego, bState.ego, tick);
+      const aTraffic = Array.isArray(aState.traffic) ? aState.traffic : [];
+      const bTraffic = Array.isArray(bState.traffic) ? bState.traffic : [];
+      const bById = new Map(bTraffic.map((car, index) => [car?.id ?? index, car]));
+      for (const [index, aCar] of aTraffic.entries()) {
+        recordPoseDrift(trafficDrift, aCar, bById.get(aCar?.id ?? index), tick);
+      }
+    }
+    if (!summary && exactState && stateOverTolerance && decision) break;
   }
-  return {
+
+  const lengthDifference =
+    left.steps.length === right.steps.length
+      ? null
+      : { tick: shared, ended: left.steps.length === shared ? "left" : "right" };
+  const result = {
     scenario: left.inputs.scenario.id,
     runtimes: [left.runtime, right.runtime],
     steps: [left.steps.length - 1, right.steps.length - 1],
     results: [left.result, right.result],
-    lengthDifference:
-      left.steps.length === right.steps.length
-        ? null
-        : { tick: shared, ended: left.steps.length === shared ? "left" : "right" },
+    lengthDifference,
     resultDifference: difference(left.result, right.result, 0, "result"),
     exactState,
-    stateTolerance: STATE_TOLERANCE,
+    stateTolerance: tolerance,
     stateOverTolerance,
     decision,
   };
+  if (summary) {
+    result.summary = {
+      sharedTicks: shared,
+      ticksOverTolerance,
+      ego: egoDrift,
+      traffic: trafficDrift,
+      maxPositionDrift: Math.max(egoDrift.maxPositionDrift, trafficDrift.maxPositionDrift),
+      maxHeadingDrift: Math.max(egoDrift.maxHeadingDrift, trafficDrift.maxHeadingDrift),
+      maxSpeedDrift: Math.max(egoDrift.maxSpeedDrift, trafficDrift.maxSpeedDrift),
+    };
+  }
+  if (window !== null) {
+    const anchor = Math.min(
+      stateOverTolerance?.tick ?? Infinity,
+      decision?.tick ?? Infinity,
+      lengthDifference?.tick ?? Infinity,
+    );
+    if (!Number.isFinite(anchor)) {
+      result.window = null;
+    } else {
+      const from = Math.max(0, anchor - window);
+      const to = Math.min(Math.max(left.steps.length, right.steps.length) - 1, anchor + window);
+      const ticks = [];
+      for (let tick = from; tick <= to; tick++) {
+        const leftStep = left.steps[tick] ?? null;
+        const rightStep = right.steps[tick] ?? null;
+        let stateDiff = null;
+        let decisionDiff = null;
+        if (leftStep && rightStep) {
+          const { decision: aDecision, ...aState } = leftStep;
+          const { decision: bDecision, ...bState } = rightStep;
+          stateDiff = difference(aState, bState, tolerance);
+          decisionDiff = difference(aDecision, bDecision, 0, "decision");
+        }
+        ticks.push({ tick, left: leftStep, right: rightStep, stateDiff, decisionDiff });
+      }
+      result.window = { centerTick: anchor, radius: window, ticks };
+    }
+  }
+  return result;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const { values, positionals } = parseArgs({ options: { check: { type: "boolean" } }, allowPositionals: true });
-    if (positionals.length !== 2) throw new Error("Usage: node scripts/bench_trace.mjs [--check] LEFT.json RIGHT.json");
-    const [left, right] = positionals.map((file) => JSON.parse(readFileSync(file, "utf8")));
-    const comparison = compareTraces(left, right);
+    const { values, positionals } = parseArgs({
+      options: {
+        check: { type: "boolean" },
+        summary: { type: "boolean" },
+        tolerance: { type: "string" },
+        window: { type: "string" },
+        help: { type: "boolean", short: "h" },
+      },
+      allowPositionals: true,
+    });
+    if (values.help) {
+      console.log(USAGE);
+      process.exit(0);
+    }
+    if (positionals.length !== 2) throw new Error(USAGE);
+    let tolerance = STATE_TOLERANCE;
+    if (values.tolerance !== undefined) {
+      if (!values.tolerance.trim()) throw new Error("--tolerance must be a finite nonnegative number.");
+      tolerance = Number(values.tolerance);
+      if (!Number.isFinite(tolerance) || tolerance < 0)
+        throw new Error("--tolerance must be a finite nonnegative number.");
+    }
+    let window = null;
+    if (values.window !== undefined) {
+      if (!/^\d+$/.test(values.window)) throw new Error("--window must be a nonnegative integer.");
+      window = Number(values.window);
+    }
+    const [left, right] = positionals.map((file) => readTraceFile(file));
+    const comparison = compareTraces(left, right, { tolerance, summary: Boolean(values.summary), window });
     console.log(JSON.stringify(comparison, null, 2));
     if (
       values.check &&

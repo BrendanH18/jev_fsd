@@ -173,8 +173,15 @@ def check_published_replay(page, url):
     heading_visible = page.locator("#replay-heading").evaluate(
         "heading => heading.getBoundingClientRect().bottom > 0 && heading.getBoundingClientRect().top < innerHeight"
     )
+    driver_header = page.locator("#results-challenges thead th").nth(1)
+    sort_button = driver_header.get_by_role("button")
+    sort_button.focus()
+    for direction in ("descending", "ascending", "none"):
+        page.keyboard.press("Enter")
+        assert driver_header.get_attribute("aria-sort") == direction
+        assert sort_button.evaluate("button => button === document.activeElement")
     replay = page.locator("#published-replay")
-    canvas = replay.get_by_role("img")
+    canvas = replay.get_by_role("img", name="Overhead street map of the recorded drive")
     play = replay.get_by_role("button", name="Play replay", exact=True)
     play.wait_for()
     first = canvas.evaluate("canvas => canvas.toDataURL()")
@@ -182,6 +189,12 @@ def check_published_replay(page, url):
     page.wait_for_function("Number(document.querySelector('#published-replay input').value) > 0.3")
     replay.get_by_role("button", name="Pause replay").click()
     slider = replay.get_by_role("slider", name="Replay time")
+    replay.get_by_role("combobox", name="Playback speed").select_option("2")
+    slider.press("Home")
+    replay.get_by_role("button", name="+1 s", exact=True).click()
+    assert float(slider.input_value()) == 1
+    replay.get_by_role("img", name="Ego vehicle speed over time").click()
+    assert abs(float(slider.input_value()) / float(slider.get_attribute("max")) - 0.5) < 0.02
     seek_trigger = "slider => { slider.value = 5; slider.dispatchEvent(new Event('input')); }"
     slider.evaluate(seek_trigger)
     assert replay.get_by_role("status").inner_text() == "Cross traffic released"
@@ -207,7 +220,7 @@ def check_published_replay(page, url):
         slider.evaluate(seek_trigger)
         assert replay.get_by_role("status").inner_text() == trigger
         if flag:
-            replay.get_by_role("button", name="Flagged at").first.click()
+            replay.get_by_role("button", name="Next flag", exact=True).click()
             replay.get_by_text(f"Flagged: {flag}", exact=False).wait_for()
     page.route("**/jev-flagger.json", lambda route: route.fulfill(status=503))
     select.select_option("jev-flagger")
@@ -223,6 +236,35 @@ def check_published_replay(page, url):
             }
         ],
     )
+
+
+def check_snapshot_form(page):
+    # Let new decisions arrive both before the next paint and while the name field is open.
+    page.evaluate("""() => {
+        const app = window.__jev;
+        app.view.render = () => {};
+        if (app.lab.dialog.open) app.lab.dialog.close();
+        window.showSnapshotDecision = label => app.autopilot.onDecision({
+          meta: {}, candidates: [], questions: { vector: label }, state: { label }
+        });
+        window.showSnapshotDecision('displayed');
+    }""")
+    page.keyboard.press("i")
+    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('displayed')")
+    page.evaluate("""() => {
+        window.showSnapshotDecision('awaiting paint');
+        document.querySelector('#save-snapshot').click();
+        window.showSnapshotDecision('newer');
+    }""")
+    page.wait_for_function("document.querySelector('#panel-body').textContent.includes('newer')")
+    page.route("**/api/snapshot/save", lambda route: route.fulfill(json={"saved": "fixture"}))
+    page.locator("#panel-inline-input").fill("fixture")
+    with page.expect_request("**/api/snapshot/save") as request:
+        page.locator("#panel-inline-submit").click()
+    payload = request.value.post_data_json
+    assert payload["state"] == {"label": "displayed"}
+    assert payload["questions"] == {"vector": "displayed"}
+    print("Inspector snapshot kept the displayed decision", flush=True)
 
 
 def check_incident_comparison(page):
@@ -381,6 +423,7 @@ def check(url, chromium=None, groups=GROUPS):
             results = page.evaluate("import('/tests/render-tests.js').then(m => m.runRenderTests())")
             ok &= report("renderer tests", results)
             ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
+            check_snapshot_form(page)
             page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
 
         kinds = (PRACTICE_KINDS if "practice" in groups else []) + (PARKING_KINDS if "parking" in groups else [])

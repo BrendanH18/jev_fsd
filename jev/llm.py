@@ -504,7 +504,9 @@ class LlmEndpoint(Endpoint):
         self._format = config.response_format
 
     def public(self) -> dict:
-        return {**super().public(), "response_format": self._format}
+        with self._lock:
+            fmt = self._format
+        return {**super().public(), "response_format": fmt}
 
     def check_url(self) -> str:
         return self.config.base_url + "/models"
@@ -515,7 +517,8 @@ class LlmEndpoint(Endpoint):
         if self.key_state == "missing":
             raise self.no_key()
         deadline = time.monotonic() + self.config.timeout_s
-        fmt = self._format
+        with self._lock:
+            fmt = self._format
         downgraded_from: Optional[str] = None
         while True:
             self.limit()
@@ -645,7 +648,7 @@ def validate_request(body: dict) -> dict:
     if not expect:
         raise InvalidLlmRequest("expect needs at least one of motion, candidate, route or headlights")
     tick, epoch = body.get("tick", 0), body.get("epoch", 0)
-    if not isinstance(tick, int) or not isinstance(epoch, int):
+    if isinstance(tick, bool) or isinstance(epoch, bool) or not isinstance(tick, int) or not isinstance(epoch, int):
         raise InvalidLlmRequest("tick and epoch must be integers")
     return {"endpoint": body.get("endpoint"), "messages": clean, "expect": expect, "tick": tick, "epoch": epoch}
 

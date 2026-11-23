@@ -30,26 +30,33 @@ def new_token() -> str:
 
 
 def split_host(host_header: str) -> tuple:
-    """'localhost:8321' -> ('localhost', 8321); '[::1]:8321' -> ('[::1]', 8321); no port -> None."""
+    """'localhost:8321' -> ('localhost', 8321); '[::1]:8321' -> ('[::1]', 8321); no port -> None; invalid -> -1."""
     host = (host_header or "").strip().lower()
     if host.startswith("["):
         end = host.find("]")
+        if end == -1:
+            return "", -1
         name, rest = host[: end + 1], host[end + 1 :]
     elif host.count(":") == 1:
         name, rest = host.split(":", 1)
         rest = ":" + rest
     else:
         name, rest = host, ""
-    port = None
-    if rest.startswith(":") and rest[1:].isdigit():
-        port = int(rest[1:])
-    return name, port
+    if not rest:
+        return name, None
+    if rest.startswith(":") and len(rest) > 1 and rest[1:].isascii() and rest[1:].isdigit():
+        parsed = int(rest[1:])
+        if 1 <= parsed <= 65535:
+            return name, parsed
+    return name, -1
 
 
 def host_allowed(host_header: Optional[str], port: int) -> bool:
     if not host_header:
         return False
     name, host_port = split_host(host_header)
+    if host_port is not None and not (1 <= host_port <= 65535):
+        return False
     return name in LOOPBACK_HOSTS and (host_port is None or host_port == port)
 
 

@@ -19,18 +19,10 @@
 // (`header.maps`), and each drive's recorded result leaves out the decision trace and timeline,
 // which are large, keeping `result_sha`, the hash of the whole comparable result, so a replay is
 // still compared field for field (timings and optional comparison measurements aside).
+import { pathToFileURL } from "node:url";
 import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
+import { benchPage, jsonDifferences, parseOptions } from "./cli_tools.mjs";
 
-const args = Object.fromEntries(
-  process.argv.slice(2).reduce((out, a, i, all) => {
-    if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
-    return out;
-  }, []),
-);
-const fail = (message) => {
-  console.error(message);
-  process.exit(1);
-};
 const OPTIONS = [
   "brain",
   "set",
@@ -46,12 +38,70 @@ const OPTIONS = [
   "browser-replay",
   "comparison-json",
 ];
-for (const [name, value] of Object.entries(args)) {
-  if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
-  if (value === true) fail(`--${name} needs a value.`);
+
+const USAGE = [
+  "Usage: node --experimental-default-type=module scripts/arena_node.mjs [options]",
+  "  --brain <id>                 driver id: rules, cautious, jev, decision:<name>, llm:<name>",
+  "  --agent <path>               load a trusted local driver module",
+  "  --set <name>                 challenges (default), road-tests, or all",
+  "  --only <id,id>               run only selected drive ids",
+  "  --track <guarded|open>       rule enforcement track (default: guarded)",
+  "  --port <port>                local server port (default: PORT or 8331)",
+  "  --json <path>                write per-drive summary JSON report",
+  "  --check <0|1|replay|submission>  exit 1 on failure, replay drift, or submission mismatch",
+  "  --record <path[.gz]>         record model or local agent answers",
+  "  --replay <path[.gz]>         replay from a recording",
+  "  --reserve <usd>              stop recording when remaining budget falls below USD",
+  "  --browser-replay <path>      export a playable replay for one drive (--replay + --only)",
+  "  --comparison-json <path>     export driven-corridor score inputs for a guarded replay",
+  "  --help, -h                   show this help",
+].join("\n");
+
+const BULKY = ["decisions_trace", "events", "report"];
+
+function replayResultDiffs(recorded, actual, rec, actualSha = null, maxDiffs = 12) {
+  const stripMeta = (entry) => {
+    const {
+      result_sha: _sha,
+      suite_version: _version,
+      comparison_score_inputs: _comparison,
+      ...rest
+    } = rec.comparableResult(entry);
+    return Object.fromEntries(Object.entries(rest).filter(([k]) => !BULKY.includes(k)));
+  };
+  const diffs = jsonDifferences(stripMeta(recorded), stripMeta(actual), rec.canonicalJson, { limit: maxDiffs });
+  if (!diffs.length && recorded?.result_sha && actualSha && recorded.result_sha !== actualSha) {
+    diffs.push(
+      `result_sha: expected ${JSON.stringify(recorded.result_sha)}, actual ${JSON.stringify(actualSha)} (differs in bulky fields: ${BULKY.join(", ")})`,
+    );
+  }
+  return diffs;
 }
+
+const fail = (message) => {
+  console.error(message);
+  process.exit(1);
+};
+let parsed;
+try {
+  parsed = parseOptions(process.argv.slice(2), OPTIONS);
+} catch (error) {
+  fail(error.message);
+}
+if (parsed.help) {
+  console.log(USAGE);
+  process.exit(0);
+}
+const args = parsed.args;
+
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
 if (args.agent && (args.brain || args.replay)) fail("--agent selects a local driver. Drop --brain and --replay.");
+// --reserve 0.5: start no further drive once less than this many dollars of the server's budget
+// (JEV_FSD_BUDGET_USD) are left, so a run that would outspend it stops between drives instead of
+// spoiling the drive under way with budget fallbacks. With --record, the finished drives are kept.
+const reserve = args.reserve === undefined ? null : Number(args.reserve);
+if (reserve !== null && (!args.record || !Number.isFinite(reserve) || reserve <= 0))
+  fail("--reserve needs --record and a positive number of dollars.");
 const checkSubmission = args.check === "submission";
 const checkReplay = args.check === "replay" || checkSubmission;
 if (checkReplay && (!args.replay || args.reserve !== undefined))
@@ -61,6 +111,7 @@ if (checkSubmission && (args.only || args["browser-replay"] || args["comparison-
 if (args["browser-replay"] && (!args.replay || !args.only || String(args.only).includes(",")))
   fail("--browser-replay needs --replay and exactly one drive selected with --only.");
 const fs = await import("node:fs"),
+  { dirname, join } = await import("node:path"),
   zlib = await import("node:zlib");
 const browserOutput = args["browser-replay"];
 const comparisonOutput = args["comparison-json"];
@@ -94,12 +145,12 @@ if (!["guarded", "open"].includes(track)) fail(`Unknown track "${track}": use gu
 
 if (comparisonOutput && track !== "guarded") fail("--comparison-json requires a guarded recording.");
 
-const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
-const page = await (await fetch(`${base}/bench`)).text();
+const { base, page } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
 const token = page.match(/name="jev-csrf" content="([^"]+)"/)?.[1] || "";
 globalThis.document = { querySelector: (sel) => (sel.includes("jev-csrf") ? { content: token } : null) };
 const nativeFetch = globalThis.fetch;
-globalThis.fetch = (path, opts) => nativeFetch(String(path).startsWith("/") ? base + path : path, opts);
+globalThis.fetch = (path, opts) =>
+  nativeFetch(String(path).startsWith("/") ? base + path : path, { ...opts, redirect: "error" });
 
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
@@ -118,7 +169,6 @@ const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).
 let brain = String(args.brain || "rules");
 if (args.agent) {
   try {
-    const { pathToFileURL } = await import("node:url");
     const { default: definition } = await import(pathToFileURL(args.agent).href);
     if (typeof definition?.id !== "string" || definition.id.includes(":"))
       throw new Error("Use a local driver id without a provider prefix.");
@@ -230,13 +280,17 @@ if (replayJson) {
 }
 
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
-const save = (recording) => {
-  const text = recording.serialize(),
-    tmp = `${args.record}.tmp`;
-  fs.writeFileSync(tmp, args.record.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
-  fs.renameSync(tmp, args.record);
+const save = (recordingToSave) => {
+  const text = recordingToSave.serialize();
+  const directory = fs.mkdtempSync(join(dirname(args.record), ".arena-recording-"));
+  const tmp = join(directory, "recording");
+  try {
+    fs.writeFileSync(tmp, args.record.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
+    fs.renameSync(tmp, args.record);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 };
-const BULKY = ["decisions_trace", "events", "report"];
 const trimmed = (result) =>
   Object.fromEntries(Object.entries(rec.comparableResult(result)).filter(([k]) => !BULKY.includes(k)));
 // Comparison inputs are display measurements. Their availability does not determine replay fidelity.
@@ -279,11 +333,6 @@ const SUMMARY = [
   "flagged_by_check",
 ];
 
-// --reserve 0.5: start no further drive once less than this many dollars of the server's budget
-// (JEV_FSD_BUDGET_USD) are left, so a run that would outspend it stops between drives instead of
-// spoiling the drive under way with budget fallbacks. With --record, the finished drives are kept.
-const reserve = args.reserve === undefined ? null : Number(args.reserve);
-if (reserve !== null && !(reserve >= 0)) fail("--reserve must be a number of dollars.");
 const results = [],
   drifted = [],
   comparisons = {};
@@ -291,9 +340,13 @@ let budgetStop = null;
 for (const challenge of drives) {
   if (reserve !== null) {
     const { budget_usd: budget, spent_usd: spent } = (await api("/api/status")).spend || {};
-    // (a budget of 0 means no limit: jev/client.py SpendGuard)
-    if (Number.isFinite(budget) && budget > 0 && budget - spent < reserve) {
-      budgetStop = `stopped before ${challenge.id}: $${(budget - spent).toFixed(2)} of the budget left`;
+    // A zero budget disables the spend limit. Refuse to start a reserved run without a limit.
+    if (!Number.isFinite(budget) || budget <= 0 || !Number.isFinite(spent) || spent < 0)
+      fail("--reserve needs a finite server spend limit.");
+    const remaining = budget - spent;
+    if (remaining < reserve) {
+      budgetStop = `stopped before ${challenge.id}: $${remaining.toFixed(2)} of the budget left`;
+      console.error(budgetStop);
       break;
     }
   }
@@ -324,11 +377,17 @@ for (const challenge of drives) {
     save(recording);
   }
   if (replayJson) {
-    r.model_recording.same_result = recorded.result_sha === resultSha(r);
+    const actualSha = resultSha(r);
+    r.model_recording.same_result = recorded.result_sha === actualSha;
+    if (r.model_recording.same_result === false) {
+      for (const line of replayResultDiffs(recorded, r, rec, actualSha)) {
+        console.error(`  drift ${challenge.id} ${line}`);
+      }
+    }
     if (
       checkSubmission &&
       rec.canonicalJson(recorded) !==
-        rec.canonicalJson({ ...trimmed(r), result_sha: resultSha(r), suite_version: recording.header.suite_version })
+        rec.canonicalJson({ ...trimmed(r), result_sha: actualSha, suite_version: recording.header.suite_version })
     )
       fail(`The recorded results for ${challenge.id} differ from the replay.`);
     if (!r.model_recording.same_result || !r.model_recording.exact) drifted.push(challenge.id);
@@ -336,7 +395,6 @@ for (const challenge of drives) {
     else if (scoreInputs) comparisons[challenge.id] = { result_sha: recorded.result_sha, score_inputs: scoreInputs };
     if (capture) {
       if (drifted.length) fail(`Cannot export ${challenge.id}: the replay differs from the recorded drive.`);
-      const { dirname, join } = await import("node:path");
       const text = `${JSON.stringify(capture.finish(challenge, args.replay, recording, r))}\n`;
       const directory = fs.mkdtempSync(join(dirname(browserOutput), ".browser-replay-"));
       const temporary = join(directory, "replay.json");
@@ -356,7 +414,6 @@ for (const challenge of drives) {
       `${r.model_recording ? ` rec=${JSON.stringify(r.model_recording)}` : ""}`,
   );
 }
-if (budgetStop) console.log(budgetStop);
 // (progress, pace, comfort, margin and time lost, computed for display only: bench/scores.js)
 console.log(`scores ${JSON.stringify(driverScores(results.filter((r) => !r.stopped)))}`);
 const passed = results.filter((r) => r.pass).length;
@@ -401,6 +458,7 @@ if (args.json)
       {
         suite_version,
         ...(manifest ? { manifest } : {}),
+        ...(budgetStop ? { stopped: budgetStop } : {}),
         summary,
         results: results.map((r) =>
           Object.fromEntries(SUMMARY.filter((k) => r[k] !== undefined).map((k) => [k, r[k]])),
@@ -418,7 +476,7 @@ if (comparisonOutput) {
     throw error;
   }
 }
-if (args.record) console.log(`recorded ${results.length} drives to ${args.record}`);
+if (args.record && results.length) console.log(`recorded ${results.length} drives to ${args.record}`);
 if (replayJson)
   console.log(
     drifted.length
@@ -435,5 +493,5 @@ if (failed.length)
   );
 const failedReplay = checkReplay && drifted.length > 0;
 process.stdout.write(`${JSON.stringify({ ...summary, suite_version })}\n`, () =>
-  process.exit(failed.length || failedReplay ? 1 : 0),
+  process.exit(failed.length || failedReplay || budgetStop ? 1 : 0),
 );

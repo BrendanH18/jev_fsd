@@ -1,15 +1,52 @@
 import { showDrive } from "./published-replay.js";
+import { describe } from "./hud.js";
 import { $, h, appUrl } from "../common.js";
 import { CHALLENGES, challengeConfig } from "../lab/challenges.js";
 import { driveLink } from "../lab/share.js";
 import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/registry.js";
 import { replayPosition } from "../lab/playback.js";
-import { challengeCity, filterChallenges, practiceStatus, readPractice } from "../lab/practice.js";
+import {
+  challengeCity,
+  challengeNeighbourhood,
+  challengeProvince,
+  exportPracticeBackup,
+  filterChallenges,
+  importPracticeBackup,
+  practiceStatus,
+  readPractice,
+  readRoadTests,
+  resetPractice,
+  roadTestRecord,
+  roadTestStatus,
+} from "../lab/practice.js";
 import { ROAD_TESTS } from "../lab/road-tests.js";
-import { readRoadTests, roadTestRecord, roadTestStatus } from "../lab/practice.js";
 
 const PRACTICE_LABELS = { untried: "Untried", attempted: "Attempted", completed: "Completed cleanly" };
 const ROAD_TEST_LABELS = { untried: "Untried", attempted: "Not yet passed", passed: "Passed" };
+// Challenges where committed model runs in data/results.json failed.
+const AI_FAILED_CHALLENGES = {
+  flagger: "Claude Haiku 5.5 failed this challenge on the open track",
+  "on-your-bumper": "Claude Haiku 5.5 failed this challenge on the guarded track",
+  "double-parked": "DeepSeek V4.1 Flash failed this challenge on the guarded track",
+};
+// Numeric positions preserve the display order when a registered feature supplies a line.
+const PERCEPTION_FIELDS = [
+  [5, "emergency", "Emergency"],
+  [6, "bus", "Bus"],
+  [7, "crosswalk", "Crosswalk"],
+  [8, "school", "School bus"],
+  [9, "streetcar", "Streetcar"],
+  [10, "crossing", "Rail crossing"],
+  [11, "box", "Junction box"],
+  [12, "workZone", "Work zone"],
+  [13, "closure", "Lane closure"],
+  [16, "scramble", "Scramble"],
+  [17, "plow", "Snow plow"],
+  [18, "cyclist", "Cyclist"],
+  [29, "blind", "Blind spot"],
+  [30, "lane", "Lane"],
+  [32, "zone", "Zone"],
+];
 
 export class DriveLab {
   constructor({
@@ -27,12 +64,18 @@ export class DriveLab {
   }) {
     Object.assign(this, { onSeek, onBranch, onLive, onAgent });
     this.dialog = h("dialog", { class: "lab-dialog", "aria-label": "Drive lab" });
+    this.dialog.addEventListener("click", (ev) => {
+      if (ev.target === this.dialog) this.dialog.close();
+    });
     this.dialog.addEventListener("close", () => onPause(false));
     document.body.append(this.dialog);
     this.city = city;
     this.demo = demo;
     this.onPause = onPause;
     this.onScenic = onScenic;
+    this.onPerception = onPerception;
+    this.rejectionsExpanded = false;
+    this.lastPerceptionData = null;
     const actions = h(
       "div",
       { class: "lab-actions" },
@@ -43,12 +86,7 @@ export class DriveLab {
         {
           class: "chip-button",
           "aria-pressed": "false",
-          onclick: () => {
-            const enabled = this.eyes.getAttribute("aria-pressed") !== "true";
-            this.eyes.setAttribute("aria-pressed", String(enabled));
-            this.perception.hidden = !enabled;
-            onPerception(enabled);
-          },
+          onclick: () => this.toggleEyes(),
         },
         "AI eyes",
       )),
@@ -57,11 +95,7 @@ export class DriveLab {
         {
           class: "chip-button",
           "aria-pressed": "false",
-          onclick: () => {
-            const enabled = !document.body.classList.contains("telemetry-expanded");
-            document.body.classList.toggle("telemetry-expanded", enabled);
-            this.inspect.setAttribute("aria-pressed", String(enabled));
-          },
+          onclick: () => this.toggleTelemetry(),
         },
         "Telemetry",
       )),
@@ -71,7 +105,7 @@ export class DriveLab {
       "section",
       { class: "perception-panel panel", hidden: true, "aria-label": "Geometric perception" },
       h("span", { class: "label" }, "AI EYES / GEOMETRIC SENSING"),
-      (this.sight = h("p", {}, "Observing the street…")),
+      (this.sight = h("div", { class: "perception-sight" }, h("p", {}, "Observing the street…"))),
       h("p", { class: "perception-legend" }, "Green: visible · Red: hidden from driver · Yellow: selected path"),
       h("p", { class: "muted" }, "Hidden-object boxes use world truth for inspection; the driver cannot see them."),
       (this.rejections = h("div", { class: "candidate-rejections" })),
@@ -90,20 +124,43 @@ export class DriveLab {
       (this.controls = h(
         "div",
         { class: "replay-controls", hidden: true },
-        (this.slider = h("input", {
-          type: "range",
-          min: 0,
-          max: 0,
-          step: 1,
-          value: 0,
-          "aria-label": "Replay time",
-          oninput: () => this.seek(Number(this.slider.value)),
-        })),
+        h(
+          "div",
+          { class: "replay-slider-wrap" },
+          (this.slider = h("input", {
+            id: "slider",
+            type: "range",
+            min: 0,
+            max: 0,
+            step: 1,
+            value: 0,
+            "aria-label": "Replay time",
+            oninput: () => this.seek(Number(this.slider.value)),
+          })),
+          (this.incidentTicks = h("div", { class: "replay-ticks", "aria-hidden": "true" })),
+        ),
         h(
           "div",
           { class: "replay-buttons" },
           (this.play = h("button", { class: "chip-button", onclick: () => this.togglePlayback() }, "Play replay")),
+          (this.speedSelect = h(
+            "select",
+            {
+              class: "replay-speed",
+              "aria-label": "Replay speed",
+              onchange: () => {
+                this.replaySpeed = Number(this.speedSelect.value) || 1;
+                this.lastTick = performance.now();
+              },
+            },
+            h("option", { value: "0.5" }, "0.5×"),
+            h("option", { value: "1", selected: true }, "1×"),
+            h("option", { value: "2" }, "2×"),
+          )),
+          h("button", { class: "chip-button", onclick: () => this.stepFrame(-1) }, "−0.5 s"),
+          h("button", { class: "chip-button", onclick: () => this.stepFrame(1) }, "+0.5 s"),
           h("button", { class: "chip-button", onclick: () => this.previousIncident() }, "Before incident"),
+          h("button", { class: "chip-button", onclick: () => this.nextIncident() }, "Next incident"),
           h("button", { class: "chip-button", onclick: () => this.branch("manual") }, "Take over here"),
           (this.branchAgent = h("select", { "aria-label": "Branch driver" })),
           h("button", { class: "chip-button", onclick: () => this.branch(this.branchAgent.value) }, "Try this driver"),
@@ -149,9 +206,27 @@ export class DriveLab {
     this.lastTick = -Infinity;
     this.playing = false;
     this.reviewing = false;
+    this.replaySpeed = 1;
     this.replayElapsed = 0;
     this.replayAlpha = 0;
     this.refreshAgents();
+  }
+  toggleEyes(force) {
+    const enabled = force === undefined ? this.eyes.getAttribute("aria-pressed") !== "true" : !!force;
+    this.eyes.setAttribute("aria-pressed", String(enabled));
+    this.perception.hidden = !enabled;
+    this.onPerception?.(enabled);
+  }
+  toggleTelemetry(force) {
+    const enabled = force === undefined ? !document.body.classList.contains("telemetry-expanded") : !!force;
+    document.body.classList.toggle("telemetry-expanded", enabled);
+    this.inspect.setAttribute("aria-pressed", String(enabled));
+  }
+  isReviewing() {
+    return !!this.reviewing;
+  }
+  togglePlay() {
+    return this.togglePlayback();
   }
   // Rebuild the driver pickers, e.g. after endpoints report whether they are reachable.
   refreshAgents(agentNote) {
@@ -243,8 +318,8 @@ export class DriveLab {
           "p",
           { class: "lab-footnote" },
           this.demo
-            ? "Public browser demo · Rules and starter agents run locally in your browser. Keyboard driving on desktop."
-            : "Local drive lab · WASD to drive · J for autopilot · P to pause. Research simulator.",
+            ? "Public browser demo · Rules and starter agents run locally in your browser. Drive with keyboard, touch or gamepad."
+            : "Local drive lab · WASD or arrows to drive · J for autopilot · P to pause. Research simulator.",
         ),
       ),
     );
@@ -284,11 +359,20 @@ export class DriveLab {
     }
   }
   challenges() {
-    const practice = this.practice?.available === false ? this.practice : readPractice();
-    const filters = (this.challengeFilters ||= { query: "", city: "", skill: "", weather: "", progress: "" });
+    let practice = this.practice?.available === false ? this.practice : readPractice();
+    let roadTests = readRoadTests();
+    const filters = (this.challengeFilters ||= {
+      query: "",
+      city: "",
+      province: "",
+      skill: "",
+      weather: "",
+      progress: "",
+      sort: "",
+    });
     const controls = {};
-    const unique = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
-    const picker = (key, label, options) =>
+    const unique = (values) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const picker = (key, label, options, ariaLabel = `Filter by ${label.toLowerCase()}`, defaultLabel = null) =>
       h(
         "label",
         {},
@@ -296,7 +380,7 @@ export class DriveLab {
         (controls[key] = h(
           "select",
           {
-            "aria-label": `Filter by ${label.toLowerCase()}`,
+            "aria-label": ariaLabel,
             onchange: () => {
               filters[key] = controls[key].value;
               render();
@@ -305,7 +389,15 @@ export class DriveLab {
           h(
             "option",
             { value: "" },
-            { city: "All cities", skill: "All skills", weather: "Any weather", progress: "Any progress" }[key],
+            defaultLabel ||
+              {
+                city: "All cities",
+                province: "All provinces",
+                skill: "All skills",
+                weather: "Any weather",
+                progress: "Any progress",
+                sort: "Default order",
+              }[key],
           ),
           options.map(([value, text]) => h("option", { value, selected: filters[key] === value }, text)),
         )),
@@ -313,10 +405,11 @@ export class DriveLab {
     const grid = h("div", { class: "challenge-grid" });
     const count = h("p", { class: "challenge-results", role: "status", "aria-live": "polite", "aria-atomic": "true" });
     const next = h("a", { class: "chip-button challenge-next" });
+    const backupStatus = h("span", { class: "practice-backup-status muted", role: "status", "aria-live": "polite" });
     const reset = () => {
       for (const key of Object.keys(filters)) {
         filters[key] = "";
-        controls[key].value = "";
+        if (controls[key]) controls[key].value = "";
       }
       render();
       controls.query.focus();
@@ -330,8 +423,7 @@ export class DriveLab {
     );
     const challengeUrl = (challenge) => driveLink({ ...challengeConfig(challenge), drive: this.challengeDriver.value });
     // (road tests, lab/road-tests.js: a longer drive marked like an examiner's sheet)
-    const roadTests = readRoadTests(),
-      roadGrid = h("div", { class: "challenge-grid road-test-grid" });
+    const roadGrid = h("div", { class: "challenge-grid road-test-grid" });
     const renderRoadTests = () =>
       roadGrid.replaceChildren(
         ...ROAD_TESTS.map((t) => {
@@ -365,15 +457,49 @@ export class DriveLab {
           );
         }),
       );
+    const sortMatches = (matches) => {
+      if (!filters.sort) return matches;
+      const statusRank = { untried: 0, attempted: 1, completed: 2 };
+      const attemptRank = { attempted: 0, untried: 1, completed: 2 };
+      return [...matches].sort((a, b) => {
+        if (filters.sort === "untried") {
+          return (
+            statusRank[practiceStatus(a, practice.records)] - statusRank[practiceStatus(b, practice.records)] ||
+            a.title.localeCompare(b.title)
+          );
+        }
+        if (filters.sort === "attempted") {
+          return (
+            attemptRank[practiceStatus(a, practice.records)] - attemptRank[practiceStatus(b, practice.records)] ||
+            a.title.localeCompare(b.title)
+          );
+        }
+        if (filters.sort === "city") {
+          return challengeCity(a).localeCompare(challengeCity(b)) || a.title.localeCompare(b.title);
+        }
+        if (filters.sort === "difficulty") {
+          return a.difficulty.localeCompare(b.difficulty) || a.title.localeCompare(b.title);
+        }
+        if (filters.sort === "title") {
+          return a.title.localeCompare(b.title);
+        }
+        return 0;
+      });
+    };
     const render = () => {
       renderRoadTests();
-      const matches = filterChallenges(CHALLENGES, filters, practice.records);
+      const filtered = filterChallenges(CHALLENGES, filters, practice.records);
+      const matches = sortMatches(filtered);
       const completed = CHALLENGES.filter((c) => practiceStatus(c, practice.records) === "completed").length;
       count.textContent = `${matches.length} of ${CHALLENGES.length} challenges · ${completed} completed cleanly by you`;
       empty.hidden = matches.length > 0;
       grid.replaceChildren(
         ...matches.map((c) => {
           const status = practiceStatus(c, practice.records);
+          const aiFail = AI_FAILED_CHALLENGES[c.id];
+          const city = challengeCity(c);
+          const neighbourhood = challengeNeighbourhood(c);
+          const place = neighbourhood.toLowerCase() === city.toLowerCase() ? city : `${city} · ${neighbourhood}`;
           return h(
             "a",
             { class: "challenge-card", "data-challenge": c.id, href: challengeUrl(c) },
@@ -384,13 +510,14 @@ export class DriveLab {
               h("span", { class: "label" }, c.difficulty),
             ),
             h("h2", {}, c.title),
-            h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
-            h("p", {}, c.description),
             h(
               "div",
-              { class: "challenge-card-meta" },
-              `${challengeCity(c)} · ${c.map.replaceAll("_", " ")} · ${c.weather} · ${c.time}`,
+              { class: "challenge-badges" },
+              h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
+              aiFail ? h("span", { class: "practice-badge beat-ai-badge", title: aiFail }, "Beat the AI") : null,
             ),
+            h("p", {}, c.description),
+            h("div", { class: "challenge-card-meta" }, `${place} · ${c.weather} · ${c.time}`),
             h(
               "strong",
               {},
@@ -412,6 +539,85 @@ export class DriveLab {
       if (recommendation) next.href = challengeUrl(recommendation);
       else next.removeAttribute("href");
     };
+
+    // Practice backup controls live in their own `.practice-backup` container so `.challenge-library-actions` keeps "Clear filters" first.
+    let resetArmed = false,
+      resetTimer = null;
+    const resetProgressBtn = h(
+      "button",
+      {
+        type: "button",
+        class: "chip-button",
+        onclick: () => {
+          if (!resetArmed) {
+            resetArmed = true;
+            resetProgressBtn.textContent = "Confirm reset?";
+            resetProgressBtn.classList.add("confirming");
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => {
+              resetArmed = false;
+              resetProgressBtn.textContent = "Reset progress";
+              resetProgressBtn.classList.remove("confirming");
+            }, 4000);
+            return;
+          }
+          clearTimeout(resetTimer);
+          resetArmed = false;
+          resetProgressBtn.textContent = "Reset progress";
+          resetProgressBtn.classList.remove("confirming");
+          const result = resetPractice();
+          if (result.available) {
+            this.practice = practice = { records: {}, available: true };
+            roadTests = { records: {}, available: true };
+          }
+          backupStatus.textContent = result.available
+            ? "Practice and road-test progress cleared."
+            : "Browser storage is unavailable.";
+          render();
+        },
+      },
+      "Reset progress",
+    );
+    const importInput = h("input", {
+      type: "file",
+      accept: ".json,application/json",
+      "aria-label": "Import practice progress JSON",
+      onchange: async () => {
+        const file = importInput.files?.[0];
+        if (!file) return;
+        try {
+          const parsed = JSON.parse(await file.text());
+          const imported = importPracticeBackup(parsed, undefined, () =>
+            window.confirm("Replace all saved challenge and road-test progress on this browser with this backup?"),
+          );
+          if (!imported) {
+            backupStatus.textContent = "Import cancelled. Your saved progress was kept.";
+            return;
+          }
+          practice = { records: imported.practice, available: imported.available };
+          roadTests = { records: imported.roadTests, available: imported.available };
+          this.practice = practice;
+          backupStatus.textContent = `Imported ${imported.practiceCount} challenges and ${imported.roadTestCount} road tests.`;
+          render();
+        } catch (err) {
+          backupStatus.textContent = `Import failed: ${err.message}`;
+        } finally {
+          importInput.value = "";
+        }
+      },
+    });
+    const exportProgress = () => {
+      const payload = exportPracticeBackup();
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const url = URL.createObjectURL(
+        new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" }),
+      );
+      const a = h("a", { href: url, download: `jev-practice-backup-${stamp}.json` });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      backupStatus.textContent = "Practice backup exported.";
+    };
+
     this.open(
       h(
         "div",
@@ -472,6 +678,11 @@ export class DriveLab {
             unique(CHALLENGES.map(challengeCity)).map((value) => [value, value]),
           ),
           picker(
+            "province",
+            "Province",
+            unique(CHALLENGES.map(challengeProvince)).map((value) => [value, value]),
+          ),
+          picker(
             "skill",
             "Skill",
             unique(CHALLENGES.map((c) => c.difficulty)).map((value) => [value, value]),
@@ -482,6 +693,19 @@ export class DriveLab {
             unique(CHALLENGES.map((c) => c.weather)).map((value) => [value, value]),
           ),
           picker("progress", "Progress", Object.entries(PRACTICE_LABELS)),
+          picker(
+            "sort",
+            "Sort",
+            [
+              ["untried", "Untried first"],
+              ["attempted", "Attempted first"],
+              ["city", "City"],
+              ["difficulty", "Difficulty"],
+              ["title", "A–Z"],
+            ],
+            "Sort challenges",
+            "Default order",
+          ),
         ),
         h(
           "p",
@@ -489,6 +713,15 @@ export class DriveLab {
           practice.available
             ? "Your manual practice is saved in this browser. A clean completion means arriving under the authored conditions with no challenge failures. AI, mixed-driver, modified and replay attempts stay separate."
             : "Browser storage is unavailable. Practice progress cannot be saved on this device.",
+        ),
+        h(
+          "div",
+          { class: "practice-backup" },
+          h("span", { class: "label" }, "Progress backup"),
+          h("button", { type: "button", class: "chip-button", onclick: exportProgress }, "Export JSON"),
+          h("label", { class: "chip-button practice-import-label" }, "Import JSON", importInput),
+          resetProgressBtn,
+          backupStatus,
         ),
         h(
           "div",
@@ -538,21 +771,72 @@ export class DriveLab {
   }
   showPerception(data) {
     if (!data) return;
-    this.sight.textContent = `${data.roadClosed ? `${data.roadClosed} · ` : ""}${data.officer ? `${data.officer} · ` : ""}${data.tailgater ? `${data.tailgater} · ` : ""}${data.runner ? `${data.runner} · ` : ""}${data.following ? `${data.following} · ` : ""}${data.emergency ? `${data.emergency} · ` : ""}${data.bus ? `${data.bus} · ` : ""}${data.crosswalk ? `${data.crosswalk} · ` : ""}${data.school ? `${data.school} · ` : ""}${data.streetcar ? `${data.streetcar} · ` : ""}${data.crossing ? `${data.crossing} · ` : ""}${data.box ? `${data.box} · ` : ""}${data.workZone ? `${data.workZone} · ` : ""}${data.closure ? `${data.closure} · ` : ""}${data.van ? `${data.van} · ` : ""}${data.calm ? `${data.calm} · ` : ""}${data.scramble ? `${data.scramble} · ` : ""}${data.plow ? `${data.plow} · ` : ""}${data.cyclist ? `${data.cyclist} · ` : ""}${data.guard ? `${data.guard} · ` : ""}${data.contraflow ? `${data.contraflow} · ` : ""}${data.reversing ? `${data.reversing} · ` : ""}${data.pothole ? `${data.pothole} · ` : ""}${data.puddle ? `${data.puddle} · ` : ""}${data.ball ? `${data.ball} · ` : ""}${data.geese ? `${data.geese} · ` : ""}${data.ice ? `${data.ice} · ` : ""}${data.snowbank ? `${data.snowbank} · ` : ""}${data.parker ? `${data.parker} · ` : ""}${data.blind ? `${data.blind} · ` : ""}${data.lane ? `${data.lane} · ` : ""}${data.roadside ? `${data.roadside} · ` : ""}${data.zone ? `${data.zone} · ` : ""}${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`;
+    this.lastPerceptionData = data;
+    const lines = PERCEPTION_FIELDS.map(([order, key, label]) => ({ order, label, text: data[key] }));
+    lines.push(...(data.featureLines || []));
+    const badges = [];
+    const seenTexts = new Set();
+    for (const { label, text } of lines.sort((a, b) => a.order - b.order)) {
+      if (!text || seenTexts.has(text)) continue;
+      seenTexts.add(text);
+      badges.push(h("span", { class: "perception-badge", title: label }, text));
+    }
+    this.sight.replaceChildren(
+      ...(badges.length ? [h("div", { class: "perception-badges" }, ...badges)] : []),
+      h(
+        "p",
+        { class: "perception-summary" },
+        `${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`,
+      ),
+    );
+    this.renderRejections(data.rejected || []);
+  }
+  renderRejections(rejected) {
+    const visible = this.rejectionsExpanded ? rejected : rejected.slice(0, 4);
+    const hiddenCount = rejected.length - 4;
     this.rejections.replaceChildren(
-      ...data.rejected
-        .slice(0, 4)
-        .map((c) => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason))),
+      ...visible.map((c) => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason))),
+      hiddenCount > 0
+        ? h(
+            "button",
+            {
+              type: "button",
+              class: "chip-button perception-more",
+              onclick: () => {
+                this.rejectionsExpanded = !this.rejectionsExpanded;
+                this.renderRejections(this.lastPerceptionData?.rejected || rejected);
+              },
+            },
+            this.rejectionsExpanded ? "Show fewer" : `+${hiddenCount} more`,
+          )
+        : null,
+    );
+  }
+  renderIncidentTicks() {
+    if (!this.incidentTicks || !this.recorder?.frames?.length) return;
+    const frames = this.recorder.frames;
+    const firstT = frames[0].t;
+    const span = Math.max(0.001, frames.at(-1).t - firstT);
+    const markers = this.recorder.markers || [];
+    this.incidentTicks.replaceChildren(
+      ...markers.map((m) =>
+        h("span", {
+          class: "replay-tick",
+          style: { left: `${Math.max(0, Math.min(100, ((m.t - firstT) / span) * 100))}%` },
+          title: `${m.t.toFixed(1)} s · ${m.type.replaceAll("_", " ")}`,
+        }),
+      ),
     );
   }
   update(recorder, now) {
     this.recorder = recorder;
     this.replay.hidden = recorder.frames.length < 2;
     if (this.reviewing && this.playing) {
+      const rate = this.replaySpeed || 1;
       const position = replayPosition(
         recorder.frames,
         Number(this.slider.value),
-        this.replayElapsed + Math.max(0, now - this.lastTick) / 1000,
+        this.replayElapsed + (Math.max(0, now - this.lastTick) / 1000) * rate,
       );
       if (position.index !== Number(this.slider.value)) this.seek(position.index);
       this.replayElapsed = position.elapsed;
@@ -579,6 +863,13 @@ export class DriveLab {
     this.playing = !this.playing;
     this.lastTick = performance.now();
     this.play.textContent = this.playing ? "Pause replay" : "Play replay";
+  }
+  stepFrame(delta) {
+    if (!this.reviewing || !this.recorder?.frames.length) return;
+    this.playing = false;
+    this.play.textContent = "Play replay";
+    const next = Math.max(0, Math.min(this.recorder.frames.length - 1, Number(this.slider.value) + delta));
+    this.seek(next);
   }
   openReplay(index, comparison) {
     if (!this.recorder?.frames.length || (this.reviewing && index === undefined)) return;
@@ -610,6 +901,7 @@ export class DriveLab {
     this.playing = false;
     this.play.textContent = "Play replay";
     this.slider.max = this.recorder.frames.length - 1;
+    this.renderIncidentTicks();
     this.seek(index === undefined ? Math.max(0, this.recorder.frames.length - 11) : index);
   }
   seek(index) {
@@ -623,13 +915,7 @@ export class DriveLab {
       ...(frame?.state.pilot.lastDecision?.candidates || [])
         // (only those that passed the safety checks: not the open track's flagged ones, brain/tracks.js)
         .filter((c) => c.eligible && !c.flagged)
-        .map((c) =>
-          h(
-            "option",
-            { value: c.id },
-            `${c.steer || "Hold lane"} · ${Number.isFinite(c.law.vTarget) ? `${Math.round(c.law.vTarget * 3.6)} km/h` : c.speed || "stop"}`,
-          ),
-        ),
+        .map((c) => h("option", { value: c.id }, describe(c))),
     );
     this.replayStatus.textContent = `${frame?.t.toFixed(1) || 0} s · recorded checkpoints every 0.5 s`;
   }
@@ -643,6 +929,31 @@ export class DriveLab {
         this.recorder.frames.findLastIndex((f) => f.t <= target),
       ),
     );
+  }
+  nextIncident() {
+    if (!this.recorder?.frames.length) return;
+    const currentIndex = Number(this.slider.value);
+    const t = this.recorder.frames[currentIndex]?.t ?? -Infinity;
+    const markers = this.recorder.markers || [];
+    const marker = markers.find((m) => m.t > t + 0.05);
+    if (!marker) {
+      this.seek(this.recorder.frames.length - 1);
+      return;
+    }
+    const leadTarget = Math.max(this.recorder.frames[0].t, marker.t - 3);
+    const leadIndex = Math.max(
+      0,
+      this.recorder.frames.findLastIndex((f) => f.t <= leadTarget),
+    );
+    if (leadIndex > currentIndex) {
+      this.seek(leadIndex);
+    } else {
+      const exactIndex = Math.max(
+        0,
+        this.recorder.frames.findLastIndex((f) => f.t <= marker.t + 1e-9),
+      );
+      this.seek(Math.max(currentIndex + 1, exactIndex));
+    }
   }
   branch(driver) {
     if (this.onBranch(Number(this.slider.value), driver) !== false) this.endReview();

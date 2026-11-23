@@ -1,3 +1,4 @@
+import { runnerNotice } from "../red-light-runner.js";
 import { r1 } from "../../common.js";
 import { auditRunner, createRunners, redLightRunner, runnerCap, runnerHold, runsLight } from "../red-light-runner.js";
 import { junctionPlan } from "./index.js";
@@ -23,6 +24,57 @@ export default {
   rulesCost: (c) => (c.id === "wait_for_runner" ? -12 : 0),
   cautious: (snap, eligible) => (snap.red_light_runner?.wait ? eligible.find((c) => c.id === "wait_for_runner") : null),
   key: "redRunners",
+  coach: {
+    init: () => ({
+      redRunnersSeen: false,
+      runnerConflicts: 0,
+    }),
+    seen: "redRunnersSeen",
+    events: {
+      fresh_green_conflict(score, ev) {
+        score.runnerConflicts++;
+        score.incident("fresh_green_conflict", "Entered on green ahead of a car running the red", { with: ev.with });
+      },
+    },
+    reports: [
+      {
+        at: "end",
+        order: 7,
+        read: (score) => (score.redRunnersSeen ? { fresh_green_conflicts: score.runnerConflicts } : {}),
+      },
+    ],
+    deductions: [{ at: "safety", order: 3, counter: "runnerConflicts", weight: 25 }],
+    cap: "runnerConflicts",
+    tips: [
+      {
+        at: "afterMerge",
+        order: 1,
+        when: (score) => score.runnerConflicts,
+        text: "When your light turns green, don't just go: look both ways and check that cross traffic has stopped. A driver trying to beat a stale amber may run the red; let anyone who cannot stop clear the junction first.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 1,
+    duration: 2500,
+    read: (world, autopilot) => runnerNotice(world, autopilot.snap),
+    style: (line) => (line.wait ? "safety" : "alert"),
+  },
+  eventBadges: {
+    fresh_green_conflict: "ENTERED AHEAD OF A CAR RUNNING THE RED",
+  },
+  perceptionLine(snap) {
+    const rr = snap.red_light_runner;
+    const text = rr
+      ? `Car from the ${rr.from} ${rr.relation === "in_junction" ? "running the red in the junction" : "cannot stop for its red"}: ${rr.wait ? "wait at the line" : "too close to stop, keep clear"}`
+      : null;
+    return text ? { order: 3, label: "Red runner", text } : null;
+  },
+  perceptionFocus: (snap, o) => snap.red_light_runner && o.id === snap.red_light_runner.id,
+  perceptionRejections: {
+    enters_ahead_of_red_light_runner: "Car running the red",
+  },
   seen: "redRunnersSeen",
   build(world, options) {
     world.runnerCall = null;

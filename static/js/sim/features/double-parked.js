@@ -1,3 +1,4 @@
+import { vanNotice } from "../double-parked.js";
 import { oncomingPassConflict } from "../cyclist-pass.js";
 import {
   DoubleParked,
@@ -155,10 +156,52 @@ function vanSpeed(dp) {
 }
 
 export default {
+  checkpoint(world) {
+    if (world.doubleParked) world.doubleParked.world = world;
+  },
   rulesStop: (snap) => snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5,
   legitimateStop: (snap) => snap?.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8,
   rulesCost: (c) => (c.id === "wait_behind_van" ? -6 : 0),
   key: "vans",
+  coach: {
+    init: () => ({
+      vanCutoffs: 0,
+    }),
+    events: {
+      failed_to_yield(score, ev) {
+        if (!ev.double_parked) return;
+        score.vanCutoffs++;
+      },
+    },
+    reports: [{ at: "afterFlagger", order: 0, read: (score) => ({ van_cutoffs: score.vanCutoffs }) }],
+    tips: [
+      {
+        at: "afterCyclists",
+        order: 0,
+        when: (score) => score.vanCutoffs,
+        text: "Going round a vehicle stopped in your lane, wait behind it until the oncoming lane is clear for the whole way round and back. Oncoming traffic has the right of way.",
+      },
+    ],
+    directionExempt: (world) => !!world.doubleParked?.passing(),
+  },
+  notice: {
+    at: "beforePlow",
+    order: 0,
+    duration: 2500,
+    read: (world) => vanNotice(world),
+    style: (line) => (line.wait ? "safety" : ""),
+  },
+  perceptionLine(snap) {
+    const dp = snap.double_parked;
+    const text = dp
+      ? `${dp.truck ? "Garbage truck" : "Double-parked van"} ${dp.gap_m > 0 ? `${Math.round(dp.gap_m)} m ahead` : "beside"}: ${dp.going_round ? "going round it" : dp.go ? `way round clear, go round at ${Math.round(dp.limit_mps * 3.6)} km/h` : dp.queued ? "wait in turn behind it" : `${dp.crew_in_road ? "crew in the road" : dp.way.oncoming ? "oncoming traffic" : "can't see far enough"}, wait${dp.bumper_to_stop_m > 0.5 ? ` in ${Math.round(dp.bumper_to_stop_m)} m` : ""}`}`
+      : null;
+    return text ? { order: 14, label: "Double-parked", text } : null;
+  },
+  perceptionFocus: (snap, o) => o.id === snap.double_parked?.van_id,
+  perceptionRejections: {
+    no_room_to_go_round: "Too close to pull out round the van",
+  },
   property: "doubleParked",
   defaultCount: defaultVanCount(),
   seen: "vansSeen",

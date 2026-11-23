@@ -1,4 +1,5 @@
 // Spring potholes (sim/potholes.js) as a feature record (sim/features/index.js, docs/feature-interface.md).
+import { potholeNotice } from "../potholes.js";
 import { r1 } from "../../common.js";
 import { current as weather } from "../weather.js";
 import {
@@ -37,6 +38,9 @@ function potholeClause(h, ahead) {
 }
 
 export default {
+  checkpointShare(world, shared) {
+    if (world.potholes?.enabled) shared.add(world.potholes);
+  },
   rulesCost: (c, snap) => (c.id === "ease_round_pothole" && snap.pothole?.room ? -1.5 : 0),
   cautious: {
     at: "afterAmber",
@@ -46,6 +50,53 @@ export default {
         : null,
   },
   key: "potholes",
+  coach: {
+    init: () => ({
+      potholes: false,
+      potholeHits: 0,
+    }),
+    seen: "potholes",
+    events: {
+      pothole_hit(score, ev) {
+        score.potholeHits++;
+        score.incident("pothole_hit", `Hit a pothole at ${Math.round(ev.kmh)} km/h`, {
+          pothole: ev.pothole,
+          kmh: ev.kmh,
+          safe_kmh: ev.safe_kmh,
+        });
+      },
+    },
+    reports: [{ at: "end", order: 9, read: (score) => (score.potholes ? { pothole_hits: score.potholeHits } : {}) }],
+    deductions: [{ at: "comfort", order: 1, counter: "potholeHits", weight: 10 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 2,
+        when: (score) => score.potholeHits,
+        text: "Look well ahead for potholes, especially in spring and when they are full of water. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 3,
+    duration: 2000,
+    read: (world, autopilot) => potholeNotice(world, autopilot.enabled ? autopilot.snap : null),
+    style: (line) => (line.slow ? "safety" : ""),
+  },
+  eventBadges: {
+    pothole_hit: (event) => `HIT A POTHOLE AT ${Math.round(event.kmh)} KM/H`,
+  },
+  perceptionLine(snap) {
+    const ph = snap.pothole;
+    const text = ph
+      ? `Pothole ${ph.starts_in_m > 0 ? `${Math.round(ph.starts_in_m)} m ahead` : "under the car"}${ph.room ? (ph.shift_m ? `: ease ${Math.abs(ph.shift_m).toFixed(1)} m ${ph.shift_m < 0 ? "left" : "right"} in the lane` : ": between the wheels") : `: no room, ${Math.round(ph.speed_mps * 3.6)} km/h over it`}`
+      : null;
+    return text ? { order: 22, label: "Pothole", text } : null;
+  },
+  perceptionRejections: {
+    hits_pothole_too_fast: "Pothole: too fast",
+  },
   seen: "potholesSeen",
   calls: "potholeCalls",
   build: (_world, { enabled, seed, map }) => new Potholes(map, { enabled, seed }),

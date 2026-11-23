@@ -3,7 +3,7 @@
 // visible observations and can change behavior after a choice.
 
 import { CAR, comfort } from "../sim/vehicle.js";
-import { behindInLane, followingPolicy } from "../sim/following.js";
+import { behindInLane } from "../sim/following.js";
 import { applyLaw, detourAt, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { surfaceDistance } from "../map/junctions.js";
 import { obbOverlap } from "../sim/collision.js";
@@ -34,10 +34,12 @@ import { firstHookResult, junctionPlan, PRIORITY_IDS, featureObstacle, hooks } f
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
 // feature's own code used to be.
 const LANE_CHANGE = hooks("laneChangeCandidate");
+const LANE_CHANGE_STYLE = hooks("laneChangeStyle");
 const LINE_STOP = hooks("lineStop");
 const PREDICTION_IGNORE = hooks("predictionIgnore");
 const SETTLE = hooks("candidateSettle");
 const CANDIDATES = {
+  afterFlagger: hooks("candidates", "afterFlagger"),
   restrictions: hooks("candidates", "restrictions"),
   beforeRunner: hooks("candidates", "beforeRunner"),
   driveways: hooks("candidates", "driveways"),
@@ -51,6 +53,7 @@ const ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
   ADJUST_LAST = hooks("adjust");
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
+  afterCollision: hooks("sim", "afterCollision"),
   first: hooks("sim", "first"),
   beforeRunner: hooks("sim", "beforeRunner"),
   driveways: hooks("sim", "driveways"),
@@ -260,13 +263,13 @@ export function sampleCandidates(snap, world) {
         continue;
       const prepare = side.delta === 0 && lane.route_ahead && side.offer === "return";
       const toRoute = side.delta === 0 ? (prepare ? " for the turn ahead" : " (the route's lane)") : "";
-      // (moving over, also at the speed it could keep there: it is no time to hang back)
+      const style = firstHookResult(LANE_CHANGE_STYLE, snap, side);
       const vs = new Set(
         [
           v,
           Math.min(side.target_v, v + 2),
           ...(side.offer === "pass" ? [] : [Math.max(0, v - 3)]),
-          ...(side.offer === "move_over" ? [side.target_v] : []),
+          ...(style?.target === undefined ? [] : [style.target]),
         ].map((x) => Math.round(Math.max(0, Math.min(limit, x)) * 10) / 10),
       );
       for (const vt of [...vs].sort((a, b) => b - a)) {
@@ -297,13 +300,12 @@ export function sampleCandidates(snap, world) {
             shift: { from: snap.routeProj.lateral, start: s, len: share },
           },
           steer:
-            side.offer === "pass"
+            style?.steer ??
+            (side.offer === "pass"
               ? `change to the ${side.dir} lane to pass`
               : side.offer === "abort"
                 ? `move back to the ${side.dir} lane`
-                : side.offer === "move_over"
-                  ? `move over to the ${side.dir} lane, away from the stopped ${snap.roadside_stop.name}`
-                  : `${prepare ? "change" : "return"} to the ${side.dir} lane${toRoute}`,
+                : `${prepare ? "change" : "return"} to the ${side.dir} lane${toRoute}`),
           speed: speedLabel(vt, v, limit),
         });
       }
@@ -380,19 +382,6 @@ export function sampleCandidates(snap, world) {
         speed: creep
           ? "creep forward to see along the crossing street, and stop there"
           : "stop and give way to crossing traffic",
-      });
-    }
-    if (snap.turn_restriction?.banned) {
-      const at = Math.min(
-        snap.routeProj.s + snap.turn_restriction.distance_m - FRONT - 8,
-        snap.intersection && !snap.intersection.entered ? snap.intersection.s_line_route - FRONT - 0.5 : Infinity,
-      );
-      out.push({
-        id: "stop_for_turn_restriction",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(at) }),
-        steer: "hold lane",
-        speed: "stop before the prohibited turn while navigation finds a legal detour",
       });
     }
     for (const add of CANDIDATES.restrictions) add(featureCtx, out);
@@ -542,19 +531,7 @@ export function sampleCandidates(snap, world) {
         speed: "stop at the line for the flagger's STOP paddle",
       });
     }
-    // A school crossing guard holding up the STOP sign at a crosswalk ahead, or anyone still in the road
-    // there (sim/crossing-guard.js): stop short of the crosswalk, and stay stopped until the guard and
-    // every child are off the road.
-    const cg = snap.crossing_guard;
-    if (cg?.wait && cg.bumper_to_stop_m > 0.3) {
-      out.push({
-        id: "stop_for_crossing_guard",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(cg.stop_s_route - FRONT - 0.5) }),
-        steer: "hold lane",
-        speed: "stop short of the crosswalk for the crossing guard's STOP sign",
-      });
-    }
+    for (const add of CANDIDATES.afterFlagger) add(featureCtx, out);
     // A lane closed ahead (sim/lane-closure.js): in the closed lane, wait at the merge point for the car's
     // turn; in the open lane, stop short of it to let in the one whose turn it is.
     const lz = snap.lane_closure;
@@ -869,9 +846,6 @@ export function simulateAll(candidates, snap, world) {
   const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the car stops for a flagger showing STOP
   const flaggerStop = snap.work_zone?.wait ? snap.work_zone.stop_s_route : null;
-  // where the car stops for a school crossing guard's STOP sign (or, already past that, where it is now:
-  // it holds still while the sign is up or anyone is in the road)
-  const guardStop = snap.crossing_guard?.wait ? Math.max(snap.crossing_guard.stop_s_route, startS + FRONT) : null;
   // at a lane closure: where the car waits for its turn at the merge point, or stops to let one in; and
   // the lane changes the zipper rules out (sim/lane-closure.js)
   const lz = snap.lane_closure;
@@ -903,6 +877,7 @@ export function simulateAll(candidates, snap, world) {
     sims[slot] = list.map((prepare) => prepare(world, snap, npcs)).filter(Boolean);
   const checks = [
     ...sims.first,
+    ...sims.afterCollision,
     ...sims.beforeRunner,
     ...sims.driveways,
     ...sims.streetHazards,
@@ -922,8 +897,7 @@ export function simulateAll(candidates, snap, world) {
     let maxAccel = 0,
       maxDecel = 0,
       maxLat = 0,
-      minClearance = Infinity,
-      closesFollowingGap = false;
+      minClearance = Infinity;
     let passesBus = false,
       passesCw = false,
       passesSchool = false,
@@ -931,7 +905,6 @@ export function simulateAll(candidates, snap, world) {
       passesRail = false,
       passesBox = false,
       passesFlagger = false,
-      passesGuard = false,
       passesMerge = false,
       passesLetIn = false,
       passesPlow = false,
@@ -1028,8 +1001,6 @@ export function simulateAll(candidates, snap, world) {
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
         // (and here: 1.5 m past the line is still 4.5 m short of the one-lane section)
         if (flaggerStop !== null && s + FRONT > flaggerStop + 1.5) passesFlagger = true;
-        // (and here: 1.5 m past where it stops is still 3.5 m short of the crosswalk's centre)
-        if (guardStop !== null && s + FRONT > guardStop + 1.5) passesGuard = true;
         // (and here: a metre past the merge point has not gone through it, sim/lane-closure.js THROUGH_M; 1.5 m past
         // where it lets one in is still behind it)
         if (mergeStop !== null && s + FRONT > mergeStop + 1) passesMerge = true;
@@ -1070,22 +1041,6 @@ export function simulateAll(candidates, snap, world) {
           if (ahead > 0 && side < box.halfWidth + ob.halfWidth + 0.3) {
             const gap = ahead - box.halfLength - ob.halfLength;
             if (gap < minGap) minGap = gap;
-            // A transient cut-in may already leave too little room. Keep braking/recovery
-            // choices available, but reject a choice that maintains or worsens the deficit.
-            // Once a pass has cleared the leader's lane, this constraint no longer applies.
-            const f = snap.following;
-            if (
-              k === steps &&
-              f?.policy &&
-              o.n.id === f.id &&
-              car.v > 2 &&
-              Math.abs(wrap(o.n.psi - car.psi)) < Math.PI / 4
-            ) {
-              const future = followingPolicy(car, { gap_m: gap, speed: f.speed, vehicle: o.n });
-              const deficit = future.target_gap_m - gap;
-              closesFollowingGap =
-                deficit > Math.max(1, f.policy.target_gap_m - f.gap_m - 0.5) && car.v > f.policy.safe_speed_mps + 0.2;
-            }
           }
           if (Math.abs(ahead) < box.halfLength + ob.halfLength + 1)
             minClearance = Math.min(minClearance, Math.max(0, side - box.halfWidth - ob.halfWidth));
@@ -1099,7 +1054,7 @@ export function simulateAll(candidates, snap, world) {
             side - box.halfWidth - ob.halfWidth < cyclistClearance
           )
             closePass = true;
-          for (const check of nearbyChecks) check.near(car, box, o.n, ob, ahead, side, meeting);
+          for (const check of nearbyChecks) check.near(car, box, o.n, ob, ahead, side, meeting, k === steps);
           // going round a cyclist with its far side across the centre line, meeting a vehicle coming the
           // other way in its way (sim/cyclist-pass.js)
           if (
@@ -1183,7 +1138,7 @@ export function simulateAll(candidates, snap, world) {
     let reject = rejectBy(sims.first, c);
     if (reject);
     else if (collision) reject = "collision";
-    else if (closesFollowingGap && c.law.kind !== "hard_brake") reject = "following_distance";
+    else if ((reject = rejectBy(sims.afterCollision, c)));
     else if (
       snap.bus_lane?.in_effect &&
       !snap.bus_lane.entering_allowed &&
@@ -1232,7 +1187,6 @@ export function simulateAll(candidates, snap, world) {
       reject = snap.level_crossing.wait === "train" ? "crosses_in_front_of_train" : "no_room_past_tracks";
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if (passesFlagger && c.law.kind !== "hard_brake") reject = "runs_flagger_stop";
-    else if (passesGuard && c.law.kind !== "hard_brake") reject = "passes_crossing_guard";
     else if ((reject = rejectBy(sims.parking, c)));
     else if (passesMerge && c.law.kind !== "hard_brake") reject = "merges_out_of_turn";
     else if (passesLetIn && c.law.kind !== "hard_brake") reject = "takes_merge_turn";

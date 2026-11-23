@@ -1,3 +1,4 @@
+import { sunGlareNotice } from "../sun-glare.js";
 import { r1 } from "../../common.js";
 import {
   GLARE_SPEEDING_THRESHOLD_S,
@@ -9,6 +10,48 @@ import {
 
 export default {
   key: "sunGlare",
+  coach: {
+    init: () => ({
+      glareSpeeding: 0,
+      sunGlareSeen: false,
+    }),
+    observe(score, world) {
+      if (world.sunGlareSeen) {
+        score.sunGlareSeen = true;
+        score.glareSpeeding = Math.max(
+          0,
+          (world.violations.glare_speeding_seconds || 0) - (score.baseline.glare_speeding_seconds || 0),
+        );
+      }
+      if (score.glareSpeeding > 1 && !score.sunGlareRecorded) {
+        score.sunGlareRecorded = true;
+        score.incident("sun_glare", "Drove too fast to stop within sight in sun glare");
+      }
+    },
+    reports: [
+      {
+        at: "end",
+        order: 1,
+        read: (score, round) => (score.sunGlareSeen ? { glare_speeding_seconds: round(score.glareSpeeding, 2) } : {}),
+      },
+    ],
+    deductions: [{ at: "safety", order: 4, counter: "glareSpeeding", weight: 3 }],
+    tips: [
+      {
+        at: "afterFollowing",
+        order: 1,
+        when: (score) => score.glareSpeeding > 1,
+        text: "When the sun is in your eyes, slow down to what you can see, leave more room, and look for signals and people early.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 14,
+    duration: 2500,
+    read: (world) => sunGlareNotice(world),
+    style: (line) => (line.slow ? "safety" : ""),
+  },
   seen: "sunGlareSeen",
   day: true,
   utcOffset: true,

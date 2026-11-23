@@ -1,3 +1,4 @@
+import { calmingNotice } from "../traffic-calming.js";
 import { r1 } from "../../common.js";
 import { CALM_EARLY_M, HIT_OVER_MPS, calmingAhead, deviceOf, pathCalmLimit, slowsFor } from "../traffic-calming.js";
 import { comfort } from "../vehicle.js";
@@ -43,6 +44,47 @@ function auditCalming(world) {
 
 export default {
   key: "calming",
+  coach: {
+    init: () => ({
+      humpHits: 0,
+      calmed: false,
+    }),
+    seen: "calmed",
+    events: {
+      hump_hit(score, ev) {
+        score.humpHits++;
+        score.incident(
+          "hump_hit",
+          `Took a ${ev.kind === "table" ? "speed table" : `speed ${ev.kind}`} at ${Math.round(ev.kmh)} km/h`,
+          { device: ev.device, kmh: ev.kmh },
+        );
+      },
+    },
+    reports: [{ at: "end", order: 4, read: (score) => (score.calmed ? { hump_hits: score.humpHits } : {}) }],
+    deductions: [{ at: "comfort", order: 0, counter: "humpHits", weight: 8 }],
+    tips: [
+      {
+        at: "afterBusLanes",
+        order: 1,
+        when: (score) => score.humpHits,
+        text: "Slow right down for speed humps: 30 km/h for a hump or a cushion, 40 for a speed table and a crawl for a bump. Brake before it, not on it, and keep to that speed until the rear wheels are over.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 13,
+    duration: 2000,
+    read: (world) => calmingNotice(world),
+    style: (line) => (line.slow ? "safety" : ""),
+  },
+  perceptionLine(snap) {
+    const tc = snap.traffic_calming;
+    const text = tc
+      ? `${tc.name[0].toUpperCase()}${tc.name.slice(1)} ${tc.over ? "under the car" : `${Math.round(Math.max(0, tc.starts_in_m))} m ahead`}: ${Math.round(tc.speed_mps * 3.6)} km/h`
+      : null;
+    return text ? { order: 15, label: "Traffic calming", text } : null;
+  },
   seen: "calmingSeen",
   calls: "calmingAxle",
   snapshot: { traffic_calming: null },

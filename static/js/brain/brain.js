@@ -10,6 +10,7 @@
 import { applyLaw, lateralAt, lookahead, purePursuit } from "../sim/controller.js";
 import { endLeg, linedUp } from "../sim/turnaround.js";
 import { ParkPlanner, leftSpace, parkedPose } from "../sim/parallel-park.js";
+import { featureRouteOptions, hooks } from "../sim/features/index.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
@@ -26,6 +27,8 @@ const INTERVAL_CLEAR_MS = 650;
 const TIMEOUT_MS = 1500;
 const GOAL_LATERAL_M = 1.5; // a blocked destination counts only this close to the route lane's centre
 const TURN_ROUND_AWAY_M = 25;
+const REROUTE_BEFORE = hooks("requestReroute", "beforeOffRoute");
+const REROUTE_AFTER = hooks("requestReroute", "afterOffRoute");
 const SPEND_KEYS = [
   "model",
   "endpoint",
@@ -260,17 +263,13 @@ export class Autopilot {
     // faces away from its route for a while on purpose)
     if (!snap.onRoute && !snap.turnaround) this.offRouteFor += dt;
     else this.offRouteFor = 0;
-    const illegalRoute = snap.turn_restriction?.banned && world.t >= (this.restrictionReplanAt ?? -Infinity);
-    if ((this.offRouteFor > 3 || illegalRoute) && !this.rerouting) {
-      if (illegalRoute) this.restrictionReplanAt = world.t + 5;
+    if (!this.rerouting && (REROUTE_BEFORE.some((request) => request(this, snap)) || this.offRouteFor > 3))
       this.reroute();
-    }
-    // a road closed ahead on the route, seen at its barricades: a route round it (sim/road-closures.js)
-    if (snap.road_closed?.on_route && !this.rerouting && world.t >= (this.closureReplanAt ?? -Infinity)) {
-      this.closureReplanAt = world.t + 3;
-      this.closureRouting = this.reroute().finally(() => {
-        this.closureRouting = null;
+    if (!this.rerouting && REROUTE_AFTER.some((request) => request(this, snap))) {
+      const request = this.reroute().finally(() => {
+        if (this.detourRouting === request) this.detourRouting = null;
       });
+      this.detourRouting = request;
     }
 
     const s = snap.routeProj ? snap.routeProj.s : 0;
@@ -586,20 +585,15 @@ export class Autopilot {
     const epoch = this.epoch;
     this.rerouting = true;
     try {
-      // (round the blocks closed for an event that the car has seen: sim/road-closures.js)
-      const avoid = world.roadClosures?.known.size ? world.roadClosures.avoid() : null;
       const body = {
         bbox: world.map.routingBbox.join(","),
         from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
         to: { x: world.destination[0], y: world.destination[1] },
         k: 3,
-        ...(world.restrictions
-          ? { restrictions: true, hour: world.clock?.hour ?? 15.5, weekday: world.clock?.weekday ?? 0 }
-          : {}),
-        ...(avoid?.length ? { avoid } : {}),
+        ...featureRouteOptions(world, true),
       };
       // (without a server, in Node, the browser's router finds the way round: demo/routing.js)
-      const res = avoid?.length
+      const res = body.avoid?.length
         ? await api("/api/route", body).catch(() => {
             const r = browserRoute(world.map, body.from, body.to, body);
             return { routes: r ? [r] : [] };

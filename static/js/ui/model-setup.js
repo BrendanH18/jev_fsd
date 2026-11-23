@@ -55,7 +55,19 @@ export class ModelSetup {
     this.loadToken = 0;
     this.dialog = h("dialog", { class: "drive-dialog llm-setup", "aria-labelledby": "llm-setup-title" });
     // Escape closes the dialog without close(); the close event can arrive a frame late, so pausing is idempotent.
-    this.dialog.addEventListener("close", () => this.setPaused(false));
+    this.dialog.addEventListener("close", () => {
+      if (this.dialog.open) return;
+      this.loadToken++;
+      this.key.value = "";
+      this.key.type = "password";
+      this.setPaused(false);
+    });
+    this.dialog.addEventListener("click", (ev) => {
+      if (ev.target !== this.dialog) return;
+      const rect = this.dialog.getBoundingClientRect();
+      if (ev.clientX < rect.left || ev.clientX > rect.right || ev.clientY < rect.top || ev.clientY > rect.bottom)
+        this.close();
+    });
     this.paused = false;
     document.body.append(this.dialog);
   }
@@ -92,6 +104,26 @@ export class ModelSetup {
 
   render() {
     const kind = KINDS[this.kind];
+    const move = (ev) => {
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(ev.key)) return;
+      const buttons = [...ev.currentTarget.querySelectorAll("button")];
+      const index = buttons.indexOf(ev.target);
+      if (index < 0) return;
+      ev.preventDefault();
+      const direction = ["ArrowLeft", "ArrowUp"].includes(ev.key) ? -1 : 1;
+      const next =
+        ev.key === "Home"
+          ? 0
+          : ev.key === "End"
+            ? buttons.length - 1
+            : (index + direction + buttons.length) % buttons.length;
+      buttons[next].click();
+      const selected =
+        ev.currentTarget.getAttribute("role") === "tablist"
+          ? this.dialog.querySelector('[role="tab"][aria-selected="true"]')
+          : buttons[next];
+      selected?.focus();
+    };
     const tab = (k) =>
       h(
         "button",
@@ -101,6 +133,7 @@ export class ModelSetup {
           class: "llm-provider",
           "data-kind": k,
           "aria-selected": String(k === this.kind),
+          tabindex: k === this.kind ? 0 : -1,
           onclick: () => {
             if (k !== this.kind) this.open(k);
           },
@@ -116,6 +149,7 @@ export class ModelSetup {
           class: "llm-provider",
           "data-provider": p.id,
           "aria-checked": String(p.id === this.provider.id),
+          tabindex: p.id === this.provider.id ? 0 : -1,
           onclick: () => this.selectProvider(p),
         },
         p.label,
@@ -127,13 +161,17 @@ export class ModelSetup {
         h("h2", { id: "llm-setup-title" }, "Connect a model"),
         h("button", { class: "chip-button", "aria-label": "Close", onclick: () => this.close() }, "×"),
       ),
-      h("div", { class: "model-tabs", role: "tablist", "aria-label": "Kind of model" }, Object.keys(KINDS).map(tab)),
+      h(
+        "div",
+        { class: "model-tabs", role: "tablist", "aria-label": "Kind of model", onkeydown: move },
+        Object.keys(KINDS).map(tab),
+      ),
       h("p", { class: "muted" }, kind.intro),
       (this.saved = h("section", { class: "llm-saved", "aria-label": "Your models" })),
       h("h3", { class: "label llm-add-heading" }, kind.heading),
       h(
         "div",
-        { class: "llm-providers", role: "radiogroup", "aria-label": "Provider" },
+        { class: "llm-providers", role: "radiogroup", "aria-label": "Provider", onkeydown: move },
         this.providers[this.kind].map(radio),
       ),
       (this.hint = h("p", { class: "muted llm-hint" })),
@@ -162,6 +200,21 @@ export class ModelSetup {
             spellcheck: "false",
             onchange: () => this.loadModels(),
           })),
+          (this.showKey = h(
+            "button",
+            {
+              type: "button",
+              class: "chip-button",
+              "aria-pressed": "false",
+              onclick: () => {
+                const show = this.key.type === "password";
+                this.key.type = show ? "text" : "password";
+                this.showKey.textContent = show ? "Hide key" : "Show key";
+                this.showKey.setAttribute("aria-pressed", String(show));
+              },
+            },
+            "Show key",
+          )),
           (this.keyLink = h("a", { target: "_blank", rel: "noopener noreferrer" }, "Get a key ↗")),
         ),
       )),
@@ -180,7 +233,11 @@ export class ModelSetup {
             spellcheck: "false",
             oninput: () => this.fillPrices(),
           })),
-          h("button", { type: "button", class: "chip-button", onclick: () => this.loadModels() }, "Load models"),
+          h(
+            "button",
+            { type: "button", class: "chip-button", onclick: () => this.loadModels(true) },
+            "Test connection",
+          ),
         ),
         (this.list = h("datalist", { id: "llm-model-list" })),
       ),
@@ -274,12 +331,17 @@ export class ModelSetup {
     this.provider = p;
     this.chosen[this.kind] = p.id;
     this.loadToken++; // a list still loading for the previous provider must not land here
-    for (const b of this.dialog.querySelectorAll("[data-provider]"))
+    for (const b of this.dialog.querySelectorAll("[data-provider]")) {
       b.setAttribute("aria-checked", String(b.dataset.provider === p.id));
+      b.tabIndex = b.dataset.provider === p.id ? 0 : -1;
+    }
     this.hint.textContent = p.hint;
     this.urlRow.hidden = p.id !== "custom";
     this.keyRow.hidden = p.local;
     this.key.value = "";
+    this.key.type = "password";
+    this.showKey.textContent = "Show key";
+    this.showKey.setAttribute("aria-pressed", "false");
     this.key.placeholder = p.key_set
       ? `Saved (${p.key_env}). Paste a new key to replace it.`
       : p.needs_key
@@ -300,14 +362,14 @@ export class ModelSetup {
     else this.modelStatus.textContent = p.needs_key ? "Paste a key to load the model list, or type a model id." : "";
   }
 
-  async loadModels() {
+  async loadModels(test = false) {
     const p = this.provider,
       token = ++this.loadToken;
     if (p.id === "custom" && !this.url.value.trim()) {
       this.modelStatus.textContent = "Enter the server URL first.";
       return;
     }
-    this.modelStatus.textContent = "Loading models…";
+    this.modelStatus.textContent = test ? "Testing connection…" : "Loading models…";
     try {
       const res = await api(`${KINDS[this.kind].api}/models`, {
         provider: p.id,

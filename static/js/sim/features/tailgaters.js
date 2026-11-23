@@ -1,3 +1,4 @@
+import { tailgaterNotice } from "../tailgaters.js";
 import { r1 } from "../../common.js";
 import { laneChangeLength } from "../controller.js";
 import { followingPolicy } from "../following.js";
@@ -26,6 +27,8 @@ function tailgaterClause(t) {
   return `${lead} ${brake} ${by}`;
 }
 
+const TAILGATER_COACH = "Someone’s on your bumper. Leave more room ahead, brake early and gently, and let them by.";
+
 export default {
   rulesCost(c) {
     if (c.id === "let_tailgater_pass") return -8;
@@ -35,6 +38,64 @@ export default {
   cautious: (snap, eligible) =>
     snap.tailgater?.can_move_right ? eligible.find((c) => c.id === "let_tailgater_pass") : null,
   key: "tailgaters",
+  coach: {
+    init: () => ({
+      tailgaters: false,
+      brakeChecks: 0,
+    }),
+    seen: "tailgaters",
+    events: {
+      brake_check(score, ev) {
+        score.brakeChecks++;
+        score.incident("brake_check", "Braked hard with a tailgater close behind, with nothing ahead calling for it", {
+          with: ev.with,
+          decel_mps2: ev.decel_mps2,
+          need_mps2: ev.need_mps2,
+        });
+      },
+    },
+    reports: [{ at: "end", order: 12, read: (score) => (score.tailgaters ? { brake_checks: score.brakeChecks } : {}) }],
+    deductions: [{ at: "post", order: 0, counter: "brakeChecks", weight: 20, category: "safety" }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 7,
+        when: (score) => score.brakeChecks,
+        text: "Never brake-check a tailgater: they can't stop in time. Increase your gap to the car ahead so you can brake early and gently, don't speed up to please them, and let them by: move into the right lane when it's safe, or ease off a little so they can pass.",
+      },
+    ],
+    guidance: [
+      {
+        at: "beforeSample",
+        order: 0,
+        read: (score, { world, normal }) =>
+          normal && score.lastTtc >= 1.5 && world.tailgaters?.behind ? TAILGATER_COACH : "",
+      },
+      { at: "afterSample", order: 0, read: (_score, { world }) => (world.tailgaters?.behind ? TAILGATER_COACH : "") },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 6,
+    duration: 2500,
+    read: (world, autopilot) =>
+      world.tailgaters?.enabled ? tailgaterNotice(world, autopilot.enabled ? autopilot.snap : null) : null,
+    style: "safety",
+  },
+  eventBadges: {
+    brake_check: "BRAKE CHECK · TAILGATER BEHIND",
+  },
+  perceptionLine(snap) {
+    const tg = snap.tailgater;
+    const text = tg
+      ? `Tailgater ${Math.max(0, Math.round(tg.gap_m))} m behind (${tg.headway_s.toFixed(1)} s): ${tg.can_move_right ? "move right, let it by" : "twice the gap ahead, brake gently"}`
+      : null;
+    return text ? { order: 2, label: "Tailgater", text } : null;
+  },
+  perceptionFocus: (snap, o) => snap.tailgater && o.id === snap.tailgater.id,
+  perceptionRejections: {
+    brakes_hard_with_tailgater: "Tailgater: brakes too hard",
+  },
   seen: "tailgatersSeen",
   calls: "tailgaterCalls",
   build: (_world, options) => createTailgaters(options),

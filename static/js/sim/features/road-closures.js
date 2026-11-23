@@ -1,5 +1,6 @@
 // Road closures (sim/road-closures.js) as a feature record (sim/features/index.js,
 // docs/feature-interface.md).
+import { roadClosedNotice } from "../road-closures.js";
 import { r1 } from "../../common.js";
 import {
   RoadClosures,
@@ -8,6 +9,7 @@ import {
   avoidClosure,
   closureHold,
   isBarricade,
+  knownAhead,
   roadClosedSensing,
 } from "../road-closures.js";
 
@@ -19,7 +21,22 @@ function roadClosedClause(c) {
     : `${where} The route still goes through it and navigation is finding a detour: choose \`stop_for_closure\` to stop short of it (${Math.max(0, Math.round(c.bumper_to_stop_m))} m ahead) until the detour comes, and never drive past the barricades.`;
 }
 
+const CLOSURE_COACH = "Road closed ahead. Follow the detour; never drive past the barricades.";
+
 export default {
+  routeOptions(world, rerouting) {
+    const avoid = rerouting && world.roadClosures?.known.size ? world.roadClosures.avoid() : null;
+    return avoid?.length ? { avoid } : null;
+  },
+  requestReroute: {
+    at: "afterOffRoute",
+    run(pilot, snap) {
+      const { t } = pilot.world;
+      if (!snap.road_closed?.on_route || t < (pilot.closureReplanAt ?? -Infinity)) return false;
+      pilot.closureReplanAt = t + 3;
+      return true;
+    },
+  },
   rulesStop: {
     at: "beforeSignal",
     run: (snap) => snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 1.5,
@@ -28,6 +45,62 @@ export default {
   cautious: { at: "beforeBusLanes", run: (_snap, eligible) => eligible.find((c) => c.id === "stop_for_closure") },
   cautiousStop: (snap) => snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 12,
   key: "roadClosures",
+  coach: {
+    init: () => ({
+      roadClosures: false,
+      closureEntries: 0,
+    }),
+    seen: "roadClosures",
+    events: {
+      closure_entry(score, ev) {
+        score.closureEntries++;
+        score.incident("closure_entry", `Drove past a ROAD CLOSED barricade onto ${ev.street || "a closed street"}`, {
+          closure: ev.closure,
+        });
+      },
+    },
+    reports: [
+      { at: "end", order: 18, read: (score) => (score.roadClosures ? { closure_entries: score.closureEntries } : {}) },
+    ],
+    deductions: [
+      { at: "post", order: 2, counter: "closureEntries", weight: 20, category: "safety" },
+      { at: "post", order: 3, counter: "closureEntries", weight: 25, category: "legality" },
+    ],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 9,
+        when: (score) => score.closureEntries,
+        text: "A ROAD CLOSED barricade closes the whole street to traffic, however empty it looks. Turn off at the junction before it and follow the detour; if you only see it late, stop short of it and find another way.",
+      },
+    ],
+    guidance: [
+      {
+        at: "beforeSample",
+        order: 3,
+        read: (score, { world, normal }) =>
+          world.roadClosures?.known.size && normal && score.lastTtc >= 1.5 && knownAhead(world) ? CLOSURE_COACH : "",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 7,
+    duration: 3000,
+    read: (world, autopilot, views) =>
+      views.roadClosures ? roadClosedNotice(autopilot.enabled ? autopilot.snap : null, world) : null,
+    style: (line) => (line.stop ? "safety" : ""),
+  },
+  perceptionLine(snap) {
+    const rc = snap.road_closed;
+    const text = rc
+      ? `Road closed ${Math.max(0, Math.round(rc.distance_m))} m ahead${rc.street ? ` (${rc.street})` : ""}: ${rc.detour_planned ? "following the detour" : "stopping, finding a detour"}`
+      : null;
+    return text ? { order: 0, label: "Road closed", text } : null;
+  },
+  perceptionRejections: {
+    enters_closed_road: "Road closed",
+  },
   seen: "roadClosuresSeen",
   calls: "roadClosureCalls",
   build: (_world, { enabled, seed }) => new RoadClosures({ enabled, seed }),

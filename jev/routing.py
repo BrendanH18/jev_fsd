@@ -12,7 +12,7 @@ import math
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from . import geometry as g
-from .osm.restrictions import banned
+from .osm.restrictions import banned, in_effect  # noqa: F401
 
 TURN_PENALTY_S = {"straight": 0.0, "right": 2.0, "left": 4.0, "uturn": 20.0}
 SHARP_TURN_DEG = 130.0
@@ -44,6 +44,29 @@ class Router:
         for key, lane in self.lanes.items():
             for cell in _cells_of_polyline(lane["pts"]):
                 self._grid.setdefault(cell, []).append(key)
+        self._restriction_source = None
+        self._restriction_index: Dict[Tuple[str, str], List[dict]] = {}
+        self._build_restriction_index()
+
+    def _build_restriction_index(self) -> None:
+        raw = self.pack.get("restrictions")
+        records = raw.get("restrictions", []) if isinstance(raw, dict) else []
+        index: Dict[Tuple[str, str], List[dict]] = {}
+        for r in records:
+            src = r.get("from")
+            if src not in self.edges:
+                continue
+            to_edges = r.get("to") or ()
+            if r["kind"].startswith("only_"):
+                allowed = set(to_edges)
+                for nxt in self.successors(src):
+                    if nxt not in allowed:
+                        index.setdefault((src, nxt), []).append(r)
+            else:
+                for nxt in to_edges:
+                    index.setdefault((src, nxt), []).append(r)
+        self._restriction_source = records
+        self._restriction_index = index
 
     # Edge helpers
 
@@ -167,6 +190,13 @@ class Router:
         parent: Dict[str, Optional[str]] = {start_edge: None}
         heap = [(g0 + h(start_edge), 0, start_edge)]
         counter = 1
+        restriction_index = None
+        if restrictions:
+            raw = self.pack.get("restrictions")
+            records = raw.get("restrictions", []) if isinstance(raw, dict) else []
+            if records is not self._restriction_source:
+                self._build_restriction_index()
+            restriction_index = self._restriction_index
         closed = set()
         while heap:
             _, _, cur = heapq.heappop(heap)
@@ -181,10 +211,10 @@ class Router:
                     node = parent[node]
                 return list(reversed(path)), best_g[cur]
             for nxt in self.successors(cur):
-                if restrictions and banned(
-                    self.pack.get("restrictions", {}).get("restrictions", []), cur, nxt, hour, weekday
-                ):
-                    continue
+                if restriction_index:
+                    rules = restriction_index.get((cur, nxt))
+                    if rules and any(in_effect(r, hour, weekday) for r in rules):
+                        continue
                 if avoid and nxt in avoid:
                     continue
                 if nxt in closed:

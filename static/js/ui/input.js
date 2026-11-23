@@ -13,7 +13,7 @@ export class Input {
     this.sources = []; // analog sources, each with a `state` (see poll)
     this.analog = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
     window.addEventListener("keydown", (ev) => {
-      if (document.querySelector("dialog[open]") || editing(ev.target)) {
+      if (ev.defaultPrevented || document.querySelector("dialog[open]") || editing(ev.target)) {
         this.keys.clear();
         return;
       }
@@ -24,6 +24,10 @@ export class Input {
         ["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)
       )
         return;
+      if (this.actions.interceptKey?.(k, ev.repeat)) {
+        ev.preventDefault();
+        return;
+      }
       if (["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
         ev.preventDefault();
         this.keys.add(k);
@@ -37,6 +41,12 @@ export class Input {
         q: "signalLeft",
         e: "signalRight",
         h: "horn",
+        i: "inspector",
+        v: "perception",
+        t: "telemetry",
+        m: "sound",
+        x: "explorer",
+        l: "lab",
         1: "brain1",
         2: "brain2",
         3: "brain3",

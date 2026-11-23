@@ -7,7 +7,6 @@
 // whether the school buses run. Returns the `World` options and the `NpcFleet` options apart from the
 // seed, weather, vehicle and traffic count, which each caller sets itself.
 
-import { ROADSIDE_COUNT } from "./roadside.js";
 import { WORK_ZONE_COUNT } from "./work-zone.js";
 import { LANE_CLOSURE_COUNT } from "./lane-closure.js";
 import { OUTAGE_COUNT } from "./outage.js";
@@ -26,8 +25,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     pedestrians: hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined,
     // buses run their routes (`?buses=0`)
     buses,
-    // vehicles stopped at the roadside with their lights flashing (`?roadside=0`)
-    roadside: on("roadside") ? ROADSIDE_COUNT : 0,
     // work zones with a flagger at each end (`?workzones=0`)
     workZones: on("workzones") ? WORK_ZONE_COUNT : 0,
     // power cuts that turn a signal's lights off for a while (`?outages=0`)
@@ -43,17 +40,10 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     passCyclists: on("cyclistpass"),
     // scramble crossings run their all-walk phase, with no right turn on red (`?scramble=0`)
     scrambles: on("scramble"),
-    // crossing guards in school zones while they are in effect (`?guards=0`)
-    guards: on("guards"),
     nightFlash: on("nightflash"),
     busLanes: on("buslanes"),
-    pxo: on("pxo"),
-    restrictions: on("restrictions"),
-    highBeams: on("highbeams"),
     leftOnRed: on("leftonred"),
-    redTurnSigns: on("redturnsigns"),
     amberLights: on("amberlights"),
-    followingDistance: on("followingdistance"),
   };
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)

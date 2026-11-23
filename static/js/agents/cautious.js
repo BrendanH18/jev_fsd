@@ -1,7 +1,8 @@
-import { beamChoice } from "../sim/high-beams.js";
-import { firstHookResult, hooks } from "../sim/features/index.js";
+import { featureDecisionFields, firstHookResult, hooks } from "../sim/features/index.js";
 
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
+const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
+const AFTER_PASSING = hooks("cautious", "afterPassing");
 const CAUTIOUS = hooks("cautious");
 const BEFORE_AMBER = hooks("cautious", "beforeAmber");
 const AFTER_AMBER = hooks("cautious", "afterAmber");
@@ -22,11 +23,9 @@ export class CautiousAgent {
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.
     // A legal left on red uses the shared target: zero until stopped and clear.
-    const target =
-      (snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12) ||
-      FEATURE_STOP.some((shouldStop) => shouldStop(snap))
-        ? 0
-        : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
+    const target = FEATURE_STOP.some((shouldStop) => shouldStop(snap))
+      ? 0
+      : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
     const ranked = eligible.map((candidate) => ({
       candidate,
       cost:
@@ -40,23 +39,20 @@ export class CautiousAgent {
     // parking at the destination, or pulling out of a space, once on offer: carry on with it
     // passing a cyclist through the oncoming lane, once the way is clear: at the pass speed, so as to
     // spend no longer in that lane than the pass was judged clear for
-    // a school crossing guard holding up the STOP sign: stop short of the crosswalk, however far off
     // in a bus lane while it is in effect, short of the right-turn approach: out of it, after making way for an emergency vehicle
     const inBusLane =
       snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index);
     const exitBusLane = inBusLane
       ? eligible.find((c) => c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx))
       : null;
-    const pxoStop = snap.pxo?.bumper_to_crosswalk_m < 3.5;
     const candidate =
       eligible.find((c) => c.id === "pull_over") ||
-      eligible.find((c) => c.id === "stop_for_turn_restriction") ||
       firstHookResult(BEFORE_BUS_LANES, snap, eligible, target) ||
       exitBusLane ||
-      (pxoStop && eligible.find((c) => c.id === "stop_for_pedestrian")) ||
+      firstHookResult(AFTER_BUS_LANES, snap, eligible, target) ||
       eligible.find((c) => c.id === "park" || c.id === "pull_out") ||
       eligible.find((c) => c.id === "pass_cyclist") ||
-      eligible.find((c) => c.id === "stop_for_crossing_guard") ||
+      firstHookResult(AFTER_PASSING, snap, eligible, target) ||
       firstHookResult(CAUTIOUS, snap, eligible, target) ||
       firstHookResult(BEFORE_AMBER, snap, eligible, target) ||
       (amberStop && eligible.find((c) => c.id === "stop_at_line")) ||
@@ -65,7 +61,7 @@ export class CautiousAgent {
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
     // pulling up to park stops where the car reverses in)
     return {
-      ...(snap.headlights ? { headlights: beamChoice(snap) } : {}),
+      ...featureDecisionFields(snap),
       motion:
         !(amberStop && candidate?.id === "stop_at_line") &&
         candidate?.sim.end_speed < 0.3 &&

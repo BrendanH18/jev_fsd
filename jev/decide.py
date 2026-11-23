@@ -46,7 +46,7 @@ def validate_request(body: dict) -> Dict[str, Any]:
                 raise InvalidRequest("criteria for %s must be strings or null" % qid)
     tick = body.get("tick", 0)
     epoch = body.get("epoch", 0)
-    if not isinstance(tick, int) or not isinstance(epoch, int):
+    if isinstance(tick, bool) or isinstance(epoch, bool) or not isinstance(tick, int) or not isinstance(epoch, int):
         raise InvalidRequest("tick and epoch must be integers")
     return {"state": state, "questions": questions, "tick": tick, "epoch": epoch}
 

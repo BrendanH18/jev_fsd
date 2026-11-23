@@ -10,7 +10,8 @@ Guides: [adding a challenge](../adding-a-challenge.md), [adding a driver](../age
 
 ## Using the app
 
-Running the app, driving it and changing its look and maps.
+Running the app, driving with keyboard, touch controls or a gamepad, choosing a vehicle in the
+six-car garage, connecting models, replaying recorded drives, and changing looks and maps.
 
 - [Overview and quick start](overview.md)
 - [Drive coach, HUD and controls](drive-coach-and-hud.md)
@@ -20,17 +21,22 @@ Running the app, driving it and changing its look and maps.
 
 ## Simulation and decisions
 
-How the car, traffic and the decision pipeline work.
+How the car, traffic, regional road rules and the decision pipeline work.
 
 - [Simulation: car, traffic, buses and emergency vehicles](simulation.md)
 - [The decision pipeline](decision-pipeline.md)
 - [Scenery, collisions and sight](scenery-and-sight.md)
 - [Lane changes and turn lanes](lane-changes.md)
 - [All-way stops](all-way-stops.md)
+- [Provincial road rules coverage and gap analysis](provincial-rules.md)
 
 ## Benchmarks and development
 
-Measuring drivers, running the checks and finding your way around the code.
+Measuring drivers on versioned suites (`v1` and `hard-city-v1`), inspecting saved runs offline
+(`scripts/inspect_run.py`: 100 core reports, 1,073 cohort profiles, 100 rate profiles and 100
+matched paired-rate comparisons), running CLI tooling (`bench_node.mjs`, `arena_node.mjs`,
+`bench_trace.mjs`, `compare_repeats.mjs`, `check_driver.mjs`, `node_checks.mjs`, `soak.mjs`,
+`boat-check.sh`), and finding your way around the code.
 
 - [Benchmarks and validation](benchmarks.md)
 - [Development](development.md)

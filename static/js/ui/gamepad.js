@@ -10,6 +10,29 @@
 // brakes with it pulled down.
 
 export const STICK_DEAD_ZONE = 0.15;
+const DEAD_ZONE_KEY = "jev-gamepad-dead-zone";
+let stickDeadZone = STICK_DEAD_ZONE;
+try {
+  const saved = globalThis.localStorage?.getItem(DEAD_ZONE_KEY);
+  if (saved != null && Number.isFinite(Number(saved))) stickDeadZone = Math.max(0, Math.min(0.5, Number(saved)));
+} catch {
+  // Storage can be unavailable in private browsing.
+}
+
+export function getDeadZone() {
+  return stickDeadZone;
+}
+
+export function setDeadZone(value) {
+  if (!Number.isFinite(value)) return stickDeadZone;
+  stickDeadZone = Math.max(0, Math.min(0.5, value));
+  try {
+    globalThis.localStorage?.setItem(DEAD_ZONE_KEY, String(stickDeadZone));
+  } catch {
+    // Retain the setting for this session.
+  }
+  return stickDeadZone;
+}
 export const TRIGGER_DEAD_ZONE = 0.06;
 // (a button counts as held past this much travel, so an analog trigger has a clean press edge)
 export const PRESS_THRESHOLD = 0.5;
@@ -81,8 +104,8 @@ export function readPad(pad) {
   const axes = pad.axes || [],
     buttons = pad.buttons || [];
   const held = (i) => buttonHeld(buttons[i]);
-  const stickX = deadZone(axes[0]),
-    stickY = deadZone(axes[1]);
+  const stickX = deadZone(axes[0], stickDeadZone),
+    stickY = deadZone(axes[1], stickDeadZone);
   const dpad = Number(held(BUTTON.RIGHT)) - Number(held(BUTTON.LEFT));
   const steer = Math.abs(stickX) >= Math.abs(dpad) ? stickX : dpad;
   let throttle = triggerValue(pad, BUTTON.RT),

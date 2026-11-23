@@ -4,7 +4,7 @@ import json
 import unittest
 
 import helpers  # noqa: F401 (puts the repository on sys.path)
-from scripts.run_insights.decisions import REPORTS
+from scripts.run_insights.decisions import EXTENDED_REPORTS, RANKINGS, REPORTS
 
 
 class DecisionReportsTest(unittest.TestCase):
@@ -80,19 +80,45 @@ class DecisionReportsTest(unittest.TestCase):
         self.assertAlmostEqual(mix["shares"]["local_decisions"], 8 / 11)
         self.assertEqual(self.report("fallback-free-passes")["without_fallback"], ["short"])
         self.assertEqual(self.report("local-only-routes"), ["local"])
-        self.assertEqual(self.report("fallback-decision-ranking")[0]["id"], "long")
+        fallback_rank = EXTENDED_REPORTS["fallback-decision-ranking-summary"][1](self.rows)
+        self.assertEqual(fallback_rank["routes"][0]["id"], "long")
+        self.assertEqual(fallback_rank["unavailable"], 2)
+        self.assertEqual(fallback_rank["summary"], {"min": 0, "median": 0, "p95": 0.9, "max": 1, "mean": 0.333333})
         self.assertAlmostEqual(self.report("fallback-exposure")["affected_share"], 2 / 3)
 
     def test_resources_and_latency(self):
         self.assertAlmostEqual(self.report("cost-per-pass")["usd_per_pass"], 0.6)
         self.assertEqual(self.report("spend-by-outcome")["failed"], {"routes": 1, "cost_usd": 0.4})
-        self.assertAlmostEqual(self.report("spend-concentration")[0]["share_of_spend"], 2 / 3)
+        spend_rank = EXTENDED_REPORTS["spend-concentration-summary"][1](self.rows)
+        self.assertAlmostEqual(spend_rank["routes"][0]["share_of_spend"], 2 / 3)
+        self.assertEqual(spend_rank["unavailable"], 3)
         self.assertEqual(self.report("token-demand")[0]["id"], "short")
         self.assertEqual(self.report("median-call-latency")[0]["id"], "short")
         self.assertEqual(self.report("tail-call-latency")[0]["id"], "long")
-        self.assertEqual(self.report("latency-tail-inflation")[0], {"id": "long", "p95_over_p50": 2.5})
+        tail = EXTENDED_REPORTS["latency-tail-inflation-summary"][1](self.rows)
+        self.assertEqual(tail["routes"][0], {"id": "long", "p95_over_p50": 2.5})
+        self.assertEqual(tail["unavailable"], 3)
+        self.assertEqual(tail["summary"]["max"], 2.5)
         self.rows.append({"id": "missing-timings", "calls": 1, "latency_p50_ms": None})
         self.assertAlmostEqual(self.report("latency-coverage")["coverage"], 2 / 3)
+
+    def test_cost_per_pass_avoids_double_rounding_and_ties_sort_by_id(self):
+        self.rows = [
+            {"id": "b", "pass": True, "cost_usd": 0.0000004, "tokens": 100},
+            {"id": "a", "pass": False, "cost_usd": 0.0000004, "tokens": 100},
+        ]
+        self.assertAlmostEqual(self.report("cost-per-pass")["usd_per_pass"], 0.0000008)
+        tokens = EXTENDED_REPORTS["token-demand-summary"][1](self.rows)
+        self.assertEqual([row["id"] for row in tokens["routes"]], ["a", "b"])
+        self.assertEqual(tokens["unavailable"], 0)
+        self.assertEqual(tokens["summary"], {"min": 100, "median": 100, "p95": 100, "max": 100, "mean": 100})
+
+    def test_legacy_rankings_keep_arrays_and_companion_reports_include_statistics(self):
+        for name in RANKINGS:
+            with self.subTest(name=name):
+                rows = self.report(name)
+                self.assertIsInstance(rows, list)
+                self.assertEqual(EXTENDED_REPORTS[f"{name}-summary"][1](self.rows)["routes"], rows)
 
     def test_open_track_reporting(self):
         self.assertEqual(self.report("flagged-check-frequency"), {"routes_measured": 2, "by_check": {"a": 1}})

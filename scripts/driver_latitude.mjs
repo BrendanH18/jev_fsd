@@ -92,7 +92,7 @@ function wrapRules(autopilot, choose) {
 async function stepOnce(ctx) {
   stepWorld(ctx, DT, ctx.world.t * 1000);
   if (ctx.autopilot.firing) await ctx.autopilot.firing;
-  if (ctx.autopilot.closureRouting) await ctx.autopilot.closureRouting;
+  if (ctx.autopilot.detourRouting) await ctx.autopilot.detourRouting;
 }
 
 async function latitude(challenge) {

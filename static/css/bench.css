@@ -26,3 +26,13 @@ body.bench { overflow: auto; padding: 18px 22px 40px; height: auto; min-height: 
 #results tfoot td { font-weight: 600; border-top: 2px solid var(--border); }
 .bench .foot { font-size: 12px; max-width: 900px; line-height: 1.5; }
 .bench .watch { font-size: 11px; padding: 3px 8px; }
+.bench-table-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 10px 0; }
+.table-sort { border: 0; padding: 0; background: none; color: inherit; cursor: pointer; font: inherit; }
+[aria-sort="ascending"] > .table-sort::after { content: " ▲"; }
+[aria-sort="descending"] > .table-sort::after { content: " ▼"; }
+#results :is(th, td):nth-child(-n+3) { position: sticky; z-index: 1; background: #11151c; box-sizing: border-box; }
+#results th:nth-child(-n+3) { z-index: 2; }
+#results :is(th, td):nth-child(1) { left: 0; min-width: 40px; max-width: 40px; width: 40px; }
+#results :is(th, td):nth-child(2) { left: 40px; min-width: 155px; max-width: 155px; width: 155px; }
+#results :is(th, td):nth-child(3) { left: 195px; min-width: 90px; max-width: 90px; width: 90px; overflow: hidden; text-overflow: ellipsis; }
+#results tr.fail td:nth-child(-n+3) { background: #231c24; }

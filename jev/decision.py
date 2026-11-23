@@ -168,15 +168,15 @@ def _choice_answer(answer: Any, options: List[str], qid: str) -> Tuple[Optional[
 
 def check_answers(response: Optional[dict], questions: Dict[str, dict]) -> Tuple[Dict[str, dict], Optional[str]]:
     """The reply's answers to the questions asked, each a valid choice, or ({}, why not). A missing
-    or unusable route answer is dropped rather than failing the decision: the car already follows
-    the first route option, as for LLM drivers."""
+    or unusable route or headlights answer is dropped rather than failing the decision: the browser
+    falls back to the default route or beam, as for LLM drivers."""
     raw = response.get("answers") if isinstance(response, dict) else None
     raw = raw if isinstance(raw, dict) else {}  # judged per question, so a route-only request can still pass
     answers: Dict[str, dict] = {}
     for qid, question in questions.items():
         answer, why = _choice_answer(raw.get(qid), list(question["criteria"]), qid)
         if answer is None:
-            if qid == "route":
+            if qid in ("route", "headlights"):
                 continue
             return {}, why
         answers[qid] = answer

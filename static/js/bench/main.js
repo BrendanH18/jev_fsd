@@ -4,6 +4,7 @@
 // (brain/recording.js).
 
 import { api, $, h, usd, appUrl } from "../common.js";
+import { downloadCsv, downloadJson } from "../ui/export.js";
 import { MapData } from "../map/mapdata.js";
 import { buildSuite } from "./scenarios.js";
 import { runScenario, yieldNow, suiteOptions, benchmarkConfig } from "./runner.js";
@@ -103,6 +104,8 @@ const pickScores = (results) => {
   return Object.fromEntries(SCORE_KEYS.map((k) => [k, s[k]]));
 };
 const compareScores = new Map();
+let tableSort = { key: "index", direction: 1 };
+let savedRunRequest = 0;
 
 async function boot() {
   const params = new URLSearchParams(location.search),
@@ -110,6 +113,54 @@ async function boot() {
   const query = selection ? `?bbox=${encodeURIComponent(selection)}` : "";
   status = await api(`/api/status${query}`);
   map = new MapData(await api(`/api/map${query}`));
+  const mapSelect = $("#bench-map");
+  const { maps } = await api("/api/maps").catch(() => ({ maps: [] }));
+  mapSelect.replaceChildren(
+    ...(!maps.some((entry) => entry.id === status.map.id)
+      ? [h("option", { value: status.map.id }, status.map.label)]
+      : []),
+    ...maps.map((entry) => h("option", { value: entry.id }, `${entry.name} · ${entry.city}`)),
+  );
+  mapSelect.value = status.map.id;
+  mapSelect.addEventListener("change", () => {
+    const next = new URL(location.href);
+    next.searchParams.delete("bbox");
+    next.searchParams.set("map", mapSelect.value);
+    location.assign(next);
+  });
+  const syncHeldout = () => {
+    $("#count").disabled = $("#seed").disabled = $("#heldout").checked;
+  };
+  syncHeldout();
+  $("#heldout").addEventListener("change", syncHeldout);
+  $("#bench-failures").addEventListener("change", () => lastRun && render(lastRun));
+  $("#bench-csv").addEventListener("click", () => {
+    const rows = tableRows(lastRun).filter(({ result }) => result);
+    downloadCsv(
+      "jev-benchmark.csv",
+      ["id", "pass", ...COLUMNS.map(([key]) => key)],
+      rows.map(({ result, scored }) => [result.id, result.pass, ...COLUMNS.map(([key]) => scored[key])]),
+    );
+  });
+  $("#bench-json").addEventListener("click", () => {
+    const { config, summary, results, suite_version } = lastRun;
+    downloadJson("jev-benchmark.json", { config, summary, results, suite_version });
+  });
+  $("#saved-run").addEventListener("change", async (ev) => {
+    const name = ev.target.value;
+    const request = ++savedRunRequest;
+    if (!name || running) return;
+    try {
+      const data = await api(`/api/bench/runs?name=${encodeURIComponent(name)}`);
+      if (request !== savedRunRequest || running) return;
+      if (!Array.isArray(data.results)) throw new Error("Saved run has no results.");
+      lastRun = { ...data, suite: data.results.map((r) => ({ id: r.id, tags: r.tags || {} })) };
+      render(lastRun);
+      $("#status").textContent = `Viewing saved run ${name}`;
+    } catch (error) {
+      if (request === savedRunRequest && !running) $("#status").textContent = error.message;
+    }
+  });
   const decisions = registerDecisionAgents(status.decision, { demo: !!status.demo }),
     endpoints = registerLlmAgents(status.llm);
   const count = (n, what) => (n ? ` · ${n} ${what}${n > 1 ? "s" : ""}` : "");
@@ -185,6 +236,13 @@ async function loadRuns() {
   );
   if (keep) sel.value = keep;
   sel._runs = runs;
+  const saved = $("#saved-run");
+  const previous = saved.value;
+  saved.replaceChildren(
+    h("option", { value: "" }, "choose a run"),
+    ...[...sel.options].slice(1).map((o) => o.cloneNode(true)),
+  );
+  if (runs.some((run) => run.name === previous)) saved.value = previous;
 }
 
 function runFromForm() {
@@ -248,6 +306,7 @@ export async function run({
     seed = plan.seeds[0];
   }
   running = true;
+  savedRunRequest++;
   stopRequested = false;
   $("#run").textContent = "Stop";
   const definition = agentDefinitions().find((a) => a.id === brain),
@@ -303,6 +362,7 @@ export async function run({
     summary: null,
   };
   lastRun = state;
+  $("#saved-run").value = "";
   render(state);
   for (let i = 0; i < suite.length && !stopRequested; i++) {
     state.current = i;
@@ -398,6 +458,28 @@ function delta(cur, prev, better, f) {
   return h("span", { class: `delta ${cls}` }, text);
 }
 
+function tableRows(state) {
+  const rows = state.suite.map((scenario, index) => {
+    const result = state.results[index];
+    return { scenario, index, result, scored: result && { ...result, ...driveScores(result) } };
+  });
+  const { key, direction } = tableSort;
+  const value = ({ index, scenario, result, scored }) => {
+    if (key === "index") return index;
+    if (key === "route") return scenario.tags?.length_m;
+    if (key === "pass") return result ? Number(result.pass) : null;
+    return scored?.[key];
+  };
+  return rows
+    .filter(({ result }) => !$("#bench-failures").checked || result?.pass === false)
+    .sort((a, b) => {
+      const x = value(a),
+        y = value(b);
+      if (x == null || y == null) return Number(x == null) - Number(y == null);
+      return direction * (x - y) || a.index - b.index;
+    });
+}
+
 function render(state) {
   const compare = $("#compare");
   const before = compare._runs?.find((run) => run.name === compare.value);
@@ -423,20 +505,42 @@ function render(state) {
       : []),
   );
 
+  const sortHeader = (key, label, cls = "") =>
+    h(
+      "th",
+      {
+        class: cls,
+        "aria-sort": tableSort.key === key ? (tableSort.direction === 1 ? "ascending" : "descending") : null,
+      },
+      h(
+        "button",
+        {
+          type: "button",
+          class: "table-sort",
+          onclick: () => {
+            tableSort = { key, direction: tableSort.key === key ? -tableSort.direction : 1 };
+            render(state);
+            $(`#results button[data-sort="${key}"]`).focus();
+          },
+          "data-sort": key,
+        },
+        label,
+      ),
+    );
   const head = h(
     "tr",
     {},
-    h("th", { class: "left" }, "#"),
-    h("th", { class: "left" }, "route"),
-    h("th", { class: "left" }, "result"),
-    ...COLUMNS.map(([, label]) => h("th", {}, label)),
+    sortHeader("index", "#", "left"),
+    sortHeader("route", "route", "left"),
+    sortHeader("pass", "result", "left"),
+    ...COLUMNS.map(([key, label]) => sortHeader(key, label)),
     h("th", {}, ""),
   );
   $("#results thead").replaceChildren(head);
-  const rows = state.suite.map((sc, i) => {
-    const r = state.results[i];
+  const rows = tableRows(state).map(({ scenario: sc, index: i, result: r, scored }) => {
     const t = sc.tags;
-    const route = `${t.length_m} m · ${t.signals}sig ${t.stops}stop ${t.lefts}L ${t.rights}R`;
+    const route =
+      t.length_m == null ? sc.id : `${t.length_m} m · ${t.signals}sig ${t.stops}stop ${t.lefts}L ${t.rights}R`;
     if (!r) {
       return h(
         "tr",
@@ -448,7 +552,6 @@ function render(state) {
         h("td", {}, ""),
       );
     }
-    const scored = { ...r, ...driveScores(r) };
     const cells = COLUMNS.map(([k, , f]) => {
       const v = scored[k];
       const warn =
@@ -464,24 +567,33 @@ function render(state) {
       { class: r.pass ? "" : "fail" },
       h("td", {}, i + 1),
       h("td", { class: "left" }, route),
-      h("td", { class: `left ${r.pass ? "pass" : "failed"}` }, r.pass ? "PASS" : r.failures.join(", ")),
+      h(
+        "td",
+        { class: `left ${r.pass ? "pass" : "failed"}`, title: r.failures?.join(", ") },
+        r.pass ? "PASS" : r.failures?.join(", ") || "FAIL",
+      ),
       ...cells,
       h(
         "td",
         {},
-        h(
-          "button",
-          {
-            class: "toggle watch",
-            title: "Replay this scenario in the 3D sim",
-            onclick: () => watch(sc, state.config),
-          },
-          "watch",
-        ),
+        sc.route &&
+          h(
+            "button",
+            {
+              class: "toggle watch",
+              title: "Replay this scenario in the 3D sim",
+              onclick: () => watch(sc, state.config),
+            },
+            "watch",
+          ),
       ),
     );
   });
-  $("#results tbody").replaceChildren(...rows);
+  $("#results tbody").replaceChildren(
+    ...(rows.length ? rows : [h("tr", {}, h("td", { colspan: COLUMNS.length + 4 }, "No matching drives."))]),
+  );
+  $("#bench-csv").disabled = !state.results.length;
+  $("#bench-json").disabled = !state.results.length;
   const foot = s
     ? h(
         "tr",

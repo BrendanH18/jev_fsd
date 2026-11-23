@@ -4,6 +4,9 @@
 import { $, h, ms, usd, num, pct, percentile } from "../common.js";
 import { SPEED_GRACE_MPS } from "../sim/drive-score.js";
 import { pillarOf } from "../brain/registry.js";
+import { FEATURES } from "../sim/features/index.js";
+import { freeDriveOptions } from "../sim/free-drive.js";
+import { getDeadZone, setDeadZone } from "./gamepad.js";
 
 const TURN_ARROWS = {
   left: "↰",
@@ -17,6 +20,51 @@ const TURN_ARROWS = {
   none: "↑",
 };
 const MOTIONS = { drive: "Driving", stop: "Holding still" };
+
+const CORE_FEATURE_SWITCHES = [
+  ["hazards", "Hidden hazards"],
+  ["buses", "Transit buses"],
+  ["roadside", "Roadside flashing lights"],
+  ["workzones", "Work zones & flaggers"],
+  ["outages", "Signal outages"],
+  ["park", "Parallel park at destination"],
+  ["closures", "Lane closures (zipper)"],
+  ["cyclistpass", "Cyclist passing"],
+  ["scramble", "Scramble crossings"],
+  ["guards", "School crossing guards"],
+  ["nightflash", "Night flashing signals"],
+  ["buslanes", "Bus lanes"],
+  ["pxo", "Pedestrian crossovers"],
+  ["restrictions", "Turn restrictions"],
+  ["highbeams", "High-beam dipping"],
+  ["leftonred", "Left turn on red"],
+  ["redturnsigns", "No-turn-on-red signs"],
+  ["amberlights", "Amber-light dilemma"],
+  ["followingdistance", "Grip-aware following"],
+  ["emergency", "Emergency vehicles"],
+  ["streetcars", "Streetcars"],
+  ["trains", "Trains & level crossings"],
+  ["schoolbuses", "School buses"],
+  ["plows", "Snow plows"],
+];
+
+function formatSwitchLabel(key) {
+  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (ch) => ch.toUpperCase());
+}
+
+export function freeDriveSwitchList() {
+  const known = new Map(CORE_FEATURE_SWITCHES);
+  // Dynamically discover every registered feature option from the feature registry and verify with freeDriveOptions.
+  const probe = freeDriveOptions(new URLSearchParams());
+  const activeKeys = new Set([...Object.keys(probe.world), ...Object.keys(probe.fleet)]);
+  for (const feature of FEATURES) {
+    const flag = feature.key.toLowerCase();
+    if (!known.has(flag) && activeKeys.has(feature.key)) {
+      known.set(flag, formatSwitchLabel(feature.key));
+    }
+  }
+  return [...known.entries()];
+}
 
 export class Hud {
   constructor(root = document) {
@@ -42,11 +90,20 @@ export class Hud {
       weather: find("#weather"),
       time: find("#time"),
       quality: find("#quality"),
+      worldSeed: find("#world-seed"),
+      randomizeSeed: find("#randomize-seed"),
+      deadzone: find("#gamepad-deadzone"),
+      deadzoneValue: find("#gamepad-deadzone-value"),
+      featureSwitchesList: find("#feature-switches-list"),
+      featureSwitchesAll: find("#feature-switches-all"),
+      featureSwitchesNone: find("#feature-switches-none"),
+      featureSwitchesApply: find("#feature-switches-apply"),
       autopilot: find("#autopilot"),
       settingsToggle: find("#settings-toggle"),
       settings: find("#settings"),
       keysToggle: find("#keys-toggle"),
       keysHelp: find("#keys-help"),
+      keysClose: find("#keys-close"),
       latency: find("#latency"),
       p50: find("#p50"),
       tokens: find("#tokens"),
@@ -72,13 +129,71 @@ export class Hud {
     this.lastUpdate = -Infinity;
     this.shownDecision = null;
     this.shownAutopilot = null;
+    this._keysReturnFocus = null;
     this.el.settingsToggle.addEventListener("click", () => {
       const open = this.el.settings.hidden;
       this.el.settings.hidden = !open;
       this.el.settingsToggle.setAttribute("aria-expanded", String(open));
     });
     this.el.keysToggle.addEventListener("click", () => this.toggleKeys());
-    find("#keys-close").addEventListener("click", () => this.toggleKeys(false));
+    this.el.keysClose?.addEventListener("click", () => this.toggleKeys(false));
+    this.el.randomizeSeed?.addEventListener("click", () => {
+      if (!this.el.worldSeed || this.el.worldSeed.disabled) return;
+      const seed = Math.floor(Math.random() * 2147483647) + 1;
+      this.el.worldSeed.value = String(seed);
+      this.el.worldSeed.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    if (this.el.deadzone) {
+      const initial = Math.round(getDeadZone() * 100);
+      this.el.deadzone.value = String(initial);
+      if (this.el.deadzoneValue) this.el.deadzoneValue.textContent = `${initial}%`;
+      this.el.deadzone.addEventListener("input", () => {
+        const pctVal = Number(this.el.deadzone.value) || 0;
+        const applied = setDeadZone(pctVal / 100);
+        if (this.el.deadzoneValue) this.el.deadzoneValue.textContent = `${Math.round(applied * 100)}%`;
+      });
+    }
+    if (this.el.featureSwitchesList) {
+      this.initFeatureSwitches(new URLSearchParams(globalThis.location?.search || ""));
+    }
+  }
+
+  initFeatureSwitches(params = new URLSearchParams()) {
+    const container = this.el.featureSwitchesList;
+    if (!container) return;
+    const switches = freeDriveSwitchList();
+    container.replaceChildren(
+      ...switches.map(([flag, label]) =>
+        h(
+          "label",
+          { class: "check" },
+          h("input", { type: "checkbox", "data-feature-flag": flag, checked: params.get(flag) !== "0" }),
+          label,
+        ),
+      ),
+    );
+    if (!this._featureSwitchesBound) {
+      this._featureSwitchesBound = true;
+      this.el.featureSwitchesAll?.addEventListener("click", () => {
+        for (const box of container.querySelectorAll("[data-feature-flag]")) box.checked = true;
+      });
+      this.el.featureSwitchesNone?.addEventListener("click", () => {
+        for (const box of container.querySelectorAll("[data-feature-flag]")) box.checked = false;
+      });
+      this.el.featureSwitchesApply?.addEventListener("click", () => {
+        const disabled = [...container.querySelectorAll("[data-feature-flag]")]
+          .filter((box) => !box.checked)
+          .map((box) => box.dataset.featureFlag);
+        const next = new URL(location.href);
+        next.searchParams.delete("replay");
+        next.searchParams.delete("challenge");
+        for (const [flag] of freeDriveSwitchList()) {
+          if (disabled.includes(flag)) next.searchParams.set(flag, "0");
+          else next.searchParams.delete(flag);
+        }
+        location.assign(next);
+      });
+    }
   }
 
   show() {
@@ -86,9 +201,18 @@ export class Hud {
   }
 
   toggleKeys(force) {
-    const open = force === undefined ? this.el.keysHelp.hidden : force;
+    const wasOpen = !this.el.keysHelp.hidden;
+    const open = force === undefined ? !wasOpen : !!force;
     this.el.keysHelp.hidden = !open;
     this.el.keysToggle.setAttribute("aria-pressed", String(open));
+    if (open && !wasOpen) {
+      this._keysReturnFocus = document.activeElement;
+      this.el.keysClose?.focus?.({ preventScroll: true });
+    } else if (!open && wasOpen && this._keysReturnFocus?.isConnected) {
+      const target = this._keysReturnFocus;
+      this._keysReturnFocus = null;
+      target.focus?.({ preventScroll: true });
+    }
   }
 
   onBrainChange(fn) {
@@ -380,7 +504,7 @@ const SPEED_VERBS = {
   cautious: "Cautious",
 };
 // Candidate labels are written for the model in m/s; describe them for people in km/h.
-function describe(c) {
+export function describe(c) {
   const law = c.law || {};
   if (c.id === "hard_brake") return "Brake hard";
   if (law.stopAtRoute !== undefined) return capital(c.speed);

@@ -37,9 +37,13 @@ on Node 22. CI's `scripts/test_*.mjs` loop includes it automatically.
 The saved Jev requests `data/snapshots/left_on_red_clear.json` and
 `left_on_red_traffic.json` cover driving after a full stop and waiting for traffic
 from the right; run them with `uv run scripts/verify_jev.py data/snapshots/left_on_red_*.json`.
-`scripts/test_drive_lab.mjs` also measures two complete saved arena evaluations
-(all challenges with Rules and cautious) and checks the 9 MB localStorage fallback cap: 58.7% with
-43 challenges, measured 2026-11-05.
+Saved arena evaluations now live in IndexedDB (`static/js/lab/history.js`, `openEvaluationHistory`,
+database `jev-fsd-arena`: up to 20 runs within a 200 MB JSON budget, where one complete
+60-challenge run with Rules and the cautious agent takes about 3.7 MB, migrating any prior
+`localStorage` history once). Where IndexedDB is unavailable, storage falls back to `localStorage`
+and its 9 MB cap; `scripts/test_drive_lab.mjs` still measures two full 60-challenge runs with Rules
+and the cautious agent against that fallback cap (about 78.3% of 9 MB for the 60 challenges, and
+87.1% when both road tests are included).
 
 ## Agent rules
 

@@ -1,5 +1,6 @@
 // Submission files contain recorded data only. Replay never loads a submitted agent module.
 import { canonicalJson, RECORDING_FORMAT } from "../static/js/brain/recording.js";
+import { jsonDifferences } from "./cli_tools.mjs";
 import { LOCAL_RECORDING_FORMAT } from "./local_recording.mjs";
 
 export const SUBMISSION_FORMAT = "jev-submission/1";
@@ -50,5 +51,30 @@ export function verifySubmissionManifest(recording, current, ids) {
 }
 
 export function verifySubmissionReport(submitted, replayed) {
-  if (!same(submitted, replayed)) throw new Error("The submitted report differs from the replayed report.");
+  if (same(submitted, replayed)) return;
+  const { results: submittedDrives, ...submittedMeta } = submitted ?? {};
+  const { results: replayedDrives, ...replayedMeta } = replayed ?? {};
+  const limit = 12;
+  const details = [];
+  if (Array.isArray(submittedDrives) && Array.isArray(replayedDrives)) {
+    const driveKeys = (rows) => rows.map((drive, i) => [drive?.map, drive?.challenge ?? drive?.id ?? i]);
+    const submittedKeys = driveKeys(submittedDrives);
+    const replayedKeys = driveKeys(replayedDrives);
+    if (!same(submittedKeys, replayedKeys)) {
+      details.push(...jsonDifferences(submittedKeys, replayedKeys, canonicalJson, { limit, path: "drive order" }));
+    } else {
+      for (const [i, drive] of submittedDrives.entries()) {
+        const remaining = limit - details.length;
+        if (!remaining) break;
+        const [map, id] = submittedKeys[i];
+        const path = `drive ${map ? `${map}/` : ""}${id}`;
+        details.push(...jsonDifferences(drive, replayedDrives[i], canonicalJson, { limit: remaining, path }));
+      }
+    }
+  } else {
+    details.push(...jsonDifferences(submittedDrives, replayedDrives, canonicalJson, { limit, path: "results" }));
+  }
+  details.push(...jsonDifferences(submittedMeta, replayedMeta, canonicalJson, { limit: limit - details.length }));
+  const suffix = details.length ? `: ${details.join("; ")}` : "";
+  throw new Error(`The submitted report differs from the replayed report${suffix}.`);
 }

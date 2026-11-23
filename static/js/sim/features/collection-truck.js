@@ -4,6 +4,35 @@ import { PED } from "../pedestrians.js";
 
 export default {
   key: "collection",
+  coach: {
+    init: () => ({
+      crewPasses: 0,
+      collected: false,
+    }),
+    seen: "collected",
+    events: {
+      crew_close_pass(score, ev) {
+        score.crewPasses++;
+        score.incident("crew_close_pass", "Passed a garbage crew worker too close", {
+          worker: ev.worker,
+          clearance_m: ev.clearance_m,
+          kmh: ev.kmh,
+        });
+      },
+    },
+    reports: [
+      { at: "end", order: 5, read: (score) => (score.collected ? { crew_close_passes: score.crewPasses } : {}) },
+    ],
+    deductions: [{ at: "safety", order: 0, counter: "crewPasses", weight: 20 }],
+    tips: [
+      {
+        at: "afterFollowing",
+        order: 3,
+        when: (score) => score.crewPasses,
+        text: "Behind a garbage truck at work, wait well back while its crew is in the street, and go round only when they are at the kerb and the oncoming lane is clear, slowly, with room to spare.",
+      },
+    ],
+  },
   property: "crewPassed",
   defaultCount: 1,
   seen: "collectionSeen",

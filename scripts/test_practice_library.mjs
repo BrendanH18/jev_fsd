@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import {
   PRACTICE_KEY,
+  ROAD_TEST_KEY,
+  PRACTICE_BACKUP_FORMAT,
+  importPracticeBackup,
   challengeCity,
   filterChallenges,
   practiceStatus,
@@ -74,7 +77,11 @@ const report = (c = challenge, overrides = {}) => ({
 });
 function storage(raw = null) {
   const data = new Map(raw === null ? [] : [[PRACTICE_KEY, raw]]);
-  return { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
+  return {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => data.set(key, value),
+    removeItem: (key) => data.delete(key),
+  };
 }
 const record = (overrides) => ({
   version: 2,
@@ -279,6 +286,44 @@ test("malformed storage is ignored and blocked storage returns usable in-memory 
   assert.equal(result.available, false);
   assert.equal(result.outcome, "completed");
   assert.equal(practiceStatus(challenge, result.records), "completed");
+});
+
+test("backups require both record objects and consent before replacing saved progress", () => {
+  const backup = { format: PRACTICE_BACKUP_FORMAT, practice: {}, road_tests: {} };
+  const raw = JSON.stringify({ original: record() });
+  const s = storage(raw);
+  for (const key of ["practice", "road_tests"]) {
+    for (const invalid of [null, [], 0, ""]) {
+      assert.throws(() => importPracticeBackup({ ...backup, [key]: invalid }, s), /record object/);
+    }
+    const missing = { ...backup };
+    delete missing[key];
+    assert.throws(() => importPracticeBackup(missing, s), /record object/);
+  }
+  const cancelled = importPracticeBackup(backup, s, () => false);
+  assert.equal(cancelled, null);
+  assert.equal(s.getItem(PRACTICE_KEY), raw);
+  assert.equal(s.getItem(ROAD_TEST_KEY), null);
+  assert.equal(importPracticeBackup(backup, s, () => true).available, true);
+  assert.equal(s.getItem(PRACTICE_KEY), "{}");
+  assert.equal(s.getItem(ROAD_TEST_KEY), "{}");
+});
+
+test("a failed road-test write preserves both original storage values", () => {
+  const backup = { format: PRACTICE_BACKUP_FORMAT, practice: { replacement: record() }, road_tests: {} };
+  for (const original of [null, JSON.stringify({ original: record() })]) {
+    const s = storage(original);
+    const oldRoadTests = '{"old":{"version":1}}';
+    s.setItem(ROAD_TEST_KEY, oldRoadTests);
+    const write = s.setItem;
+    s.setItem = (key, value) => {
+      if (key === ROAD_TEST_KEY) throw new Error("Out of storage");
+      write(key, value);
+    };
+    assert.throws(() => importPracticeBackup(backup, s, () => true), /Out of storage/);
+    assert.equal(s.getItem(PRACTICE_KEY), original);
+    assert.equal(s.getItem(ROAD_TEST_KEY), oldRoadTests);
+  }
 });
 
 console.log(`${passed} practice library checks passed`);

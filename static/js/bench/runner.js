@@ -123,7 +123,7 @@ export function setupScenario(
 export function watchClosureReplans(autopilot, world, metrics, onDetour) {
   let seen = null;
   return () => {
-    const pending = autopilot.closureRouting;
+    const pending = autopilot.detourRouting;
     if (!pending || pending === seen) return;
     seen = pending;
     const before = world.route;
@@ -253,7 +253,7 @@ export async function runScenario(
         if (autopilot.inFlight && autopilot.firing) await autopilot.firing;
         while (autopilot.rerouting) await sleep(5);
         // (and a route round a closed road, so the detour comes at the same step every run: sim/road-closures.js)
-        if (autopilot.closureRouting) await autopilot.closureRouting;
+        if (autopilot.detourRouting) await autopilot.detourRouting;
         if (steps % 240 === 0) await yieldNow();
       } else {
         // keep sim time from running ahead of the wall clock

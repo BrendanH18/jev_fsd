@@ -19,7 +19,7 @@ OPEN_ARENA = ROOT / "data/results/2026-11-20/claude-haiku-open.json"
 class ProfilesTests(unittest.TestCase):
     def test_new_catalog_inventory(self):
         original = {name for module in (decisions, motion, outcomes, safety) for name in module.REPORTS}
-        self.assertEqual(len(profiles.REPORTS), 1073)
+        self.assertEqual(len(profiles.REPORTS), 1139)
         self.assertEqual(len(profiles.RATE_REPORTS), 100)
         self.assertFalse(original.intersection(profiles.REPORTS))
         for name, (description, report) in profiles.REPORTS.items():
@@ -30,12 +30,14 @@ class ProfilesTests(unittest.TestCase):
             "profile-red-lights-by-verdict",
             "profile-progress-by-arrival",
             "profile-safety-brakes-by-brake-assist",
+            "profile-deadlocks-by-deadlocks",
             "profile-fallback-share-by-fallback",
             "profile-flagged-choices-by-flags",
         ):
             self.assertNotIn(name, profiles.REPORTS)
         self.assertIn("profile-off-road-s-by-verdict", profiles.REPORTS)
         self.assertIn("profile-bus-lane-driving-by-verdict", profiles.REPORTS)
+        self.assertIn("profile-time-s-by-deadlocks", profiles.REPORTS)
 
     def test_cohort_distribution_and_missing_values(self):
         _, report = profiles.REPORTS["profile-off-road-s-by-signals"]
@@ -53,20 +55,26 @@ class ProfilesTests(unittest.TestCase):
         result = report(rows)
         self.assertEqual(result["field"], "off_road_s")
         self.assertEqual(result["unit"], "seconds")
+        group_one = result["groups"]["1"]
         self.assertEqual(
-            result["groups"]["1"],
-            {
-                "routes": 5,
-                "measured": 4,
-                "unavailable": 1,
-                "zero": 1,
-                "min": 0,
-                "p25": 3,
-                "median": 6,
-                "p75": 9,
-                "max": 12,
-            },
+            set(group_one),
+            {"routes", "measured", "unavailable", "zero", "mean", "min", "p25", "median", "p75", "p90", "p95", "max"},
         )
+        for key, expected in (
+            ("routes", 5),
+            ("measured", 4),
+            ("unavailable", 1),
+            ("zero", 1),
+            ("mean", 6),
+            ("min", 0),
+            ("p25", 3),
+            ("median", 6),
+            ("p75", 9),
+            ("max", 12),
+        ):
+            self.assertEqual(group_one[key], expected)
+        self.assertAlmostEqual(group_one["p90"], 10.8)
+        self.assertAlmostEqual(group_one["p95"], 11.4)
         self.assertEqual(
             result["groups"]["3 or more"],
             {
@@ -74,15 +82,33 @@ class ProfilesTests(unittest.TestCase):
                 "measured": 0,
                 "unavailable": 2,
                 "zero": 0,
+                "mean": None,
                 "min": None,
                 "p25": None,
                 "median": None,
                 "p75": None,
+                "p90": None,
+                "p95": None,
                 "max": None,
             },
         )
         self.assertEqual(result["groups"]["unknown"]["median"], 1)
         self.assertEqual(result["groups"]["unknown"]["unavailable"], 1)
+
+    def test_deadlocks_cohort_and_overflow_safe_mean(self):
+        _, by_deadlocks = profiles.REPORTS["profile-time-s-by-deadlocks"]
+        rows = [
+            {"deadlocks": 0, "time_s": 20},
+            {"deadlocks": 2, "time_s": 80},
+            {"time_s": 50},
+        ]
+        groups = by_deadlocks(rows)["groups"]
+        self.assertEqual(groups["zero"]["mean"], 20)
+        self.assertEqual(groups["one or more"]["mean"], 80)
+        self.assertEqual(groups["unknown"]["mean"], 50)
+        dist = profiles.distribution([-1e308, -1e308], 2)
+        self.assertEqual(dist["mean"], -1e308)
+        json.dumps(dist, allow_nan=False)
 
     def test_runtime_cohorts_distinguish_missing_from_absent(self):
         _, reroutes = profiles.REPORTS["profile-speeding-s-by-rerouting"]

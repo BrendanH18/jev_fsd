@@ -3,7 +3,7 @@
 import unittest
 
 import helpers  # noqa: F401 (puts the repository on sys.path)
-from scripts.run_insights.safety import REPORTS
+from scripts.run_insights.safety import EXTENDED_REPORTS, QUESTIONS, REPORTS
 
 
 class SafetyInsightsTest(unittest.TestCase):
@@ -78,3 +78,59 @@ class SafetyInsightsTest(unittest.TestCase):
         rows = [{"bus_lane_driving": value} for value in [False, None, -1, "3", float("nan"), 0.4, 0.2]]
         summary = lanes(rows)["bus_lane_driving"]
         self.assertEqual((summary["measured_routes"], summary["total"], summary["unit"]), (2, 0.6, "metres"))
+
+    def test_diagnostic_samples_preserve_extra_keys_and_extended_reports(self):
+        rows = [
+            {
+                "id": "r2",
+                "distance_m": 1000,
+                "collisions": 1,
+                "red_lights": 2,
+                "off_road_s": 1.5,
+                "diagnostics": {
+                    "incidents": [
+                        {
+                            "audit": "collisions",
+                            "t": 12.5,
+                            "street": "Broadway",
+                            "x": 10,
+                            "y": -20,
+                            "with": "npc-4",
+                            "kind": "sedan",
+                            "ignored": "drop",
+                        },
+                        {
+                            "audit": "off_road_s",
+                            "t": 22.0,
+                            "x": 30,
+                            "y": 40,
+                            "value": 1.5,
+                            "kind": "curb",
+                        },
+                    ]
+                },
+            },
+            {"id": "r1", "distance_m": 1000, "collisions": 1, "red_lights": 0, "off_road_s": 0},
+        ]
+        col = REPORTS["safety-collisions"][1](rows)["collisions"]
+        self.assertEqual([entry["id"] for entry in col["affected_routes"]], ["r1", "r2"])
+        self.assertEqual(
+            col["affected_routes"][1]["samples"],
+            [{"t": 12.5, "street": "Broadway", "x": 10, "y": -20, "with": "npc-4", "kind": "sedan"}],
+        )
+
+        overview = EXTENDED_REPORTS["safety-overview"][1](rows)
+        self.assertEqual(len(overview["hazards"]), sum(len(f) for _, f in QUESTIONS.values()) + 1)
+        self.assertEqual(overview["total_km"], 2.0)
+        self.assertEqual(overview["families_triggered"], 3)
+        self.assertEqual(overview["hazards"]["collisions"]["per_km"], 1.0)
+        self.assertEqual(overview["hazards"]["off_road_s"]["per_km"], 0.75)
+        self.assertEqual(
+            overview["off_road_incidents"]["affected_routes"][0]["samples"],
+            [{"t": 22.0, "x": 30, "y": 40, "value": 1.5, "kind": "curb"}],
+        )
+
+        exposure = EXTENDED_REPORTS["safety-exposure"][1](rows)
+        self.assertEqual(len(exposure["by_family"]), len(QUESTIONS) + 1)
+        self.assertEqual(exposure["ranked_hazards"][0]["field"], "collisions")
+        self.assertEqual(exposure["by_family"]["off-road"]["triggered_routes"], 1)

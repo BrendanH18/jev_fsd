@@ -102,6 +102,10 @@ export class RoadsideStops {
     for (let i = 0; i < count; i++) this.spawn();
   }
 
+  get enabled() {
+    return this.count > 0;
+  }
+
   step(dt) {
     if (!this.count) return;
     const ego = this.world.ego;

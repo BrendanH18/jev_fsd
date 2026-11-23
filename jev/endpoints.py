@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
+from . import VERSION
 from .client import JevError, SpendGuard
 from .config import PROJECT_ROOT, Settings
 
@@ -39,7 +40,7 @@ MAX_REPORTED_COST_USD = 100.0  # a larger per-call cost is a broken usage block,
 MAX_SCRUB_DEPTH = 2 * MAX_TRACE_DEPTH  # scrub() summarises anything deeper; traces fit well inside it
 CHECK_TTL_S = 15.0
 CHECK_TIMEOUT_S = 3.0
-USER_AGENT = "jev-fsd/0.3.0"
+USER_AGENT = "jev-fsd/%s" % VERSION
 ANTHROPIC_VERSION = "2026-10-21"  # the `anthropic-version` header for Anthropic's API
 
 
@@ -280,6 +281,9 @@ def error_body(err: urllib.error.HTTPError) -> Any:
 def price(value: Any, field: str, problems: List[str], where: str) -> Optional[float]:
     if value is None:
         return None
+    if isinstance(value, bool):
+        problems.append("%s: %s must be a number" % (where, field))
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -295,6 +299,8 @@ def number(value: Any, integer: bool = False) -> Optional[float]:
     """A finite number from config, or None for null. Raises TypeError, ValueError or OverflowError otherwise."""
     if value is None:
         return None
+    if isinstance(value, bool):
+        raise TypeError("boolean is not a number")
     result = float(value)
     if not math.isfinite(result):
         raise ValueError("not finite")
@@ -400,7 +406,9 @@ def unique(configs: list, problems: List[str]) -> list:
 
 
 def tokens(value: Any) -> int:
-    """A token count from a usage block: 0 when missing, negative or not finite (JSON Infinity, NaN)."""
+    """A token count from a usage block: 0 when missing, negative, boolean or not finite (JSON Infinity, NaN)."""
+    if isinstance(value, bool):
+        return 0
     try:
         return min(MAX_USAGE_TOKENS, max(0, int(value or 0)))
     except (TypeError, ValueError, OverflowError):
@@ -558,9 +566,10 @@ class Endpoint:
 
     def check(self, force: bool = False) -> dict:
         """Is the endpoint reachable, and is its key accepted? One GET that costs nothing. Cached briefly."""
-        now = time.monotonic()
-        if not force and self._check and now - self._check[0] < CHECK_TTL_S:
-            return self._check[1]
+        with self._lock:
+            cached = self._check
+        if not force and cached and time.monotonic() - cached[0] < CHECK_TTL_S:
+            return cached[1]
         name = self.config.name
         if self.key_state == "missing":
             out = {
@@ -582,6 +591,7 @@ class Endpoint:
                     resp.read(MAX_RESPONSE_BYTES)
                 out = {"name": name, "status": "ready", "reachable": True, "detail": "reachable"}
             except urllib.error.HTTPError as err:
+                err.close()
                 if err.code in (401, 403):
                     out = {
                         "name": name,
@@ -591,10 +601,17 @@ class Endpoint:
                     }
                 elif 300 <= err.code < 400:  # calls refuse redirects too, so this endpoint cannot work
                     out = {"name": name, "status": "unreachable", "reachable": False, "detail": str(err.reason)[:200]}
-                else:  # the server answered; some servers just do not offer this path
+                elif err.code in (404, 405):  # the server answered; some servers just do not offer this path
                     out = {
                         "name": name,
                         "status": "ready",
+                        "reachable": True,
+                        "detail": "HTTP %d from %s" % (err.code, path),
+                    }
+                else:
+                    out = {
+                        "name": name,
+                        "status": "error",
                         "reachable": True,
                         "detail": "HTTP %d from %s" % (err.code, path),
                     }
@@ -610,7 +627,8 @@ class Endpoint:
                         "detail": "no reply within %g s" % limit,
                     }
         out = scrub(out, self.api_key)
-        self._check = (now, out)
+        with self._lock:
+            self._check = (time.monotonic(), out)
         return out
 
 
@@ -650,7 +668,8 @@ class EndpointRegistry:
             same = old is not None and vars(old.config) == vars(c) and old.api_key == key
             endpoints[c.name] = old if same else self.endpoint_class(c, self.settings, self.guard)
         for e in endpoints.values():
-            e._check = None  # a key may have changed in .env, so check reachability afresh
+            with e._lock:
+                e._check = None  # a key may have changed in .env, so check reachability afresh
         self.endpoints, self.problems = endpoints, problems
 
     def public(self) -> dict:

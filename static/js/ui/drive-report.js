@@ -1,6 +1,6 @@
 import { $, api, h } from "../common.js";
-import { readHistory } from "../sim/drive-score.js";
-import { exportDriveCard, copyDriveLink, driveLink } from "../lab/share.js";
+import { HISTORY_KEY, readHistory } from "../sim/drive-score.js";
+import { exportDriveCard, copyDriveLink, driveLink, exportFilename } from "../lab/share.js";
 import { CHALLENGES, challengeById, challengeConfig } from "../lab/challenges.js";
 import { readPractice, practiceStatus, practiceEligible, challengeFailures } from "../lab/practice.js";
 import { examinerSheet, roadTestNote } from "./road-test.js";
@@ -13,6 +13,53 @@ import { incidentDrive, loadPublishedDrive } from "./published-replay.js";
 
 const time = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const labels = { safety: "Safety", legality: "Road rules", comfort: "Smoothness", control: "Control" };
+const signed = (n, digits = 1) => `${n > 0 ? "+" : ""}${n.toFixed(digits)}`;
+const norm = (value) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+let cachedResultsPromise = null;
+
+function fetchResultsCached(signal) {
+  if (!cachedResultsPromise) {
+    cachedResultsPromise = api("/api/results")
+      .then(checkResults)
+      .catch((err) => {
+        cachedResultsPromise = null;
+        throw err;
+      });
+  }
+  if (!signal) return cachedResultsPromise;
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new DOMException("Request aborted", "AbortError"));
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    cachedResultsPromise.then(
+      (data) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(data);
+      },
+      (err) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
+function writeHistory(list) {
+  try {
+    globalThis.localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 20)));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export class DriveReport {
   constructor({ onFinish, onNewDrive, onReplay, getReplayTarget = () => null, onOpen = () => {}, onClose = () => {} }) {
@@ -20,6 +67,7 @@ export class DriveReport {
     this.getReplayTarget = getReplayTarget;
     this.current = null;
     this.comparisonRequest = null;
+    this.resultsRequest = null;
     this.lastUpdate = -Infinity;
     this.onOpen = onOpen;
     this.card = h(
@@ -61,7 +109,7 @@ export class DriveReport {
       if (ev.target === this.dialog) this.dialog.close();
     });
     this.dialog.addEventListener("close", () => {
-      if (!this.dialog.open) this.cancelIncidentComparison();
+      if (!this.dialog.open) this.cancelComparisons();
       onClose();
     });
     document.body.append(this.dialog);
@@ -97,7 +145,14 @@ export class DriveReport {
         h("span", {}, labels[key]),
         h(
           "div",
-          { class: "score-track" },
+          {
+            class: "score-track",
+            role: "progressbar",
+            "aria-label": labels[key],
+            "aria-valuenow": String(Math.round(value)),
+            "aria-valuemin": "0",
+            "aria-valuemax": "100",
+          },
           h("i", {
             style: {
               width: `${value}%`,
@@ -160,22 +215,33 @@ export class DriveReport {
 
   comparison(challenge, report) {
     const reasons = challengeFailures(challenge, report);
-    const row = (driver, verdict, seconds, score, incidents) =>
+    const manualInputs = report.benchmarkMetrics;
+    const method = manualInputs?.method === CHALLENGE_SCORE_METHOD ? manualInputs.method : null;
+    const manualScore = method ? driveScores(manualInputs).score : null;
+    const manualDuration = Number.isFinite(report.elapsed_s) ? report.elapsed_s : null;
+
+    const deltaTag = (diff, unit = "", higherBetter = true) => {
+      if (!Number.isFinite(diff)) return null;
+      const cls = Math.abs(diff) < 0.05 ? "" : diff > 0 === higherBetter ? " better" : " worse";
+      return h("small", { class: `comparison-delta${cls}` }, `you ${signed(diff, 1)}${unit}`);
+    };
+
+    const row = (driver, verdict, seconds, score, incidents, { durationDelta = null, scoreDelta = null } = {}) =>
       h(
         "tr",
         {},
         h("th", { scope: "row" }, driver),
-        [verdict, Number.isFinite(seconds) ? `${seconds.toFixed(1)} s` : "—", score, incidents].map((value) =>
-          h("td", {}, value),
-        ),
+        h("td", {}, verdict),
+        h("td", {}, Number.isFinite(seconds) ? `${seconds.toFixed(1)} s` : "—", durationDelta),
+        h("td", {}, score, scoreDelta),
+        h("td", {}, incidents),
       );
-    const manualInputs = report.benchmarkMetrics;
-    const method = manualInputs?.method === CHALLENGE_SCORE_METHOD ? manualInputs.method : null;
+
     const manual = row(
       "You",
       reasons.length ? "Fail" : "Pass",
-      report.elapsed_s,
-      method ? driveScores(manualInputs).score : "Unmeasured",
+      manualDuration,
+      manualScore ?? "Unmeasured",
       [...new Set([...reasons, ...report.incidents.map((i) => i.message)])].join(" · ") || "None recorded",
     );
     const body = h("tbody", {}, manual);
@@ -203,9 +269,12 @@ export class DriveReport {
       challenge.roadTest ? h("p", { class: "muted" }, "The examiner’s sheet determines road-test completion.") : null,
       status,
     );
-    api("/api/results")
-      .then(checkResults)
+    this.resultsRequest?.abort();
+    const request = new AbortController();
+    this.resultsRequest = request;
+    fetchResultsCached(request.signal)
       .then((data) => {
+        if (request.signal.aborted || !body.isConnected) return;
         for (const id of ["rules", "jev", "llm:claude-haiku-5-5"]) {
           const cell = compatibleChallengeDrive(data, id, report.config);
           const label = data.drivers[id]?.label || id;
@@ -216,23 +285,36 @@ export class DriveReport {
           const counts = Object.entries(cell.incident_counts || {}).map(
             ([key, value]) => `${key.replaceAll("_", " ")}: ${value}`,
           );
+          const theirScore =
+            method && cell.comparison_score_inputs?.method === method
+              ? driveScores(cell.comparison_score_inputs).score
+              : null;
+          const durationDelta =
+            manualDuration !== null && Number.isFinite(cell.time_s)
+              ? deltaTag(manualDuration - cell.time_s, " s", false)
+              : null;
+          const scoreDelta =
+            manualScore !== null && Number.isFinite(theirScore) ? deltaTag(manualScore - theirScore, "", true) : null;
           body.append(
             row(
               label,
               cell.pass ? "Pass" : "Fail",
               cell.time_s,
-              method && cell.comparison_score_inputs?.method === method
-                ? driveScores(cell.comparison_score_inputs).score
-                : "Unavailable",
+              theirScore ?? "Unavailable",
               [...cell.failures, ...counts].join(" · ") || "No incident data",
+              { durationDelta, scoreDelta },
             ),
           );
         }
         status.textContent =
-          "Published rows use the guarded track. A score is available for comparison when both drives were measured from the car’s path.";
+          "Published rows use the guarded track. Deltas show your drive minus theirs; a score is available when both drives were measured from the car’s path.";
       })
-      .catch(() => {
-        status.textContent = "Published comparisons could not be loaded.";
+      .catch((err) => {
+        if (!request.signal.aborted && err?.name !== "AbortError" && status.isConnected)
+          status.textContent = "Published comparisons could not be loaded.";
+      })
+      .finally(() => {
+        if (this.resultsRequest === request) this.resultsRequest = null;
       });
     return section;
   }
@@ -249,6 +331,12 @@ export class DriveReport {
   cancelIncidentComparison() {
     this.comparisonRequest?.abort();
     this.comparisonRequest = null;
+  }
+
+  cancelComparisons() {
+    this.cancelIncidentComparison();
+    this.resultsRequest?.abort();
+    this.resultsRequest = null;
   }
 
   incidentRow(report, incident) {
@@ -316,7 +404,7 @@ export class DriveReport {
   }
 
   show(report, saved = true) {
-    this.cancelIncidentComparison();
+    this.cancelComparisons();
     const challenge = challengeById(report.config?.challenge);
     const records = challenge ? readPractice().records : {};
     const remaining = challenge ? CHALLENGES.filter((c) => c.id !== challenge.id) : [];
@@ -464,8 +552,178 @@ export class DriveReport {
   }
 
   showHistory() {
-    this.cancelIncidentComparison();
-    const history = readHistory();
+    this.cancelComparisons();
+    let history = readHistory();
+    const state = { query: "", type: "", city: "", driver: "" };
+    const trendEl = h("div", { class: "history-trend" });
+    const listWrap = h("div", { class: "history-list" });
+    const statusEl = h("p", { class: "muted", role: "status", "aria-live": "polite" });
+
+    const cities = [...new Set(history.map((r) => r.map).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const drivers = [...new Set(history.map((r) => r.driver).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+    const searchInput = h("input", {
+      type: "search",
+      placeholder: "Search drives…",
+      "aria-label": "Search drive history",
+      oninput: () => {
+        state.query = searchInput.value;
+        renderList();
+      },
+    });
+    const typeSelect = h(
+      "select",
+      {
+        "aria-label": "Filter by drive type",
+        onchange: () => {
+          state.type = typeSelect.value;
+          renderList();
+        },
+      },
+      h("option", { value: "" }, "All types"),
+      h("option", { value: "challenge" }, "Challenges"),
+      h("option", { value: "free" }, "Free drives"),
+    );
+    const citySelect = h(
+      "select",
+      {
+        "aria-label": "Filter by city",
+        onchange: () => {
+          state.city = citySelect.value;
+          renderList();
+        },
+      },
+      h("option", { value: "" }, "All cities"),
+      ...cities.map((c) => h("option", { value: c }, c)),
+    );
+    const driverSelect = h(
+      "select",
+      {
+        "aria-label": "Filter by driver",
+        onchange: () => {
+          state.driver = driverSelect.value;
+          renderList();
+        },
+      },
+      h("option", { value: "" }, "All drivers"),
+      ...drivers.map((d) => h("option", { value: d }, d)),
+    );
+
+    let clearArmed = false,
+      clearTimer = null;
+    const clearBtn = h(
+      "button",
+      {
+        type: "button",
+        class: "chip-button history-clear",
+        disabled: !history.length,
+        onclick: () => {
+          if (!clearArmed) {
+            clearArmed = true;
+            clearBtn.textContent = "Confirm clear?";
+            clearBtn.classList.add("confirming");
+            clearTimer = setTimeout(() => {
+              clearArmed = false;
+              clearBtn.textContent = "Clear history";
+              clearBtn.classList.remove("confirming");
+            }, 4000);
+            return;
+          }
+          clearTimeout(clearTimer);
+          clearArmed = false;
+          clearBtn.textContent = "Clear history";
+          clearBtn.classList.remove("confirming");
+          history = [];
+          writeHistory(history);
+          statusEl.textContent = "Drive history cleared.";
+          renderList();
+        },
+      },
+      "Clear history",
+    );
+
+    const renderList = () => {
+      const terms = norm(state.query).trim().split(/\s+/).filter(Boolean);
+      const filtered = history
+        .map((r, index) => ({ r, index }))
+        .filter(({ r }) => {
+          if (state.type === "challenge" && !r.config?.challenge) return false;
+          if (state.type === "free" && r.config?.challenge) return false;
+          if (state.city && r.map !== state.city) return false;
+          if (state.driver && r.driver !== state.driver) return false;
+          if (!terms.length) return true;
+          const hay = norm(`${r.title} ${r.map} ${r.driver} ${r.status}`);
+          return terms.every((t) => hay.includes(t));
+        });
+
+      const qualified = filtered.map(({ r }) => r).filter((r) => r.qualified && Number.isFinite(r.score));
+      const avg = qualified.length
+        ? Math.round(qualified.reduce((acc, r) => acc + r.score, 0) / qualified.length)
+        : null;
+      const best = qualified.length ? Math.max(...qualified.map((r) => r.score)) : null;
+      trendEl.hidden = !history.length;
+      trendEl.replaceChildren(
+        h("span", {}, "Drives: ", h("strong", {}, String(filtered.length))),
+        h("span", {}, "Average score: ", h("strong", {}, avg !== null ? `${avg}/100` : "—")),
+        h("span", {}, "Best score: ", h("strong", {}, best !== null ? `${best}/100` : "—")),
+      );
+      clearBtn.disabled = !history.length;
+
+      if (!history.length) {
+        listWrap.replaceChildren(
+          h(
+            "p",
+            { class: "empty-state" },
+            "Your first drive starts with a destination. Finish it to see your report here.",
+          ),
+        );
+        return;
+      }
+      if (!filtered.length) {
+        listWrap.replaceChildren(h("p", { class: "empty-state muted" }, "No drives match the current filters."));
+        return;
+      }
+      listWrap.replaceChildren(
+        ...filtered.map(({ r, index }) =>
+          h(
+            "div",
+            { class: "history-row" },
+            h(
+              "button",
+              { type: "button", class: "history-entry", onclick: () => this.show(r) },
+              h("strong", {}, r.qualified ? `${r.score} / ${r.grade}` : "Practice"),
+              h(
+                "span",
+                {},
+                r.title,
+                h(
+                  "small",
+                  {},
+                  `${r.map} · ${r.driver} · ${(r.distance_m / 1000).toFixed(2)} km · ${new Date(r.started_at).toLocaleDateString()}`,
+                ),
+              ),
+            ),
+            h(
+              "button",
+              {
+                type: "button",
+                class: "chip-button history-delete",
+                "aria-label": `Delete ${r.title}`,
+                title: "Delete drive",
+                onclick: () => {
+                  history.splice(index, 1);
+                  writeHistory(history);
+                  statusEl.textContent = `Deleted "${r.title}".`;
+                  renderList();
+                },
+              },
+              "×",
+            ),
+          ),
+        ),
+      );
+    };
+
     this.dialog.replaceChildren(
       h(
         "div",
@@ -475,34 +733,14 @@ export class DriveReport {
       ),
       h("h2", {}, "Every drive, a little better."),
       h("p", { class: "muted" }, "Your last 20 drives, saved on this device."),
+      trendEl,
       history.length
-        ? h(
-            "div",
-            { class: "history-list" },
-            history.map((r) =>
-              h(
-                "button",
-                { class: "history-entry", onclick: () => this.show(r) },
-                h("strong", {}, r.qualified ? `${r.score} / ${r.grade}` : "Practice"),
-                h(
-                  "span",
-                  {},
-                  r.title,
-                  h(
-                    "small",
-                    {},
-                    `${r.map} · ${(r.distance_m / 1000).toFixed(2)} km · ${new Date(r.started_at).toLocaleDateString()}`,
-                  ),
-                ),
-              ),
-            ),
-          )
-        : h(
-            "p",
-            { class: "empty-state" },
-            "Your first drive starts with a destination. Finish it to see your report here.",
-          ),
+        ? h("div", { class: "history-filters" }, searchInput, typeSelect, citySelect, driverSelect, clearBtn)
+        : null,
+      statusEl,
+      listWrap,
     );
+    renderList();
     this.open();
   }
 
@@ -515,7 +753,7 @@ export class DriveReport {
 
   export(report) {
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
-    const a = h("a", { href: url, download: "jev-drive-report.json" });
+    const a = h("a", { href: url, download: exportFilename(report, "json", "jev-report") });
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

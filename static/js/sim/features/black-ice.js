@@ -1,6 +1,7 @@
 // Black ice (sim/black-ice.js) as a feature record (sim/features/index.js, docs/feature-interface.md).
 // Grip itself is the car model's: the World builds this record in every world, so one without ice clears
 // `ROAD.gripAt` (sim/vehicle.js) and vehicle stepping stays exactly as without the feature.
+import { iceNotice } from "../black-ice.js";
 import { r1 } from "../../common.js";
 import { current as weather } from "../weather.js";
 import {
@@ -44,10 +45,73 @@ function iceClause(a, k, ahead) {
 }
 
 export default {
+  checkpointShare(world, shared) {
+    if (world.ice?.enabled) shared.add(world.ice);
+  },
   rulesCost: (c, snap) => (c.id === "slow_for_ice" && snap.black_ice ? -2 : 0),
   cautious: (snap, eligible) =>
     snap.black_ice && !snap.following ? eligible.find((c) => c.id === "slow_for_ice") : null,
   key: "ice",
+  coach: {
+    init: () => ({
+      ice: false,
+      iceOverspeed: 0,
+    }),
+    seen: "ice",
+    events: {
+      ice_overspeed(score, ev) {
+        score.iceOverspeed++;
+        score.incident(
+          "ice_overspeed",
+          ev.reason === "fast"
+            ? `Crossed black ice at ${Math.round(ev.kmh)} km/h`
+            : ev.reason === "skid"
+              ? "Skidded on black ice"
+              : `${ev.reason === "brake" ? "Braked" : "Accelerated"} hard on black ice`,
+          { patch: ev.patch, reason: ev.reason, kmh: ev.kmh, safe_kmh: ev.safe_kmh },
+        );
+      },
+    },
+    reports: [{ at: "end", order: 14, read: (score) => (score.ice ? { ice_overspeed: score.iceOverspeed } : {}) }],
+    deductions: [{ at: "safety", order: 8, counter: "iceOverspeed", weight: 20 }],
+    tips: [
+      {
+        at: "afterMerge",
+        order: 13,
+        when: (score) => score.iceOverspeed,
+        text: "Near freezing, expect black ice on bridges, overpasses and shaded stretches, even when the road looks only dry or damp. Slow down before them, on the dry road, and cross the ice steadily: no braking, accelerating or sharp steering on it. If you are already on it, ease off and keep the wheel straight.",
+      },
+    ],
+  },
+  notice: {
+    at: "beforeLeftOnRed",
+    order: 9,
+    duration: 2500,
+    read: (world, autopilot, views) => (views.ice ? iceNotice(world, autopilot.enabled ? autopilot.snap : null) : null),
+    style: (line) => (line.slow ? "safety" : ""),
+  },
+  eventBadges: {
+    ice_overspeed: (event) =>
+      event.reason === "fast"
+        ? `ONTO BLACK ICE AT ${Math.round(event.kmh)} KM/H`
+        : event.reason === "skid"
+          ? "SKIDDED ON BLACK ICE"
+          : `${event.reason === "brake" ? "BRAKED" : "ACCELERATED"} HARD ON BLACK ICE`,
+  },
+  perceptionLine(snap) {
+    const bi = snap.black_ice,
+      ib = snap.ice_caution?.bridge;
+    const text = bi
+      ? `Black ice ${bi.on_ice ? "under the car: hold steady, no braking" : `${Math.round(bi.starts_in_m)} m ahead: ${Math.round(bi.speed_mps * 3.6)} km/h before it`}`
+      : ib && ib.starts_in_m < 80
+        ? `Near freezing: bridge ${ib.on ? "here" : `in ${Math.round(ib.starts_in_m)} m`}, ${Math.round(snap.ice_caution.slow.mps * 3.6)} km/h`
+        : null;
+    return text ? { order: 26, label: "Black ice", text } : null;
+  },
+  perceptionRejections: {
+    crosses_ice_too_fast: "Black ice: too fast",
+    brakes_on_ice: "Black ice: no hard braking or steering",
+  },
   seen: "iceSeen",
   calls: "iceCalls",
   // (built in every world: one without it clears the car model's grip hook)

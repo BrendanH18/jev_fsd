@@ -1,6 +1,9 @@
 """Reports about who drove, the resources used, and the decisions a driver made."""
 
+from functools import partial
 from math import isfinite
+
+from .profiles import ranking_summary
 
 SOURCES = ("model_decisions", "local_decisions", "fallback_decisions")
 
@@ -27,11 +30,19 @@ def _rate(rows, numerator, denominator, scale=1):
     }
 
 
+def _route_sort_key(route_id):
+    return (route_id is None, "" if route_id is None else str(route_id))
+
+
 def _ranks(rows, field):
     measured = _measured(rows, field)
-    return [
-        {"id": row.get("id"), field: row[field]} for row in sorted(measured, key=lambda row: row[field], reverse=True)
-    ]
+    ordered = sorted(measured, key=lambda row: (-row[field], *_route_sort_key(row.get("id"))))
+    routes = [{"id": row.get("id"), field: row[field]} for row in ordered]
+    return {
+        "routes": routes,
+        "unavailable": len(rows) - len(measured),
+        "summary": ranking_summary([row[field] for row in ordered], 6),
+    }
 
 
 def _mix(rows):
@@ -96,11 +107,11 @@ def _spend_by_outcome(rows):
 
 
 def _cost_per_pass(rows):
-    outcomes = _spend_by_outcome(rows)
-    passed = outcomes["passed"]["routes"]
-    total = sum(group["cost_usd"] or 0 for group in outcomes.values())
+    measured = [row for row in _measured(rows, "cost_usd") if type(row.get("pass")) is bool]
+    passed = sum(1 for row in measured if row["pass"])
+    total = sum(row["cost_usd"] for row in measured)
     return {
-        "routes_measured": sum(group["routes"] for group in outcomes.values()),
+        "routes_measured": len(measured),
         "passed": passed,
         "usd_per_pass": _ratio(total, passed),
     }
@@ -108,8 +119,12 @@ def _cost_per_pass(rows):
 
 def _cost_concentration(rows):
     ranked = _ranks(rows, "cost_usd")
-    total = sum(row["cost_usd"] for row in ranked)
-    return [{**row, "share_of_spend": _ratio(row["cost_usd"], total)} for row in ranked]
+    total = sum(row["cost_usd"] for row in ranked["routes"])
+    return {
+        "routes": [{**row, "share_of_spend": _ratio(row["cost_usd"], total)} for row in ranked["routes"]],
+        "unavailable": ranked["unavailable"],
+        "summary": ranked["summary"],
+    }
 
 
 def _tail_inflation(rows):
@@ -118,7 +133,12 @@ def _tail_inflation(rows):
         for row in _measured(rows, "latency_p95_ms", "latency_p50_ms")
         if row["latency_p50_ms"] > 0
     ]
-    return sorted(out, key=lambda item: item["p95_over_p50"], reverse=True)
+    out.sort(key=lambda item: (-item["p95_over_p50"], *_route_sort_key(item["id"])))
+    return {
+        "routes": out,
+        "unavailable": len(rows) - len(out),
+        "summary": ranking_summary([item["p95_over_p50"] for item in out], 6),
+    }
 
 
 def _latency_coverage(rows):
@@ -157,16 +177,42 @@ def _flag_outcomes(rows):
     return out
 
 
+RANKINGS = {
+    "fallback-decision-ranking": (
+        "Routes ranked by decisions handed to Rules.",
+        partial(_ranks, field="fallback_decisions"),
+    ),
+    "spend-concentration": ("Each route's share of recorded spend, largest first.", _cost_concentration),
+    "token-demand": ("Routes ranked by recorded input tokens.", partial(_ranks, field="tokens")),
+    "median-call-latency": (
+        "Routes ranked by median recorded call latency in milliseconds.",
+        partial(_ranks, field="latency_p50_ms"),
+    ),
+    "tail-call-latency": (
+        "Routes ranked by 95th percentile recorded call latency in milliseconds.",
+        partial(_ranks, field="latency_p95_ms"),
+    ),
+    "latency-tail-inflation": ("Routes ranked by the ratio of tail to median latency.", _tail_inflation),
+}
+
+
+def _ranked_routes(report, rows):
+    return report(rows)["routes"]
+
+
+EXTENDED_REPORTS = {
+    f"{name}-summary": (f"{description} Includes suite statistics and unavailable counts.", report)
+    for name, (description, report) in RANKINGS.items()
+}
+
+
 REPORTS = {
+    **{name: (description, partial(_ranked_routes, report)) for name, (description, report) in RANKINGS.items()},
     "decision-sources": ("Decision counts and weighted shares for each source.", _mix),
     "attribution-coverage": ("Fraction of routes with complete decision-source counts.", _attribution_coverage),
     "partial-answer-rate": (
         "Share of model decisions that defaulted a requested answer.",
         lambda rows: _rate(rows, "partial_decisions", "model_decisions"),
-    ),
-    "fallback-decision-ranking": (
-        "Routes ranked by decisions handed to Rules.",
-        lambda rows: _ranks(rows, "fallback_decisions"),
     ),
     "fallback-free-passes": ("Passing routes with model decisions and no Rules fallback.", _fallback_free_passes),
     "local-only-routes": ("Routes with at least one decision, every one resolved locally.", _local_only),
@@ -181,21 +227,10 @@ REPORTS = {
     ),
     "cost-per-pass": ("Total spend on routes with verdicts divided by passes.", _cost_per_pass),
     "spend-by-outcome": ("Spend on passed and failed routes.", _spend_by_outcome),
-    "spend-concentration": ("Each route's share of recorded spend, largest first.", _cost_concentration),
-    "token-demand": ("Routes ranked by recorded input tokens.", lambda rows: _ranks(rows, "tokens")),
     "cost-per-drive-hour": (
         "Recorded US dollars per simulated hour.",
         lambda rows: _rate(rows, "cost_usd", "time_s", 3600),
     ),
-    "median-call-latency": (
-        "Routes ranked by median recorded call latency in milliseconds.",
-        lambda rows: _ranks(rows, "latency_p50_ms"),
-    ),
-    "tail-call-latency": (
-        "Routes ranked by 95th percentile recorded call latency in milliseconds.",
-        lambda rows: _ranks(rows, "latency_p95_ms"),
-    ),
-    "latency-tail-inflation": ("Routes ranked by the ratio of tail to median latency.", _tail_inflation),
     "latency-coverage": (
         "Share of routes with counted calls that report both percentiles; some calls are untimed.",
         _latency_coverage,
