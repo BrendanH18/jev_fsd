@@ -117,7 +117,12 @@ the challenge table and a short section.
 
 ## Checks to run
 
-Run each with Node 22 and `--experimental-default-type=module`, one at a time.
+Run each with Node 22 and `--experimental-default-type=module`, one at a time; agents run them on
+Boat with `scripts/boat-check.sh -- CMD`. CI runs every Node check, the fixture check and the model
+recordings on the pushed commit, so while working run the feature's own test and
+`scripts/test_drive_lab.mjs` and leave the rest to CI. CI doesn't compare unchanged results with
+the baseline or record the arena storage figure; those stay to do before hand-off. Verify the saved
+model case live only when the owner asks ([checking work](../AGENTS.md#checking-work)).
 
 - **The feature's own test** (`scripts/test_<feature>.mjs`): the challenge passes with `rules` and
   `cautious` (`evaluateChallenge(...).pass`), a driver who makes the mistake the lesson warns about
