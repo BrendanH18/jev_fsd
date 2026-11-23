@@ -233,7 +233,7 @@ export class DriveReport {
         h("th", { scope: "row" }, driver),
         h("td", {}, verdict),
         h("td", {}, Number.isFinite(seconds) ? `${seconds.toFixed(1)} s` : "—", durationDelta),
-        h("td", {}, score, scoreDelta),
+        h("td", {}, h("span", { class: "comparison-score" }, score), scoreDelta),
         h("td", {}, incidents),
       );
 

@@ -441,9 +441,11 @@ def check(url, chromium=None, groups=GROUPS):
                 if kind == "early":
                     score = comparison.locator("tbody tr").first.locator("td").nth(2).inner_text()
                     assert float(score) > 0, score
-                    published = comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)").all_text_contents()
+                    published_scores = comparison.locator("tbody tr:not(:first-child) td:nth-of-type(3)")
+                    published = published_scores.locator(".comparison-score").all_text_contents()
                     assert published[0] == "Unavailable", published
                     assert all(0 <= float(value) <= 100 for value in published[1:]), published
+                    assert published_scores.locator(".comparison-delta").count() == 2
             elif kind in ("rules", "branched", "modified"):
                 assert comparison.count() == 0
             page.close()
