@@ -291,6 +291,7 @@ export const COLLECTION_TRUCK = {
 // world without such a surface, and then nothing about it is computed.
 export const ROAD = { mu: 0.9, gripAt: null };
 export const G = 9.81;
+export const MAX_PHYSICS_STEP_S = 1; // a step integrates one tick, never time spent paused
 const LOAD_SENSITIVITY = 0.12; // a tire at twice its static load grips 12% less per newton
 const KINEMATIC_BELOW = 3.0; // m/s: below this the kinematic model is used
 const SUBSTEP = 0.01; // s, the dynamic model's integration step
@@ -319,11 +320,18 @@ export class Vehicle {
     c.r = this.r;
     c.ax = this.ax;
     c.latAccel = this.latAccel;
+    c.slipping = this.slipping;
     return c;
   }
 
   // steer: desired steering angle (rad); accel: m/s^2. Both are clamped to the vehicle's limits.
   step(dt, { steer = 0, accel = 0, reverse = false } = {}) {
+    if (!Number.isFinite(dt) || dt < 0 || dt > MAX_PHYSICS_STEP_S)
+      throw new RangeError("Invalid vehicle step duration");
+    if (dt === 0) return;
+    if (!Number.isFinite(steer) || !Number.isFinite(accel)) throw new RangeError("Non-finite vehicle command");
+    if (!Number.isFinite(this.x) || !Number.isFinite(this.y) || !Number.isFinite(this.psi) || !Number.isFinite(this.v))
+      throw new RangeError("Invalid vehicle pose");
     const P = this.spec;
     const target = Math.max(-P.maxSteer, Math.min(P.maxSteer, steer));
     const maxDelta = P.steerRate * dt;
@@ -501,8 +509,10 @@ function axleGrip(v) {
     wb = P.wheelbase;
   const front = at(v.x + Math.cos(v.psi) * wb, v.y + Math.sin(v.psi) * wb, P),
     rear = at(v.x, v.y, P);
-  return [front ?? ROAD.mu, rear ?? ROAD.mu];
+  return [validGrip(front), validGrip(rear)];
 }
+
+const validGrip = (mu) => (Number.isFinite(mu) && mu >= 0 ? mu : ROAD.mu);
 
 // Longitudinal force an axle may use: what its friction circle has left after the cornering force
 // it is being asked for, and never less than a quarter of its grip.

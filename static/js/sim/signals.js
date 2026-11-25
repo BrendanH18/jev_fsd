@@ -188,7 +188,12 @@ function stateIn(p, u) {
 
 export function phaseOf(intersection, t) {
   const main = flashing(intersection);
-  if (main) return { A: flashState(intersection, "A"), B: flashState(intersection, "B"), u: 0 };
+  if (main)
+    return {
+      A: main === "A" ? "flashing_amber" : "flashing_red",
+      B: main === "B" ? "flashing_amber" : "flashing_red",
+      u: 0,
+    };
   const plan = planOf(intersection);
   const c = plan.cycle;
   const u = (((t + (intersection.offset_s || 0)) % c) + c) % c;
@@ -242,17 +247,18 @@ export function pedPhase(intersection, group, t) {
 // through the clearance under a flashing green, and "red" for the rest of its group until the
 // clearance is over.
 export function approachPhase(intersection, edgeId, t) {
-  const flash = flashState(intersection, intersection.approaches?.find((a) => a.edge === edgeId)?.group);
+  const group = intersection.approaches?.find((a) => a.edge === edgeId)?.group;
+  if (group !== "A" && group !== "B") return "red";
+  const flash = flashState(intersection, group);
   if (flash) return flash;
   const plan = planOf(intersection);
-  const a = intersection.approaches?.find((x) => x.edge === edgeId);
-  const group = a?.group;
-  const ph = phaseOf(intersection, t),
-    base = ph[group] || "red";
+  const u = (((t + (intersection.offset_s || 0)) % plan.cycle) + plan.cycle) % plan.cycle;
+  if (!Number.isFinite(u)) return "red";
+  const base = stateIn(plan[group], u);
   const adv = plan.advance;
   if (!adv || adv.group !== group) return base;
   const c = plan.cycle,
-    d = (((ph.u - plan[group].start) % c) + c) % c;
+    d = (((u - plan[group].start) % c) + c) % c;
   if (d >= adv.length + adv.clear) return base;
   if (edgeId !== adv.edge) return "red";
   if (d < adv.length) return adv.style === "flash" ? "advance" : "arrow";
@@ -308,7 +314,7 @@ export function scrambleState(intersection, t) {
 // a movement, until that movement does: behind an advance green held by another approach, or going
 // any way but left under an arrow, that is once the advance and its clearance are over.
 export function secondsToGreen(intersection, group, t, edgeId = null, turn = "straight") {
-  if (flashing(intersection)) return null;
+  if ((group !== "A" && group !== "B") || !Number.isFinite(t) || flashing(intersection)) return null;
   const plan = planOf(intersection);
   const p = plan[group];
   const c = plan.cycle;
@@ -322,9 +328,9 @@ export function secondsToGreen(intersection, group, t, edgeId = null, turn = "st
   // green after its clearance: the nearer one)
   const adv = plan.advance;
   if (!adv || adv.group !== group) return (((p.start - u) % c) + c) % c;
-  const starts = [p.start + adv.length + adv.clear];
-  if (edgeId === adv.edge && (adv.style === "flash" || isLeft(turn))) starts.push(p.start);
-  return Math.min(...starts.map((s) => (((s - u) % c) + c) % c));
+  const afterClear = (((p.start + adv.length + adv.clear - u) % c) + c) % c;
+  if (edgeId !== adv.edge || (adv.style !== "flash" && !isLeft(turn))) return afterClear;
+  return Math.min(afterClear, (((p.start - u) % c) + c) % c);
 }
 
 // Stop-sign progress for one vehicle: approaching -> stopped -> completed. Reset when the vehicle
@@ -347,6 +353,7 @@ export class StopMemory {
       this.controlId = control.id;
     }
     if (this.state === "completed") return this.state;
+    if (!Number.isFinite(dt) || dt <= 0) return this.state;
     if (Math.abs(v) < 0.2 && bumperToLine < STOP_ZONE_M && bumperToLine > -6) {
       this.stoppedFor += dt;
       if (this.state === "approaching") {

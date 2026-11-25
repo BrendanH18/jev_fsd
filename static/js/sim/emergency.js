@@ -44,7 +44,7 @@ const LANE_EDGE_MARGIN_M = 0.35;
 
 export const isEmergency = (v) => !!v && v.siren === true;
 // One of the emergency vehicles, siren on or not.
-export const isEmergencyVehicle = (v) => !!v && !!EMERGENCY_SPECS[v.kind];
+export const isEmergencyVehicle = (v) => !!v && Object.hasOwn(EMERGENCY_SPECS, v.kind);
 // Whether a vehicle an emergency vehicle is stuck behind should drive on ahead of it: one going its
 // way, that has held it up for EV_STUCK_S.
 export const leadsEmergency = (ev, o) => holdsUp(ev, o, EV_STUCK_S) && Math.abs(wrap(o.psi - ev.psi)) < Math.PI / 4;

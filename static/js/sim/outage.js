@@ -31,10 +31,12 @@ const NOTICE_M = 80;
 // id as its junction, and the signal's line and group.
 const darkOf = new WeakMap();
 export function darkControl(control, edgeId) {
-  let d = darkOf.get(control);
+  let approaches = darkOf.get(control);
+  if (!approaches) darkOf.set(control, (approaches = new Map()));
+  let d = approaches.get(edgeId);
   if (!d)
-    darkOf.set(
-      control,
+    approaches.set(
+      edgeId,
       (d = {
         type: "stop",
         all_way: true,
@@ -79,6 +81,7 @@ export class Outages {
 
   // Turn a signal's lights off for `last` seconds (for good, by default: a challenge's).
   cut(id, last = Infinity) {
+    if (typeof last !== "number" || !(last > 0)) return null;
     if (this.isDark(id) || !this.world.map.intersections.has(id)) return null;
     const o = { id, since: this.world.t, left: last };
     this.list.push(o);
