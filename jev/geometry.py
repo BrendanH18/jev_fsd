@@ -23,6 +23,12 @@ def heading_of(a: Point, b: Point) -> float:
 
 def wrap_angle(a: float) -> float:
     """Wrap to (-pi, pi]."""
+    if not math.isfinite(a):
+        raise ValueError("angle must be finite")
+    # Preserve the normal operating path, including its floating-point rounding.
+    # Subtracting tau from a very large number can take billions of iterations or never progress.
+    if abs(a) > 16 * math.tau:
+        a = math.fmod(a, math.tau)
     while a <= -math.pi:
         a += 2 * math.pi
     while a > math.pi:
@@ -36,6 +42,8 @@ def turn_angle(h_in: float, h_out: float) -> float:
 
 
 def classify_turn(angle: float) -> str:
+    if not math.isfinite(angle):
+        raise ValueError("turn angle must be finite")
     deg = math.degrees(abs(angle))
     if deg < 25:
         return "straight"
@@ -55,9 +63,21 @@ def cumulative_s(pts: Sequence[Point]) -> List[float]:
     return out
 
 
+def _arc_lengths(pts, cum):
+    if cum is None or not len(cum):
+        return cumulative_s(pts)
+    if len(cum) != len(pts):
+        raise ValueError("arc lengths must match the polyline point count")
+    return cum
+
+
 def point_at(pts: Sequence[Point], s: float, cum: Optional[Sequence[float]] = None) -> Point:
     """Point at arc length s, clamped to the ends."""
-    cum = cum or cumulative_s(pts)
+    if not pts:
+        raise ValueError("point interpolation requires at least one point")
+    if math.isnan(s):
+        raise ValueError("point interpolation distance must be a number")
+    cum = _arc_lengths(pts, cum)
     if s <= 0:
         return pts[0]
     if s >= cum[-1]:
@@ -70,7 +90,13 @@ def point_at(pts: Sequence[Point], s: float, cum: Optional[Sequence[float]] = No
 
 
 def heading_at(pts: Sequence[Point], s: float, cum: Optional[Sequence[float]] = None) -> float:
-    cum = cum or cumulative_s(pts)
+    if not pts:
+        raise ValueError("heading interpolation requires at least one point")
+    if math.isnan(s):
+        raise ValueError("heading interpolation distance must be a number")
+    if len(pts) == 1:
+        return 0.0  # the same neutral heading as a zero-length segment
+    cum = _arc_lengths(pts, cum)
     i = _segment_index(cum, min(max(s, 0.0), cum[-1]))
     i = min(i, len(pts) - 2)
     return heading_of(pts[i], pts[i + 1])
@@ -90,7 +116,13 @@ def _segment_index(cum: Sequence[float], s: float) -> int:
 def project_point(pts: Sequence[Point], p: Point, cum: Optional[Sequence[float]] = None) -> dict:
     """Closest point on the polyline. Returns s, signed lateral (+ = right of travel), segment index,
     the point itself, and the segment heading."""
-    cum = cum or cumulative_s(pts)
+    if not pts:
+        raise ValueError("projection requires at least one point")
+    if not all(map(math.isfinite, p)):
+        raise ValueError("projection coordinates must be finite")
+    if len(pts) == 1:
+        return {"distance": dist(p, pts[0]), "s": 0.0, "lateral": 0.0, "index": 0, "point": pts[0], "heading": 0.0}
+    cum = _arc_lengths(pts, cum)
     best = None
     for i in range(len(pts) - 1):
         a, b = pts[i], pts[i + 1]
@@ -110,6 +142,8 @@ def project_point(pts: Sequence[Point], p: Point, cum: Optional[Sequence[float]]
 
 def douglas_peucker(pts: Sequence[Point], epsilon: float) -> Polyline:
     """Simplify while keeping every point that deviates more than epsilon. Endpoints always kept."""
+    if not math.isfinite(epsilon) or epsilon < 0:
+        raise ValueError("simplification tolerance must be finite and nonnegative")
     if len(pts) < 3:
         return list(pts)
     keep = [False] * len(pts)
@@ -139,6 +173,8 @@ def douglas_peucker(pts: Sequence[Point], epsilon: float) -> Polyline:
 def offset_polyline(pts: Sequence[Point], d: float) -> Polyline:
     """Parallel polyline offset by d meters to the right of travel (negative = left).
     Vertex normals are mitered and the miter length is clamped to 2|d| so hairpins do not spike."""
+    if not math.isfinite(d):
+        raise ValueError("polyline offset must be finite")
     n = len(pts)
     if n == 0:
         return []
@@ -178,6 +214,10 @@ def offset_polyline(pts: Sequence[Point], d: float) -> Polyline:
 def fillet(a: Point, corner: Point, b: Point, radius: float, steps: int = 8) -> Polyline:
     """Quadratic Bezier that rounds the corner: starts `radius` before it along (a -> corner) and ends
     `radius` after it along (corner -> b). Radius is clamped to half of each leg."""
+    if not math.isfinite(radius) or radius < 0:
+        raise ValueError("fillet radius must be finite and nonnegative")
+    if type(steps) is not int or steps < 1:
+        raise ValueError("fillet steps must be a positive integer")
     la, lb = dist(a, corner), dist(corner, b)
     ra = min(radius, la / 2)
     rb = min(radius, lb / 2)
@@ -198,10 +238,16 @@ def fillet(a: Point, corner: Point, b: Point, radius: float, steps: int = 8) -> 
 
 def resample(pts: Sequence[Point], step: float) -> Polyline:
     """Points every `step` meters along the polyline, always including the last point."""
+    if not math.isfinite(step) or step <= 0:
+        raise ValueError("resampling step must be positive and finite")
     if len(pts) < 2:
         return list(pts)
     cum = cumulative_s(pts)
     total = cum[-1]
+    if not math.isfinite(total):
+        raise ValueError("resampling requires a finite polyline length")
+    if total and step < math.ulp(total):
+        raise ValueError("resampling step is too small to reach the end of the polyline")
     out = []
     s = 0.0
     while s < total:
@@ -225,6 +271,8 @@ def polygon_area(pts: Sequence[Point]) -> float:
 
 
 def dedupe_consecutive(pts: Sequence[Point], eps: float = 1e-6) -> Polyline:
+    if not math.isfinite(eps) or eps < 0:
+        raise ValueError("deduplication tolerance must be finite and nonnegative")
     out: Polyline = []
     for p in pts:
         if not out or dist(out[-1], p) > eps:

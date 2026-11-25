@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import heapq
 import math
+from bisect import bisect_left, bisect_right
+from collections.abc import Mapping
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from . import geometry as g
@@ -26,20 +28,123 @@ ALT_MIN_DIFFERENT = 0.25
 GRID_CELL_M = 50.0
 
 
+def _finite_number(value, field):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} must be a finite number")
+    try:
+        finite = math.isfinite(value)
+    except OverflowError:
+        finite = False
+    if not finite:
+        raise ValueError(f"{field} must be a finite number")
+
+
+def _nonnegative(value, field):
+    _finite_number(value, field)
+    if value < 0:
+        raise ValueError(f"{field} must be nonnegative")
+
+
+def _pose(pose, field):
+    if not isinstance(pose, Mapping):
+        raise ValueError(f"{field} must be an object with x and y coordinates")
+    for axis in ("x", "y"):
+        _finite_number(pose.get(axis), f"{field}.{axis}")
+
+
+def _clock(restrictions, hour, weekday):
+    if not isinstance(restrictions, bool):
+        raise ValueError("restrictions must be a boolean")
+    _finite_number(hour, "hour")
+    if type(weekday) is not int:
+        raise ValueError("weekday must be an integer")
+
+
+def _avoid_edges(avoid):
+    if avoid is None:
+        return None
+    if not isinstance(avoid, (list, tuple, set, frozenset)) or not all(isinstance(e, str) for e in avoid):
+        raise ValueError("avoid must contain edge ids")
+    return frozenset(avoid) or None
+
+
+def _records(value, field):
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"{field} must be a list of records")
+    for i, item in enumerate(value):
+        if not isinstance(item, Mapping):
+            raise ValueError(f"{field}[{i}] must be a record")
+    return value
+
+
+def _id(value, field):
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{field} must be a nonempty id")
+
+
+def _line(pts, field):
+    if not isinstance(pts, (list, tuple)) or len(pts) < 2:
+        raise ValueError(f"{field} must contain at least two points")
+    for point in pts:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise ValueError(f"{field} points must be x, y pairs")
+        for coordinate in point:
+            _finite_number(coordinate, f"{field} coordinate")
+    cum = g.cumulative_s(pts)
+    if not math.isfinite(cum[-1]):
+        raise ValueError(f"{field} length must be finite")
+    return cum
+
+
+def _restriction_records(pack):
+    layer = pack.get("restrictions")
+    return layer.get("restrictions", ()) if isinstance(layer, Mapping) else ()
+
+
 class Router:
     def __init__(self, pack: dict):
+        if not isinstance(pack, Mapping):
+            raise ValueError("routing pack must be an object")
         self.pack = pack
-        self.edges: Dict[str, dict] = {e["id"]: e for e in pack["edges"]}
+        self.edges: Dict[str, dict] = {}
         self.lanes: Dict[Tuple[str, int], dict] = {}
         self.out_edges: Dict[str, List[str]] = {}
-        for e in pack["edges"]:
-            self.out_edges.setdefault(e["from"], []).append(e["id"])
-        for lane in pack["lanes"]:
+        self._cum: Dict[str, List[float]] = {}
+        for i, e in enumerate(_records(pack.get("edges"), "edges")):
+            eid = e.get("id")
+            _id(eid, f"edges[{i}].id")
+            if eid in self.edges:
+                raise ValueError(f"duplicate edge id {eid!r}")
+            _id(e.get("from"), f"edge {eid!r} source")
+            _id(e.get("to"), f"edge {eid!r} target")
+            self._cum[eid] = _line(e.get("pts"), f"edge {eid!r} geometry")
+            if "length" in e:
+                _nonnegative(e["length"], f"edge {eid!r} length")
+            if "limit" in e:
+                _nonnegative(e["limit"], f"edge {eid!r} speed limit")
+            if "lanes" in e and (type(e["lanes"]) is not int or e["lanes"] < 1):
+                raise ValueError(f"edge {eid!r} lane count must be a positive integer")
+            if "name" in e and not isinstance(e["name"], str):
+                raise ValueError(f"edge {eid!r} name must be text")
+            self.edges[eid] = e
+            self.out_edges.setdefault(e["from"], []).append(eid)
+        for i, lane in enumerate(_records(pack.get("lanes"), "lanes")):
+            eid, idx = lane.get("edge"), lane.get("idx")
+            _id(eid, f"lanes[{i}].edge")
+            if eid not in self.edges:
+                raise ValueError(f"lanes[{i}] references unknown edge {eid!r}")
+            if type(idx) is not int or idx < 0:
+                raise ValueError(f"lanes[{i}].idx must be a nonnegative integer")
+            count = self.edges[eid].get("lanes")
+            if count is not None and idx >= count:
+                raise ValueError(f"lane {idx} is outside edge {eid!r} lane count {count}")
+            key = (eid, idx)
+            if key in self.lanes:
+                raise ValueError(f"duplicate lane {idx} for edge {eid!r}")
             lane = dict(lane)
-            lane["cum"] = g.cumulative_s(lane["pts"])
+            lane["cum"] = _line(lane.get("pts"), f"edge {eid!r} lane {idx} geometry")
             lane["length"] = lane["cum"][-1]
-            self.lanes[(lane["edge"], lane["idx"])] = lane
-        self._cum: Dict[str, List[float]] = {e["id"]: g.cumulative_s(e["pts"]) for e in pack["edges"]}
+            self.lanes[key] = lane
         self._grid: Dict[Tuple[int, int], List[Tuple[str, int]]] = {}
         for key, lane in self.lanes.items():
             for cell in _cells_of_polyline(lane["pts"]):
@@ -49,15 +154,20 @@ class Router:
         self._build_restriction_index()
 
     def _build_restriction_index(self) -> None:
-        raw = self.pack.get("restrictions")
-        records = raw.get("restrictions", []) if isinstance(raw, dict) else []
+        records = _restriction_records(self.pack)
         index: Dict[Tuple[str, str], List[dict]] = {}
-        for r in records:
+        for i, r in enumerate(_records(records, "routing restrictions")):
             src = r.get("from")
+            _id(src, f"routing restrictions[{i}].from")
             if src not in self.edges:
                 continue
             to_edges = r.get("to") or ()
-            if r["kind"].startswith("only_"):
+            if not isinstance(to_edges, (list, tuple)) or any(not isinstance(e, str) for e in to_edges):
+                raise ValueError(f"routing restrictions[{i}].to must contain edge ids")
+            kind = r.get("kind")
+            if not isinstance(kind, str) or not kind.startswith(("only_", "no_")):
+                raise ValueError(f"routing restrictions[{i}].kind must be an only_ or no_ restriction")
+            if kind.startswith("only_"):
                 allowed = set(to_edges)
                 for nxt in self.successors(src):
                     if nxt not in allowed:
@@ -71,7 +181,8 @@ class Router:
     # Edge helpers
 
     def successors(self, edge_id: str) -> List[str]:
-        return self.out_edges.get(self.edges[edge_id]["to"], [])
+        edge = self.edges.get(edge_id)
+        return self.out_edges.get(edge["to"], []) if edge else []
 
     def heading_in(self, edge_id: str) -> float:
         pts = self.edges[edge_id]["pts"]
@@ -82,13 +193,14 @@ class Router:
         return g.heading_of(pts[0], pts[1])
 
     def turn(self, edge_in: str, edge_out: str) -> str:
-        return g.classify_turn(g.turn_angle(self.heading_in(edge_in), self.heading_out(edge_out)))
+        return g.classify_turn(self.turn_angle(edge_in, edge_out))
 
     def turn_penalty(self, edge_in: str, edge_out: str) -> float:
-        kind = self.turn(edge_in, edge_out)
+        angle = self.turn_angle(edge_in, edge_out)
+        kind = g.classify_turn(angle)
         # A turn sharper than SHARP_TURN_DEG doubles back on itself (the tip of a traffic island
         # where the two one-way halves of a street meet): no car makes it, so treat it as a U-turn.
-        if abs(math.degrees(self.turn_angle(edge_in, edge_out))) > SHARP_TURN_DEG:
+        if abs(math.degrees(angle)) > SHARP_TURN_DEG:
             kind = "uturn"
         if kind == "uturn" and len(self.successors(edge_in)) > 1:
             return 1e6  # only at dead ends
@@ -103,9 +215,14 @@ class Router:
         cx, cy = int(math.floor(x / GRID_CELL_M)), int(math.floor(y / GRID_CELL_M))
         radius = int(math.ceil(max_m / GRID_CELL_M))
         candidates = set()
-        for i in range(cx - radius, cx + radius + 1):
-            for j in range(cy - radius, cy + radius + 1):
-                candidates.update(self._grid.get((i, j), ()))
+        if (2 * radius + 1) ** 2 > len(self._grid):
+            for (i, j), keys in self._grid.items():
+                if abs(i - cx) <= radius and abs(j - cy) <= radius:
+                    candidates.update(keys)
+        else:
+            for i in range(cx - radius, cx + radius + 1):
+                for j in range(cy - radius, cy + radius + 1):
+                    candidates.update(self._grid.get((i, j), ()))
         # Strict distance comparisons keep the first match. Break ties by edge ID, then lane index.
         return sorted(candidates)
 
@@ -119,27 +236,35 @@ class Router:
     ) -> Optional[dict]:
         """Nearest lane point. With a heading, lanes pointing the other way are ignored (within
         the tolerance) unless nothing else is nearby."""
+        _finite_number(x, "snap x")
+        _finite_number(y, "snap y")
+        _nonnegative(max_m, "snap radius")
+        _nonnegative(heading_tolerance, "heading tolerance")
+        if heading is not None:
+            _finite_number(heading, "snap heading")
         candidates = self._nearby_lane_keys(x, y, max_m)
-        best = None
-        for pass_no in (0, 1):
-            for key in candidates:
-                lane = self.lanes[key]
-                proj = g.project_point(lane["pts"], (x, y), lane["cum"])
-                if proj["distance"] > max_m:
-                    continue
-                if heading is not None and pass_no == 0:
-                    if abs(g.wrap_angle(proj["heading"] - heading)) > heading_tolerance:
-                        continue
-                if best is None or proj["distance"] < best["distance"]:
+        best, fallback = None, None
+        for key in candidates:
+            lane = self.lanes[key]
+            proj = g.project_point(lane["pts"], (x, y), lane["cum"])
+            distance = proj["distance"]
+            if distance > max_m:
+                continue
+            if fallback is None or distance < fallback["distance"]:
+                fallback = dict(proj, edge=key[0], lane=key[1])
+            if heading is not None and (best is None or distance < best["distance"]):
+                if abs(g.wrap_angle(proj["heading"] - heading)) <= heading_tolerance:
                     best = dict(proj, edge=key[0], lane=key[1])
-            if best is not None or heading is None:
-                break
-        return best
+        return best or fallback
 
     def snap_all(self, x: float, y: float, max_m: float = 60.0, slack_m: float = 2.5) -> List[dict]:
         """Nearest lane point per edge, keeping every edge within `slack_m` of the closest one. A click
         on a two-way street's centerline is equidistant from both directions; the caller routes to each
         and keeps the cheaper."""
+        _finite_number(x, "destination x")
+        _finite_number(y, "destination y")
+        _nonnegative(max_m, "destination snap radius")
+        _nonnegative(slack_m, "destination snap slack")
         per_edge: Dict[str, dict] = {}
         for key in self._nearby_lane_keys(x, y, max_m):
             lane = self.lanes[key]
@@ -171,6 +296,20 @@ class Router:
         """(edge sequence, cost) from start to goal, or None. Cost is travel time plus turn penalties.
         `avoid`: edges the search never enters (a block closed to traffic, static/js/sim/road-closures.js);
         the start edge itself is where the car already is."""
+        if not isinstance(start_edge, str) or start_edge not in self.edges:
+            raise ValueError(f"unknown start edge {start_edge!r}")
+        if not isinstance(goal_edge, str) or goal_edge not in self.edges:
+            raise ValueError(f"unknown goal edge {goal_edge!r}")
+        _finite_number(start_s, "start distance")
+        _finite_number(goal_s, "goal distance")
+        _clock(restrictions, hour, weekday)
+        avoid = _avoid_edges(avoid)
+        if extra_cost is not None:
+            if not isinstance(extra_cost, Mapping):
+                raise ValueError("extra costs must map edge ids to multipliers")
+            for edge, cost in extra_cost.items():
+                _id(edge, "extra cost edge")
+                _nonnegative(cost, f"extra cost for edge {edge!r}")
         extra_cost = extra_cost or {}
         goal_pt = g.point_at(self.edges[goal_edge]["pts"], goal_s, self._cum[goal_edge])
 
@@ -192,8 +331,7 @@ class Router:
         counter = 1
         restriction_index = None
         if restrictions:
-            raw = self.pack.get("restrictions")
-            records = raw.get("restrictions", []) if isinstance(raw, dict) else []
+            records = _restriction_records(self.pack)
             if records is not self._restriction_source:
                 self._build_restriction_index()
             restriction_index = self._restriction_index
@@ -242,12 +380,21 @@ class Router:
     ) -> List[dict]:
         """`start` = {x, y, heading?}, `goal` = {x, y}. Up to k distinct routes, best first. `avoid`: edge
         ids no route may enter (a block closed for an event); empty, the routes are exactly as without it."""
-        avoid = frozenset(avoid) if avoid else None
+        _pose(start, "from")
+        _pose(goal, "to")
+        if type(k) is not int or k < 0:
+            raise ValueError("route count must be a nonnegative integer")
+        _clock(restrictions, hour, weekday)
+        avoid = _avoid_edges(avoid)
+        if k == 0:
+            return []
         s = self.snap(start["x"], start["y"], start.get("heading"))
+        if s is None:
+            return []
         goals = self.snap_all(goal["x"], goal["y"])
         if avoid:
             goals = [c for c in goals if c["edge"] not in avoid]
-        if s is None or not goals:
+        if not goals:
             return []
         # pick the goal lane (direction) that is cheapest to reach
         t, first = None, None
@@ -288,8 +435,6 @@ class Router:
                 break
             path = res[0]
             if any(_overlap(path, p) > 1 - ALT_MIN_DIFFERENT for p in found):
-                if i == 0:
-                    found.append(path)
                 break
             found.append(path)
             for eid in path[1:-1]:
@@ -328,10 +473,22 @@ class Router:
     def build_route(self, path: Sequence[str], start_snap: dict, goal_snap: dict) -> dict:
         """Polyline along lane centerlines from the snapped start to the snapped goal, with fillets
         at turns, resampled at 1 m. Also the turn list and total length."""
+        if not isinstance(path, (list, tuple)) or not path:
+            raise ValueError("a route path requires a sequence of edge ids")
+        for eid in path:
+            if not isinstance(eid, str) or eid not in self.edges:
+                raise ValueError(f"route contains unknown edge {eid!r}")
+        for field, snap in (("start", start_snap), ("goal", goal_snap)):
+            if not isinstance(snap, Mapping):
+                raise ValueError(f"{field} snap must be an object")
+            _finite_number(snap.get("s"), f"{field} snap distance")
+        indices = [self._lane_index(path, i) for i in range(len(path))]
         pieces: List[List[Tuple[float, float]]] = []
         for i, eid in enumerate(path):
-            lane = self.lanes[(eid, self._lane_index(path, i))]
-            pts = list(lane["pts"])
+            lane = self.lanes.get((eid, indices[i]))
+            if lane is None:
+                raise ValueError(f"route edge {eid!r} is missing lane {indices[i]}")
+            pts = lane["pts"]
             cum = lane["cum"]
             s0 = start_snap["s"] if i == 0 else 0.0
             s1 = goal_snap["s"] if i == len(path) - 1 else lane["length"]
@@ -377,7 +534,7 @@ class Router:
         length = cum[-1] if cum else 0.0
         return {
             "edges": list(path),
-            "lanes": [self._lane_index(path, i) for i in range(len(path))],
+            "lanes": indices,
             "start_s": g.r2(start_snap["s"]),
             "goal_s": g.r2(goal_snap["s"]),
             "polyline": [(g.r2(x), g.r2(y)) for x, y in polyline],
@@ -391,7 +548,6 @@ def _exits_between(router: "Router", path: Sequence[str], first: int, last: int)
     """Exits of the ring passed from path[first] up to and including the one taken after path[last]."""
     count = 0
     for j in range(first, last + 1):
-        e = router.edges[path[j]]  # noqa: F841  (the lookup checks the edge exists)
         if any(not router.edges[o].get("ring") for o in router.successors(path[j])):
             count += 1
     return max(1, count)
@@ -466,13 +622,10 @@ def _round_corner(before: List[Tuple[float, float]], after: List[Tuple[float, fl
     return head + curve + tail
 
 
-def _slice(pts: List[Tuple[float, float]], cum: List[float], s0: float, s1: float) -> List[Tuple[float, float]]:
+def _slice(pts: Sequence[Tuple[float, float]], cum: List[float], s0: float, s1: float) -> List[Tuple[float, float]]:
     s0 = max(0.0, min(s0, cum[-1]))
     s1 = max(s0, min(s1, cum[-1]))
-    out = [g.point_at(pts, s0, cum)]
-    for i, s in enumerate(cum):
-        if s0 < s < s1:
-            out.append(pts[i])
+    out = [g.point_at(pts, s0, cum), *pts[bisect_right(cum, s0) : bisect_left(cum, s1)]]
     out.append(g.point_at(pts, s1, cum))
     return g.dedupe_consecutive(out, 0.01)
 
@@ -505,6 +658,8 @@ def _cells_of_polyline(pts: Sequence[Tuple[float, float]]) -> set:
     for i in range(len(pts) - 1):
         (x0, y0), (x1, y1) = pts[i], pts[i + 1]
         n = max(1, int(g.dist(pts[i], pts[i + 1]) / (GRID_CELL_M / 2)))
+        if n > 2**53:
+            raise ValueError("lane segment is too long to index")
         for k in range(n + 1):
             t = k / n
             cells.add(
