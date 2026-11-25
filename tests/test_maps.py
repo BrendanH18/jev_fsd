@@ -1,5 +1,9 @@
+import json
 import math
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import server
@@ -150,6 +154,66 @@ class CanadianMapsTests(unittest.TestCase):
     def test_no_reachable_start_returns_no_fake_missions(self):
         router = Router(synthetic_pack())
         self.assertEqual(suggested_drives(router, {"x": 1e6, "y": 1e6, "heading": 0}), [])
+
+
+class CatalogPreviewTests(unittest.TestCase):
+    def setUp(self):
+        work = tempfile.TemporaryDirectory()
+        self.addCleanup(work.cleanup)
+        self.maps = Path(work.name)
+        self.path = pack_path(self.maps, PRESET_BBOXES["kitsilano"])
+
+    def entry(self):
+        return next(item for item in catalog(self.maps) if item["id"] == "kitsilano")
+
+    def test_broken_pack_does_not_hide_other_catalog_entries(self):
+        self.path.write_text("{")
+        other = pack_path(self.maps, PRESET_BBOXES["victoria"])
+        other.write_text(json.dumps(synthetic_pack()))
+        entries = {item["id"]: item for item in catalog(self.maps)}
+        self.assertFalse(entries["kitsilano"]["cached"])
+        self.assertEqual(entries["kitsilano"]["preview"], [])
+        self.assertTrue(entries["victoria"]["cached"])
+
+    def test_wrong_pack_version_is_uncached(self):
+        self.path.write_text(json.dumps({**synthetic_pack(), "pack_version": "5"}))
+        self.assertFalse(self.entry()["cached"])
+
+    def test_atomic_replacement_updates_cached_preview_with_old_size_and_mtime(self):
+        pack = synthetic_pack()
+        pack["edges"][0]["pts"] = [[1, 2], [3, 4]]
+        self.path.write_text(json.dumps(pack))
+        original = self.path.stat()
+        previous = self.entry()["preview"][0]["pts"]
+        replacement = self.maps / "replacement"
+        pack["edges"][0]["pts"][0][0] = 8
+        replacement.write_text(json.dumps(pack))
+        self.assertEqual(replacement.stat().st_size, original.st_size)
+        os.utime(replacement, ns=(original.st_atime_ns, original.st_mtime_ns))
+        replacement.replace(self.path)
+        self.assertEqual(self.path.stat().st_mtime_ns, original.st_mtime_ns)
+        self.assertNotEqual(self.entry()["preview"][0]["pts"], previous)
+
+    def test_preview_keeps_parallel_roads_but_draws_reverse_twins_once(self):
+        first = {"from": "a", "to": "b", "pts": [[0, 0], [5, 0], [10, 0]], "cls": "residential"}
+        reverse = {**first, "from": "b", "to": "a", "pts": first["pts"][::-1]}
+        parallel = {**first, "pts": [[0, 0], [5, 4], [10, 0]], "cls": "primary"}
+        pack = {**synthetic_pack(), "edges": [first, reverse, parallel]}
+        self.path.write_text(json.dumps(pack))
+        self.assertEqual(
+            self.entry()["preview"],
+            [{"pts": first["pts"], "major": False}, {"pts": parallel["pts"], "major": True}],
+        )
+
+    def test_non_regular_path_cannot_be_used_as_metadata(self):
+        self.path.mkdir()
+        self.assertFalse(self.entry()["cached"])
+
+    def test_catalog_stats_are_safe_to_edit_in_the_caller(self):
+        self.path.write_text(json.dumps(synthetic_pack()))
+        stats = self.entry()["stats"]
+        stats["roads"] = -1
+        self.assertGreater(self.entry()["stats"]["roads"], 0)
 
 
 if __name__ == "__main__":
