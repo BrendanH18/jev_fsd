@@ -80,7 +80,7 @@ try {
             timeout: 10_000,
           },
         ),
-        /fetch failed/,
+        { code: 1, stderr: /Could not reach the simulator server/ },
       );
     }
     assert.equal(apiCalls, 2);
