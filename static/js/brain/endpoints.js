@@ -3,6 +3,7 @@
 // changes and removes them while the app runs; a free status probe labels each one.
 
 import { api } from "../common.js";
+import { isObject, nonblank, own } from "./model-contract.js";
 import {
   agentDefinition,
   agentDefinitions,
@@ -12,6 +13,7 @@ import {
   updateAgent,
 } from "./registry.js";
 
+const ENDPOINT_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/u;
 const checked = new Map(); // id -> "ready" | "unreachable" | "key rejected" | "no key"
 const latestProbe = new Map();
 const PROBE_STATUSES = new Set(["ready", "unreachable", "key rejected", "no key", "error"]);
@@ -22,7 +24,31 @@ export const checkedStatus = (id) => checked.get(id);
 // whose brains must be rebuilt.
 export function syncEndpointAgents(field, endpoints = [], create) {
   const changed = [];
-  const configured = new Map(endpoints.map((e) => [e.id, e]));
+  if (!Array.isArray(endpoints)) return changed;
+  const configured = new Map();
+  const prefix = `${field}:`;
+  for (const e of endpoints) {
+    const id = own(e, "id");
+    if (
+      !isObject(e) ||
+      typeof id !== "string" ||
+      !id.startsWith(prefix) ||
+      !ENDPOINT_NAME.test(id.slice(prefix.length))
+    )
+      continue;
+    if (
+      e.name !== id.slice(prefix.length) ||
+      !nonblank(e.model) ||
+      !nonblank(e.label) ||
+      !nonblank(e.endpoint) ||
+      typeof e.usable !== "boolean"
+    ) {
+      // Preserve the existing definition if the server listed this ID but sent an incomplete entry.
+      if (!configured.has(id)) configured.set(id, null);
+      continue;
+    }
+    configured.set(id, e);
+  }
   for (const d of agentDefinitions().filter((d) => d[field] && !configured.has(d.id))) {
     removeAgent(d.id);
     checked.delete(d.id);
@@ -30,8 +56,9 @@ export function syncEndpointAgents(field, endpoints = [], create) {
     changed.push(d.id);
   }
   for (const e of configured.values()) {
+    if (!e) continue;
     const current = agentDefinition(e.id);
-    if (typeof e.id !== "string" || !e.id.startsWith(`${field}:`) || (current && !current[field])) continue;
+    if (current && !current[field]) continue;
     const description = `${e.model} at ${e.endpoint}`;
     if (!current) {
       registerAgent({ id: e.id, label: e.label, description, create: () => create(e.id), [field]: e });
@@ -77,9 +104,12 @@ export async function checkEndpoints(prefix, url) {
   const { endpoints } = (await api(url, {})) ?? {};
   if (!Array.isArray(endpoints)) throw new Error("Invalid endpoint check response.");
   for (const s of endpoints) {
-    const id = `${prefix}${s?.name}`;
-    if (latestProbe.get(id) !== probe || !PROBE_STATUSES.has(s.status)) continue;
-    const status = agentDefinition(id)?.[field]?.usable ? s.status : "no key";
+    const name = own(s, "name");
+    const outcome = own(s, "status");
+    if (!nonblank(name) || !PROBE_STATUSES.has(outcome)) continue;
+    const id = `${prefix}${name}`;
+    if (latestProbe.get(id) !== probe) continue;
+    const status = agentDefinition(id)?.[field]?.usable ? outcome : "no key";
     checked.set(id, status);
     setAgentAvailability(id, status !== "no key", status === "ready" ? "" : status);
   }

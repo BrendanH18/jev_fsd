@@ -13,7 +13,7 @@ import { agentDefinition, agentDefinitions, setAgentAvailability } from "./regis
 import { syncEndpointAgents, checkEndpoints, checkedStatus, defaultFrom } from "./endpoints.js";
 import { decisionResult } from "./jev.js";
 
-const TIMEOUT_MARGIN_MS = 750; // the server's own timeout fires first and explains itself
+import { callModel, checkCoordinates, checkJevRequest, endpointTimeout } from "./model-contract.js";
 
 export class DecisionBrain {
   constructor(endpoint) {
@@ -21,31 +21,22 @@ export class DecisionBrain {
     this.name = endpoint.id;
     this.questionDriven = true; // like Jev: nothing to ask means a local decision, no call
     this.transport = api; // the server call; a model recording (recording.js) swaps it
-    this.timeoutMs = Math.round((endpoint.timeout_s || 5) * 1000) + TIMEOUT_MARGIN_MS;
+    this.timeoutMs = endpointTimeout(endpoint.timeout_s, 5);
   }
 
   async decide(snap, eligible, request, signal) {
-    const started = performance.now();
-    const res = await this.transport(
-      "/api/decision/decide",
-      {
-        endpoint: this.endpoint.name,
-        tick: snap.tick || 0,
-        epoch: request.epoch || 0,
-        state: request.state,
-        questions: request.questions,
-      },
-      { signal },
-    );
-    const meta = {
-      ...res?.meta,
-      source: this.name,
-      live_call: true,
-      round_trip_ms: Math.round(performance.now() - started),
+    signal?.throwIfAborted();
+    const body = {
+      endpoint: this.endpoint.name,
+      tick: snap.tick ?? 0,
+      epoch: request.epoch ?? 0,
+      state: request.state,
+      questions: request.questions,
     };
-    // The call happened, so the error carries its tokens, cost and trace into the Rules fallback.
-    if (res?.invalid) throw Object.assign(new Error(`invalid answer: ${res.invalid}`), { meta, trace: res.trace });
-    return decisionResult(res, request, eligible, meta);
+    checkCoordinates(body);
+    checkJevRequest(body);
+    const { response, meta } = await callModel(this, "/api/decision/decide", body, signal);
+    return decisionResult(response, request, eligible, meta);
   }
 }
 
@@ -59,7 +50,7 @@ export function registerDecisionAgents(decision, { demo = false } = {}) {
     !!jev?.configured,
     demo ? "needs the local app" : jev?.configured ? "" : "no TypeSafe key",
   );
-  return syncEndpointAgents("decision", decision?.endpoints || [], decisionBrainFor);
+  return syncEndpointAgents("decision", decision?.endpoints ?? [], decisionBrainFor);
 }
 export const decisionBrainFor = (id) => {
   const e = agentDefinition(id)?.decision;

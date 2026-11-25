@@ -16,6 +16,16 @@
 //  * Hand over computed targets (target_speed, vs_target, outcome) instead of expecting arithmetic.
 //  * Keep the system message identical between calls so providers can cache it.
 
+import {
+  characterCount,
+  chatChoices,
+  invalidRequest,
+  isObject,
+  MAX_CHAT_CHARS,
+  own,
+  QUESTION_FIELDS,
+  questionIds,
+} from "./model-contract.js";
 import { situationClauses } from "./state.js";
 // (each registered feature's line, at its place: sim/features/index.js)
 import { promptLines } from "../sim/features/index.js";
@@ -83,30 +93,52 @@ Reply with one JSON object and nothing else. Use exactly the keys listed in \`an
 
 export const SYSTEM_PROMPT = systemPrompt(GUARDED_CHECKS);
 export const OPEN_SYSTEM_PROMPT = systemPrompt(OPEN_CHECKS);
+const GUARDED_SYSTEM_CHARS = characterCount(SYSTEM_PROMPT);
+const OPEN_SYSTEM_CHARS = characterCount(OPEN_SYSTEM_PROMPT);
 
 // Returns { messages, expect }. `expect` lists the values the model may answer with; the server
 // uses it for structured output (when the endpoint supports it) and to validate the reply.
 export function buildLlmPrompt(snap, request) {
   const { state = {}, questions = {} } = request;
+  if (!isObject(state)) invalidRequest("state must be an object");
+  const asked = new Set(questionIds(questions));
   const expect = {};
-  if (questions.motion) expect.motion = Object.keys(questions.motion.criteria);
-  if (questions.vector) expect.candidate = Object.keys(questions.vector.criteria);
-  if (questions.headlights) expect.headlights = Object.keys(questions.headlights.criteria);
-  if (questions.route) expect.route = Object.keys(questions.route.criteria);
+  for (const [id, field] of Object.entries(QUESTION_FIELDS)) {
+    if (asked.has(id)) expect[field] = chatChoices(questions, id);
+  }
   // `units` lives in the system message; candidates and route options are listed separately below.
   const { driving_style, units, candidates = [], rejected, route_options, ...observed } = state;
   const input = { driving_style, situation: snap ? situationClauses(snap, { track: request.track }) : [], observed };
   if (expect.candidate) {
+    if (!Array.isArray(candidates)) invalidRequest("state.candidates must be an array for a candidate question");
     const offered = new Set(expect.candidate);
-    input.candidates = candidates.filter((c) => offered.has(c.id));
+    const seen = new Set();
+    input.candidates = candidates.filter((candidate) => {
+      const id = own(candidate, "id");
+      if (!offered.has(id)) return false;
+      if (seen.has(id)) invalidRequest(`duplicate candidate observation for ${id}`);
+      seen.add(id);
+      return true;
+    });
+    for (const id of offered) if (!seen.has(id)) invalidRequest(`missing candidate observation for ${id}`);
   }
   if (expect.motion) input.motion_options = questions.motion.criteria;
   if (expect.route) input.route_options = questions.route.criteria;
   input.answer = expect;
+  const open = request.track === "open";
+  const system = open ? OPEN_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  let user;
+  try {
+    user = JSON.stringify(input);
+  } catch {
+    invalidRequest("LLM decision state cannot be encoded as JSON");
+  }
+  const total = (open ? OPEN_SYSTEM_CHARS : GUARDED_SYSTEM_CHARS) + characterCount(user);
+  if (total > MAX_CHAT_CHARS) invalidRequest(`LLM prompt has ${total} characters (limit ${MAX_CHAT_CHARS})`);
   return {
     messages: [
-      { role: "system", content: request.track === "open" ? OPEN_SYSTEM_PROMPT : SYSTEM_PROMPT },
-      { role: "user", content: JSON.stringify(input) },
+      { role: "system", content: system },
+      { role: "user", content: user },
     ],
     expect,
   };
