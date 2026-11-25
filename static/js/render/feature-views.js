@@ -141,6 +141,9 @@ function updateRoadEffects(world, mesh, pose, dt) {
 }
 
 const hasIndividualMesh = (car) => car.roadside || car.workzone || car.closure || car.doubleParked;
+const parkedKeys = ["x", "y", "psi", "color", "style", "kind", "roadside", "workzone", "closure", "doubleParked"];
+const parkedLook = (car) => parkedKeys.map((key) => car[key]);
+const sameParkedLook = (look, car) => parkedKeys.every((key, i) => look[i] === car[key]);
 
 function createParkedActor(car, world) {
   const zone = car.workzone ? world.workZones.zones.find((z) => z.closure === car) : null;
@@ -156,7 +159,13 @@ function createParkedActor(car, world) {
           : carView.create(car);
   if (zone) syncWorkZone(mesh, zone);
   else if (closure) syncLaneClosure(mesh, closure);
-  else (car.roadside ? syncRoadside : car.doubleParked ? syncVan : syncCar)(mesh, car);
+  else if (car.roadside) syncRoadside(mesh, car);
+  else if (car.doubleParked) syncVan(mesh, car);
+  else {
+    mesh.position.set(car.x, 0, -car.y);
+    mesh.rotation.y = car.psi;
+    mesh.userData.tail.emissiveIntensity = 0;
+  }
   return mesh;
 }
 
@@ -185,8 +194,15 @@ function actorPose(actor, previous, alpha, next, replayAlpha) {
 export function mountActorViews(view, world, fleet) {
   // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
   // work zone's closed stretch)
-  view.addScenery(buildParkedCars(world.parked.list.filter((car) => !hasIndividualMesh(car))));
-  const initialInstances = new Map(world.parked.list.filter((car) => car.instances).map((car) => [car.id, car]));
+  const batched = world.parked.list.filter((car) => !hasIndividualMesh(car));
+  const batch = buildParkedCars(batched);
+  view.addScenery(batch);
+  const initialInstances = new Map(
+    batched.map((car) => [
+      car.id,
+      { look: parkedLook(car), handles: batch.userData.instances.get(car), visible: true },
+    ]),
+  );
   // (a mesh per person, by id: children get off school buses and go home)
   const pedMeshes = new Map();
   const pedMesh = (p) => {
@@ -201,45 +217,37 @@ export function mountActorViews(view, world, fleet) {
   world.crowd.list.forEach(pedMesh);
   const npcMeshes = new Map();
   const parkedMeshes = new Map();
-  const parkedMesh = (car) => parkedMeshes.get(car.id);
+  const parkedMesh = (car) => parkedMeshes.get(car.id)?.mesh;
   let lastVehicleTime = world.t;
   const doorMeshes = new Map();
   const previousCars = new Map(),
     previousPeople = new Map();
-  function syncParked(car) {
-    if (initialInstances.has(car.id) && car.instances) {
-      restoreParkedCar(car);
-      return;
+  function reconcileParked() {
+    // Replays restore fresh actor objects. Match the batched cars by ID and their original pose and look.
+    const current = new Map(world.parked.list.map((car) => [car.id, car]));
+    for (const [id, instance] of initialInstances) {
+      const car = current.get(id);
+      const visible = !!car && sameParkedLook(instance.look, car);
+      if (visible !== instance.visible) {
+        (visible ? restoreParkedCar : hideParkedCar)(instance.handles);
+        instance.visible = visible;
+      }
+      if (visible) current.delete(id);
     }
-    if (!parkedMeshes.has(car.id)) {
+    for (const [id, { mesh, look }] of parkedMeshes) {
+      const car = current.get(id);
+      if (car && sameParkedLook(look, car)) {
+        current.delete(id);
+      } else {
+        retireActor(mesh);
+        parkedMeshes.delete(id);
+      }
+    }
+    for (const car of current.values()) {
       const mesh = createParkedActor(car, world);
       view.scene.add(mesh);
-      parkedMeshes.set(car.id, mesh);
+      parkedMeshes.set(car.id, { mesh, look: parkedLook(car) });
     }
-  }
-
-  function removeParked(id) {
-    const instance = initialInstances.get(id);
-    if (instance) hideParkedCar(instance);
-    const mesh = parkedMeshes.get(id);
-    if (mesh) {
-      retireActor(mesh);
-      parkedMeshes.delete(id);
-    }
-  }
-
-  function reconcileParked() {
-    const { parked } = world;
-    if (!parked.added.length && !parked.removed.length) return;
-    // A car can leave a bay and park again between render frames. Draw its final location once.
-    const dirty = new Set([...parked.added, ...parked.removed].map((car) => car.id));
-    const current = new Map(parked.list.filter((car) => dirty.has(car.id)).map((car) => [car.id, car]));
-    for (const id of dirty) {
-      removeParked(id);
-      const car = current.get(id);
-      if (car) syncParked(car);
-    }
-    parked.added.length = parked.removed.length = 0;
   }
 
   // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
@@ -286,8 +294,6 @@ export function mountActorViews(view, world, fleet) {
       }
   };
   const trafficGroups = () => [fleet.vehicles, world.contraflow.riders, world.driveways.cars];
-  for (const car of world.parked.list) syncParked(car);
-  world.parked.added.length = 0;
   syncFleetMeshes();
 
   return {
@@ -302,21 +308,11 @@ export function mountActorViews(view, world, fleet) {
       if (seek || world.t < lastVehicleTime || world.t - lastVehicleTime > 1) {
         if (egoMesh) resetActorMotion(egoMesh);
         for (const { mesh } of npcMeshes.values()) resetActorMotion(mesh);
-        for (const mesh of parkedMeshes.values()) resetActorMotion(mesh);
+        for (const { mesh } of parkedMeshes.values()) resetActorMotion(mesh);
       }
       previousCars.clear();
       previousPeople.clear();
-      const { parked } = world;
-      const restored = new Map(parked.list.map((car) => [car.id, car]));
-      for (const [id, car] of initialInstances) {
-        if (!restored.get(id)?.instances) hideParkedCar(car);
-      }
-      for (const id of parkedMeshes.keys()) {
-        if (!restored.has(id) || restored.get(id).instances) removeParked(id);
-      }
-      for (const car of restored.values()) syncParked(car);
-      // Checkpoints can include notifications that were already drawn in the original timeline.
-      parked.added.length = parked.removed.length = 0;
+      reconcileParked();
       for (const mesh of doorMeshes.values()) retireActor(mesh);
       doorMeshes.clear();
     },

@@ -1,4 +1,4 @@
-// The map and Explore share one pending route request, so only the latest destination can win.
+// The map, Explore and the Lab share one pending route selection, so only the latest can win.
 export class RouteRequest {
   constructor({ request, payload, install, show, canInstall = () => true }) {
     Object.assign(this, { request, payload, install, show, canInstall });
@@ -9,6 +9,22 @@ export class RouteRequest {
     this.pending?.abort();
     this.pending = null;
     this.show("");
+  }
+
+  async lookup(load, select) {
+    if (!this.canInstall()) return false;
+    this.cancel();
+    const current = (this.pending = new AbortController());
+    try {
+      const result = await load(current.signal);
+      if (this.pending !== current || !this.canInstall()) return false;
+      return select(result);
+    } catch (error) {
+      if (this.pending === current) throw error;
+      return false;
+    } finally {
+      if (this.pending === current) this.pending = null;
+    }
   }
 
   async choose(point, { route, title, check = true } = {}) {

@@ -904,6 +904,8 @@ def check_startup_preferences(page, url):
       weather.value = 'rain'; weather.dispatchEvent(new Event('change'));
       $('quality').dispatchEvent(new Event('change'));
       const quality = !new URL(location.href).searchParams.has('quality') && localStorage.getItem('jev-fsd-quality') === 'low';
+      const { checkQualityFallback } = await import('/tests/ui-tests.js');
+      const qualityFallback = checkQualityFallback(app);
       const before = app.world.tick;
       const originalFetch = window.fetch;
       let pendingRoute;
@@ -927,6 +929,7 @@ def check_startup_preferences(page, url):
         { name: 'An invalid quality override uses saved graphics and keeps the exact clock time', ok: initial },
         { name: 'Reflecting conditions in the URL preserves history state', ok: time && history.state.retained },
         { name: 'A graphics selection replaces the old URL override', ok: quality },
+        qualityFallback,
         { name: 'Losing graphics pauses stepping and offers recovery', ok: app.world.paused
           && app.world.tick === before && !document.querySelector('.simulation-error').hidden },
         { name: 'Losing graphics cancels pending routes', ok: routeCancelled },
@@ -998,6 +1001,10 @@ def check(url, chromium=None, groups=GROUPS):
             page.goto(url.rstrip("/") + "/?drive=manual&quality=low", wait_until="domcontentloaded")
             page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
             ok &= check_driving_ui(page)
+            ok &= report(
+                "Photo Mode routing",
+                page.evaluate("import('/tests/ui-tests.js').then(async m => [await m.checkPhotoRoutes(window.__jev)])"),
+            )
             for skip_id, target_id in (("skip-drive-settings", "settings-toggle"), ("skip-drive-map", "minimap")):
                 skip_link = page.locator(f"#{skip_id}")
                 skip_link.focus()
