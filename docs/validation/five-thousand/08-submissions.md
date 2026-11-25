@@ -180,7 +180,7 @@ This batch adds offline tape and report validation, local driver scaffolding, me
 176. Check that a request which exhausts its answer queue reports both the attempt number and the saved answer count. Validated by: scripts/test_5k_submissions_tapes.mjs.
 177. Check that a new replay of the same drive starts at the first answer even after a previous replay misses. Validated by: scripts/test_5k_submissions_tapes.mjs.
 178. Cover model replay applying the current tick even when a raw provider response was saved. Validated by: scripts/test_5k_submissions_tapes.mjs.
-179. Cover an Arena recording stopped between drives replaying the finished subset. Validated by: scripts/test_5k_submissions_tapes.mjs.
+179. Cover reading a partial Arena tape while preserving its planned count and completed subset. Validated by: scripts/test_5k_submissions_tapes.mjs.
 180. Cover inspection distinguishing a recorded null response from timeout, cancellation, and transport error outcomes. Validated by: scripts/test_5k_submissions_tapes.mjs.
 181. Check that bounded CLI reads and Arena-specific validation accept the committed recordings. Validated by: scripts/test_5k_submissions_tapes.mjs.
 182. Check canonicalization of the replacement object returned by a custom toJSON method. Validated by: scripts/test_5k_submissions_tapes.mjs.
