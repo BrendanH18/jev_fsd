@@ -95,13 +95,13 @@ The benchmark runner adds route selection, progress and recovery artifacts, cano
 91. Include route coverage in benchmark list and run output on request. Validated by: scripts/test_5k_bench_selection.mjs.
 92. Distinguish selected-but-pending routes from routes excluded by the selection. Validated by: scripts/test_5k_bench_selection.mjs.
 93. Count distinct failing routes per failure reason in coverage reports. Validated by: scripts/test_5k_bench_selection.mjs.
-94. Require the generated count on demand without rejecting intentional subsets. Validated by: Boat benchmark CLI integration.
-95. Write a separately marked partial benchmark checkpoint after each completed drive. Validated by: Boat benchmark CLI integration.
+94. Require the generated count on demand without rejecting intentional subsets. Validated by: node --experimental-default-type=module scripts/bench_node.mjs --count 1 --npcs 0 --coverage --require-count --progress-finish --checkpoint checkpoint.json.gz --json report.json.
+95. Write a separately marked partial benchmark checkpoint after each completed drive. Validated by: node --experimental-default-type=module scripts/bench_node.mjs --count 1 --npcs 0 --coverage --require-count --progress-finish --checkpoint checkpoint.json.gz --json report.json.
 96. Check checkpoint path collisions with benchmark inputs and other outputs. Validated by: scripts/test_5k_bench_selection.mjs.
 97. Prevent benchmark-only output modes from being used during a list operation. Validated by: scripts/test_5k_bench_selection.mjs.
-98. Emit benchmark route-generation progress independently of final JSON. Validated by: Boat benchmark CLI integration.
-99. Emit per-route finish progress with verdict and simulated duration. Validated by: Boat benchmark CLI integration.
-100. Report short suite generation in benchmark progress output. Validated by: Boat benchmark CLI integration.
+98. Emit benchmark route-generation progress independently of final JSON. Validated by: node --experimental-default-type=module scripts/bench_node.mjs --count 1 --npcs 0 --coverage --require-count --progress-finish --checkpoint checkpoint.json.gz --json report.json.
+99. Emit per-route finish progress with verdict and simulated duration. Validated by: node --experimental-default-type=module scripts/bench_node.mjs --count 1 --npcs 0 --coverage --require-count --progress-finish --checkpoint checkpoint.json.gz --json report.json.
+100. Report short suite generation in benchmark progress output. Validated by: node --experimental-default-type=module scripts/bench_node.mjs --count 1 --npcs 0 --coverage --require-count --progress-finish --checkpoint checkpoint.json.gz --json report.json.
 101. Reject held-out count or seed overrides before connecting to the server. Validated by: scripts/test_5k_bench_selection.mjs.
 102. Reject a blank benchmark driver ID before connecting. Validated by: scripts/test_5k_bench_selection.mjs.
 103. Check the CLI hour range before connecting. Validated by: scripts/test_5k_bench_selection.mjs.
@@ -110,7 +110,7 @@ The benchmark runner adds route selection, progress and recovery artifacts, cano
 106. Reject arena artifacts at the benchmark replay entry point. Validated by: scripts/test_5k_bench_selection.mjs.
 107. Reject benchmark replay headers that specify a realtime clock. Validated by: scripts/test_5k_bench_selection.mjs.
 108. Report unexpected benchmark runner errors with benchmark context. Validated by: scripts/test_5k_bench_selection.mjs.
-109. Require the returned map bounds to contain four finite coordinates. Validated by: Boat benchmark CLI integration.
+109. Require the returned map bounds to contain four finite coordinates. Validated by: node --experimental-default-type=module scripts/bench_node.mjs --count 1 --npcs 0 --coverage --require-count --progress-finish --checkpoint checkpoint.json.gz --json report.json.
 110. Explain the eligibility of an existing run manifest without replaying it. Validated by: scripts/test_5k_bench_canonical.mjs.
 111. Add a check mode for the report's declared canonical suite badge. Validated by: scripts/test_5k_bench_canonical.mjs.
 112. Report the actual and expected fields for canonical configuration mismatches. Validated by: scripts/test_5k_bench_canonical.mjs.
@@ -170,7 +170,7 @@ The benchmark runner adds route selection, progress and recovery artifacts, cano
 166. Show completed and passed route counts when returning an unsaved browser benchmark. Validated by: scripts/test_bench_view.mjs.
 167. Tell browser users if suite generation returned fewer routes than requested. Validated by: scripts/test_bench_view.mjs.
 168. Retain the recording in the returned browser result when server saving was disabled. Validated by: scripts/test_bench_view.mjs.
-169. Show which artifact survived a partial save failure and where to download results. Validated by: scripts/test_5k_bench_runtime.mjs.
+169. Show which artifact survived a partial save failure and where to download results. Validated by: scripts/test_bench_view.mjs.
 170. Pin distance accumulation while the vehicle is reversing. Validated by: scripts/test_5k_bench_metrics.mjs.
 171. Pin the boundary between a stop and slow movement. Validated by: scripts/test_5k_bench_metrics.mjs.
 172. Pin the strict speeding threshold. Validated by: scripts/test_5k_bench_metrics.mjs.
@@ -195,7 +195,7 @@ The benchmark runner adds route selection, progress and recovery artifacts, cano
 191. Verify that partial decisions are not counted twice in model share. Validated by: scripts/test_5k_bench_metrics.mjs.
 192. Verify that zero decisions produce unavailable shares. Validated by: scripts/test_5k_bench_metrics.mjs.
 193. Check aggregate model share by total decisions rather than by averaging percentages. Validated by: scripts/test_5k_bench_metrics.mjs.
-194. Check that guarded-trace results leave out open-track flags. Validated by: scripts/test_5k_bench_metrics.mjs.
+194. Check that guarded-track results leave out open-track flags. Validated by: scripts/test_5k_bench_metrics.mjs.
 195. Verify that flag counts are combined and emitted in stable check order. Validated by: scripts/test_5k_bench_metrics.mjs.
 196. Check collision and stop-sign exposure per driven kilometre. Validated by: scripts/test_5k_bench_metrics.mjs.
 197. Check that missing speeds do not lower mean recorded speed. Validated by: scripts/test_5k_bench_metrics.mjs.

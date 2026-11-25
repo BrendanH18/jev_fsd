@@ -192,6 +192,8 @@ class Element {
   replaceChildren(...children) {
     this.children = children;
   }
+  click() {}
+  remove() {}
   cloneNode() {
     return Object.assign(new Element(), { ...this });
   }
@@ -209,6 +211,7 @@ globalThis.Node = Element;
 globalThis.document = {
   querySelector: (selector) => (selector.startsWith("meta") ? null : element(selector)),
   createElement: () => new Element(),
+  body: new Element(),
   createTextNode: (textContent) => Object.assign(new Element(), { textContent }),
 };
 element("#brain").querySelector = () => new Element();
@@ -229,16 +232,38 @@ const { MapData } = await import("../static/js/map/mapdata.js");
 const { browserRoute } = await import("../static/js/demo/routing.js");
 const map = new MapData(pack);
 let saves = 0;
+let saveFailed = false;
 let released;
 let routeSignal;
+let comparisons = 0;
+let resolveComparison;
+const report = {
+  ...run,
+  stopped: "interrupted",
+  manifest: { suite: { route_sha: "fixture" } },
+};
 globalThis.fetch = async (path, options) => {
   if (path === "/api/status")
     return Response.json({ npcs: 40, map: { id: "kitsilano", name: "kitsilano", label: "Kitsilano" } });
   if (path === "/api/map") return Response.json(pack);
   if (path === "/api/maps") return Response.json({ maps: [{ id: "kitsilano", name: "Kitsilano", city: "Vancouver" }] });
   if (path === "/api/bench/runs?summary=1") return Response.json({ runs: [] });
+  if (path === "/api/bench/runs?name=valid") return Response.json(report);
+  if (path === "/api/bench/runs?name=invalid")
+    return Response.json({
+      ...report,
+      results: [report.results[0], report.results[0]],
+    });
+  if (path === "/api/bench/runs?name=baseline") {
+    comparisons++;
+    await new Promise((resolve) => {
+      resolveComparison = resolve;
+    });
+    return Response.json(report);
+  }
   if (path === "/api/bench/save") {
     saves++;
+    if (saveFailed) return Response.json({ error: "Storage unavailable" }, { status: 503 });
     return Response.json({ saved: "test" });
   }
   if (path === "/api/route") {
@@ -317,5 +342,47 @@ assert.equal(element("#bench-csv").disabled, true);
 filter.value = completed.results[0].id;
 filter.handlers.input();
 assert.equal(element("#bench-csv").disabled, false);
+const savedSelection = element("#saved-run").handlers.change;
+await savedSelection({ target: { value: "valid" } });
+assert.match(element("#status").textContent, /Viewing saved run valid/);
+await savedSelection({ target: { value: "invalid" } });
+assert.match(element("#status").textContent, /missing or repeated route ID/);
+let blob;
+const createObjectURL = URL.createObjectURL;
+try {
+  URL.createObjectURL = (content) => {
+    blob = content;
+    return "blob:fixture";
+  };
+  element("#bench-json").handlers.click();
+  const exported = JSON.parse(await blob.text());
+  assert.equal(exported.stopped, report.stopped);
+  assert.equal(exported.manifest.suite.route_sha, "fixture");
+  window.__bench.last.complete = false;
+  element("#bench-json").handlers.click();
+  assert.equal(JSON.parse(await blob.text()).stopped, "exported while running");
+  window.__bench.last.complete = true;
+} finally {
+  URL.createObjectURL = createObjectURL;
+}
+window.__bench.last.stopped = false;
+const compare = element("#compare");
+compare._runs = [{ name: "baseline", summary: {} }];
+compare.value = "baseline";
+compare.handlers.change();
+compare.handlers.change();
+assert.equal(comparisons, 1);
+resolveComparison();
+await new Promise(setImmediate);
+assert.match(element("#comparison-note").textContent, /stopped before its suite/);
+compare.handlers.change();
+assert.equal(comparisons, 1);
+saveFailed = true;
+const failedSave = await window.__bench.run({ count: 1, npcs: 0 });
+assert.equal(saves, 1);
+assert.equal(failedSave.saved, null);
+assert.equal(failedSave.results.length, 1);
+assert.match(element("#status").textContent, /Could not save benchmark: Storage unavailable.*available to download/);
+assert.equal(element("#bench-json").disabled, false);
 console.log("Benchmark page controller completed, stopped and filtered a fixture route.");
 process.exit(0);
