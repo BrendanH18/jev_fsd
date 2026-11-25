@@ -150,6 +150,21 @@ class ManifestTest(TestCase):
             with self.subTest(keys=keys), self.assertRaisesRegex(ValueError, error):
                 pub.checked_manifest(BENCH, run, "2026-11-21")
 
+    def test_stopped_benchmark_must_complete_an_ordered_prefix_of_planned_routes(self):
+        run = pub.read_json(BENCH)
+        first, *rest = run["results"]
+        run["results"] = [first]
+        run["stopped"] = "budget reserve"
+        self.assertIs(pub.checked_manifest(BENCH, run, "2026-11-21"), run["manifest"])
+
+        run["results"] = rest
+        with self.assertRaisesRegex(ValueError, "benchmark routes disagree"):
+            pub.checked_manifest(BENCH, run, "2026-11-21")
+        run["results"] = [first]
+        del run["stopped"]
+        with self.assertRaisesRegex(ValueError, "benchmark routes disagree"):
+            pub.checked_manifest(BENCH, run, "2026-11-21")
+
     def test_cost_rounding_matches_node_for_half_microdollar(self):
         run = pub.read_json(BENCH)
         run["results"][0]["cost_usd"] = 0.0000005

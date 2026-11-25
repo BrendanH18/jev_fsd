@@ -3,6 +3,8 @@ import { driverKind, ModelRecording } from "../static/js/brain/recording.js";
 import { LOCAL_RECORDING_FORMAT, LocalRecording } from "./local_recording.mjs";
 import { isArenaSet, isId, isRecord, isTrack } from "./recording_artifacts.mjs";
 
+export const sameArenaTrack = (result, arena) => (result.track ?? "guarded") === (arena.track ?? "guarded");
+
 export function parseArenaTape(value) {
   const tape = value?.format === LOCAL_RECORDING_FORMAT ? LocalRecording.parse(value) : ModelRecording.parse(value);
   const { header, results, drives } = tape;
@@ -23,8 +25,7 @@ export function parseArenaTape(value) {
     if (!Object.hasOwn(drives, id)) throw new Error(`Result ${id} has no decision tape.`);
     if (result.map !== undefined && !Object.hasOwn(header.maps, result.map))
       throw new Error(`Result ${id} refers to an unrecorded map (${result.map}).`);
-    if ((result.track ?? "guarded") !== (arena.track ?? "guarded"))
-      throw new Error(`Result ${id} uses a different track from the recording.`);
+    if (!sameArenaTrack(result, arena)) throw new Error(`Result ${id} uses a different track from the recording.`);
   }
   for (const id of Object.keys(drives))
     if (!Object.hasOwn(results, id)) throw new Error(`Decision tape ${id} has no result.`);

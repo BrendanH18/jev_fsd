@@ -50,6 +50,7 @@ export async function buildSuite(map, { count = 12, seed = 1, restrictions = nul
         "/api/route",
         {
           bbox: map.routingBbox.join(","),
+          ...(map.pack.synthetic ? { synthetic: true } : {}),
           from: { x: p[0], y: p[1], heading: psi },
           to: { x: goal[0], y: goal[1] },
           k: 1,

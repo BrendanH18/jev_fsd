@@ -29,7 +29,16 @@ const write = (name, h, drives) => {
     header: h,
     drives: Object.fromEntries(drives.map((id) => [id, { [`k-${id}`]: [{ response: { id } }] }])),
     results: Object.fromEntries(
-      drives.map((id) => [id, { challenge: id, ...h.manifest?.suite.drives[id], pass: true, result_sha: id }]),
+      drives.map((id) => [
+        id,
+        {
+          challenge: id,
+          ...h.manifest?.suite.drives[id],
+          ...(h.arena.track === "open" ? { track: "open" } : {}),
+          pass: true,
+          result_sha: id,
+        },
+      ]),
     ),
   });
   const file = path.join(dir, name);

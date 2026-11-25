@@ -119,6 +119,23 @@ try {
     publishedDrives({ rows: candidates }, "guarded", selected).get("external").get("kitsilano/door-zone").date,
     "2026-11-11",
   );
+  const authored = JSON.parse(details.stdout).drives;
+  const [doorZone] = authored;
+  const summaryRow = { challenge: doorZone.id, map: doorZone.map, seed: doorZone.seed, version: doorZone.version };
+  const summaryRows = new Map([[`${doorZone.map}/${doorZone.id}`, summaryRow]]);
+  const baseline = { ...row, drives: [doorZone] };
+  const mismatchedConditions = [
+    { ...baseline, date: "2026-11-28", drives: [{ ...doorZone, weather: "other" }] },
+    { ...baseline, date: "2026-11-29", drives: [{ ...doorZone, time: "other" }] },
+    baseline,
+  ];
+  assert.equal(
+    publishedDrives({ rows: mismatchedConditions }, "guarded", summaryRows, authored)
+      .get("external")
+      .get(`${doorZone.map}/${doorZone.id}`).date,
+    row.date,
+  );
+
   for (const name of ["jev-arena-2026-11-11.json.gz", "jev-open-2026-11-20.json.gz"]) {
     const file = fileURLToPath(new URL(`../data/recordings/${name}`, import.meta.url));
     assert.equal(readRecordingJson(file).header.driver, "jev");

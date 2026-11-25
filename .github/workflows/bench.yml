@@ -70,7 +70,7 @@ jobs:
           WEATHER: ${{ matrix.weather }}
         run: >
           node --experimental-default-type=module scripts/bench_node.mjs --port 8331 --map kitsilano
-          --features "$FEATURES" --weather "$WEATHER" --check 1 --json benchmark.json
+          --features "$FEATURES" --weather "$WEATHER" --require-count --check 1 --json benchmark.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() && !matrix.hard && hashFiles('benchmark.json') != '' }}
         with:

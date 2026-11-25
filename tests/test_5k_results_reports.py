@@ -262,14 +262,20 @@ class SoakReportsTest(TestCase):
             ({"results": [ROUTE], "skipped": ["pairs/0", "pairs/1"]}, "skipped configurations (2): pairs/0, pairs/1"),
             ({"failed": True, "results": [ROUTE]}, "harness marked the leg failed"),
             ({"results": [], "stopped": "budget"}, "stopped: budget"),
-            ({"results": [{**ROUTE, "collisions": 1}]}, "a: collision"),
-            ({"results": [{**ROUTE, "simulation_error": "throw"}]}, "a: simulation error"),
-            ({"results": [{**ROUTE, "deadlocks": 1}]}, "a: stuck"),
+            ({"runs": [{"results": [{**ROUTE, "collisions": 1}]}]}, "a: collision"),
+            ({"runs": [{"results": [{**ROUTE, "simulation_error": "throw"}]}]}, "a: simulation error"),
+            ({"runs": [{"results": [{**ROUTE, "deadlocks": 1}]}]}, "a: stuck"),
         ]:
             with self.subTest(payload=payload):
                 _, failures = soak.leg_failures(payload)
                 self.assertEqual(len(failures), 1)
                 self.assertIn(expected, failures[0])
+
+    def test_passing_benchmark_deadlock_is_evidence_without_a_failed_verdict(self):
+        run = {"results": [{**ROUTE, "arrived": True, "deadlocks": 1}]}
+        self.assertEqual(soak.leg_failures(run), (1, []))
+        self.assertEqual(soak.leg_categories(run)["stuck"], 1)
+        self.assertEqual(soak.leg_failures({"runs": [run]}), (1, ["a: stuck"]))
 
     def test_gzip_artifact_and_output_failures_are_reported(self):
         with TemporaryDirectory() as tmp:

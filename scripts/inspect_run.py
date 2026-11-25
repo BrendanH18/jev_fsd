@@ -147,6 +147,9 @@ def load_run(path):
         config = {key: summary[key] for key in ARENA_CONFIG_KEYS if key in summary}
     else:
         config = {}
+    manifest = run.get("manifest")
+    if isinstance(manifest, dict) and manifest.get("model") is not None:
+        config["model"] = manifest["model"]
     if "set" in config or has_challenges:
         config["kind"] = "arena"
     if isinstance(run.get("suite_version"), str):

@@ -602,17 +602,18 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         require(suite.get("kind") == "bench", "expected a benchmark manifest suite")
         require(suite.get("config") == config, "benchmark settings disagree with the manifest")
         ids = [r["id"] for r in results]
+        planned = suite.get("ids")
         require(
-            distinct_ids(suite.get("ids"), allow_empty=True) and suite["ids"] == ids,
+            distinct_ids(planned, allow_empty=True) and ids == (planned[: len(ids)] if run.get("stopped") else planned),
             "benchmark routes disagree with the manifest",
         )
-        generated = suite.get("generated_ids", ids)
+        generated = suite.get("generated_ids", planned)
         require(distinct_ids(generated, allow_empty=True), "invalid generated benchmark route IDs")
         require("only" not in suite or type(suite["only"]) is bool, "benchmark only must be a boolean")
-        selected = set(ids)
+        selected = set(planned)
         require(
-            ids == [route for route in generated if route in selected]
-            and (suite.get("only") is True or generated == ids or run.get("stopped")),
+            planned == [route for route in generated if route in selected]
+            and (suite.get("only") is True or generated == planned or run.get("stopped")),
             "benchmark selection differs from the generated route order",
         )
         require("route_sha" not in suite or fingerprint(suite["route_sha"]), "invalid benchmark route fingerprint")

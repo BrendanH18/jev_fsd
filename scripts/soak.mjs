@@ -26,6 +26,7 @@ import {
 // freeDriveOptions' imports use common.js, which reads the token at module load.
 globalThis.document = { querySelector: () => null };
 const { coveringArray, FEATURE_NAMES } = await import("../static/js/bench/features.js");
+const { benchmarkConfig } = await import("../static/js/bench/options.js");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { heldoutPlan } = await import("../static/js/bench/heldout.js");
 
@@ -172,6 +173,63 @@ export function soakCoverage(plan, outcomes) {
   return { counts, legs };
 }
 
+function validateReusedRun(task, run, policy) {
+  const invalid = (reason) => new Error(`Retry report cannot reuse ${task.id}: ${reason}`);
+  if (
+    run.harness_error ||
+    run.stopped ||
+    !run.config ||
+    !Array.isArray(run.results) ||
+    !run.results.length ||
+    run.results.some(
+      (r) =>
+        typeof r?.id !== "string" ||
+        !r.id.trim() ||
+        typeof r.pass !== "boolean" ||
+        typeof r.arrived !== "boolean" ||
+        !Array.isArray(r.failures) ||
+        r.pass !== (r.failures.length === 0) ||
+        r.stopped,
+    ) ||
+    new Set(run.results.map(({ id }) => id)).size !== run.results.length
+  )
+    throw invalid("expected distinct, finished route results and their benchmark config.");
+
+  for (const [key, value] of Object.entries(task))
+    if (JSON.stringify(run[key]) !== JSON.stringify(value)) throw invalid(`saved task differs for ${key}.`);
+
+  const hard = task.only !== undefined;
+  if (!hard) {
+    const expected = {
+      brain: "rules",
+      mode: "lockstep",
+      map: task.map,
+      weather: task.weather ?? "dry",
+      seed: task.heldout ? task.seeds[0] : task.seed,
+      count: task.heldout ? task.seeds.length * task.count : task.count,
+      npcs: 40,
+      heldout: task.heldout,
+      seeds: task.seeds,
+      cover: undefined,
+      without: undefined,
+      park: undefined,
+      hour: undefined,
+      track: undefined,
+      stopped: undefined,
+      ...benchmarkConfig({ features: "city", cover: task.options.cover }),
+    };
+    for (const [key, value] of Object.entries(expected))
+      if (JSON.stringify(run.config[key]) !== JSON.stringify(value))
+        throw invalid(`benchmark config differs for ${key}.`);
+  }
+  const passed = soakVerdict(task, run, classifyResults(run.results), {
+    hard,
+    strict: policy.audit_policy === "all drive verdicts count",
+    requireCount: policy.require_count,
+  });
+  if (!passed) throw invalid("the saved results fail the soak verdict.");
+}
+
 export function retrySoakPlan(plan, prior, shard, shards, policy) {
   if (prior?.schema !== 1 || prior.shard !== shard || prior.shards !== shards)
     throw new Error("Retry report uses a different soak shard.");
@@ -194,12 +252,16 @@ export function retrySoakPlan(plan, prior, shard, shards, policy) {
       throw new Error(`Retry report conditions differ for ${task.id}.`);
   }
   if (!Array.isArray(prior.runs)) throw new Error("Retry report is missing its run evidence.");
-  const passed = prior.runs.filter(({ id }) => byId.get(id)?.status === "passed");
-  const passedIds = new Set(passed.map(({ id }) => id));
-  for (const { id, status } of history)
-    if (status === "passed" && (!passedIds.has(id) || passed.filter((run) => run.id === id).length !== 1))
-      throw new Error(`Retry report needs one passed run for ${id}.`);
-  return { eligible: plan.filter(({ id }) => !passedIds.has(id)), passed };
+  const passed = [];
+  const eligible = plan.filter((task) => {
+    if (byId.get(task.id).status !== "passed") return true;
+    const matches = prior.runs.filter((run) => run?.id === task.id);
+    if (matches.length !== 1) throw new Error(`Retry report needs one passed run for ${task.id}.`);
+    validateReusedRun(task, matches[0], policy);
+    passed.push(matches[0]);
+    return false;
+  });
+  return { eligible, passed };
 }
 
 async function main() {

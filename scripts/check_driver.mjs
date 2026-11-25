@@ -186,13 +186,26 @@ try {
     : values.published
       ? readArtifactJson(values.published)
       : JSON.parse(readFileSync(new URL("../data/results.json", import.meta.url), "utf8"));
+  const authored = values["no-published"]
+    ? []
+    : JSON.parse(
+        execFileSync(
+          process.execPath,
+          ["--experimental-default-type=module", arena, "--set", values.set, "--list", "--details"],
+          {
+            encoding: "utf8",
+            timeout,
+            killSignal: "SIGKILL",
+          },
+        ),
+      ).drives;
   let anyFailed = false;
   const jsonTracks = {};
   for (const track of tracks) {
     const custom = evaluate(track, "your driver", "--agent", values.agent);
     const rules = values["no-baselines"] ? null : evaluate(track, "Rules", "--brain", "rules");
     const cautious = values["no-baselines"] ? null : evaluate(track, "Cautious", "--brain", "cautious");
-    const published = publishedDrives(leaderboard, track, custom.drives);
+    const published = publishedDrives(leaderboard, track, custom.drives, authored);
     const customList = [...custom.drives.values()];
     const customScores = driverScores(customList);
     if (customList.some((drive) => !drive.pass)) anyFailed = true;

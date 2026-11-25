@@ -31,6 +31,7 @@ const USAGE = `Usage: node scripts/node_checks.mjs [options] [FILE...]
   -h, --help       show this help`;
 
 const SCRIPTS = fileURLToPath(new URL(".", import.meta.url));
+const REPO = path.resolve(SCRIPTS, "..");
 const MAX_TIMER_S = Math.floor((2 ** 31 - 1) / 1000);
 const MAX_REPORT_BYTES = 128 * 1024 ** 2;
 const switches = new Set(["list", "show-output", "fail-fast", "include-skipped", "quiet", "github"]);
@@ -102,13 +103,32 @@ function parseArgs(argv) {
   return opts;
 }
 
+function reportPath(file) {
+  const relative = path.relative(REPO, file);
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+    ? file
+    : relative.split(path.sep).join("/");
+}
+
+function rerunPath(saved, label) {
+  if (!saved || !path.isAbsolute(saved)) return path.resolve(REPO, saved ?? label);
+  // Older CI reports stored the runner's absolute path alongside a repo-relative label.
+  const local = path.resolve(REPO, label);
+  if (
+    !path.isAbsolute(label) &&
+    !path.isAbsolute(reportPath(local)) &&
+    !statSync(saved, { throwIfNoEntry: false }) &&
+    statSync(local, { throwIfNoEntry: false })?.isFile()
+  )
+    return local;
+  return saved;
+}
+
 function rerunFiles(file, includeSkipped) {
   const report = readJson(file, { maxBytes: MAX_REPORT_BYTES });
   const validLabel = (label) => typeof label === "string" && label.length > 0;
   const validCheck = (check) =>
-    validLabel(check?.file) &&
-    typeof check.ok === "boolean" &&
-    (check.path === undefined || (typeof check.path === "string" && path.isAbsolute(check.path)));
+    validLabel(check?.file) && typeof check.ok === "boolean" && (check.path === undefined || validLabel(check.path));
   if (
     !Array.isArray(report?.checks) ||
     !report.checks.every(validCheck) ||
@@ -117,11 +137,12 @@ function rerunFiles(file, includeSkipped) {
     (report.skipped_paths !== undefined &&
       (!Array.isArray(report.skipped_paths) ||
         report.skipped_paths.length !== report.skipped.length ||
-        !report.skipped_paths.every((file) => typeof file === "string" && path.isAbsolute(file))))
+        !report.skipped_paths.every(validLabel)))
   )
     throw new Error(`${file}: expected a Node check report.`);
-  const failed = report.checks.filter((check) => !check.ok).map((check) => check.path ?? check.file);
-  if (includeSkipped) failed.push(...(report.skipped_paths ?? report.skipped));
+  const failed = report.checks.filter((check) => !check.ok).map((check) => rerunPath(check.path, check.file));
+  if (includeSkipped)
+    failed.push(...report.skipped.map((label, index) => rerunPath(report.skipped_paths?.[index], label)));
   if (!failed.length) throw new Error(`${file}: no checks to rerun.`);
   return failed;
 }
@@ -320,8 +341,8 @@ export async function runChecks(opts, log = console.log, selected = queueChecks(
 
 function report({ results, skipped, skippedPaths, wall, busy, parallel, lowestFree }, opts) {
   const checks = [...results].sort(byLabel).map((r) => ({
-    file: r.label,
-    path: r.file,
+    file: path.isAbsolute(r.label) ? reportPath(r.file) : r.label,
+    path: reportPath(r.file),
     ok: r.ok,
     seconds: r.seconds,
     code: r.code,
@@ -338,8 +359,8 @@ function report({ results, skipped, skippedPaths, wall, busy, parallel, lowestFr
     lowest_free_bytes: lowestFree,
     timeout_s: opts.timeout,
     checks,
-    skipped,
-    skipped_paths: skippedPaths,
+    skipped: skipped.map((label) => (path.isAbsolute(label) ? reportPath(label) : label)),
+    skipped_paths: skippedPaths.map(reportPath),
   };
 }
 

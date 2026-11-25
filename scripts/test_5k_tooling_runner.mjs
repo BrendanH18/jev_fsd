@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readJson } from "./cli_tools.mjs";
 
@@ -87,6 +87,40 @@ try {
     /expected a Node check report/,
   );
   assert.match(expect(2, "--rerun", make("empty.json", '{"checks":[],"skipped":[]}')).stderr, /no checks to rerun/);
+
+  const repo = fileURLToPath(new URL("../", import.meta.url));
+  const inRepo = fs.mkdtempSync(join(repo, "runner-fixtures-"));
+  try {
+    const failing = join(inRepo, "failure.mjs");
+    const skipped = join(inRepo, "skipped.mjs");
+    fs.writeFileSync(failing, "process.exitCode = 3;");
+    fs.writeFileSync(skipped, "");
+    const portable = JSON.parse(
+      expect(1, "--json=-", "--jobs=1", "--fail-fast", "--order=input", failing, skipped).stdout,
+    );
+    assert.equal(portable.checks[0].path, relative(repo, failing).split(sep).join("/"));
+    assert.equal(portable.checks[0].file, portable.checks[0].path);
+    assert.equal(portable.skipped_paths[0], relative(repo, skipped).split(sep).join("/"));
+    assert.equal(portable.skipped[0], portable.skipped_paths[0]);
+    const rerun = (report) =>
+      spawnSync(process.execPath, [runner, "--list", "--rerun", report, "--include-skipped", "--order=input"], {
+        cwd: root,
+        encoding: "utf8",
+        timeout: 5000,
+      });
+    const checkRerun = (report) => {
+      const result = rerun(make("portable.json", JSON.stringify(report)));
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), `${failing}\n${skipped}`);
+    };
+    checkRerun(portable);
+    const legacy = structuredClone(portable);
+    legacy.checks[0].path = join(root, "old-checkout", portable.checks[0].path);
+    legacy.skipped_paths[0] = join(root, "old-checkout", portable.skipped_paths[0]);
+    checkRerun(legacy);
+  } finally {
+    fs.rmSync(inRepo, { recursive: true, force: true });
+  }
 
   const refused = spawnSync(process.execPath, [runner, pass], {
     env: { ...process.env, NODE_TEST_TIMEOUT: "invalid" },

@@ -60,7 +60,7 @@ class MapApiTests(unittest.TestCase):
                 server.api_map({}, {"bbox": ["victoria"], "map": ["kitsilano"]})["routing_bbox"],
                 list(PRESET_BBOXES["victoria"]),
             )
-        load.assert_called_once_with("victoria")
+        load.assert_called_once_with("victoria", refresh=True)
 
     def test_bbox_query_cannot_select_multiple_maps(self):
         with patch.object(server, "load_map") as load, self.assertRaisesRegex(server.BadRequest, "one bbox"):
@@ -212,8 +212,34 @@ class MapCacheTests(unittest.TestCase):
             self.assertIs(server.load_map("victoria"), results[0])
             self.assertEqual(build.call_count, 1)
             clock.return_value = 60
-            self.assertIs(server.load_map("victoria"), results[1])
+            self.assertIs(server.load_map("victoria", refresh=True), results[1])
             self.assertEqual(build.call_count, 2)
+
+    def test_open_synthetic_drive_keeps_its_router_across_map_refresh(self):
+        query = {"bbox": ["victoria"]}
+        street_router = Mock(routes=Mock(return_value=[{"id": "street"}]))
+        with (
+            patch.object(server.time, "monotonic", return_value=0) as clock,
+            patch.object(server, "build_pack", side_effect=fetch.FetchError("offline")) as download,
+        ):
+            pack = server.api_map({}, query)
+            self.assertTrue(pack["synthetic"])
+            bbox = ",".join(map(str, pack["routing_bbox"]))
+            drive_route = dict(ROUTE, bbox=bbox, synthetic=True)
+            expected = server.api_route(drive_route, {})["routes"]
+            self.assertTrue(expected)
+            clock.return_value = server.MAP_RETRY_SECONDS
+            self.assertEqual(server.api_route(dict(ROUTE, bbox=bbox), {})["routes"], expected)
+            self.assertEqual(server.api_route(drive_route, {})["routes"], expected)
+            download.assert_called_once()
+            with patch.object(
+                server,
+                "_build_map",
+                return_value={"bbox": PRESET_BBOXES["victoria"], "pack": {}, "router": street_router},
+            ):
+                self.assertNotIn("synthetic", server.api_map({}, query))
+        self.assertEqual(server.api_route(drive_route, {})["routes"], expected)
+        self.assertEqual(server.api_route(dict(ROUTE, bbox=bbox), {})["routes"], [{"id": "street"}])
 
     def test_fetch_error_fallback_retains_bbox_and_retry_time(self):
         with (

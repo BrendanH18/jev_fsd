@@ -687,6 +687,7 @@ export class Autopilot {
     try {
       const body = {
         bbox: world.map.routingBbox.join(","),
+        ...(world.map.pack.synthetic ? { synthetic: true } : {}),
         from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
         to: { x: world.destination[0], y: world.destination[1] },
         k: 3,

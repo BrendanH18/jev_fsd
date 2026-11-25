@@ -55,6 +55,7 @@ try {
   assert.match(demo, /python -m unittest discover -s tests/);
   assert.match(demo, /needs: demo-passed/);
   assert.match(bench, /--json benchmark\.json/);
+  assert.match(bench, /--require-count --check 1 --json benchmark\.json/);
   assert.match(bench, /name: benchmark-\$\{\{ matrix\.features \}\}-\$\{\{ matrix\.weather \}\}/);
   assert.match(yaml.get("soak.yml"), /continue-on-error: true/);
   const replay = yaml.get("replay-drift.yml");

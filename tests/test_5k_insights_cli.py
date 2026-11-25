@@ -127,6 +127,13 @@ class InspectorCLITests(unittest.TestCase):
         self.assertTrue(any(r["section"] == "repeat-pass-rate: measurement" for r in rows))
         self.assertIn("matched routes", self.cli(*cmd, "repeat-pass-rate", "--format", "table"))
 
+    def test_repeat_refuses_different_models_for_the_same_endpoint(self):
+        config = {**BENCH, "brain": "llm:shared"}
+        one = self.save("one.json", ROWS, config, manifest={"model": "model-a"})
+        two = self.save("two.json", ROWS, config, manifest={"model": "model-b"})
+        self.assertEqual(load_run(one)[0]["model"], "model-a")
+        self.cli(one, "--repeat", two, code=2, error="repeat conditions differ: driver, model")
+
     def test_repeat_options_check_intent_before_loading_inputs(self):
         other = self.dir / "missing.json"
         for args, message in (
