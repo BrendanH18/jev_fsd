@@ -37,7 +37,6 @@ function createBallMesh(color) {
     }
   }
   geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
-  geo.computeVertexNormals();
   const mesh = new THREE.Mesh(
     geo,
     new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0 }),
@@ -51,6 +50,7 @@ export class BallView {
   constructor(scene) {
     this.scene = scene;
     this.meshes = new Map();
+    this.axis = new THREE.Vector3();
   }
 
   // Follow the simulation: each ball out of its gap, rolling (turned through the angle it has rolled
@@ -64,27 +64,32 @@ export class BallView {
       let m = this.meshes.get(b.id);
       if (!m) {
         m = createBallMesh(b.color);
-        m.userData.spin = b.spin;
+        m.userData.spin = 0;
         this.scene.add(m);
         this.meshes.set(b.id, m);
       }
-      m.visible =
-        Math.abs(b.x - camera.position.x) < DRAW_WITHIN_M && Math.abs(-b.y - camera.position.z) < DRAW_WITHIN_M;
       if (b.phase === "carried" && b.child) {
         const c = b.child;
         m.position.set(c.x + Math.cos(c.psi) * CARRY_AHEAD, CARRY_Y, -(c.y + Math.sin(c.psi) * CARRY_AHEAD));
         m.scale.set(1, b.burst ? 0.35 : 1, 1);
-        continue;
-      }
-      const turn = b.spin - m.userData.spin;
-      m.userData.spin = b.spin;
-      // (rolling along (ax, ay) in the sim, (ax, 0, -ay) here: about the axis up × that)
-      if (Math.abs(turn) > 1e-6) m.rotateOnWorldAxis(new THREE.Vector3(-b.axis[1], 0, -b.axis[0]).normalize(), turn);
-      if (b.burst) {
+      } else if (b.burst) {
         m.scale.set(1.25, 0.3, 1.25);
         m.rotation.set(0, 0, 0);
         m.position.set(b.x, BALL_R * 0.3, -b.y);
-      } else m.position.set(b.x, BALL_R, -b.y);
+      } else {
+        m.scale.setScalar(1);
+        if (b.spin < m.userData.spin || m.userData.burst) {
+          m.quaternion.identity();
+          m.userData.spin = 0;
+        }
+        const turn = b.spin - m.userData.spin;
+        // Rolling along (ax, ay) in the sim: turn around up × (ax, 0, -ay).
+        if (turn > 1e-6) m.rotateOnWorldAxis(this.axis.set(-b.axis[1], 0, -b.axis[0]).normalize(), turn);
+        m.position.set(b.x, BALL_R, -b.y);
+      }
+      m.userData.spin = b.spin;
+      m.userData.burst = b.burst;
+      m.visible = Math.hypot(m.position.x - camera.position.x, m.position.z - camera.position.z) < DRAW_WITHIN_M;
     }
     for (const [id, m] of this.meshes) {
       if (here.has(id)) continue;

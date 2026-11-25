@@ -104,7 +104,10 @@ export class IceView {
   // Follow the world's ice: rebuilt when its patches change, shown while any lie on the road.
   sync(world) {
     const ice = world.ice;
-    if (!ice?.enabled) return;
+    if (!ice?.enabled) {
+      this.group.visible = false;
+      return;
+    }
     if (ice.version !== this.version) {
       this.version = ice.version;
       for (const m of this.group.children) m.geometry.dispose();

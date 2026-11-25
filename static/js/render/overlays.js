@@ -19,9 +19,7 @@ const overlayMat = (color, opacity) =>
     side: THREE.DoubleSide,
   });
 
-function ribbonMesh(pts, width, material, order) {
-  const b = new GeoBuilder();
-  b.ribbon(pts, -width / 2, width / 2, 0.04);
+function overlayMesh(b, material, order) {
   const mesh = new THREE.Mesh(b.toGeometry(), material);
   mesh.renderOrder = order;
   return mesh;
@@ -69,6 +67,8 @@ export class Overlays {
   }
 
   setRoute(route) {
+    if (this.route === route) return;
+    this.route = route;
     if (this.routeMesh) {
       this.scene.remove(this.routeMesh);
       this.routeMesh.geometry.dispose();
@@ -78,8 +78,12 @@ export class Overlays {
       this.marker.visible = false;
       return;
     }
-    this.routeMesh = ribbonMesh(route.pts, 0.35, this.mats.route, 1);
-    this.scene.add(this.routeMesh);
+    const ribbon = new GeoBuilder();
+    ribbon.ribbon(route.pts, -0.175, 0.175, 0.04);
+    if (!ribbon.empty) {
+      this.routeMesh = overlayMesh(ribbon, this.mats.route, 1);
+      this.scene.add(this.routeMesh);
+    }
     const end = route.endPoint();
     this.marker.position.set(end[0], 0, -end[1]);
     this.marker.visible = true;
@@ -92,17 +96,17 @@ export class Overlays {
     }
     this.candidateMeshes = [];
     if (!this.showCandidates || !candidates) return;
+    const batches = new Map();
     for (const c of candidates) {
       if (!c.trace || c.trace.length < 2) continue;
-      const chosen = c.id === chosenId;
-      const mat = chosen
-        ? this.mats.chosen
-        : c.flagged
-          ? this.mats.flagged
-          : c.eligible
-            ? this.mats.eligible
-            : this.mats.rejected;
-      const mesh = ribbonMesh(c.trace, chosen ? 0.32 : 0.12, mat, chosen ? 3 : 2);
+      const status = c.id === chosenId ? "chosen" : c.flagged ? "flagged" : c.eligible ? "eligible" : "rejected";
+      if (!batches.has(status)) batches.set(status, new GeoBuilder());
+      const halfWidth = status === "chosen" ? 0.16 : 0.06;
+      batches.get(status).ribbon(c.trace, -halfWidth, halfWidth, 0.04);
+    }
+    for (const [status, batch] of batches) {
+      if (batch.empty) continue;
+      const mesh = overlayMesh(batch, this.mats[status], status === "chosen" ? 3 : 2);
       this.group.add(mesh);
       this.candidateMeshes.push(mesh);
     }
