@@ -22,7 +22,7 @@ CONDITIONS = (
     "suite_version",
 )
 DEFAULTS = {"features": "bare", "weather": "dry", "track": "guarded", "park": False, "without": []}
-DIFF_FIELDS = ("weather", "features", "npcs", "track", "park", "hour", "without", "driver")
+DIFF_FIELDS = ("weather", "features", "npcs", "track", "park", "hour", "without", "cover", "mode", "driver")
 COUNTED_VIOLATIONS = tuple(
     field
     for _, fields in safety.QUESTIONS.values()
@@ -66,6 +66,11 @@ def condition_differences(left, right):
             after = right.get(field, DEFAULTS[field])
         else:
             before, after = left.get(field), right.get(field)
+        if field == "without" and all(
+            isinstance(values, list) and all(isinstance(value, str) for value in values) for values in (before, after)
+        ):
+            if set(before) == set(after):
+                continue
         if before != after:
             diffs[field] = {"baseline": before, "comparison": after}
     return diffs
@@ -157,6 +162,8 @@ def assess_regression(left, right, routes=None):
     missing_traffic_counts = {}
     new_audit_failures = []
     increased_violations = []
+    lost_passes = []
+    increased_collisions = []
     skipped = {
         key: (routes or {}).get(key, []) for key in ("baseline_only", "comparison_only", "missing_tags", "changed_tags")
     }
@@ -164,6 +171,8 @@ def assess_regression(left, right, routes=None):
         if type(before.get("pass")) is bool and type(after.get("pass")) is bool:
             verdict_pairs += 1
             passed_delta += after["pass"] - before["pass"]
+            if before["pass"] and not after["pass"]:
+                lost_passes.append(before["id"])
         earlier, later = outcomes.reasons(before), outcomes.reasons(after)
         if earlier is not None and later is not None:
             label_pairs += 1
@@ -175,6 +184,8 @@ def assess_regression(left, right, routes=None):
         if first is not None and second is not None:
             collision_pairs += 1
             collision_delta += second - first
+            if second > first:
+                increased_collisions.append({"id": before["id"], "increase": second - first})
         for field in COUNTED_VIOLATIONS:
             first = profiles.measurement(before, field)
             second = profiles.measurement(after, field)
@@ -186,7 +197,7 @@ def assess_regression(left, right, routes=None):
             elif first is not None or second is not None or field in REQUIRED_VIOLATION_COUNTS:
                 missing_traffic_counts[field] = missing_traffic_counts.get(field, 0) + 1
     return {
-        "regressed": passed_delta < 0 or collision_delta > 0 or bool(increased_violations or new_audit_failures),
+        "regressed": bool(lost_passes or increased_collisions or increased_violations or new_audit_failures),
         "deltas": {
             "passed": passed_delta if verdict_pairs else None,
             "collisions": collision_delta if collision_pairs else None,
@@ -194,6 +205,8 @@ def assess_regression(left, right, routes=None):
         },
         "new_audit_failures": new_audit_failures,
         "increased_violations": increased_violations,
+        "lost_passes": lost_passes,
+        "increased_collisions": increased_collisions,
         "coverage": {
             "matched_routes": len(left),
             "verdict_pairs": verdict_pairs,
@@ -228,7 +241,7 @@ def match_routes(left_name, left_config, left_rows, right_name, right_config, ri
         if arena:
             if any(
                 row.get(field) is not None and paired.get(field) is not None and row[field] != paired[field]
-                for field in ("map", "pack", "seed", "version")
+                for field in ("map", "pack", "seed", "version", "weather", "time", "car")
             ):
                 changed_tags.append(route_id)
                 continue
