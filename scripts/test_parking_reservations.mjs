@@ -32,6 +32,18 @@ for (const name of [
   if (url) pack[name] = JSON.parse(fs.readFileSync(url));
 }
 const map = new MapData(pack);
+const { ParkedCars } = await import("../static/js/sim/parking.js");
+const parked = new ParkedCars(map, { density: 0 });
+const moved = new Vehicle(0, 0);
+parked.add(moved);
+moved.x += 100;
+parked.add(moved);
+assert.equal(parked.list.length, 1);
+assert.equal(parked.added.length, 1);
+assert.equal(parked.remove(moved), true);
+parked.add(moved);
+assert.equal(parked.near(moved.x, moved.y, 5).length, 1);
+console.log("✓ a moved parked car cannot be added twice and can be added again after removal");
 
 // Original failure: a driveway reserved a bay with "driveway", and taken() read its vehicle spec.
 // This is the world combination used by free drives, not a hand-written reservation fixture.

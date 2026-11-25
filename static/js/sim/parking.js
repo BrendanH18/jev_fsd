@@ -185,9 +185,9 @@ export class ParkedCars {
   }
 
   add(car) {
+    if (this.list.includes(car)) return;
     const key = parkedCell(car);
     const cell = this.grid.get(key);
-    if (cell?.includes(car)) return;
     car.parked = true;
     if (car.slot) {
       car.slot.occupant = car;

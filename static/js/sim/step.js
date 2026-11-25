@@ -18,6 +18,7 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > MAX_PHYSICS_STEP_S)
     throw new RangeError("Invalid simulation step duration");
   if (!Number.isFinite(world.t + dt) || !Number.isFinite(now)) throw new RangeError("Invalid simulation clock");
+  if (autopilot.stepFailure) throw autopilot.stepFailure.error;
   // (what a registered feature sets up before anything moves: black ice's grip hook, say)
   for (const step of FIRST) step(world, fleet, dt);
   stepChallenge(world, fleet);

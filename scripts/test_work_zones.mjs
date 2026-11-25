@@ -382,6 +382,21 @@ await test("sensing: under SLOW nothing holds the car; on the open side there is
   assert.equal(hidden.work_zone, null);
 });
 
+await test("a visible barricade with a hidden flagger keeps the base following label", () => {
+  const { world, zone } = queen();
+  drive(world, zone, { back: 1, v: 5 });
+  const [flaggerX, flaggerY] = zone.flaggers.closed;
+  world.visibility.canSee = (_car, x, y) => x !== flaggerX || y !== flaggerY;
+  const snap = buildSnapshot(world);
+  assert.equal(snap.work_zone, null);
+  assert.equal(snap.following?.id, zone.closure.id);
+  assert.equal(snap.following.kind, "parked car");
+  assert.equal(toJevState(snap, [], {}).following.kind, "parked car");
+  drive(world, zone, { back: -5, v: 5 });
+  const roadside = buildSnapshot(world).roadside.find((o) => o.id === zone.closure.id);
+  assert.equal(roadside?.kind, "work zone");
+});
+
 await test("a car that turned up too close to stop when the paddle turned to STOP is not held; one standing at the line when STOP comes again is", () => {
   const { world, zone } = queen({ phase: "closed" });
   drive(world, zone, { side: "closed", back: 3, v: 10 });

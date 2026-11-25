@@ -92,7 +92,8 @@ test("every record is whole, its option and flags its own, and every hook at a s
 });
 
 test("the core runs every slot, and names no registered feature", () => {
-  const core = CORE.map(source).join("\n");
+  const pedestrianCore = "sim/pedestrians.js";
+  const core = [...CORE, pedestrianCore].map(source).join("\n");
   const coach = source("sim/drive-score.js");
   for (const field of ["flaggerStops", "workZoneSpeeding", "world.workZones", "scrambleReds", "darkSignals"]) {
     assert.ok(!coach.includes(field), `the coaching core no longer owns ${field}`);
@@ -171,8 +172,6 @@ test("the core runs every slot, and names no registered feature", () => {
       'turn-restrictions.js"',
       'high-beams.js"',
       'red-turn-signs.js"',
-      'work-zone.js"',
-      'outage.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -295,16 +294,28 @@ test("the core runs every slot, and names no registered feature", () => {
       "world.redTurnSigns",
       "this.redTurnSigns",
       "no_turn_on_red",
+    ]) {
+      assert.ok(!text.includes(field), `${path} names ${field}`);
+    }
+  }
+  for (const path of [...CORE, pedestrianCore]) {
+    const text = source(path);
+    for (const field of [
+      'work-zone.js"',
+      'outage.js"',
       "world.scrambles",
       "this.scrambles",
       "i.scramble",
       "isScramble(",
+      "import { isScramble",
       "scrambleState(",
       "world.outages",
+      "world?.outages",
       "this.outages",
       "darkControl(",
       "world.workZones",
       "this.workZones",
+      ".workzone",
       "snap.work_zone",
       "flagger_stops_run",
       '"stop_for_flagger"',
