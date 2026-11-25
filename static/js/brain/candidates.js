@@ -26,7 +26,6 @@ import { PEEK_AT_M } from "../sim/priority.js";
 import { planTurnaround } from "../sim/turnaround.js";
 import { TRY_START_M, planParking, planPullOut } from "../sim/parallel-park.js";
 import { isEmergency } from "../sim/emergency.js";
-import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { wheelPoints } from "../sim/potholes.js";
 import {
@@ -69,12 +68,13 @@ const SIMS = {
   streetHazards: hooks("sim", "streetHazards"),
   beforeEmergency: hooks("sim", "beforeEmergency"),
   parking: hooks("sim", "parking"),
+  afterMerge: hooks("sim", "afterMerge"),
   end: hooks("sim"),
 };
 // The first rejection among checkers `list` for candidate `c`, or null.
-const rejectBy = (list, c) => {
+const rejectBy = (list, c, ...position) => {
   for (const x of list) {
-    const r = x.reject(c);
+    const r = x.reject(c, ...position);
     if (r) return r;
   }
   return null;
@@ -92,9 +92,6 @@ const MEET_M = 8,
   MEET_SIDE_M = 0.5;
 const QUEUE_GAP_M = 2.5;
 const LANE_RETURN_MARGIN_M = 8;
-// Inside the stay-back distance behind a snow plow, a manoeuvre may not end up closer to it than now,
-// give or take this.
-const PLOW_CLOSING_M = 0.05;
 const MIN_CHANGE_M = 12;
 const HOLD_LINE_M = 0.75; // a hard brake this far off the lane's centre keeps to its line
 // Scenery standing in the car's lane ahead, as far as this, gets nudges of a full metre on offer.
@@ -849,11 +846,6 @@ export function simulateAll(candidates, snap, world) {
   const mergeStop = lz?.wait ? lz.stop_s_route : null,
     letInStop = lz?.let_in_for ? lz.stop_s_route : null;
   const zipper = lz ? lz.side : null;
-  // a snow plow the car must stay back of, still ahead of it (sim/snow-plow.js): no candidate takes the
-  // car's front past its rear while the car is in a lane to its right (or, with the plow on its right
-  // in poor sight, at all)
-  const plow = snap.snow_plow?.holds && snap.snow_plow.gap_m >= 0 ? snap.snow_plow : null;
-  const anySide = plow?.lane === "right";
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
@@ -871,7 +863,7 @@ export function simulateAll(candidates, snap, world) {
   // none, by the place its rejection takes among the others
   const sims = {};
   for (const [slot, list] of Object.entries(SIMS))
-    sims[slot] = list.map((prepare) => prepare(world, snap, npcs)).filter(Boolean);
+    sims[slot] = list.map((prepare) => prepare(world, snap, npcs, { startS, horizon: HORIZON_S })).filter(Boolean);
   const checks = [
     ...sims.first,
     ...sims.afterCollision,
@@ -881,6 +873,7 @@ export function simulateAll(candidates, snap, world) {
     ...sims.beforeEmergency,
     ...sims.beforeMerge,
     ...sims.parking,
+    ...sims.afterMerge,
     ...sims.end,
   ];
   const wheelChecks = checks.filter((x) => x.afterLaw),
@@ -904,7 +897,6 @@ export function simulateAll(candidates, snap, world) {
       passesBox = false,
       passesMerge = false,
       passesLetIn = false,
-      passesPlow = false,
       passesEv = false,
       pastTurnPoint = false,
       pastSpace = false,
@@ -981,7 +973,7 @@ export function simulateAll(candidates, snap, world) {
         // likewise turning right across a cyclist's line of travel
         if (hook && s + FRONT > hook.yield_s_route + HOOK_STOP_M - 0.5) hooks = true;
         // (and where the registered features' checks look along the route: sim/features/index.js)
-        for (const x of routeChecks) x.along(s, FRONT, car);
+        for (const x of routeChecks) x.along(s, FRONT, car, lateral, t);
         // (1.5 m past it, as a short stop overshoots)
         if (evStop !== null && s + FRONT > evStop + 1.5) passesEv = true;
         // (1.5 m past where it stops, as a short stop overshoots: into the 2 m it leaves behind the bus)
@@ -1000,13 +992,6 @@ export function simulateAll(candidates, snap, world) {
         // where it lets one in is still behind it)
         if (mergeStop !== null && s + FRONT > mergeStop + 1) passesMerge = true;
         if (letInStop !== null && s + FRONT > letInStop + 1.5) passesLetIn = true;
-        // (its rear where it will be by then, going on at its speed)
-        if (
-          plow &&
-          s + FRONT > plow.s_rear_route + plow.speed * t + 0.5 &&
-          (anySide || lateral + route.frameMove(startS, s) - plow.lateral_route > SAME_LANE_M)
-        )
-          passesPlow = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -1190,16 +1175,7 @@ export function simulateAll(candidates, snap, world) {
     // the closed one, to the end of the closure)
     else if (zipper === "closed" && c.change) reject = lz.merged ? "into_closed_lane" : "merges_early";
     else if (zipper === "open" && c.change && c.change.dir === lz.closed_lane) reject = "into_closed_lane";
-    else if (passesPlow && c.law.kind !== "hard_brake") reject = "passes_plow_on_right";
-    // (ending up closer to a snow plow it must stay back of than the stay-back distance, and closer
-    // than now: in its lane or a lane to its right, still behind it, the plow going on at its speed)
-    else if (
-      plow &&
-      c.law.kind !== "hard_brake" &&
-      (anySide || lateral + route.frameMove(startS, s) - plow.lateral_route > -SAME_LANE_M) &&
-      plow.s_rear_route + plow.speed * HORIZON_S - (s + FRONT) < Math.min(plow.keep_back_m, plow.gap_m - PLOW_CLOSING_M)
-    )
-      reject = "follows_plow_too_close";
+    else if ((reject = rejectBy(sims.afterMerge, c, s, FRONT, lateral)));
     else if (passesHold && c.law.kind !== "hard_brake")
       reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";

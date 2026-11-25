@@ -32,7 +32,7 @@ import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
 import { createLaneClosureMesh, syncLaneClosure } from "./render/lane-closure.js";
 import { laneClosureNotice } from "./sim/lane-closure.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
-import { isPlow, plowNotice } from "./sim/snow-plow.js";
+import { isPlow } from "./sim/snow-plow.js";
 import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
 import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
 import { hazardNotice } from "./sim/hidden-hazards.js";
@@ -1427,7 +1427,6 @@ export async function boot() {
     announcedAdvance = null,
     announcedClosure = null,
     announcedNightFlash = null,
-    announcedPlow = null,
     announcedPark = null,
     announcedHazard = null,
     announcedTraffic = null,
@@ -1777,13 +1776,6 @@ export async function boot() {
     }
     if (!nightNotice) announcedNightFlash = null;
     announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
-    // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
-    const plowLine = plowNotice(world);
-    if (plowLine && plowLine.key !== announcedPlow) {
-      announcedPlow = plowLine.key;
-      hud.badge(plowLine.text, plowLine.wait ? "safety" : "", 2500);
-    }
-    if (!plowLine) announcedPlow = null;
     // parking at the destination: the space, checking behind, reversing in, parked
     const parkLine = parkNotice(world);
     if (parkLine && parkLine.key !== announcedPark) {

@@ -5,15 +5,16 @@ export const COACH_SLOTS = {
   tips: [
     "afterSpeed",
     "afterBlind",
+    "beforeMerge",
     "afterMerge",
     "afterCyclists",
     "beforeJunction",
     "afterFollowing",
     "afterBusLanes",
   ],
-  reports: ["afterSpeed", "afterFlagger", "afterBrakes", "end"],
-  guidance: ["afterDirection", "afterBlind", "beforeSample", "afterSample"],
-  deductions: ["safety", "beforeLegality", "afterSpeed", "legality", "comfort", "post"],
+  reports: ["beforeMerge", "afterSpeed", "afterFlagger", "afterBrakes", "end"],
+  guidance: ["afterBlindSpeed", "afterDirection", "afterBlind", "beforeSample", "afterSample"],
+  deductions: ["safety", "followingRules", "beforeLegality", "afterSpeed", "legality", "comfort", "post"],
 };
 
 const WORLD_FIELDS = ["property", "seen", "calls"];
@@ -59,7 +60,7 @@ function mapProblem(name, map, test) {
 
 function obstacleProblem(obstacle) {
   if (!object(obstacle) || !callback(obstacle.test)) return "obstacle needs a test function";
-  for (const field of ["traffic", "fixed", "likePedestrian", "long"])
+  for (const field of ["traffic", "fixed", "likePedestrian", "long", "fixedCruise", "noCyclistPass"])
     if (!optional(obstacle[field], boolean)) return `obstacle.${field} must be a boolean`;
   for (const field of ["predict", "visible", "oncoming", "parkedClearance", "noParking"])
     if (!optional(obstacle[field], callback)) return `obstacle.${field} must be a function`;
@@ -72,6 +73,7 @@ function obstacleProblem(obstacle) {
 function metricProblem(metric) {
   for (const field of ["name", "failure", "label"]) if (!text(metric[field])) return `metric has no ${field}`;
   if (!fieldName(metric.name)) return "metric has an invalid name";
+  if (!optional(metric.initial, nonnegative)) return "metric.initial must be a nonnegative finite number";
   if (!optional(metric.category, (category) => typeof category === "string" && Object.hasOwn(CATEGORIES, category)))
     return "metric has an unknown category";
   if (!optional(metric.decimals, (n) => Number.isSafeInteger(n) && n >= 0 && n <= 15))

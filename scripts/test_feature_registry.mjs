@@ -74,6 +74,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "scrambles",
       "workZones",
       "outages",
+      "plows",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -87,7 +88,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
   );
   assert.deepEqual(
     R.FLEET_FEATURES.map((f) => f.key),
-    ["collection"],
+    ["collection", "plows"],
   );
 });
 

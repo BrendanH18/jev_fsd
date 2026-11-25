@@ -49,7 +49,6 @@ import {
 } from "./streetcar.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
-import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
 import {
   EGO_ID,
   LET_IN_DECEL,
@@ -213,13 +212,6 @@ const AUDIT_TRAIN_MOVING_MPS = 1;
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
-// Snow plows (sim/snow-plow.js): the car passes one when its centre draws level with the plow's,
-// going its way in the lane beside it. On its right (the plow not turning left), that is passing it on
-// the right, counted once a pass. Having passed one on the left, moving back into its lane with its
-// rear less than the stay-back distance, less AUDIT_CUT_SLACK_M, ahead of the plow's front is cutting
-// in front of it (an event for coaching, once a pass).
-const AUDIT_PLOW_M = 40;
-const AUDIT_CUT_SLACK_M = 3;
 // Lane closures (sim/lane-closure.js). In the closed lane, the car owes its wait at the merge point once,
 // at the merge (the nearest in its lane to it), it could stop there braking at up to 3.5 m/s^2 and has not
 // been let in; going through the merge point owing it is merging out of turn, forcing in (counted once a
@@ -345,10 +337,7 @@ export class World {
       safety_brakes: 0,
       fallbacks: 0,
       deadlock_overrides: 0,
-      plow_right_passes: 0,
     };
-    this.plowPass = new Map(); // snow plow id -> where the car was beside it last tick, and what it has counted this pass
-    this.plowsSeen = false; // whether a snow plow has worked the streets this drive (sim/snow-plow.js)
     this.mergeCall = null; // the lane closure the car is at, and what it owes and has counted there
     this.closuresSeen = false; // whether a lane closure has stood this drive (sim/lane-closure.js)
     this.events = []; // transient per-step events for the UI
@@ -499,7 +488,6 @@ export class World {
     this.trainYields?.clear();
     this.onTracks = null;
     this.inBox = null;
-    this.plowPass.clear();
     this.mergeCall = null;
     this.mergeWait = null;
     this.mergeLetIn = null;
@@ -970,7 +958,6 @@ export class World {
     this.auditArrow();
     for (const audit of AUDIT_BEFORE_MERGE) audit(this);
     for (const audit of AUDIT_AFTER_FLAGGER) audit(this);
-    this.auditPlows();
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
     if (this.busLanes) auditBusLanes(this, dt);
@@ -995,54 +982,6 @@ export class World {
     const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
     if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
     this.kerbContact = on;
-  }
-
-  // Passing a snow plow on the right, and cutting back in front of one passed on the left (see
-  // AUDIT_PLOW_M).
-  auditPlows() {
-    const npcs = this.npcs || [];
-    if (!npcs.some(isPlow)) {
-      this.plowPass.clear();
-      return;
-    }
-    this.plowsSeen = true;
-    const ego = this.ego,
-      keep = stayBack(this._road?.limit ?? 11.2);
-    for (const n of npcs) {
-      if (!isPlow(n)) continue;
-      const rel =
-        Math.abs(n.x - ego.x) < AUDIT_PLOW_M && Math.abs(n.y - ego.y) < AUDIT_PLOW_M ? plowRelation(ego, n) : null;
-      if (!rel) {
-        this.plowPass.delete(n.id);
-        continue;
-      }
-      const prev = this.plowPass.get(n.id),
-        pass = prev ? { ...prev } : { right: false, left: false, cut: false };
-      // (the car's centre drawing level with the plow's, from behind; and the plow getting ahead again
-      // starts a new pass)
-      if (prev && prev.ahead > 0 && rel.ahead_m <= 0) {
-        const beside = Math.abs(rel.right_m) > SAME_LANE_M && Math.abs(rel.right_m) < NEXT_LANE_M;
-        if (beside && rel.right_m < 0 && !turningLeft(n) && !pass.right) {
-          pass.right = true;
-          this.violations.plow_right_passes++;
-          this.events.push({ type: "passed_plow_on_right", plow: n.id });
-        }
-        if (beside && rel.right_m > 0) pass.left = true;
-      } else if (prev && prev.ahead <= 0 && rel.ahead_m > 0)
-        Object.assign(pass, { right: false, left: false, cut: false });
-      if (
-        pass.left &&
-        !pass.cut &&
-        Math.abs(rel.right_m) < SAME_LANE_M &&
-        rel.clear_m > -1 &&
-        rel.clear_m < keep - AUDIT_CUT_SLACK_M
-      ) {
-        pass.cut = true;
-        this.events.push({ type: "cut_in_front_of_plow", plow: n.id, ahead_m: Math.round(rel.clear_m * 10) / 10 });
-      }
-      pass.ahead = rel.ahead_m;
-      this.plowPass.set(n.id, pass);
-    }
   }
 
   // At a lane closure: merging out of turn, merging early, and not letting someone in (see AUDIT_EARLY_M).

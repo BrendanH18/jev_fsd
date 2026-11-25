@@ -79,8 +79,6 @@ export const FLAG_TEXT = {
   takes_merge_turn: "it takes the turn of the car merging at the lane closure",
   into_closed_lane: "it moves into a closed lane",
   merges_early: "it leaves the closed lane before the merge point",
-  passes_plow_on_right: "it passes a snow plow on the right",
-  follows_plow_too_close: "it closes in behind a snow plow inside its stay-back distance",
   enters_unseen_junction: "it enters a junction before it can see that it is clear",
   passes_turn_round_point: "it drives past the point where the route turns round",
   passes_parking_space: "it drives past the parking space at the destination",

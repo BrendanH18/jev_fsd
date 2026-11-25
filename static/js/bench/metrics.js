@@ -108,8 +108,7 @@ export class DriveMetrics {
       ...(world.amberLightsSeen ? { amber_lights_run: v.amber_lights_run || 0 } : {}),
       stop_signs: v.stop_signs_run,
       failed_to_yield: v.failed_to_yield || 0,
-      // (only for a drive a snow plow worked in: sim/snow-plow.js)
-      ...(world.plowsSeen ? { plow_right_passes: v.plow_right_passes || 0 } : {}),
+      ...featureMetrics(world, v, "vehiclePassing"),
       // (only for a drive a lane closure stood in: sim/lane-closure.js)
       ...(world.closuresSeen ? { merge_cut_ins: v.merge_cut_ins || 0 } : {}),
       // (only for a drive in which traffic passes cyclists: sim/cyclist-pass.js)
@@ -177,7 +176,7 @@ export function failures(m) {
   if (m.stop_signs) f.push("stop sign");
   if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
-  if (m.plow_right_passes) f.push("passed plow on the right");
+  f.push(...featureFailures(m, "vehiclePassing"));
   if (m.merge_cut_ins) f.push("merged out of turn");
   if (m.close_passes) f.push("passed a cyclist too close");
   if (m.bus_lane_driving > 1) f.push("drove in a reserved bus lane");

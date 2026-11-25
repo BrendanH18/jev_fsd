@@ -11,7 +11,7 @@ const CORE_AUDITS = {
   red_lights_run: "Red light",
   stop_signs_run: "Missed stop",
   failed_to_yield: "Failed to yield",
-  plow_right_passes: "Passed a snow plow on the right",
+  ...Object.fromEntries(countersAt("vehiclePassing")),
   merge_cut_ins: "Merged out of turn at a lane closure",
   close_passes: "Passed a cyclist closer than the minimum passing distance",
   ...Object.fromEntries(countersAt("afterRestrictions")),
@@ -25,7 +25,8 @@ const AUDITS = [
   ...Object.entries(CORE_AUDITS),
   ...countersAt("beforeRunner"),
   ...COUNTER_AUDITS.filter(
-    ({ at }) => !["beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
+    ({ at }) =>
+      !["vehiclePassing", "beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
   ).map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;

@@ -1,7 +1,6 @@
 // Deterministic coaching model, independent of the driver. Deductions accumulate in simulation
 // time, so pauses, frame rate and the decision API cannot change the score.
 import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
-import { egoPlow } from "./snow-plow.js";
 import {
   featureCoachCap,
   featureCoachCorridor,
@@ -21,17 +20,14 @@ import {
 export const SCORE_VERSION = 1;
 export const SCORE_WEIGHTS = { safety: 0.4, legality: 0.3, comfort: 0.2, control: 0.1 };
 export const SPEED_GRACE_MPS = 5 / 3.6;
-const clamp = (n, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
-const round = (n, digits = 1) => Math.round(n * 10 ** digits) / 10 ** digits;
-// Closer than the stay-back distance less this, moving, behind a snow plow the car must stay back of,
-// is following it too closely (sim/snow-plow.js).
-const PLOW_CLOSE_SLACK_M = 10;
 const COUNTERS = {
   collisions: "Collision",
   red_lights_run: "Red light",
   stop_signs_run: "Missed stop",
   failed_to_yield: "Failed to yield",
 };
+const clamp = (n, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
+const round = (n, digits = 1) => Math.round(n * 10 ** digits) / 10 ** digits;
 
 export class DriveScore {
   constructor(world, { title = "Free drive", map = "", driver = "manual", route = null } = {}) {
@@ -68,14 +64,6 @@ export class DriveScore {
     // (and with hidden traffic, sim/hidden-traffic.js: failures to yield to a vehicle the car could
     // not see as it pulled out, hidden behind another)
     this.hiddenCutoffs = 0;
-    // (with a snow plow at work, sim/snow-plow.js: time following one too closely, passing one on the
-    // right, and moving back in front of one too soon after passing it on the left; reported only for
-    // a drive a plow worked in)
-    this.plows = false;
-    this.plowClose = 0;
-    this.plowCounted = null;
-    this.plowRightPasses = 0;
-    this.plowCutIns = 0;
     // (with a lane closure, sim/lane-closure.js: merging out of turn, not letting someone in, and merging
     // early; reported only for a drive a closure stood in)
     this.closures = false;
@@ -211,28 +199,13 @@ export class DriveScore {
         });
       }
     }
-    // a snow plow (sim/snow-plow.js): stay back of it
-    if (world.plowsSeen) this.plows = true;
     if (world.closuresSeen) this.closures = true;
-    const plow = this.plows ? egoPlow(world, road?.limit ?? 11.2) : null;
-    const plowClose =
-      !!plow?.holds && speed > 1 && plow.rel.gap_m > -1 && plow.rel.gap_m < plow.keep - PLOW_CLOSE_SLACK_M;
-    if (plowClose) {
-      this.plowClose += dt;
-      if (this.plowCounted !== plow.plow.id) {
-        this.plowCounted = plow.plow.id;
-        this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id });
-      }
-    }
+    const followingGuidance = featureCoachMessage("afterBlindSpeed", this, coachContext);
     if (world.amberLightsSeen) this.amberLightsSeen = true;
     if (world.busLanesSeen) this.busLanesSeen = true;
     observeFeatureCoach(this, world);
     for (const ev of world.events || []) {
       featureCoachEvent(this, ev);
-      if (ev.type === "passed_plow_on_right") {
-        this.plowRightPasses++;
-        this.incident("plow_right_pass", "Passed a snow plow on the right", { plow: ev.plow });
-      }
       if (ev.type === "merged_out_of_turn") {
         this.mergeCutIns++;
         this.incident("merge_cut_in", "Merged out of turn: forced in ahead of the car whose turn it was", {
@@ -249,10 +222,6 @@ export class DriveScore {
       if (ev.type === "merged_early") {
         this.earlyMerges++;
         this.incident("early_merge", "Merged early instead of using the lane to the merge point", { zone: ev.zone });
-      }
-      if (ev.type === "cut_in_front_of_plow") {
-        this.plowCutIns++;
-        this.incident("plow_cut_in", "Moved back in too close in front of a snow plow", { plow: ev.plow });
       }
       if (ev.type === "amber_light")
         this.incident(
@@ -304,11 +273,10 @@ export class DriveScore {
           : blocking
             ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
             : corridorGuidance ||
-              (plowClose
-                ? `Drop back. Stay ${plow.keep} m behind the snow plow.`
-                : blindFast
-                  ? `Slow to ${Math.round(blind.limit_mps * 3.6)}. Parked cars hide the sidewalk: someone could step out.`
-                  : featureCoachMessage("afterBlind", this, coachContext)));
+              followingGuidance ||
+              (blindFast
+                ? `Slow to ${Math.round(blind.limit_mps * 3.6)}. Parked cars hide the sidewalk: someone could step out.`
+                : featureCoachMessage("afterBlind", this, coachContext)));
     this.coach =
       featureCoachMessage("beforeSample", this, coachContext) ||
       immediate ||
@@ -435,13 +403,7 @@ export class DriveScore {
     const safety = featureCoachDeduct(
       "safety",
       this,
-      100 -
-        collisions * 35 -
-        atFault * 15 -
-        this.danger * 3 -
-        this.closeFollowing * 0.6 -
-        this.blindSpeeding * 1.2 -
-        this.plowClose * 0.6,
+      100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2,
     );
     const afterAmber = featureCoachDeduct("beforeLegality", this, 100 - delta("amber_lights_run") * 25);
     const afterSpeed = featureCoachDeduct(
@@ -452,9 +414,7 @@ export class DriveScore {
     const legality = featureCoachDeduct(
       "legality",
       this,
-      afterSpeed -
-        this.plowRightPasses * 20 -
-        this.plowCutIns * 10 -
+      featureCoachDeduct("followingRules", this, afterSpeed) -
         this.mergeCutIns * 20 -
         this.mergeTurnsTaken * 10 -
         this.closePasses * 20,
@@ -508,14 +468,7 @@ export class DriveScore {
       tips.push(
         "A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.",
       );
-    if (this.plowRightPasses)
-      tips.push(
-        "Never pass a snow plow on the right. Its blade throws snow and debris that way, and a wing blade can reach well into the next lane.",
-      );
-    if (this.plowClose > 1 || this.plowCutIns)
-      tips.push(
-        "Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h). Pass one only on the left, where you can see the road ahead is clear, and move back in well ahead of it.",
-      );
+    featureCoachTips("beforeMerge", this, tips);
     if (this.mergeCutIns || this.mergeTurnsTaken)
       tips.push(
         "Where a lane is closed, zipper merge: use both lanes right up to the merge point, then take turns, one vehicle from each lane. Don't force your way in out of turn, and don't close the gap on someone whose turn it is.",
@@ -609,13 +562,7 @@ export class DriveScore {
       ...featureCoachReport("afterBrakes", this, round),
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null,
       resets: this.resets,
-      ...(this.plows
-        ? {
-            plow_close_s: round(this.plowClose),
-            plow_right_passes: this.plowRightPasses,
-            plow_cut_ins: this.plowCutIns,
-          }
-        : {}),
+      ...featureCoachReport("beforeMerge", this, round),
       ...(this.closures
         ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges }
         : {}),

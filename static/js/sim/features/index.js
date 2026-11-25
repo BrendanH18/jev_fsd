@@ -193,6 +193,7 @@ import workZones from "./work-zones.js";
 import outages from "./outages.js";
 import { flashControl } from "../night-flash.js";
 import scrambles from "./scrambles.js";
+import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
 
 export const FEATURES = [
@@ -223,6 +224,7 @@ export const FEATURES = [
   scrambles,
   workZones,
   outages,
+  plows,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -259,6 +261,7 @@ export const SLOTS = {
     "beforeWorkZone",
     "afterCalming",
     "beforeRunner",
+    "afterParking",
     "parking",
     "driveways",
     "streetHazards",
@@ -277,13 +280,23 @@ export const SLOTS = {
     "beforeCurve",
     "beforeRoadside",
     "beforeParked",
+    "beforeCrosswalk",
     "afterSchoolBus",
     "driveways",
     "streetHazards",
     "beforeEmergency",
     "parking",
   ],
-  hazard: ["beforeWorkZone", "beforeRunner", "parking", "driveways", "streetHazards", "rearTraffic", "late"],
+  hazard: [
+    "beforeWorkZone",
+    "beforeRunner",
+    "afterParking",
+    "parking",
+    "driveways",
+    "streetHazards",
+    "rearTraffic",
+    "late",
+  ],
   laneOffer: ["afterPassing", "end"],
   laneChangeCandidate: ["end"],
   laneChangeStyle: ["end"],
@@ -322,6 +335,7 @@ export const SLOTS = {
     "streetHazards",
     "beforeEmergency",
     "parking",
+    "afterMerge",
     "end",
   ],
   state: [
@@ -329,6 +343,7 @@ export const SLOTS = {
     "signal",
     "afterFollowing",
     "beforePlow",
+    "nearbySpecial",
     "afterPlow",
     "beforeRunner",
     "restrictions",
@@ -347,6 +362,7 @@ export const SLOTS = {
     "signal",
     "afterJunctionBox",
     "afterClosure",
+    "afterParking",
     "afterPassing",
     "following",
     "beforeRunner",
@@ -364,6 +380,7 @@ export const SLOTS = {
     "pedestrian",
     "beforeSchoolBus",
     "beforeMerge",
+    "nearbySpecial",
     "afterPlow",
     "afterAllWay",
     "beforeBusLanes",
@@ -380,6 +397,7 @@ export const SLOTS = {
     "afterParking",
   ],
   metric: [
+    "vehiclePassing",
     "headlights",
     "afterHeadlights",
     "pxo",
@@ -395,7 +413,14 @@ export const SLOTS = {
     "junctions",
   ],
   evQueueHold: ["end"],
-  trafficManage: ["beforePlows", "afterPlows", "end"],
+  trafficManage: ["beforePlows", "dispatch", "afterPlows", "end"],
+  trafficFollowingLeader: ["end"],
+  trafficLeadPolicy: ["end"],
+  trafficPassingLaneBlocked: ["end"],
+  trafficMergeGap: ["end"],
+  laneGapBlocked: ["end"],
+  laneTargetFields: ["end"],
+  lanePassBlocked: ["end"],
   trafficDriver: ["end"],
   trafficManeuver: ["beforeSpecial", "end"],
   trafficStop: ["afterMerge", "end"],
@@ -611,6 +636,7 @@ export function buildFeatures(world, options, seed, map, position) {
     const enabled = options[f.key] ?? (f.defaultCount === undefined ? false : 0);
     world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
     if (f.seen) world[f.seen] = false;
+    if (f.metric?.initial !== undefined) world.violations[f.metric.name] = f.metric.initial;
     if (f.calls) world[f.calls] = new Map();
   }
 }
