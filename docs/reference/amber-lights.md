@@ -9,7 +9,8 @@ and seeded benchmarks retain their existing amber handling and metric keys.
 A safe stop needs 0.5 m plus speed times the 0.4 s decision allowance and the vehicle's
 actuator lag, plus speed squared divided by twice `comfort().decel`. This is a conservative
 simulator model, not a statutory stopping distance. `ego.amberChoices` latches the decision
-per physical approach and displayed signal phase when the lamp first becomes visible.
+per physical approach and displayed signal phase when the lamp first becomes visible. Invalid
+position, speed or clock samples leave any latched decision in place.
 The stop branch uses a response-aware braking profile through amber and the following red;
 the clear branch caps speed at observation speed until the rear clears the crossing street,
 including when red follows the legal entry. A car whose bumper has already crossed

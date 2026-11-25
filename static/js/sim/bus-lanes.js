@@ -5,24 +5,47 @@
 // not driving in it.
 import { laneChangeLength } from "./controller.js";
 export const BUS_TURN_M = 50;
-export function busLaneActive(lane, clock) {
-  if (!clock || !Number.isFinite(clock.hour)) return false;
-  if (!lane.hours) return true;
-  const minute = clock.hour * 60,
-    day = clock.weekday ?? 0; // (Monday = 0; drive clocks default to Monday)
-  return lane.hours.some((w) =>
-    w.start <= w.end
-      ? w.days.includes(day) && minute >= w.start && minute < w.end
-      : (w.days.includes(day) && minute >= w.start) || (w.days.includes((day + 6) % 7) && minute < w.end),
+function validWindow(window) {
+  return (
+    Number.isInteger(window?.start) &&
+    window.start >= 0 &&
+    window.start < 1440 &&
+    Number.isInteger(window.end) &&
+    window.end >= 0 &&
+    window.end <= 1440 &&
+    Array.isArray(window.days) &&
+    Array.from(window.days).every((day) => Number.isInteger(day) && day >= 0 && day < 7)
   );
 }
+
+export function busLaneActive(lane, clock) {
+  const hour = clock?.hour;
+  if (!lane || !Number.isFinite(hour) || hour < 0 || hour >= 24) return false;
+  const hours = lane.hours;
+  if (!Array.isArray(hours)) return true; // absent and unrecognized schedules retain the reservation
+  const minute = hour * 60;
+  const day = clock.weekday ?? 0;
+  if (!Number.isInteger(day) || day < 0 || day > 6) return hours.length > 0;
+  return hours.some((w) => {
+    if (!validWindow(w)) return true;
+    if (w.start <= w.end) return w.days.includes(day) && minute >= w.start && minute < w.end;
+    return (w.days.includes(day) && minute >= w.start) || (w.days.includes((day + 6) % 7) && minute < w.end);
+  });
+}
+
+function busLaneLayer(map) {
+  return Array.isArray(map?.buslanes) ? map.buslanes : [];
+}
+
 export function reservedLane(map, edge, index, clock, kind = "car") {
-  return (map.buslanes || []).find(
-    (l) =>
-      l.edge === edge &&
-      l.lane === index &&
-      busLaneActive(l, clock) &&
-      !l.allowed.includes(kind === "bike" ? "bicycle" : kind),
+  const vehicleClass = kind === "bike" ? "bicycle" : kind;
+  return busLaneLayer(map).find(
+    (lane) =>
+      lane &&
+      lane.edge === edge &&
+      lane.lane === index &&
+      busLaneActive(lane, clock) &&
+      !(Array.isArray(lane.allowed) && lane.allowed.includes(vehicleClass)),
   );
 }
 export function legalBusLane(
@@ -37,10 +60,13 @@ export function legalBusLane(
 ) {
   return curb || (turn === "right" && remaining <= BUS_TURN_M) || !reservedLane(map, edge, index, clock, kind);
 }
-export function routeBusLane(route, s, clock, curb = false, i = route.laneEdgeAt(s)) {
-  const edge = route.map.edges.get(route.edges[i]);
+export function routeBusLane(route, s, clock, curb = false, i) {
+  if (!Number.isFinite(s)) return null;
+  i ??= route?.laneEdgeAt?.(s);
+  if (!Number.isSafeInteger(i) || i < 0) return null;
+  const edge = route?.map?.edges?.get(route.edges?.[i]);
   if (!edge) return null;
-  const lanes = (route.map.buslanes || []).filter((l) => l.edge === edge.id);
+  const lanes = busLaneLayer(route.map).filter((l) => l?.edge === edge.id);
   if (!lanes.length) return null;
   const starts = route.laneEdgeStarts(),
     remaining = starts[i + 1] - s;
@@ -88,9 +114,10 @@ export function auditBusLanes(world, dt) {
   const { map, route, ego } = world;
   if (!world.clock) return;
   const near = map.nearestLane(ego.x, ego.y, ego.psi, 5);
-  if (!near || !(map.buslanes || []).some((l) => l.edge === near.lane.edge && busLaneActive(l, world.clock))) return;
+  if (!near || !busLaneLayer(map).some((l) => l?.edge === near.lane.edge && busLaneActive(l, world.clock))) return;
   world.busLanesSeen = true;
-  if (ego.v < 0.2 || !reservedLane(map, near.lane.edge, near.lane.idx, world.clock)) return;
+  if (!Number.isFinite(dt) || dt <= 0 || !Number.isFinite(ego.v) || ego.v < 0.2) return;
+  if (!reservedLane(map, near.lane.edge, near.lane.idx, world.clock)) return;
   // (on the route's own street: rounding the corner of the right turn, the route is already on the next one)
   const curb = !!world.parking || !!world.parkedIn,
     i = route ? route.edges.indexOf(near.lane.edge) : -1;
@@ -100,6 +127,9 @@ export function auditBusLanes(world, dt) {
   // (or leaving the curb lane it turned right into, over a lane change's length: latched at the speed
   // it had when it started out of the lane, so slowing on the way across does not shorten it)
   if (b?.turned_in_m != null && b.turned_in_m <= turnInAllowance(world, near)) return;
-  world.violations.bus_lane_driving = (world.violations.bus_lane_driving || 0) + Math.max(0, ego.v) * dt;
+  const previous = world.violations.bus_lane_driving;
+  const distance = (Number.isFinite(previous) && previous > 0 ? previous : 0) + ego.v * dt;
+  if (!Number.isFinite(distance)) return;
+  world.violations.bus_lane_driving = distance;
   world.events.push({ type: "bus_lane_driving", edge: near.lane.edge });
 }

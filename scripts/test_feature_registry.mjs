@@ -184,6 +184,10 @@ test("the core runs every slot, and names no registered feature", () => {
       'turn-restrictions.js"',
       'high-beams.js"',
       'red-turn-signs.js"',
+      'night-flash.js"',
+      'left-on-red.js"',
+      'amber.js"',
+      'bus-lanes.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -191,6 +195,18 @@ test("the core runs every slot, and names no registered feature", () => {
       assert.equal(imports.length, 0, `${path} imports ${name}`);
     }
     for (const field of [
+      "world.nightFlash",
+      "this.nightFlash",
+      "world.leftOnRed",
+      "this.leftOnRed",
+      "world.amberLights",
+      "this.amberLights",
+      "world.busLanes",
+      "this.busLanes",
+      "snap.bus_lane",
+      "snap.amber_clear",
+      "amber_lights_run",
+      "bus_lane_driving",
       "snap.contraflow_cyclist",
       "snap.sun_glare",
       "snap.traffic_calming",

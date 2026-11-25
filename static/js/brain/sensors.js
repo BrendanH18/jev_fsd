@@ -446,10 +446,7 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
       !directive && phaseOverride && world.visibility.canSee(ego, ...junction)
         ? firstHookResult(SENSE_SIGNAL_CONTROL, world, c, phaseOverride)
         : null;
-    const policy =
-      !directive && inter && junction && world.visibility.canSee(ego, ...junction)
-        ? firstHookResult(VISIBLE_SIGNAL_POLICY, world, c, inter)
-        : null;
+    const policy = !directive && inter ? firstHookResult(VISIBLE_SIGNAL_POLICY, world, c, inter) : null;
     const control = replacement?.control ?? policy?.control ?? c.control;
     const leftTurn =
       (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") &&

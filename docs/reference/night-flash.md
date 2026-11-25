@@ -4,7 +4,8 @@ The [feature registry](../feature-interface.md) record in `sim/features/night-fl
 registers `World.nightFlash` and uses the signal policy in `sim/night-flash.js`.
 Free drives enable it unless
 `?nightflash=0` and in the `after-midnight` challenge (Halifax, Morris at Barrington, seed 39042).
-It requires a clock: 23:00 <= hour or hour < 05:00. Selection draws no randomness and uses the
+It uses a finite local hour from 00:00 to before 24:00. The overnight window starts at
+23:00 and ends at 05:00. Selection draws no randomness and uses the
 pack's existing `roadRank`: primary/secondary and links = 3, tertiary and links = 2, others = 1.
 Every approach in one phase group must rank strictly above every approach in the other. Equal
 or overlapping ranks retain normal timing. This is a documented simulator policy, not municipal

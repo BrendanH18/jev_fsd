@@ -510,26 +510,43 @@ export const recordProblem = (record) => featureRecordProblem(record, SLOTS);
 export const registryProblem = (records) => featureRegistryProblem(records, SLOTS);
 const problem = registryProblem(FEATURES);
 if (problem) throw new Error(`Feature registry: ${problem}.`);
+freezeDeclarations(FEATURES);
+freezeDeclarations(SLOTS);
 
-// The functions of hook `name` at `slot`, in registration order (bound to their record as `this`).
-// A core module asks for its hooks when it loads, and that may be while the records are still loading,
-// through an import cycle (the snowbanks record's simulation reaches sim/npc.js, say): the list it is
-// handed is then filled once they have all loaded, before any of it can run.
+function freezeDeclarations(object) {
+  if (!object || typeof object !== "object" || Object.isFrozen(object)) return;
+  Object.freeze(object);
+  for (const { value } of Object.values(Object.getOwnPropertyDescriptors(object))) freezeDeclarations(value);
+}
+
+// A core module can ask before the registry finishes loading through an import cycle.
+// Keep its list identity and fill the list in registration order once all records are ready.
+function hookLists() {
+  return (hookLists.state ??= { byName: new Map(), pending: [], ready: false });
+}
+
 export function hooks(name, slot = "end") {
+  const state = hookLists();
+  if (!state.byName.has(name)) state.byName.set(name, new Map());
+  const slots = state.byName.get(name);
+  if (slots.has(slot)) return slots.get(slot);
   const out = [];
-  if (hooks.ready) fillHooks(out, name, slot);
-  else (hooks.pending ||= []).push([out, name, slot]);
+  if (state.ready) fillHooks(out, name, slot);
+  else state.pending.push([out, name, slot]);
+  slots.set(slot, out);
   return out;
 }
+
 function fillHooks(out, name, slot) {
+  if (name === "metric" || name === "prompt" || name === "notice")
+    throw new Error(`Feature registry: ${name} is data. Read it through recordsAt().`);
   if (!Object.hasOwn(SLOTS, name) || !SLOTS[name].includes(slot))
     throw new Error(`Feature registry: no slot "${slot}" for ${name}.`);
-  for (const f of FEATURES) {
-    const h = f[name];
-    if (!h) continue;
-    const at = slotOf(h);
-    if (at === slot) out.push((typeof h === "function" ? h : h.run).bind(f));
+  for (const record of FEATURES) {
+    const hook = record[name];
+    if (hook && slotOf(hook) === slot) out.push((typeof hook === "function" ? hook : hook.run).bind(record));
   }
+  Object.freeze(out);
 }
 
 // Return the first result when a feature takes over a core decision.
@@ -541,8 +558,11 @@ export function firstHookResult(list, ...args) {
   return null;
 }
 
+const ROUTE_OPTIONS = hooks("routeOptions");
 export function featureRouteOptions(world, rerouting = false) {
-  return Object.assign({}, ...hooks("routeOptions").map((options) => options(world, rerouting)));
+  const result = {};
+  for (const options of ROUTE_OPTIONS) Object.assign(result, options(world, rerouting));
+  return result;
 }
 
 const CONTROL_DIRECTION = hooks("controlDirection");
@@ -588,26 +608,32 @@ const EVENT_BADGES = Object.assign(Object.create(null), ...FEATURES.map((f) => f
 const PERCEPTION_REJECTIONS = Object.assign(Object.create(null), ...FEATURES.map((f) => f.perceptionRejections));
 
 export function announceFeatureNotices(slot, world, autopilot, views, announced, hud) {
+  if (!Object.hasOwn(NOTICES, slot)) throw new Error(`Feature registry: no notice slot "${slot}".`);
   for (const { key, notice } of NOTICES[slot]) {
     const previous = announced.get(key);
     const line = notice.read(world, autopilot, views, previous);
     if (line && line.key !== previous) {
-      announced.set(key, line.key);
+      if (line.key == null || typeof line.text !== "string" || !line.text.trim())
+        throw new Error(`Feature registry: ${key} returned a notice without a key or text.`);
       const style = typeof notice.style === "function" ? notice.style(line) : notice.style;
-      hud.badge(line.text, style, notice.duration);
+      hud.badge(line.text, style ?? "", notice.duration);
+      announced.set(key, line.key);
     } else if (!line && !notice.hold) announced.delete(key);
   }
 }
 
 export function featureEventBadge(event) {
-  const badge = EVENT_BADGES[event.type];
+  const badge = EVENT_BADGES[event?.type];
   return typeof badge === "function" ? badge(event) : badge;
 }
 
 export const featurePerceptionRejection = (id) => PERCEPTION_REJECTIONS[id];
 
 // Metrics in slot order, with registration order within each slot.
-export const FEATURE_METRICS = SLOTS.metric.flatMap((slot) => recordsAt("metric", slot).map((f) => f.metric));
+const METRIC_RECORDS = new Map(SLOTS.metric.map((slot) => [slot, recordsAt("metric", slot)]));
+export const FEATURE_METRICS = Object.freeze(
+  [...METRIC_RECORDS.values()].flatMap((records) => records.map((f) => f.metric)),
+);
 
 // The obstacle descriptor of the feature `o` belongs to, or null.
 const OBSTACLES = FEATURES.filter((f) => f.obstacle).map((f) => f.obstacle);
@@ -640,19 +666,27 @@ export function featureMetrics(world, violations, slot) {
   for (const {
     seen,
     metric: { name, decimals },
-  } of recordsAt("metric", slot)) {
+  } of METRIC_RECORDS.get(slot) || []) {
     if (!world[seen]) continue;
-    const value = violations[name] || 0;
-    const scale = 10 ** decimals;
-    out[name] = decimals === undefined ? value : Number.isFinite(value) ? Math.round(value * scale) / scale : null;
+    const value = Object.hasOwn(violations, name) ? (violations[name] ?? 0) : 0;
+    if (!Number.isFinite(value) || value < 0) out[name] = null;
+    else if (decimals === undefined) out[name] = value;
+    else {
+      const scale = 10 ** decimals;
+      const scaled = value * scale;
+      out[name] = Number.isFinite(scaled) ? Math.round(scaled) / scale : value;
+    }
   }
   return out;
 }
 
 // The failure texts of the features at `slot`, for a drive's metrics `m`.
 export const featureFailures = (m, slot) =>
-  recordsAt("metric", slot)
-    .filter(({ metric: { name, threshold } }) => (threshold === undefined ? m[name] : m[name] > threshold))
+  (METRIC_RECORDS.get(slot) || [])
+    .filter(
+      ({ metric: { name, threshold = 0 } }) =>
+        Object.hasOwn(m, name) && Number.isFinite(m[name]) && m[name] > threshold,
+    )
     .map((f) => f.metric.failure);
 
 // The LLM system prompt's lines at `slot`, each with its newline.
@@ -664,7 +698,10 @@ export const promptLines = (slot) =>
 // Whether a registered feature that is on reads the day of the year from the World's clock.
 const DAY = FEATURES.filter((f) => f.day);
 const UTC_OFFSET = FEATURES.filter((f) => f.utcOffset);
-const enabled = (world, f) => world[f.property ?? f.key]?.enabled;
+function enabled(world, f) {
+  const state = world[f.property ?? f.key];
+  return state === true || (state?.enabled ?? state?.count > 0);
+}
 export const featureNeedsDay = (world) => DAY.some((f) => enabled(world, f));
 export const featureNeedsUtcOffset = (world) => UTC_OFFSET.some((f) => enabled(world, f));
 
@@ -677,13 +714,18 @@ export function featureDecisionFields(snap) {
 }
 
 // Every World option a registered feature takes.
-export const FEATURE_OPTIONS = FEATURES.filter((f) => !f.buildFleet).map((f) => f.key);
-export const FLEET_FEATURES = FEATURES.filter((f) => f.buildFleet);
+export const FEATURE_OPTIONS = Object.freeze(FEATURES.filter((f) => !f.buildFleet).map((f) => f.key));
+export const FLEET_FEATURES = Object.freeze(FEATURES.filter((f) => f.buildFleet));
+const FEATURES_BY_POSITION = new Map(
+  [undefined, "early", "afterSpawn"].map((position) => [position, FEATURES.filter((f) => f.buildAt === position)]),
+);
 
 export function buildFeatures(world, options, seed, map, position) {
-  for (const f of FEATURES) {
-    if (f.buildAt !== position) continue;
-    const enabled = options[f.key] ?? (f.defaultCount === undefined ? false : 0);
+  const records = FEATURES_BY_POSITION.get(position);
+  if (!records) throw new Error(`Feature registry: unknown build position "${position}".`);
+  for (const f of records) {
+    const value = Object.hasOwn(options, f.key) ? options[f.key] : undefined;
+    const enabled = value ?? (f.defaultCount === undefined ? false : 0);
     world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
     if (f.seen) world[f.seen] = false;
     if (f.calls) world[f.calls] = new Map();
@@ -691,10 +733,11 @@ export function buildFeatures(world, options, seed, map, position) {
 }
 
 // Default snapshot fields that older readers expect even when the feature is inactive.
-export const FEATURE_SNAPSHOT_FIELDS = Object.assign({}, ...FEATURES.map((f) => f.snapshot));
+export const FEATURE_SNAPSHOT_FIELDS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.snapshot)));
 
 // (the records have loaded: fill the lists handed out before)
-hooks.ready = true;
-for (const [out, name, slot] of hooks.pending || []) fillHooks(out, name, slot);
-hooks.pending = null;
+const hookState = hookLists();
+for (const [out, name, slot] of hookState.pending) fillHooks(out, name, slot);
+hookState.pending.length = 0;
+hookState.ready = true;
 setSignalPhaseResolver(specialSignalPhase);

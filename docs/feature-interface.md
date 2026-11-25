@@ -11,8 +11,8 @@ potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddl
 road closures, double-parked vans, contraflow cyclists, low sun glare, garbage trucks, traffic calming,
 red-light runners, crossing guards, Ontario pedestrian crossovers, roadside stops, following distance,
 turn restrictions, high beams, no-turn-on-red signs, scramble crossings, work zones with flaggers and
-power cuts, overnight flashing signals, left turns on red, amber-light decisions, and bus-only lanes. Each record holds its core pipeline hooks and
-model wording.
+power cuts, overnight flashing signals, left turns on red, amber-light decisions, and bus-only
+lanes. Each record holds its core pipeline hooks and model wording.
 
 ## A record
 
@@ -96,15 +96,43 @@ decision. A corridor also prevents the start of a new oncoming-lane cyclist pass
 `detour` slot before the merge supplies the ego's preferred path to both following and candidate laws.
 An `examinerFail` hook returns a failure item or null without modifying the report.
 
+### Signal and lane policies
+
+- `specialSignalPhase` supplies a physical phase before advance greens or scramble timing.
+  `visibleSignalPolicy` supplies the signal, replacement stop and optional speed and yield policy
+  the driver can see. Replacement controls such as a power cut still take precedence.
+- `priorityLevel` changes an approach's priority for gap checks. `priorityJunction` lets a replacement
+  stop or a traffic junction check use the grouped signal's reference point, and
+  `priorityTrafficOutside` excludes traffic still waiting outside that junction.
+- `senseRedTurn` calls the existing gap calculation when an additional red turn is permitted.
+  `extraRedTurn` supplies its required lane and observed turn. The independent crossing audit takes
+  entry data through `redTurnMemory` and confirms the actual exit through `redTurnExit`. Traffic can
+  nominate its entry lane through `trafficRedTurnLane`.
+- `signalDecision` exposes the latched stopping profile to the planner and local drivers.
+  `observeSignal` observes the physical lamp before the crossing audit and can return an action for
+  entry. If that action returns fields for an arrow crossing, `arrowExitAudit` checks them on the
+  actual left-turn exit. `trafficSignalDecision` supplies the profile to traffic using the same policy.
+- `routeLaneIndex` selects a lane after ordinary route lane preparation. `routeLaneMerges` supplies
+  frame transitions where the lane selection changes at a street join. `laneOfferBlocked` filters
+  lane-change offers, and `candidateLaneReject` applies the restriction after collision checks and
+  before ordinary lane-change checks. The traffic hooks supply independent spawn, path, and live
+  lane-change decisions while leaving the normal gap check in the fleet.
+
 ### Registry validation
 
 Loading the registry validates the declarations before filling the hook lists. A hook can be a
 function at `end` or an object with a supported `at` and a callable `run`. Data records for metrics,
 notices and prompts have their own required fields. A notice's order is unique within its slot.
-World properties, seen flags and audit maps share one namespace, and feature snapshot fields and
-display text IDs each have one owner. Coach reports, guidance, deductions and tips take the same
-slot lists the coaching dispatcher uses. Keep label accessors lazy when a vehicle module can
-import the registry before its constants have initialized.
+World properties, seen flags and audit maps share one namespace. Snapshot fields, display text IDs,
+priority candidate IDs, audit failure reasons, and trace markers each have one owner. Snapshot
+defaults are scalar values copied into every snapshot. Declarations use enumerable data properties
+except that an obstacle label can use a getter for constants in modules that are still loading.
+Coach reports, guidance, deductions and tips take the same slot lists the coaching dispatcher uses.
+
+Set `metric.trace` to false for an aggregate metric that should appear in the report and verdict
+without emitting trace events. A `traceType` needs a threshold, while `eventType` identifies the
+World event used for replay markers. Score deductions can read a World counter's change since coaching
+began with `delta: true`. `capDelta` applies the same baseline when a violation caps the score.
 
 ## Slots: why results stay exactly the same
 

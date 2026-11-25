@@ -6,7 +6,8 @@ counts, busway sides and conditional hours map onto existing directed edge/lane
 indices. Weekday/time windows are minutes since midnight; unknown schedules are
 retained and conservatively active. The day comes from the world clock's `weekday`
 (Monday = 0, the default; `?weekday=` in free drives, and the app clock moves it on at
-midnight), as for turn restrictions. No clock means inactive.
+midnight), as for turn restrictions. A clock outside the local day cannot activate a lane. An
+invalid window keeps its reservation active when the clock has a usable hour.
 
 The [feature registry](../feature-interface.md) record in `sim/features/bus-lanes.js` enables
 `sim/bus-lanes.js` through `World.busLanes`. The policy covers sensing `bus_lane`, route lane choice,

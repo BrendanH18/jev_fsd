@@ -3539,11 +3539,12 @@ export class NpcFleet {
   }
 
   boxBusy(n, e) {
-    const node = firstHookResult(PRIORITY_JUNCTION, this.world, e.control, true) ?? this.map.nodes.get(e.to);
+    const junction = firstHookResult(PRIORITY_JUNCTION, this.world, e.control, true);
+    const node = junction ?? this.map.nodes.get(e.to);
     if (!node) return false;
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n) continue;
-      if (PRIORITY_TRAFFIC_OUTSIDE.some((outside) => outside(this.world, e.control, o, null, true))) continue;
+      if (PRIORITY_TRAFFIC_OUTSIDE.some((outside) => outside(this.world, e.control, o, null, true, junction))) continue;
       if (Math.hypot(o.x - node.x, o.y - node.y) > BOX_M) continue;
       const diff = Math.abs(wrap(o.psi - n.psi));
       if (diff > Math.PI / 6 && diff < (Math.PI * 5) / 6) {

@@ -417,7 +417,10 @@ export class DriveScore {
   }
 
   counterDelta(name) {
-    return Math.max(0, (this.lastCounters[name] || 0) - (this.baseline[name] || 0));
+    const current = this.lastCounters[name];
+    const original = this.baseline[name];
+    if (!Number.isFinite(current)) return 0;
+    return Math.max(0, current - (Number.isFinite(original) ? original : 0));
   }
 
   snapshot() {

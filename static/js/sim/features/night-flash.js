@@ -22,6 +22,7 @@ export default {
   },
   checkpoint: (world) => setNightFlash(world),
   controlReplace(world, control, edge) {
+    if (!world.nightFlash) return null;
     const resolved = flashControl(world, control, edge);
     return resolved === control ? null : resolved;
   },
@@ -55,17 +56,14 @@ export default {
     const inter = world.map.intersections.get(control.id);
     return flashing(inter, world) ? inter : null;
   },
-  priorityTrafficOutside(world, control, vehicle, rule, traffic) {
+  priorityTrafficOutside(world, control, vehicle, rule, traffic, junction) {
     if (!world.nightFlash) return false;
-    const inter = traffic
-      ? this.priorityJunction(world, control, true)
-      : rule === "major"
-        ? world.map.intersections.get(control.id)
-        : null;
+    const inter = traffic ? junction : rule === "major" ? world.map.intersections.get(control.id) : null;
     const a = inter ? approachTo(world.map, vehicle, inter.id, traffic) : null;
     return a && a.to_node_m > world.map.crossingHalfWidth(a.edge) + 0.1;
   },
   visibleSignalPolicy(world, c, inter) {
+    if (!world.nightFlash || !world.visibility.canSee(world.ego, inter.x, inter.y)) return null;
     const signal = flashState(inter, c.control.group, world);
     if (signal === FLASHING_RED) return { signal, control: flashControl(world, c.control, c.edge) };
     if (signal !== FLASHING_AMBER) return null;
