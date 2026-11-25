@@ -6,15 +6,24 @@
 // per map, labelled heldout/<map>); report them apart and never debug against them (docs/rules-baseline.md).
 // --mode hard runs the fixed hard city slice without sampling or changing its conditions.
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { benchPage, loopbackPort, parseOptions } from "./cli_tools.mjs";
+import {
+  benchPage,
+  checkFiles,
+  commaList,
+  loopbackPort,
+  parseOptions,
+  wholeNumber,
+  writeArtifact,
+} from "./cli_tools.mjs";
 
 // freeDriveOptions' imports use common.js, which reads the token at module load.
 globalThis.document = { querySelector: () => null };
 const { coveringArray, FEATURE_NAMES } = await import("../static/js/bench/features.js");
+const { WEATHER } = await import("../static/js/sim/weather.js");
 const { heldoutPlan } = await import("../static/js/bench/heldout.js");
 const hardCity = JSON.parse(await readFile(new URL("../data/suites/hard-city-v1.json", import.meta.url), "utf8"));
 
@@ -32,8 +41,10 @@ const VALUE_OPTIONS = [
   "json",
   "heldout",
   "timeout",
+  "only",
+  "skip",
 ];
-const FLAG_OPTIONS = ["dry-run", "list"];
+const FLAG_OPTIONS = ["dry-run", "list", "fail-on-audit", "fail-fast", "quiet", "progress", "require-count"];
 const USAGE = [
   "Usage: node --experimental-default-type=module scripts/soak.mjs [options]",
   "  --mode <all|city|pairs|hard>  task mode (default: all, or city with --heldout 1)",
@@ -46,7 +57,14 @@ const USAGE = [
   "  --heldout <0|1>               run held-out routes instead of tuned seeds",
   "  --port <port>                 local server port (default: PORT or 8331)",
   "  --timeout <ms>                per-configuration timeout in ms (default: 1200000)",
-  "  --json <path>                 write soak report JSON",
+  "  --json <path[.gz]>            write soak JSON, compressed with a .gz suffix",
+  "  --only <id,id>                keep the named configurations in this shard",
+  "  --skip <id,id>                omit the named configurations from this shard",
+  "  --fail-on-audit               fail when any drive fails its full verdict",
+  "  --fail-fast                   stop after the first failing configuration",
+  "  --require-count               fail if the suite produces fewer routes than requested",
+  "  --quiet                      emit only the final JSON to stdout",
+  "  --progress                   report configuration starts to stderr",
   "  --dry-run, --list             print shard assignments without running benchmarks",
   "  --help, -h                    show this help",
 ].join("\n");
@@ -61,7 +79,7 @@ export function soakPlan({
   heldout = false,
 } = {}) {
   if (!["all", "city", "pairs", "hard"].includes(mode)) throw new Error("mode must be all, city, pairs or hard.");
-  if (!Number.isInteger(shards) || shards < 1 || !Number.isInteger(shard) || shard < 0 || shard >= shards)
+  if (!Number.isSafeInteger(shards) || shards < 1 || !Number.isSafeInteger(shard) || shard < 0 || shard >= shards)
     throw new Error("shard must be a zero-based index below shards.");
   if (mode === "hard") {
     if (heldout) throw new Error("The hard city slice uses tuned routes.");
@@ -93,7 +111,7 @@ export function soakPlan({
     throw new Error("maps must contain map preset ids.");
   if (!seeds.length || seeds.some((s) => !Number.isSafeInteger(s) || s < 0))
     throw new Error("seeds must be nonnegative integers.");
-  if (!Number.isInteger(count) || count < 1) throw new Error("count must be a positive integer.");
+  if (!Number.isSafeInteger(count) || count < 1) throw new Error("count must be a positive integer.");
   const tasks = [];
   if (mode !== "pairs")
     for (const map of maps)
@@ -125,6 +143,15 @@ export function classifyResults(results) {
 }
 export const soakFailed = (r) => !!(r.throws.length || r.stuck.length || r.collisions.length);
 
+export function soakVerdict(task, run, categories, { hard, strict, requireCount } = {}) {
+  const expected = task.only?.length ?? (task.heldout ? task.seeds.length * task.count : task.count);
+  if (requireCount && run.results.length !== expected)
+    throw new Error(`Expected ${expected} routes; completed ${run.results.length}.`);
+  return hard
+    ? checkHardRun(task, run)
+    : !soakFailed(categories) && (!strict || run.results.every((r) => r.pass === true));
+}
+
 export function checkHardRun(task, run) {
   if (run.manifest?.maps?.[task.map]?.fingerprint !== task.map_sha)
     throw new Error(`${task.id}: map fingerprint changed from the slice definition.`);
@@ -143,28 +170,33 @@ async function main() {
   }
   const args = parsed.args;
   const port = loopbackPort(args.port ?? process.env.PORT ?? "8331");
-  const integer = (s, fallback) => (s === undefined ? fallback : /^\d+$/.test(s) ? Number(s) : NaN);
   if (args.heldout !== undefined && !["0", "1"].includes(args.heldout)) throw new Error("--heldout must be 0 or 1.");
-  const timeoutMs = integer(args.timeout, DEFAULT_TIMEOUT_MS);
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2 ** 31 - 1)
-    throw new Error("--timeout must be a positive number of milliseconds.");
+  const timeoutMs = wholeNumber("timeout", args.timeout, DEFAULT_TIMEOUT_MS, { min: 1, max: 2 ** 31 - 1 });
+  if (args.weather && !Object.hasOwn(WEATHER, args.weather))
+    throw new Error(`Unknown weather "${args.weather}": use ${Object.keys(WEATHER).join(", ")}.`);
+  if (args.json) checkFiles({}, { json: args.json });
   const heldout = args.heldout === "1";
   const hard = args.mode === "hard";
   if (heldout && (args.seeds !== undefined || args.count !== undefined))
     throw new Error("--heldout sets the seeds and routes: drop --seeds and --count.");
   if (hard && ["maps", "seeds", "count", "weather"].some((key) => args[key] !== undefined))
     throw new Error("--mode hard sets the conditions: drop --maps, --seeds, --count and --weather.");
-  const shard = integer(args.shard, 0);
-  const shards = integer(args.shards, 1);
-  const tasks = soakPlan({
+  const shard = wholeNumber("shard", args.shard, 0);
+  const shards = wholeNumber("shards", args.shards, 1, { min: 1 });
+  const planned = soakPlan({
     mode: args.mode ?? (heldout ? "city" : undefined),
-    maps: args.maps?.split(","),
-    seeds: args.seeds?.split(",").map((s) => integer(s)),
-    count: integer(args.count, 2),
+    maps: commaList("maps", args.maps) ?? undefined,
+    seeds: commaList("seeds", args.seeds)?.map((s) => wholeNumber("seeds", s)),
+    count: wholeNumber("count", args.count, 2, { min: 1 }),
     shard,
     shards,
     heldout,
   });
+  const only = commaList("only", args.only);
+  const skip = commaList("skip", args.skip);
+  const unknown = [...(only || []), ...(skip || [])].filter((id) => !planned.some((task) => task.id === id));
+  if (unknown.length) throw new Error(`Unknown configurations in shard ${shard}: ${unknown.join(", ")}.`);
+  const tasks = planned.filter(({ id }) => (!only || only.includes(id)) && !skip?.includes(id));
   if (args["dry-run"] || args.list) {
     const listed = tasks.map((task) => ({
       configuration: task.id,
@@ -180,11 +212,15 @@ async function main() {
     return 0;
   }
 
-  await benchPage(port);
+  if (tasks.length) await benchPage(port);
+  const say = args.quiet ? () => {} : console.log;
 
   const directory = await mkdtemp(join(tmpdir(), "jev-soak-")),
     runs = [];
-  const auditPolicy = hard ? "all drive verdicts count" : "report-only; throws, deadlocks/timeouts and collisions fail";
+  const auditPolicy =
+    hard || args["fail-on-audit"]
+      ? "all drive verdicts count"
+      : "report-only; throws, deadlocks/timeouts and collisions fail";
   const killGraceMs = Math.min(5000, Math.max(200, timeoutMs));
   let failed = false;
   try {
@@ -206,6 +242,7 @@ async function main() {
         weather,
         "--diagnostics",
         "1",
+        ...(args.quiet ? ["--quiet"] : []),
         "--json",
         path,
         ...(options.cover !== undefined ? ["--cover", String(options.cover)] : []),
@@ -222,7 +259,8 @@ async function main() {
             ]
           : []),
       ];
-      console.log(
+      if (args.progress) console.error(`[${index + 1}/${tasks.length}] Starting ${task.id}`);
+      say(
         JSON.stringify({
           configuration: task.id,
           ...task,
@@ -233,7 +271,8 @@ async function main() {
       try {
         const outcome = await new Promise((resolve, reject) => {
           const child = spawn(process.execPath, command, { stdio: ["ignore", "pipe", "pipe"] });
-          child.stdout.pipe(process.stdout);
+          if (args.quiet) child.stdout.resume();
+          else child.stdout.pipe(process.stdout, { end: false });
           let stderrTail = "";
           child.stderr.on("data", (chunk) => {
             process.stderr.write(chunk);
@@ -270,7 +309,11 @@ async function main() {
         }
         const run = JSON.parse(await readFile(path, "utf8"));
         const categories = classifyResults(run.results);
-        const passed = hard ? checkHardRun(task, run) : !soakFailed(categories);
+        const passed = soakVerdict(task, run, categories, {
+          hard,
+          strict: args["fail-on-audit"],
+          requireCount: args["require-count"],
+        });
         failed ||= !passed;
         const record = {
           ...task,
@@ -281,9 +324,9 @@ async function main() {
           results: run.results,
         };
         runs.push(record);
-        console.log(JSON.stringify({ configuration: task.id, ...categories }));
+        say(JSON.stringify({ configuration: task.id, ...categories }));
         for (const r of run.results.filter((r) => !r.pass || r.deadlocks))
-          console.log(
+          say(
             JSON.stringify({ configuration: task.id, route: r.id, failures: r.failures, diagnostics: r.diagnostics }),
           );
       } catch (error) {
@@ -291,6 +334,7 @@ async function main() {
         runs.push({ ...task, harness_error: error.message });
         console.error(JSON.stringify({ configuration: task.id, harness_error: error.message }));
       }
+      if (failed && args["fail-fast"]) break;
     }
     const report = {
       schema: 1,
@@ -301,9 +345,10 @@ async function main() {
       ...(heldout ? { heldout: true } : {}),
       audit_policy: auditPolicy,
       failed,
+      ...(runs.length < tasks.length ? { skipped: tasks.slice(runs.length).map(({ id }) => id) } : {}),
       runs,
     };
-    if (args.json) await writeFile(args.json, JSON.stringify(report, null, 1));
+    if (args.json) writeArtifact(args.json, JSON.stringify(report, null, 1), { gzip: args.json.endsWith(".gz") });
     console.log(JSON.stringify({ configurations: runs.length, failed, audit_policy: auditPolicy }));
   } finally {
     await rm(directory, { recursive: true, force: true });

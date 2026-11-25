@@ -21,7 +21,17 @@
 // still compared field for field (timings and optional comparison measurements aside).
 import { pathToFileURL } from "node:url";
 import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
-import { benchPage, jsonDifferences, parseOptions } from "./cli_tools.mjs";
+import {
+  benchPage,
+  checkFiles,
+  checkMode,
+  commaList,
+  jsonDifferences,
+  parseOptions,
+  readJson,
+  wholeNumber,
+  writeArtifact,
+} from "./cli_tools.mjs";
 
 const OPTIONS = [
   "brain",
@@ -37,6 +47,13 @@ const OPTIONS = [
   "agent",
   "browser-replay",
   "comparison-json",
+  "map",
+  "region",
+  "weather",
+  "hazard",
+  "difficulty",
+  "skip",
+  "limit",
 ];
 
 const USAGE = [
@@ -47,13 +64,24 @@ const USAGE = [
   "  --only <id,id>               run only selected drive ids",
   "  --track <guarded|open>       rule enforcement track (default: guarded)",
   "  --port <port>                local server port (default: PORT or 8331)",
-  "  --json <path>                write per-drive summary JSON report",
+  "  --json <path[.gz]>           write per-drive JSON report, compressed with a .gz suffix",
   "  --check <0|1|replay|submission>  exit 1 on failure, replay drift, or submission mismatch",
   "  --record <path[.gz]>         record model or local agent answers",
   "  --replay <path[.gz]>         replay from a recording",
   "  --reserve <usd>              stop recording when remaining budget falls below USD",
   "  --browser-replay <path>      export a playable replay for one drive (--replay + --only)",
   "  --comparison-json <path>     export driven-corridor score inputs for a guarded replay",
+  "  --map <id,id>                restrict drives to these maps",
+  "  --region <name,name>         restrict drives to these provinces",
+  "  --weather <name,name>        restrict drives by authored weather",
+  "  --hazard <id,id>             restrict drives by authored hazard",
+  "  --difficulty <name,name>     restrict drives by difficulty",
+  "  --skip <id,id>               exclude drive IDs",
+  "  --parking-only              select drives with destination parking",
+  "  --limit <N>                 run at most N drives after filtering",
+  "  --list                      list matching drives as JSON without a server",
+  "  --quiet                     emit only the final JSON to stdout",
+  "  --progress                  report drive starts to stderr",
   "  --help, -h                   show this help",
 ].join("\n");
 
@@ -84,7 +112,7 @@ const fail = (message) => {
 };
 let parsed;
 try {
-  parsed = parseOptions(process.argv.slice(2), OPTIONS);
+  parsed = parseOptions(process.argv.slice(2), OPTIONS, ["list", "quiet", "progress", "parking-only"]);
 } catch (error) {
   fail(error.message);
 }
@@ -93,6 +121,40 @@ if (parsed.help) {
   process.exit(0);
 }
 const args = parsed.args;
+const say = args.quiet ? () => {} : console.log;
+const FILTERS = ["map", "region", "weather", "hazard", "difficulty"];
+let only, skip, limit, filters;
+try {
+  checkMode(args.check, ["0", "1", "replay", "submission"]);
+  only = commaList("only", args.only);
+  skip = commaList("skip", args.skip);
+  limit = wholeNumber("limit", args.limit, Number.MAX_SAFE_INTEGER, { min: 1 });
+  filters = FILTERS.flatMap((name) => (args[name] ? [[name, commaList(name, args[name])]] : []));
+  checkFiles(
+    { replay: args.replay, agent: args.agent },
+    {
+      record: args.record,
+      json: args.json,
+      "browser-replay": args["browser-replay"],
+      "comparison-json": args["comparison-json"],
+    },
+  );
+} catch (error) {
+  fail(error.message);
+}
+const partial = Boolean(only || skip || filters.length || args.limit || args["parking-only"]);
+if (
+  args.list &&
+  (args.agent ||
+    args.brain ||
+    args.record ||
+    args.json ||
+    args["browser-replay"] ||
+    args["comparison-json"] ||
+    args.reserve ||
+    (args.check && args.check !== "0"))
+)
+  fail("--list only lists drives. Drop driver, check and output options.");
 
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
 if (args.agent && (args.brain || args.replay)) fail("--agent selects a local driver. Drop --brain and --replay.");
@@ -106,29 +168,20 @@ const checkSubmission = args.check === "submission";
 const checkReplay = args.check === "replay" || checkSubmission;
 if (checkReplay && (!args.replay || args.reserve !== undefined))
   fail(`--check ${args.check} requires --replay without a budget reserve.`);
-if (checkSubmission && (args.only || args["browser-replay"] || args["comparison-json"]))
+if (checkSubmission && (partial || args["browser-replay"] || args["comparison-json"]))
   fail("--check submission verifies the entire recording without replay exports.");
-if (args["browser-replay"] && (!args.replay || !args.only || String(args.only).includes(",")))
+if (args["browser-replay"] && (!args.replay || only?.length !== 1))
   fail("--browser-replay needs --replay and exactly one drive selected with --only.");
-const fs = await import("node:fs"),
-  { dirname, join } = await import("node:path"),
-  zlib = await import("node:zlib");
+const { lstatSync, writeFileSync } = await import("node:fs");
 const browserOutput = args["browser-replay"];
 const comparisonOutput = args["comparison-json"];
 if (comparisonOutput && !args.replay) fail("--comparison-json requires --replay.");
-if (comparisonOutput && fs.lstatSync(comparisonOutput, { throwIfNoEntry: false }))
+if (comparisonOutput && lstatSync(comparisonOutput, { throwIfNoEntry: false }))
   fail("--comparison-json must name a new file.");
-if (browserOutput) {
-  const source = fs.statSync(args.replay, { throwIfNoEntry: false });
-  const destination = fs.statSync(browserOutput, { throwIfNoEntry: false });
-  if (source && destination && source.dev === destination.dev && source.ino === destination.ino)
-    fail("--browser-replay must write to a different file from --replay.");
-}
 let replayJson = null;
 if (args.replay) {
   try {
-    const raw = fs.readFileSync(args.replay);
-    replayJson = JSON.parse(args.replay.endsWith(".gz") ? zlib.gunzipSync(raw).toString("utf8") : raw.toString("utf8"));
+    replayJson = readJson(args.replay);
   } catch (error) {
     fail(`Cannot read the recording ${args.replay}: ${error.message}`);
   }
@@ -145,18 +198,21 @@ if (!["guarded", "open"].includes(track)) fail(`Unknown track "${track}": use gu
 
 if (comparisonOutput && track !== "guarded") fail("--comparison-json requires a guarded recording.");
 
-const { base, page } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
-const token = page.match(/name="jev-csrf" content="([^"]+)"/)?.[1] || "";
+const { base, token } = args.list
+  ? {}
+  : await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
 globalThis.document = { querySelector: (sel) => (sel.includes("jev-csrf") ? { content: token } : null) };
 const nativeFetch = globalThis.fetch;
-globalThis.fetch = (path, opts) =>
-  nativeFetch(String(path).startsWith("/") ? base + path : path, { ...opts, redirect: "error" });
+if (!args.list)
+  globalThis.fetch = (path, opts) =>
+    nativeFetch(String(path).startsWith("/") ? base + path : path, { ...opts, redirect: "error" });
 
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
-const { evaluateChallenge } = await import("../static/js/lab/evaluation.js");
+const { challengeProvince } = await import("../static/js/lab/practice.js");
+const fieldOf = (drive, name) => (name === "region" ? challengeProvince(drive) : drive[name]);
 const { agentDefinitions, registerAgent } = await import("../static/js/brain/registry.js");
 const rec = await import("../static/js/brain/recording.js");
 const { LOCAL_RECORDING_FORMAT, LocalRecording } = await import("./local_recording.mjs");
@@ -203,11 +259,40 @@ if (replayJson) {
   if (gone.length) fail(`The recording has drives no longer in ${set}: ${gone.join(", ")}.`);
   drives = drives.filter((c) => c.id in replayJson.results);
 }
-const only = args.only ? String(args.only).split(",") : null;
-const unknown = (only || []).filter((id) => !drives.some((c) => c.id === id));
+const unknown = [...(only || []), ...(skip || [])].filter((id) => !drives.some((c) => c.id === id));
 if (unknown.length) fail(`No drive ${unknown.join(", ")} in ${set}.`);
-if (only) drives = drives.filter((c) => only.includes(c.id));
-if (checkReplay && !drives.length) fail("The recording has no drives to check.");
+for (const [name, values] of filters) {
+  const available = [...new Set(drives.map((drive) => fieldOf(drive, name)).filter(Boolean))].sort();
+  const unknown = values.filter((value) => !available.includes(value));
+  if (unknown.length)
+    fail(`Unknown --${name} value ${unknown.join(", ")} in ${set}. Available: ${available.join(", ")}.`);
+}
+drives = drives
+  .filter(
+    (drive) =>
+      (!only || only.includes(drive.id)) &&
+      !skip?.includes(drive.id) &&
+      (!args["parking-only"] || drive.park) &&
+      filters.every(([name, values]) => values.includes(fieldOf(drive, name))),
+  )
+  .slice(0, limit);
+if (args.list) {
+  await new Promise((resolve) =>
+    process.stdout.write(
+      `${JSON.stringify({
+        set,
+        drives: drives.map((drive) => {
+          const { id, title, map, weather, hazard, difficulty, park } = drive;
+          return { id, title, map, region: challengeProvince(drive), weather, hazard, difficulty, park: Boolean(park) };
+        }),
+      })}\n`,
+      resolve,
+    ),
+  );
+  process.exit(0);
+}
+if (!drives.length) fail(replayJson ? "The recording has no matching drives." : "The selection leaves no drives.");
+const { evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 
 // The challenge maps, with every layer, as the app loads them.
 const maps = {};
@@ -279,18 +364,6 @@ if (replayJson) {
   }
 }
 
-// (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
-const save = (recordingToSave) => {
-  const text = recordingToSave.serialize();
-  const directory = fs.mkdtempSync(join(dirname(args.record), ".arena-recording-"));
-  const tmp = join(directory, "recording");
-  try {
-    fs.writeFileSync(tmp, args.record.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
-    fs.renameSync(tmp, args.record);
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
-};
 const trimmed = (result) =>
   Object.fromEntries(Object.entries(rec.comparableResult(result)).filter(([k]) => !BULKY.includes(k)));
 // Comparison inputs are display measurements. Their availability does not determine replay fidelity.
@@ -337,7 +410,7 @@ const results = [],
   drifted = [],
   comparisons = {};
 let budgetStop = null;
-for (const challenge of drives) {
+for (const [index, challenge] of drives.entries()) {
   if (reserve !== null) {
     const { budget_usd: budget, spent_usd: spent } = (await api("/api/status")).spend || {};
     // A zero budget disables the spend limit. Refuse to start a reserved run without a limit.
@@ -350,6 +423,7 @@ for (const challenge of drives) {
       break;
     }
   }
+  if (args.progress) console.error(`[${index + 1}/${drives.length}] Starting ${challenge.id} on ${challenge.map}`);
   const tape = recording ? recording.tape(challenge.id, args.record ? "record" : "replay") : null;
   const recorded = replayJson?.results[challenge.id];
   const measureInputs = replayJson
@@ -373,8 +447,8 @@ for (const challenge of drives) {
   if (args.record) {
     recording.results[challenge.id] = { ...trimmed(r), result_sha: resultSha(r) };
     manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
-    setRecordingSuiteVersion(recording, only ? CUSTOM_SUITE : arenaSuiteVersion({ ...suite, maps: shas }, results));
-    save(recording);
+    setRecordingSuiteVersion(recording, partial ? CUSTOM_SUITE : arenaSuiteVersion({ ...suite, maps: shas }, results));
+    writeArtifact(args.record, recording.serialize(), { gzip: args.record.endsWith(".gz") });
   }
   if (replayJson) {
     const actualSha = resultSha(r);
@@ -396,26 +470,19 @@ for (const challenge of drives) {
     if (capture) {
       if (drifted.length) fail(`Cannot export ${challenge.id}: the replay differs from the recorded drive.`);
       const text = `${JSON.stringify(capture.finish(challenge, args.replay, recording, r))}\n`;
-      const directory = fs.mkdtempSync(join(dirname(browserOutput), ".browser-replay-"));
-      const temporary = join(directory, "replay.json");
-      try {
-        fs.writeFileSync(temporary, text);
-        fs.renameSync(temporary, browserOutput);
-      } finally {
-        fs.rmSync(directory, { recursive: true, force: true });
-      }
+      writeArtifact(browserOutput, text);
     }
   }
   const shares =
     r.model_share !== undefined ? ` model=${r.model_share} local=${r.local_share} fallback=${r.fallback_share}` : "";
-  console.log(
+  say(
     `${challenge.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} decisions=${r.decisions}${shares}${r.flagged_choices ? ` flagged=${r.flagged_choices}` : ""} cost=${r.cost_usd ?? 0}` +
       `${r.pass ? "" : ` failures=${(r.failures || []).join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}` +
       `${r.model_recording ? ` rec=${JSON.stringify(r.model_recording)}` : ""}`,
   );
 }
 // (progress, pace, comfort, margin and time lost, computed for display only: bench/scores.js)
-console.log(`scores ${JSON.stringify(driverScores(results.filter((r) => !r.stopped)))}`);
+say(`scores ${JSON.stringify(driverScores(results.filter((r) => !r.stopped)))}`);
 const passed = results.filter((r) => r.pass).length;
 const cost = results.reduce((sum, r) => sum + (r.cost_usd || 0), 0);
 const summary = {
@@ -432,7 +499,7 @@ const summary = {
 if (manifest) manifest.cost_usd = summary.cost_usd;
 const replayManifest = replayJson && recording.header.manifest;
 const exactReplay =
-  !only &&
+  !partial &&
   !budgetStop &&
   drifted.length === 0 &&
   replayJson &&
@@ -446,13 +513,13 @@ if (checkSubmission) {
 if (checkReplay && replayManifest?.engine === summary.engine && exactReplay) manifest = replayManifest;
 const suite_version = replayJson
   ? replaySuiteVersion(recording.header, exactReplay)
-  : (args.agent && !args.record) || only || budgetStop
+  : (args.agent && !args.record) || partial || budgetStop
     ? CUSTOM_SUITE
     : arenaSuiteVersion({ ...suite, maps: shas }, results);
 if (manifest && !replayJson) manifest.suite_version = suite_version;
 for (const result of results) result.suite_version = suite_version;
 if (args.json)
-  fs.writeFileSync(
+  writeArtifact(
     args.json,
     JSON.stringify(
       {
@@ -467,18 +534,19 @@ if (args.json)
       null,
       1,
     ),
+    { gzip: args.json.endsWith(".gz") },
   );
 if (comparisonOutput) {
   try {
-    fs.writeFileSync(comparisonOutput, `${JSON.stringify(comparisons, null, 1)}\n`, { flag: "wx" });
+    writeFileSync(comparisonOutput, `${JSON.stringify(comparisons, null, 1)}\n`, { flag: "wx" });
   } catch (error) {
     if (error.code === "EEXIST") fail("--comparison-json must name a new file.");
     throw error;
   }
 }
-if (args.record && results.length) console.log(`recorded ${results.length} drives to ${args.record}`);
+if (args.record && results.length) say(`recorded ${results.length} drives to ${args.record}`);
 if (replayJson)
-  console.log(
+  say(
     drifted.length
       ? `replay: ${drifted.join(", ")} did not play out as recorded`
       : `replay: all ${results.length} drives played out as recorded`,
