@@ -1,6 +1,9 @@
-import { h } from "../common.js";
-import { replayPosition, REPORT_INCIDENT_TIME_TOLERANCE_S } from "../lab/playback.js";
+import { copyText, h } from "../common.js";
+import { REPORT_INCIDENT_TIME_TOLERANCE_S } from "../lab/playback.js";
 import { interpolatePose } from "../sim/interpolate.js";
+
+import { downloadJson } from "./export.js";
+import { repositoryArtifact, suiteLabel } from "../lab/results.js";
 
 const SIZE = [1100, 600];
 const SIGNALS = { red: "#ff7777", yellow: "#ffca66", green: "#80f2ad" };
@@ -19,6 +22,7 @@ function streetView(canvas, replay) {
   [landscape.width, landscape.height] = SIZE;
   const bg = landscape.getContext("2d");
   const view = canvas.getContext("2d");
+  if (!bg || !view) throw new Error("2D canvas is unavailable");
   const path = (points) => {
     bg.beginPath();
     points.forEach(([x, y], i) => (i === 0 ? bg.moveTo(...screen(x, y)) : bg.lineTo(...screen(x, y))));
@@ -99,7 +103,8 @@ function streetView(canvas, replay) {
     view.rotate(-pose.psi);
     view.fillStyle = colour;
     view.beginPath();
-    view.roundRect(-length / 2, -carWidth / 2, length, carWidth, 3);
+    if (view.roundRect) view.roundRect(-length / 2, -carWidth / 2, length, carWidth, 3);
+    else view.rect(-length / 2, -carWidth / 2, length, carWidth);
     view.fill();
     view.fillStyle = "#273c4a";
     view.fillRect(1, -carWidth / 2 + 2, 3, carWidth - 4);
@@ -124,7 +129,7 @@ function streetView(canvas, replay) {
     replay.signals.forEach(([x, y], i) => {
       view.beginPath();
       view.arc(...screen(x, y), 6, 0, 2 * Math.PI);
-      view.fillStyle = SIGNALS[frame.lights[i]] || "#81929a";
+      view.fillStyle = Object.hasOwn(SIGNALS, frame.lights[i]) ? SIGNALS[frame.lights[i]] : "#81929a";
       view.fill();
       view.strokeStyle = "#172932";
       view.lineWidth = 2;
@@ -136,16 +141,19 @@ function streetView(canvas, replay) {
   };
 }
 
-function drawSparkline(canvas, frames, duration, currentTime, flaggedTimes) {
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width,
-    ht = canvas.height;
-  ctx.clearRect(0, 0, w, ht);
-  const maxSpeed = Math.max(20, ...frames.map((f) => f.ego.speed || 0));
+function speedChart(canvas, frames, duration, flaggedTimes) {
+  const chart = document.createElement("canvas");
+  const w = (chart.width = canvas.width);
+  const ht = (chart.height = canvas.height);
+  const ctx = chart.getContext("2d");
+  const view = canvas.getContext("2d");
+  if (!ctx || !view) return null;
+  const peakSpeed = frames.reduce((max, f) => Math.max(max, Math.abs(f.ego.speed)), 0);
+  const maxSpeed = Math.max(20, peakSpeed);
   const padX = 6,
     padY = 6;
-  const xFor = (t) => padX + (duration > 0 ? (t / duration) * (w - padX * 2) : 0);
-  const yFor = (spd) => ht - padY - (spd / maxSpeed) * (ht - padY * 2);
+  const xFor = (t) => padX + (t / duration) * (w - padX * 2);
+  const yFor = (spd) => ht - padY - (Math.abs(spd) / maxSpeed) * (ht - padY * 2);
 
   // Subtle horizontal reference grid
   ctx.strokeStyle = "rgba(255,255,255,0.08)";
@@ -179,26 +187,33 @@ function drawSparkline(canvas, frames, duration, currentTime, flaggedTimes) {
   });
   ctx.stroke();
 
-  // Playhead
-  const px = xFor(currentTime);
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(px, 2);
-  ctx.lineTo(px, ht - 2);
-  ctx.stroke();
-
-  // Peak label
   ctx.fillStyle = "#8da3b1";
   ctx.font = "10px ui-monospace, monospace";
-  ctx.fillText(`${Math.round(maxSpeed)} km/h`, padX + 2, 12);
+  ctx.fillText(`Peak ${Math.round(peakSpeed)} km/h`, padX + 2, 12);
+
+  return {
+    draw(time) {
+      view.clearRect(0, 0, w, ht);
+      view.drawImage(chart, 0, 0);
+      const x = xFor(time);
+      view.strokeStyle = "#ffffff";
+      view.lineWidth = 1.5;
+      view.beginPath();
+      view.moveTo(x, 2);
+      view.lineTo(x, ht - 2);
+      view.stroke();
+    },
+    timeAt(fraction) {
+      return clampReplayTime(((fraction * w - padX) / (w - 2 * padX)) * duration, duration);
+    },
+  };
 }
 
 const drives = [
-  ["jev-right-on-red", "Jev · Right on red · Calgary", "right-on-red", "d068809918d0d0e7"],
-  ["claude-haiku-flagger", "Claude Haiku · Flagger · Ottawa", "flagger", "a4599358446f908f"],
-  ["jev-flagger", "Jev · Flagger · Ottawa", "flagger", "037cff94081ae1bc"],
-  ["jev-unprotected-left", "Jev · The unprotected left · Ottawa", "unprotected-left", "6718f664d8f8681f"],
+  ["jev-right-on-red", "Jev · Right on red · Calgary", "right-on-red", "d068809918d0d0e7", "jev-latest"],
+  ["claude-haiku-flagger", "Claude Haiku · Flagger · Ottawa", "flagger", "a4599358446f908f", "claude-haiku-5-5"],
+  ["jev-flagger", "Jev · Flagger · Ottawa", "flagger", "037cff94081ae1bc", "jev-latest"],
+  ["jev-unprotected-left", "Jev · The unprotected left · Ottawa", "unprotected-left", "6718f664d8f8681f", "jev-latest"],
 ];
 const triggerLabels = {
   "right-on-red": "Cross traffic released",
@@ -234,91 +249,201 @@ export function incidentDrive(config, incident) {
   return `jev-${config.challenge}`;
 }
 
-const points = (values) =>
-  Array.isArray(values) && values.every((xy) => Array.isArray(xy) && xy.length === 2 && xy.every(Number.isFinite));
-const pose = (value) => [value?.x, value?.y, value?.psi].every(Number.isFinite);
+const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const text = (value) => typeof value === "string" && value.trim().length > 0;
+const points = (values, minimum = 0) =>
+  Array.isArray(values) &&
+  values.length >= minimum &&
+  values.every((xy) => Array.isArray(xy) && xy.length === 2 && xy.every(Number.isFinite));
+const pose = (value) => record(value) && [value.x, value.y, value.psi].every(Number.isFinite);
 
-function usableReplay(replay) {
+export function validatePublishedReplay(replay) {
+  const require = (valid, field) => {
+    if (!valid) throw new Error(`Replay data is incomplete or invalid (${field})`);
+  };
+  require(replay?.format === "jev-browser-replay/1", "format");
   const { bounds, route, roads, buildings, signals, frames, choices, events } = replay;
-  return (
-    Array.isArray(bounds) &&
-    bounds.length === 4 &&
-    bounds.every(Number.isFinite) &&
-    bounds[0] < bounds[2] &&
-    bounds[1] < bounds[3] &&
-    points(route) &&
-    route.length >= 2 &&
-    Array.isArray(roads) &&
-    roads.every((road) => points(road?.points) && Number.isFinite(road.width)) &&
-    Array.isArray(buildings) &&
-    buildings.every(points) &&
-    points(signals) &&
-    Array.isArray(choices) &&
-    choices.every((choice) => Number.isFinite(choice?.t)) &&
-    Array.isArray(events) &&
-    events.every((event) => Number.isFinite(event?.t) && typeof event.message === "string") &&
-    Array.isArray(frames) &&
-    frames.length >= 2 &&
-    frames.every(
-      (frame, i) =>
-        Number.isFinite(frame?.t) &&
-        (i === 0 || frame.t > frames[i - 1].t) &&
-        pose(frame.ego) &&
-        Number.isFinite(frame.ego.speed) &&
-        frame.traffic &&
-        typeof frame.traffic === "object" &&
-        Object.values(frame.traffic).every(pose) &&
-        Array.isArray(frame.lights) &&
-        frame.lights.length === signals.length,
-    )
-  );
+  require(text(replay.model), "recorded model");
+  require(typeof replay.pass === "boolean", "verdict");
+  require(replay.source == null || repositoryArtifact(replay.source), "recording path");
+  require(Array.isArray(bounds) && bounds.length === 4 && bounds.every(Number.isFinite), "map bounds");
+  const dx = bounds[2] - bounds[0],
+    dy = bounds[3] - bounds[1];
+  require(Number.isFinite(dx) && dx > 0 && Number.isFinite(dy) && dy > 0, "map dimensions");
+  require(points(route, 2), "route");
+  require(Array.isArray(roads) && roads.every((road) => points(road?.points, 2)), "road geometry");
+  require(roads.every((road) => Number.isFinite(road.width) && road.width > 0), "road widths");
+  require(Array.isArray(buildings) && buildings.every((building) => points(building, 3)), "building geometry");
+  require(points(signals), "signal locations");
+  require(Array.isArray(frames) && frames.length >= 2, "frame count");
+  require(frames[0]?.t === 0, "first frame time");
+  for (const [i, frame] of frames.entries()) {
+    require(Number.isFinite(frame?.t) && (!i || frame.t > frames[i - 1].t), `frame ${i + 1} time`);
+    require(pose(frame.ego), `frame ${i + 1} driven vehicle`);
+    require(Number.isFinite(frame.ego.speed), `frame ${i + 1} speed`);
+    require(record(frame.traffic) && Object.values(frame.traffic).every(pose), `frame ${i + 1} traffic`);
+    require(Array.isArray(frame.lights) &&
+      frame.lights.length === signals.length &&
+      frame.lights.every(text), `frame ${i + 1} lights`);
+  }
+  // Events can be rounded independently of the last frame.
+  const end = frames.at(-1).t + REPORT_INCIDENT_TIME_TOLERANCE_S;
+  const validTimes = (items) =>
+    Array.isArray(items) &&
+    items.every(
+      (item, i) => Number.isFinite(item?.t) && item.t >= 0 && item.t <= end && (!i || item.t >= items[i - 1].t),
+    );
+  require(validTimes(choices), "decision times");
+  require(choices.every((choice) => ["drive", "stop", "reverse"].includes(choice.motion)), "decision motion");
+  require(choices.every((choice) => choice.id == null || text(choice.id)), "manoeuvre ID");
+  require(choices.every((choice) => choice.flag == null || text(choice.flag)), "flag reason");
+  require(validTimes(events), "event times");
+  require(events.every((event) => text(event.message)), "event message");
+  return replay;
+}
+
+const clampReplayTime = (value, duration) => (Number.isFinite(value) ? Math.max(0, Math.min(value, duration)) : 0);
+
+// Latest item at or before the cursor, with the last of any same-time events.
+export function replayIndex(items, time) {
+  let low = 0,
+    high = items.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if (items[mid].t <= time) low = mid + 1;
+    else high = mid;
+  }
+  return low - 1;
+}
+
+export function replayMoment(items, time, direction, wrap = false) {
+  if (direction < 0) return items.findLast((item) => item.t < time)?.t ?? (wrap ? items.at(-1)?.t : null) ?? null;
+  return items[replayIndex(items, time) + 1]?.t ?? (wrap ? items[0]?.t : null) ?? null;
+}
+
+export function replaySelection(url) {
+  const id = url.searchParams.get("replay");
+  const time = url.searchParams.get("at");
+  const valid = drives.some(([value]) => value === id);
+  return {
+    id: valid ? id : drives[0][0],
+    time: valid && /^(?:\d+(?:\.\d+)?)$/.test(time ?? "") && Number.isFinite(Number(time)) ? Number(time) : 0,
+  };
 }
 
 export async function loadPublishedDrive(id, signal) {
   const entry = drives.find(([candidate]) => candidate === id);
   if (!entry) throw new Error("Unknown published replay");
-  const [, , challenge, resultSha] = entry;
+  const [, , challenge, resultSha, model] = entry;
   const response = await fetch(new URL(`../../replays/${id}.json`, import.meta.url), { signal });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  const replay = await response.json();
-  if (replay?.format !== "jev-browser-replay/1" || !usableReplay(replay)) throw new Error("Replay data is incomplete");
-  if (replay.challenge !== challenge || replay.result_sha !== resultSha)
+  const replay = validatePublishedReplay(
+    await response.json().catch((error) => {
+      if (signal?.aborted) throw error;
+      throw new Error("Replay response is not valid JSON", { cause: error });
+    }),
+  );
+  signal?.throwIfAborted();
+  if (replay.challenge !== challenge || replay.result_sha !== resultSha || replay.model !== model)
     throw new Error("Replay does not match the selected drive");
   return replay;
 }
 
 export function mountPublishedReplay(root) {
+  if (!root) return;
+  const current = () => replaySelection(new URL(location.href));
   const select = h(
     "select",
     { "aria-label": "Published drive" },
     ...drives.map(([value, title]) => h("option", { value }, title)),
   );
   const player = h("div");
-  root.replaceChildren(select, player);
+  const actions = h("div", { class: "published-replay-bar" });
+  const toolbar = h("div", { class: "published-replay-bar" }, select, actions);
+  root.replaceChildren(toolbar, player);
   let request;
-  async function load() {
+  async function load(time = 0, focus = false) {
     request?.abort();
     request = new AbortController();
     const { signal } = request;
+    const id = select.value;
+    actions.replaceChildren();
+    player.setAttribute("aria-busy", "true");
     player.replaceChildren(h("p", { role: "status" }, "Loading replay…"));
     try {
-      const replay = await loadPublishedDrive(select.value, signal);
-      if (signal.aborted) return;
-      signal.addEventListener("abort", showDrive(player, replay).pause, { once: true });
+      const replay = await loadPublishedDrive(id, signal);
+      if (signal.aborted || !root.isConnected) return;
+      const controls = showDrive(player, replay, undefined, time);
+      signal.addEventListener("abort", controls.pause, { once: true });
+      const fallback = h("textarea", { readonly: true, hidden: true, "aria-label": "Link to replay moment" });
+      const feedback = h("span", { "aria-live": "polite" });
+      actions.append(
+        h(
+          "button",
+          {
+            type: "button",
+            class: "chip-button",
+            onclick: async () => {
+              const url = new URL(location.href);
+              url.hash = "replay-heading";
+              url.searchParams.set("replay", id);
+              url.searchParams.set("at", controls.time().toFixed(3));
+              const copied = await copyText(url.href);
+              if (signal.aborted) return;
+              fallback.hidden = copied;
+              feedback.textContent = copied ? "Replay link copied." : "Copy the selected link.";
+              if (!copied) {
+                fallback.value = url.href;
+                fallback.select();
+                fallback.focus();
+              }
+            },
+          },
+          "Copy link to this moment",
+        ),
+        h(
+          "button",
+          { type: "button", class: "chip-button", onclick: () => downloadJson(`${id}-replay.json`, replay) },
+          "Download replay JSON",
+        ),
+        fallback,
+        feedback,
+      );
+      if (focus && document.activeElement === document.body) controls.focus();
     } catch (error) {
       if (!signal.aborted) {
+        const retry = h(
+          "button",
+          { type: "button", class: "chip-button", onclick: () => load(time, true) },
+          "Retry replay",
+        );
         player.replaceChildren(
           h("p", { role: "status" }, `Could not load the browser replay. ${error.message}.`),
-          h("button", { type: "button", class: "chip-button", onclick: load }, "Retry replay"),
+          retry,
         );
+        if (focus && document.activeElement === document.body) retry.focus();
       }
+    } finally {
+      if (!signal.aborted) player.removeAttribute("aria-busy");
     }
   }
-  select.onchange = load;
-  return load();
+  select.onchange = () => {
+    const url = new URL(location.href);
+    url.searchParams.set("replay", select.value);
+    url.searchParams.delete("at");
+    history.replaceState(history.state, "", url);
+    load();
+  };
+  const fromUrl = () => {
+    const { id, time } = current();
+    select.value = id;
+    return load(time);
+  };
+  window.addEventListener("popstate", fromUrl);
+  return fromUrl();
 }
 
-export function showDrive(root, replay, alignedTime) {
+export function showDrive(root, replay, alignedTime, initialTime = 0) {
   const { frames } = replay,
     duration = frames.at(-1).t,
     interactive = alignedTime === undefined;
@@ -345,8 +470,10 @@ export function showDrive(root, replay, alignedTime) {
   const speedSelect = h(
     "select",
     { "aria-label": "Playback speed" },
+    h("option", { value: "0.25" }, "0.25×"),
     h("option", { value: "0.5" }, "0.5×"),
     h("option", { value: "1", selected: true }, "1×"),
+    h("option", { value: "1.5" }, "1.5×"),
     h("option", { value: "2" }, "2×"),
   );
   const readout = h("span", { class: "published-replay-readout" });
@@ -362,6 +489,7 @@ export function showDrive(root, replay, alignedTime) {
         title: "Click to seek along speed chart",
       })
     : null;
+  const chart = sparkline ? speedChart(sparkline, frames, duration, flaggedTimes) : null;
   let time = 0,
     speedRate = 1,
     startedAt = 0,
@@ -378,8 +506,7 @@ export function showDrive(root, replay, alignedTime) {
             {
               type: "button",
               onclick: () => {
-                render(c.t);
-                pause();
+                seek(c.t);
               },
             },
             h("span", { class: "log-time" }, `${c.t.toFixed(1)}s`),
@@ -402,7 +529,7 @@ export function showDrive(root, replay, alignedTime) {
       decelKmhPerS > 5 || selected?.id === "hard_brake" || (selected?.motion === "stop" && frame.ego.speed > 0.5);
     let signal = frame.ego.signal || null;
     if (!signal) {
-      const look = frames[Math.min(frames.length - 1, index + 15)];
+      const look = frames[Math.max(index, replayIndex(frames, frame.t + 1.5))];
       const dPsi = wrapAngle((look?.ego.psi ?? frame.ego.psi) - frame.ego.psi);
       if (dPsi > 0.28 || /left/.test(selected?.id || "")) signal = "left";
       else if (dPsi < -0.28 || /right/.test(selected?.id || "")) signal = "right";
@@ -411,28 +538,30 @@ export function showDrive(root, replay, alignedTime) {
   }
 
   function render(at) {
-    time = Math.max(0, Math.min(at, duration));
+    time = clampReplayTime(at, duration);
     const ended = time >= duration;
-    const { index, alpha } = ended ? { index: frames.length - 1, alpha: 0 } : replayPosition(frames, 0, time);
+    const index = replayIndex(frames, time);
     const frame = frames[index],
       next = frames[index + 1];
-    const selectedIndex = replay.choices.findLastIndex((c) => c.t <= time);
+    const alpha = next ? (time - frame.t) / (next.t - frame.t) : 0;
+    const selectedIndex = replayIndex(replay.choices, time);
     const selected = selectedIndex >= 0 ? replay.choices[selectedIndex] : null;
     draw(frame, next, alpha, egoCues(index, selected));
     scrub.value = time;
     scrub.setAttribute("aria-valuetext", `${time.toFixed(1)} of ${duration.toFixed(1)} seconds`);
     const speed = Math.round(frame.ego.speed + ((next?.ego.speed ?? frame.ego.speed) - frame.ego.speed) * alpha);
-    readout.textContent = `${time.toFixed(1)} / ${duration.toFixed(1)} s · ${speed} km/h${frame.lights.length ? ` · Approach light ${frame.lights[0]}` : ""}`;
+    readout.textContent = `${time.toFixed(1)} / ${duration.toFixed(1)} s · ${Math.abs(speed)} km/h${speed < 0 ? " reversing" : ""}${frame.lights.length ? ` · Approach light ${frame.lights[0]}` : ""}`;
     choice.textContent = selected
       ? `Chosen: ${selected.id || selected.motion} · ${selected.motion}${selected.flag ? ` · Flagged: ${selected.flag}` : ""}`
       : "Awaiting first decision";
-    const latest = replay.events.findLast((e) => e.t <= time)?.message;
+    const latest =
+      replay.events[replayIndex(replay.events, ended ? duration + REPORT_INCIDENT_TIME_TOLERANCE_S : time)]?.message;
     const message =
       latest === "Authored hazard triggered"
         ? triggerLabels[replay.challenge] || "Hazard begins"
         : latest || "Drive started";
     if (message !== event.textContent) event.textContent = message;
-    if (sparkline) drawSparkline(sparkline, frames, duration, time, flaggedTimes);
+    chart?.draw(time);
     if (logList && selectedIndex !== activeChoiceIndex) {
       if (activeChoiceIndex >= 0 && logItems[activeChoiceIndex]) {
         logItems[activeChoiceIndex].classList.remove("active");
@@ -443,10 +572,10 @@ export function showDrive(root, replay, alignedTime) {
         const li = logItems[activeChoiceIndex];
         li.classList.add("active");
         li.firstElementChild.setAttribute("aria-current", "step");
-        const top = li.offsetTop - logList.offsetTop;
-        if (top < logList.scrollTop || top + li.offsetHeight > logList.scrollTop + logList.clientHeight) {
-          logList.scrollTop = Math.max(0, top - logList.clientHeight / 2 + li.offsetHeight / 2);
-        }
+        const item = li.getBoundingClientRect();
+        const sheet = logList.getBoundingClientRect();
+        if (!logList.contains(document.activeElement) && (item.top < sheet.top || item.bottom > sheet.bottom))
+          logList.scrollTop += item.top - sheet.top - (logList.clientHeight - item.height) / 2;
       }
     }
     return ended;
@@ -476,32 +605,16 @@ export function showDrive(root, replay, alignedTime) {
     }
   }
   function stepTime(delta) {
-    pause();
-    render(time + delta);
+    seek(time + delta);
   }
-  function stepDecision(dir) {
+  function seek(to) {
+    if (to === null) return;
+    render(to);
     pause();
-    const list = replay.choices;
-    if (!list.length) return;
-    if (dir < 0) {
-      const prev = list.findLast((c) => c.t < time - 0.05);
-      render(prev ? prev.t : list[0].t);
-    } else {
-      const next = list.find((c) => c.t > time + 0.05);
-      render(next ? next.t : list.at(-1).t);
-    }
   }
-  function stepFlag(dir) {
-    if (!flaggedChoices.length) return;
-    pause();
-    if (dir < 0) {
-      const prev = flaggedChoices.findLast((c) => c.t < time - 0.05);
-      render(prev ? prev.t : flaggedChoices.at(-1).t);
-    } else {
-      const next = flaggedChoices.find((c) => c.t > time + 0.05);
-      render(next ? next.t : flaggedChoices[0].t);
-    }
-  }
+  const stepDecision = (dir) => seek(replayMoment(replay.choices, time, dir));
+  const stepFlag = (dir) => seek(replayMoment(flaggedChoices, time, dir, true));
+  const stepEvent = (dir) => seek(replayMoment(replay.events, time, dir));
 
   play.onclick = togglePlay;
   speedSelect.onchange = () => {
@@ -509,15 +622,13 @@ export function showDrive(root, replay, alignedTime) {
     if (animation !== null) startedAt = performance.now() - (time * 1000) / speedRate;
   };
   scrub.oninput = () => {
-    render(Number(scrub.value));
-    pause();
+    seek(Number(scrub.value));
   };
-  if (sparkline) {
+  if (chart) {
     sparkline.addEventListener("click", (ev) => {
       const rect = sparkline.getBoundingClientRect();
       const frac = Math.max(0, Math.min(1, (ev.clientX - rect.left) / Math.max(1, rect.width)));
-      pause();
-      render(frac * duration);
+      seek(chart.timeAt(frac));
     });
   }
 
@@ -529,26 +640,20 @@ export function showDrive(root, replay, alignedTime) {
           return h("button", {
             type: "button",
             class: `published-replay-marker${isHazard ? " marker-hazard" : ""}`,
-            style: { left: `${duration > 0 ? (e.t / duration) * 100 : 0}%` },
+            style: { left: `${duration > 0 ? (clampReplayTime(e.t, duration) / duration) * 100 : 0}%` },
             title: `${e.t.toFixed(1)} s · ${label}`,
             "aria-label": `Jump to ${label} at ${e.t.toFixed(1)} seconds`,
-            onclick: () => {
-              render(e.t);
-              pause();
-            },
+            onclick: () => seek(e.t),
           });
         }),
         ...flaggedChoices.map((c) =>
           h("button", {
             type: "button",
             class: "published-replay-marker marker-flag",
-            style: { left: `${duration > 0 ? (c.t / duration) * 100 : 0}%` },
+            style: { left: `${duration > 0 ? (clampReplayTime(c.t, duration) / duration) * 100 : 0}%` },
             title: `${c.t.toFixed(1)} s · Flagged: ${c.flag}`,
             "aria-label": `Jump to flagged choice at ${c.t.toFixed(1)} seconds`,
-            onclick: () => {
-              render(c.t);
-              pause();
-            },
+            onclick: () => seek(c.t),
           }),
         ),
       ]
@@ -563,10 +668,30 @@ export function showDrive(root, replay, alignedTime) {
           { class: "published-replay-bar" },
           play,
           speedSelect,
+          h("button", { class: "chip-button", type: "button", onclick: () => seek(0) }, "Start"),
+          h("button", { class: "chip-button", type: "button", onclick: () => seek(duration) }, "End"),
           h("button", { class: "chip-button", type: "button", onclick: () => stepTime(-1) }, "−1 s"),
           h("button", { class: "chip-button", type: "button", onclick: () => stepTime(1) }, "+1 s"),
-          h("button", { class: "chip-button", type: "button", onclick: () => stepDecision(-1) }, "Prev decision"),
-          h("button", { class: "chip-button", type: "button", onclick: () => stepDecision(1) }, "Next decision"),
+          h(
+            "button",
+            { class: "chip-button", type: "button", onclick: () => stepDecision(-1), disabled: !replay.choices.length },
+            "Prev decision",
+          ),
+          h(
+            "button",
+            { class: "chip-button", type: "button", onclick: () => stepDecision(1), disabled: !replay.choices.length },
+            "Next decision",
+          ),
+          h(
+            "button",
+            { class: "chip-button", type: "button", onclick: () => stepEvent(-1), disabled: !replay.events.length },
+            "Prev event",
+          ),
+          h(
+            "button",
+            { class: "chip-button", type: "button", onclick: () => stepEvent(1), disabled: !replay.events.length },
+            "Next event",
+          ),
           h(
             "button",
             {
@@ -605,7 +730,14 @@ export function showDrive(root, replay, alignedTime) {
       tabindex: interactive ? "0" : null,
       onkeydown: interactive
         ? (ev) => {
-            if (ev.target?.matches?.("select, input, textarea")) return;
+            if (
+              ev.altKey ||
+              ev.ctrlKey ||
+              ev.metaKey ||
+              ev.defaultPrevented ||
+              ev.target?.matches?.("select, input, textarea")
+            )
+              return;
             if (ev.key === " " && ev.target?.tagName !== "BUTTON") {
               ev.preventDefault();
               togglePlay();
@@ -615,11 +747,25 @@ export function showDrive(root, replay, alignedTime) {
             } else if (ev.key === "ArrowRight") {
               ev.preventDefault();
               stepTime(ev.shiftKey ? 5 : 1);
+            } else if (ev.target === wrapper && (ev.key === "Home" || ev.key === "End")) {
+              ev.preventDefault();
+              seek(ev.key === "Home" ? 0 : duration);
             }
           }
         : null,
     },
-    h("p", { class: "results-note" }, `${replay.model} · Open track · ${replay.pass ? "Pass" : "Fail"}`),
+    h(
+      "p",
+      { class: "results-note" },
+      `${replay.model} · Open track · ${replay.pass ? "Pass" : "Fail"}${replay.suite_version ? ` · ${suiteLabel(replay.suite_version)}` : ""}`,
+    ),
+    interactive
+      ? h(
+          "p",
+          { class: "results-note" },
+          `${flaggedChoices.length} flagged choices in ${replay.choices.length} logged decisions`,
+        )
+      : null,
     canvas,
     h(
       "p",
@@ -627,13 +773,14 @@ export function showDrive(root, replay, alignedTime) {
       "Driven car in mint (red tail = braking, amber = signal) · Traffic in white · Dashed line for the planned route",
     ),
     controls,
-    sparkline,
+    chart ? sparkline : null,
     choice,
     event,
     logList,
   );
 
   root.replaceChildren(wrapper);
-  render(alignedTime ?? 0);
-  return { pause, render };
+  render(alignedTime ?? initialTime);
+  pause();
+  return { pause, render, time: () => time, focus: () => play.focus() };
 }

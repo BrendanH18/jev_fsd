@@ -23,6 +23,8 @@ class Request {
 class FakeIndexedDB {
   constructor({ quota = Infinity, quotaOnWrite = false, failOpen = false, throwOpen = false } = {}) {
     Object.assign(this, { quota, quotaOnWrite, failOpen, throwOpen, dbs: new Map(), failWrites: false });
+    this.reads = [];
+    this.failReads = false;
   }
   open(name, version) {
     if (this.throwOpen) throw fail("SecurityError");
@@ -61,7 +63,12 @@ class FakeDatabase {
     this.data.stores.set(name, { keyPath, records: new Map() });
   }
   transaction(names, mode = "readonly") {
-    return new Transaction(this, [names].flat(), mode);
+    const stores = [names].flat();
+    if (mode === "readonly") {
+      this.idb.reads.push(stores.join("|"));
+      if (this.idb.failReads) throw fail("UnknownError", "temporary read failure");
+    }
+    return new Transaction(this, stores, mode);
   }
   close() {}
 }
@@ -142,7 +149,9 @@ class Transaction {
       return;
     }
     this.state = "done";
-    this.oncomplete?.();
+    const pauseRead = this.mode === "readonly" && this.db.idb.pauseRead;
+    if (pauseRead) pauseRead(() => this.oncomplete?.());
+    else this.oncomplete?.();
   }
   abort() {
     if (this.state !== "active") throw fail("InvalidStateError");
@@ -643,5 +652,101 @@ await test("Check that deleting one duplicate fallback entry leaves the other co
   assert.deepEqual(times(await history.remove(repeated)), minutes(2, 1));
 });
 // End lab validation additions
+
+await test("migration keeps an oversized fallback evaluation and existing IndexedDB history", async () => {
+  const idb = new FakeIndexedDB();
+  const database = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await database.save(at(1));
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([big(2)])]]);
+  const migrated = await openEvaluationHistory({ indexedDB: idb, storage, maxBytes: 1000 });
+  assert.equal(migrated.kind, "localStorage");
+  assert.equal((await migrated.list())[0].created_at, at(2).created_at);
+  assert.equal((await database.list())[0].created_at, at(1).created_at);
+  assert.ok(storage.getItem(EVALUATION_HISTORY_KEY));
+});
+
+await test("malformed IndexedDB limits use the real history budget", async () => {
+  const store = await openEvaluationHistory({
+    indexedDB: new FakeIndexedDB(),
+    storage: local(),
+    maxRuns: 0,
+    maxBytes: NaN,
+  });
+  assert.equal(store.limit, MAX_SAVED_RUNS);
+  assert.equal((await store.save(at(1))).length, 1);
+});
+
+await test("a corrupt ID counter cannot overwrite a valid evaluation", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  const metadata = idb.dbs.get(EVALUATION_DB).stores.get("metadata").records;
+  metadata.set("last-id", "invalid");
+  assert.equal(times(await store.save(at(2))).join("|"), minutes(2, 1).join("|"));
+  assert.equal(metadata.get("last-id"), 2);
+});
+
+await test("ID exhaustion leaves the existing history intact", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  idb.dbs.get(EVALUATION_DB).stores.get("metadata").records.set("last-id", Number.MAX_SAFE_INTEGER);
+  await assert.rejects(store.save(at(2)), /exhausted its record IDs/);
+  assert.equal((await store.list()).length, 1);
+});
+
+await test("an invalid migration ledger leaves a new migration possible", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  idb.dbs
+    .get(EVALUATION_DB)
+    .stores.get("metadata")
+    .records.set("migrated-fallback-copies", [null, ["bad", -2]]);
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2)])]]);
+  const migrated = await openEvaluationHistory({ indexedDB: idb, storage });
+  assert.equal(migrated.kind, "indexedDB");
+  assert.equal(times(await migrated.list()).join("|"), minutes(2, 1).join("|"));
+});
+
+await test("reads pair the index and payloads in one transaction", async () => {
+  const idb = new FakeIndexedDB();
+  const a = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await a.save(at(1));
+  idb.reads.length = 0;
+  const b = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  assert.equal((await b.list())[0].created_at, at(1).created_at);
+  assert.equal(idb.reads.join(","), "evaluation-index|evaluations");
+});
+
+await test("temporary index read failures cannot undo successful writes or deletes in the visible list", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  idb.failReads = true;
+  const saved = await store.save(at(2));
+  assert.equal(times(saved).join("|"), minutes(2, 1).join("|"));
+  assert.equal(times(await store.remove(saved[1])).join("|"), at(2).created_at);
+  idb.failReads = false;
+  const reopened = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  assert.equal(times(await reopened.list()).join("|"), at(2).created_at);
+});
+
+await test("an older IndexedDB read cannot replace the visible history after a save", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  const paused = Promise.withResolvers();
+  idb.pauseRead = paused.resolve;
+  const oldList = store.list();
+  const resume = await paused.promise;
+  delete idb.pauseRead;
+  try {
+    assert.equal(times(await store.save(at(2))).join("|"), minutes(2, 1).join("|"));
+  } finally {
+    resume();
+  }
+  assert.equal(times(await oldList).join("|"), minutes(2, 1).join("|"));
+});
 
 console.log(`${checks} arena storage checks passed`);

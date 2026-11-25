@@ -1,5 +1,6 @@
 import { failures, DECIDED_BY, decidedByTotals, decidedByCounts } from "../bench/metrics.js";
 import { compatibleSuiteVersions, CUSTOM_SUITE, LEGACY_SUITE } from "../bench/suite-version.js";
+import { FEATURE_METRICS } from "../sim/features/index.js";
 import { hashText } from "../brain/recording.js";
 
 // (v3: decisions no event links to are compact, and repeats are folded together: lab/trace.js)
@@ -25,18 +26,22 @@ const CONDITIONS = {
   mode: "decision clock",
   limit_s: "time limit",
 };
-const COUNTERS = [
-  "time_s",
-  "collisions",
-  "red_lights",
-  "stop_signs",
-  "failed_to_yield",
-  "off_road_s",
-  "hard_brakes",
-  "cost_usd",
+const COUNTERS = ["collisions", "red_lights", "stop_signs", "failed_to_yield", "hard_brakes"];
+const MEASUREMENTS = ["time_s", "off_road_s", "cost_usd"];
+const AUDITS = [
+  "deadlocks",
+  "amber_lights_run",
+  "plow_right_passes",
+  "merge_cut_ins",
+  "close_passes",
+  "bus_lane_driving",
+  ...FEATURE_METRICS.map(({ name }) => name),
 ];
-const text = (value) => typeof value === "string" && value.length > 0 && value.length <= 240;
+const text = (value) => typeof value === "string" && value.trim().length > 0 && value.length <= 240;
 const finite = (value) => Number.isFinite(value) && value >= 0;
+const count = (value) => Number.isSafeInteger(value) && value >= 0;
+const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const optional = (value, valid) => value === undefined || valid(value);
 
 // A recorded decision's flags, error and snapshots. Up to v2 every decision has them all (`state` and
 // `candidates` null only when no event links to it). From v3 one no event links to may instead be a
@@ -64,14 +69,14 @@ function validDecision(d, compactAllowed) {
     d.flags.every(text) &&
     (d.error == null || typeof d.error === "string") &&
     typeof d.context_recorded === "boolean" &&
-    (d.state === null ? !d.context_recorded : !!d.state && typeof d.state === "object" && !Array.isArray(d.state)) &&
+    (d.state === null ? !d.context_recorded : record(d.state)) &&
     (d.candidates === null
       ? !d.context_recorded
       : Array.isArray(d.candidates) &&
         d.candidates.length <= 100 &&
         d.candidates.every(
           (c) =>
-            c &&
+            record(c) &&
             text(c.id) &&
             typeof c.eligible === "boolean" &&
             (c.reject === null || text(c.reject)) &&
@@ -85,7 +90,7 @@ export function validateEvaluation(value) {
   if (!value || !SCHEMAS.includes(value.schema))
     throw new Error("Choose a Jev agent evaluation JSON export (v1, v2 or v3).");
   if (
-    !Number.isInteger(value.challenge_version) ||
+    !Number.isSafeInteger(value.challenge_version) ||
     value.challenge_version < 1 ||
     !Array.isArray(value.results) ||
     !value.results.length ||
@@ -96,27 +101,32 @@ export function validateEvaluation(value) {
     throw new Error("The evaluation has invalid dates, versions or results.");
   if (value.suite_version !== undefined && ![LEGACY_SUITE, CUSTOM_SUITE].includes(value.suite_version))
     throw new Error("The evaluation has an unknown suite version.");
-  const results = value.results.map((r) => {
+  const results = value.results.map((r, index) => {
     if (r?.suite_version !== value.suite_version) throw new Error("The evaluation disagrees on suite version.");
     if (
-      !r ||
+      !record(r) ||
       !["challenge", "map", "brain", "weather", "time", "car"].every((k) => text(r[k])) ||
       !["lockstep", "realtime"].includes(r.mode) ||
-      !Number.isInteger(r.version) ||
+      !Number.isSafeInteger(r.version) ||
       r.version < 1 ||
-      !Number.isInteger(r.seed) ||
+      !Number.isSafeInteger(r.seed) ||
       (!(Number.isSafeInteger(r.pack) && r.pack >= 0) && !text(r.pack)) ||
-      !COUNTERS.every((k) => finite(r[k])) ||
+      !COUNTERS.every((k) => count(r[k])) ||
+      !MEASUREMENTS.every((k) => finite(r[k])) ||
+      !AUDITS.every((k) => optional(r[k], finite)) ||
+      !optional(r.parked, (parked) => typeof parked === "boolean") ||
+      !optional(r.trace_truncated, (truncated) => typeof truncated === "boolean") ||
       typeof r.arrived !== "boolean" ||
       typeof r.stopped !== "boolean" ||
       (r.latency_p50_ms !== null && !finite(r.latency_p50_ms)) ||
       // (who decided, reported for every driver but Rules: bench/metrics.js)
-      (r.model_decisions !== undefined &&
+      (DECIDED_BY.some((k) => r[k] !== undefined) &&
         !(
-          DECIDED_BY.every((k) => Number.isInteger(r[k]) && r[k] >= 0) &&
+          DECIDED_BY.every((k) => count(r[k])) &&
+          r.partial_decisions <= r.model_decisions &&
           ["model_share", "local_share", "fallback_share"].every((k) => r[k] === null || (finite(r[k]) && r[k] <= 1))
         )) ||
-      !r.report ||
+      !record(r.report) ||
       !finite(r.report.score) ||
       r.report.score > 100 ||
       typeof r.report.qualified !== "boolean" ||
@@ -126,11 +136,10 @@ export function validateEvaluation(value) {
         ? r.flagged_choices !== undefined || r.flagged_by_check !== undefined
         : !(
             r.track === "open" &&
-            Number.isInteger(r.flagged_choices) &&
-            r.flagged_by_check &&
-            typeof r.flagged_by_check === "object" &&
-            !Array.isArray(r.flagged_by_check) &&
-            Object.values(r.flagged_by_check).every((n) => Number.isInteger(n) && n >= 0) &&
+            count(r.flagged_choices) &&
+            record(r.flagged_by_check) &&
+            Object.keys(r.flagged_by_check).every(text) &&
+            Object.values(r.flagged_by_check).every(count) &&
             Object.values(r.flagged_by_check).reduce((a, n) => a + n, 0) === r.flagged_choices
           )) ||
       r.report.status !== (r.simulation_error ? "error" : r.stopped ? "stopped" : r.arrived ? "arrived" : "timeout") ||
@@ -138,29 +147,31 @@ export function validateEvaluation(value) {
       r.report.model_version < 1 ||
       !Array.isArray(r.report.incidents) ||
       r.report.incidents.length > 100 ||
-      r.report.incidents.some((e) => !e || !finite(e.at_s) || !text(e.type) || !text(e.message))
+      r.report.incidents.some((e) => !record(e) || !finite(e.at_s) || !text(e.type) || !text(e.message))
     )
-      throw new Error("The export contains an invalid evaluation result.");
+      throw new Error(`The export contains an invalid evaluation result at attempt ${index + 1}.`);
     if (value.schema !== SCHEMAS[0] && (!finite(r.limit_s) || r.limit_s === 0 || !text(r.engine_version)))
-      throw new Error("The export is missing its evaluation conditions.");
+      throw new Error(`The export is missing its evaluation conditions at attempt ${index + 1}.`);
     if (
       r.decisions_trace !== undefined &&
       (!Array.isArray(r.decisions_trace) ||
         r.decisions_trace.length > 600 ||
         r.decisions_trace.some(
-          (d) =>
-            !d ||
+          (d, i, trace) =>
+            !record(d) ||
             !finite(d.at_s) ||
-            !Number.isInteger(d.id) ||
+            (i > 0 && d.at_s < (trace[i - 1].until_s ?? trace[i - 1].at_s)) ||
+            !Number.isSafeInteger(d.id) ||
+            (i > 0 && d.id <= trace[i - 1].id) ||
             d.id < 1 ||
             !text(d.source) ||
             !["drive", "stop", "reverse"].includes(d.motion) ||
             !(d.chosen_id === null || text(d.chosen_id)) ||
+            !optional(d.headlights, text) ||
             !validDecision(d, value.schema === EVALUATION_SCHEMA),
-        ) ||
-        new Set(r.decisions_trace.map((d) => d.id)).size !== r.decisions_trace.length)
+        ))
     )
-      throw new Error("The export contains an invalid decision trace.");
+      throw new Error(`The export contains an invalid decision trace at attempt ${index + 1}.`);
     const contextTimes = new Map(
       (r.decisions_trace || []).filter((d) => d.context_recorded).map((d) => [d.id, d.at_s]),
     );
@@ -169,16 +180,22 @@ export function validateEvaluation(value) {
       (!Array.isArray(r.events) ||
         r.events.length > 1000 ||
         r.events.some(
-          (e) =>
-            !e ||
+          (e, i, events) =>
+            !record(e) ||
             !finite(e.at_s) ||
+            (i > 0 && e.at_s < events[i - 1].at_s) ||
             !text(e.type) ||
             !text(e.message) ||
             !(e.decision_id === null || contextTimes.get(e.decision_id) <= e.at_s) ||
-            !(e.decision_age_s === null || finite(e.decision_age_s)),
+            !(value.schema === EVALUATION_SCHEMA
+              ? e.decision_id === null
+                ? e.decision_age_s === null
+                : finite(e.decision_age_s)
+              : e.decision_age_s === null || finite(e.decision_age_s)) ||
+            !optional(e.count, (n) => count(n) && n > 0),
         ))
     )
-      throw new Error("The export contains an invalid incident timeline.");
+      throw new Error(`The export contains an invalid incident timeline at attempt ${index + 1}.`);
     const f = failures(r);
     // (an import's shares are derived from its validated counts, so a row and the summary agree)
     const decided =
@@ -202,18 +219,39 @@ export function validateEvaluation(value) {
   };
 }
 
+function evaluationKey(value) {
+  try {
+    return JSON.stringify(validateEvaluation(value));
+  } catch {
+    return null;
+  }
+}
+
+const LOCAL_RUNS = 10;
+function parseFallback(raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw ?? "[]");
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const valid = [];
+  for (const run of parsed) {
+    try {
+      valid.push(validateEvaluation(run));
+    } catch {
+      continue;
+    }
+    if (valid.length === LOCAL_RUNS) break;
+  }
+  return valid;
+}
+
 export function readEvaluations(storage) {
   try {
     storage ||= globalThis.localStorage;
-    const raw = JSON.parse(storage.getItem(EVALUATION_HISTORY_KEY) || "[]");
-    if (!Array.isArray(raw)) return [];
-    return raw.slice(0, 10).flatMap((run) => {
-      try {
-        return [validateEvaluation(run)];
-      } catch {
-        return [];
-      }
-    });
+    return parseFallback(storage.getItem(EVALUATION_HISTORY_KEY));
   } catch {
     return [];
   }
@@ -224,15 +262,15 @@ export function readEvaluations(storage) {
 export function saveEvaluation(run, storage, keep = null) {
   const validated = validateEvaluation(run);
   storage ||= globalThis.localStorage;
-  const old = readEvaluations(storage),
+  const old = parseFallback(storage.getItem(EVALUATION_HISTORY_KEY)),
     runs = [validated, ...old],
-    keepJson = keep ? JSON.stringify(keep) : null,
+    keepJson = evaluationKey(keep),
     kept = old.find((r) => keepJson !== null && JSON.stringify(r) === keepJson);
   const drop = () => {
     const i = runs.findLastIndex((r, k) => k > 0 && r !== kept);
     runs.splice(i > 0 ? i : runs.length - 1, 1);
   };
-  if (runs.length > 10) drop();
+  if (runs.length > LOCAL_RUNS) drop();
   let json = JSON.stringify(runs);
   const bytes = () => Math.max(json.length * 2, new Blob([json]).size); // localStorage can account for UTF-16 strings.
   while (runs.length > 1 && bytes() > MAX_HISTORY_BYTES) {
@@ -246,7 +284,7 @@ export function saveEvaluation(run, storage, keep = null) {
       storage.setItem(EVALUATION_HISTORY_KEY, json);
       break;
     } catch (error) {
-      if (error.name !== "QuotaExceededError" || runs.length === 1) throw error;
+      if (!["QuotaExceededError", "NS_ERROR_DOM_QUOTA_REACHED"].includes(error?.name) || runs.length === 1) throw error;
       drop();
       json = JSON.stringify(runs);
     }
@@ -331,7 +369,7 @@ function localHistory(storage) {
   const local = () => storage || globalThis.localStorage;
   return {
     kind: "localStorage",
-    limit: 10,
+    limit: LOCAL_RUNS,
     async list() {
       return readEvaluations(storage);
     },
@@ -340,11 +378,13 @@ function localHistory(storage) {
     },
     async remove(run) {
       return withFallbackLock(() => {
-        const runs = readEvaluations(storage),
-          json = JSON.stringify(run),
-          at = runs.findIndex((r) => JSON.stringify(r) === json);
+        const runs = parseFallback(local().getItem(EVALUATION_HISTORY_KEY)),
+          json = evaluationKey(run),
+          at = json === null ? -1 : runs.findIndex((r) => JSON.stringify(r) === json);
+        if (at === -1) return runs;
         const remaining = runs.filter((_, k) => k !== at);
-        local().setItem(EVALUATION_HISTORY_KEY, JSON.stringify(remaining));
+        if (!remaining.length) local().removeItem(EVALUATION_HISTORY_KEY);
+        else local().setItem(EVALUATION_HISTORY_KEY, JSON.stringify(remaining));
         return remaining;
       });
     },
@@ -355,44 +395,53 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
   let entries = []; // { id, run }, newest first
   const ids = new WeakMap();
   const runs = () => entries.map((e) => e.run);
-  // (the index, newest first, and the runs not yet in memory)
-  async function refresh(index) {
-    const known = new Map(entries.map((e) => [e.id, e.run])),
-      missing = index.filter((i) => !known.has(i.id));
-    if (missing.length) {
-      const tx = db.transaction(RUNS, "readonly"),
-        store = tx.objectStore(RUNS);
-      const loaded = await Promise.all(missing.map((i) => request(store.get(i.id))));
-      missing.forEach((i, k) => {
-        try {
-          if (loaded[k]) known.set(i.id, validateEvaluation(loaded[k]));
-        } catch {
-          /* a damaged record is left out */
-        }
-      });
+  let started = 0,
+    rendered = 0;
+  const sorted = (index) =>
+    index.filter((entry) => Number.isSafeInteger(entry?.id) && entry.id > 0).sort((a, b) => b.id - a.id);
+
+  async function list() {
+    const sequence = ++started;
+    try {
+      const tx = db.transaction([INDEX, RUNS], "readonly");
+      const done = finished(tx);
+      const loaded = (async () => {
+        const index = sorted(await request(tx.objectStore(INDEX).getAll()));
+        const known = new Map(entries.map((e) => [e.id, e.run]));
+        const missing = index.filter((i) => !known.has(i.id));
+        const store = tx.objectStore(RUNS);
+        const records = await Promise.all(missing.map((i) => request(store.get(i.id))));
+        missing.forEach((i, k) => {
+          try {
+            if (records[k]) known.set(i.id, validateEvaluation(records[k]));
+          } catch {
+            /* a damaged record is left out */
+          }
+        });
+        return index.filter((i) => known.has(i.id)).map((i) => ({ id: i.id, run: known.get(i.id) }));
+      })();
+      const [snapshot] = await Promise.all([loaded, done]);
+      if (sequence >= rendered) {
+        rendered = sequence;
+        entries = snapshot;
+        for (const e of entries) ids.set(e.run, e.id);
+      }
+    } catch {
+      /* a temporary read failure leaves the last successful snapshot visible */
     }
-    entries = index.filter((i) => known.has(i.id)).map((i) => ({ id: i.id, run: known.get(i.id) }));
-    for (const e of entries) ids.set(e.run, e.id);
     return runs();
   }
-  const sorted = (index) => index.sort((a, b) => b.id - a.id);
-  const readIndex = async () => sorted(await request(db.transaction(INDEX, "readonly").objectStore(INDEX).getAll()));
+
   const keepId = (keep) => {
     if (!keep) return null;
     if (ids.has(keep)) return ids.get(keep);
-    const json = JSON.stringify(keep);
-    return entries.find((e) => JSON.stringify(e.run) === json)?.id ?? null;
+    const json = evaluationKey(keep);
+    return json === null ? null : (entries.find((e) => JSON.stringify(e.run) === json)?.id ?? null);
   };
   return {
     kind: "indexedDB",
     limit: maxRuns,
-    async list() {
-      try {
-        return await refresh(await readIndex());
-      } catch {
-        return runs();
-      }
-    },
+    list,
     // Saves `run` as the newest, dropping the oldest runs to keep within the limits; `keep` (a saved
     // run, such as the chosen baseline) is dropped only when nothing else is left to drop. Drops and
     // the write are one transaction, so a failed save leaves the history as it was.
@@ -419,8 +468,9 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
           const old = sorted(stored);
           // (never an id used before, even after the newest run is deleted: another tab may still map the
           // old id to the run it named, and would delete the new one in its place)
-          const id = Math.max(old[0]?.id ?? 0, lastId ?? 0) + 1,
-            drop = new Set();
+          const id = Math.max(old[0]?.id ?? 0, count(lastId) ? lastId : 0) + 1;
+          if (!Number.isSafeInteger(id)) throw new Error("Evaluation history has exhausted its record IDs.");
+          const drop = new Set();
           const droppable = () =>
             old.findLast((i) => !drop.has(i.id) && i.id !== kept) || old.findLast((i) => !drop.has(i.id));
           const total = () => old.reduce((sum, i) => sum + (drop.has(i.id) ? 0 : i.bytes), bytes);
@@ -444,11 +494,14 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
           } catch {
             /* already finished */
           }
+          await done.catch(() => {});
           if (error?.name === "QuotaExceededError" && left > 0) continue;
           throw error;
         }
+        rendered = started + 1;
+        ids.set(validated, after[0].id);
         entries = [{ id: after[0].id, run: validated }, ...entries.filter((e) => after.some((i) => i.id === e.id))];
-        return refresh(after);
+        return list();
       }
     },
     async remove(run) {
@@ -462,12 +515,14 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
             tx.objectStore(RUNS).delete(id);
             tx.objectStore(INDEX).delete(id);
             // Version 1 histories may still contain ids that predate the counter.
-            if (id > (lastId ?? 0)) metadata.put(id, LAST_ID);
+            if (!count(lastId) || id > lastId) metadata.put(id, LAST_ID);
           }),
           done,
         ]);
+        rendered = started + 1;
+        entries = entries.filter((entry) => entry.id !== id);
       }
-      return refresh(await readIndex());
+      return list();
     },
   };
 }
@@ -483,8 +538,10 @@ async function migrate(db, storage, { maxRuns, maxBytes }) {
     return;
   }
   if (raw == null) return;
-  const legacy = readEvaluations({ getItem: () => raw });
+  const legacy = parseFallback(raw);
   if (legacy.length) {
+    if (legacy.some((run) => new Blob([JSON.stringify(run)]).size > maxBytes))
+      throw new Error("A saved evaluation exceeds the IndexedDB history budget.");
     const tx = db.transaction([RUNS, INDEX, META], "readwrite"),
       store = tx.objectStore(RUNS),
       index = tx.objectStore(INDEX),
@@ -506,12 +563,16 @@ async function migrate(db, storage, { maxRuns, maxBytes }) {
       const matching = old.filter((entry) => pending.some((p) => sameSummary(p.entry, entry)));
       const copies = new Map();
       for (const saved of await Promise.all(matching.map((entry) => request(store.get(entry.id))))) {
+        if (!saved) continue;
         const key = hashText(JSON.stringify(saved));
         copies.set(key, (copies.get(key) ?? 0) + 1);
       }
       // A fallback tab may still hold copies that were deleted or evicted in IndexedDB.
-      for (const [key, count] of migrated ?? []) copies.set(key, Math.max(copies.get(key) ?? 0, count));
-      const previous = old.reduce((max, i) => Math.max(max, i.id), lastId ?? 0);
+      if (Array.isArray(migrated))
+        for (const pair of migrated)
+          if (Array.isArray(pair) && text(pair[0]) && count(pair[1]))
+            copies.set(pair[0], Math.max(copies.get(pair[0]) ?? 0, pair[1]));
+      const previous = old.reduce((max, i) => Math.max(max, i.id), count(lastId) ? lastId : 0);
       let id = previous;
       const occurrences = new Map();
       const incoming = new Map();
@@ -524,6 +585,7 @@ async function migrate(db, storage, { maxRuns, maxBytes }) {
           continue;
         }
         id++;
+        if (!Number.isSafeInteger(id)) throw new Error("Evaluation history has exhausted its record IDs.");
         incoming.set(id, run);
         combined.push({ id, ...entry });
       }
@@ -582,6 +644,8 @@ export async function openEvaluationHistory({
   try {
     indexedDB ??= globalThis.indexedDB;
     if (!indexedDB) return localHistory(storage);
+    maxRuns = count(maxRuns) && maxRuns > 0 ? Math.min(maxRuns, MAX_SAVED_RUNS) : MAX_SAVED_RUNS;
+    maxBytes = finite(maxBytes) && maxBytes >= 1 ? Math.min(Math.floor(maxBytes), MAX_SAVED_BYTES) : MAX_SAVED_BYTES;
     db = await openDatabase(indexedDB);
     await withFallbackLock(() => migrate(db, storage, { maxRuns, maxBytes }));
     return databaseHistory(db, { maxRuns, maxBytes });
@@ -614,6 +678,7 @@ export function conditionDifferences(a, b) {
 }
 
 export function compareResult(result, baseline, brain) {
+  if (!Array.isArray(baseline?.results)) return { reasons: ["no baseline results"] };
   const candidates = baseline.results.filter((r) => r.challenge === result.challenge && r.brain === brain);
   if (!candidates.length) return { reasons: ["challenge absent from baseline"] };
   const conditions = candidates.map((r) => ({ before: r, reasons: conditionDifferences(result, r) }));
