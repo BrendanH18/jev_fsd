@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
-import { ModelRecording, canonicalJson, requestKey, sameResult } from "../static/js/brain/recording.js";
+import { DriveTape, ModelRecording, canonicalJson, requestKey, sameResult } from "../static/js/brain/recording.js";
 import { parseArenaTape, tapeCounts } from "./arena_tape.mjs";
 import { LocalRecording, checkedLocalDefinition } from "./local_recording.mjs";
 import {
@@ -185,27 +185,19 @@ assert.throws(() => modelRecording.tape("test", "other"), /tape mode/);
 assert.equal(modelRecording.tape("constructor", "replay").exact, false);
 assert.equal(recording.remainingAnswers(), null);
 
-const inFlight = modelRecording.tape("parallel", "record");
-let resolveFirst;
-const slow = inFlight.record(
-  autopilot,
-  () =>
-    new Promise((resolve) => {
-      resolveFirst = resolve;
-    }),
-  path,
-  request,
+const twice = new ModelRecording({ header: model, drives: { attempt: { [key]: [{ response: 1 }, { response: 2 }] } } });
+const queue = twice.tape("attempt", "replay");
+assert.equal(await queue.replay(autopilot, path, request), 1);
+assert.equal(await queue.replay(autopilot, path, request), 2);
+await assert.rejects(queue.replay(autopilot, path, request), /asked 3 times, recorded 2/);
+assert.equal(twice.tape("attempt", "replay").remainingAnswers()[key], 2);
+assert.equal(await twice.tape("attempt", "replay").replay(autopilot, path, request), 1);
+const inherited = new DriveTape(
+  { header: model, drives: Object.create({ attempt: { [key]: [{ response: "inherited" }] } }) },
+  "attempt",
+  "replay",
 );
-await inFlight.record(autopilot, async () => ({ order: 2 }), path, request);
-resolveFirst({ order: 1 });
-await slow;
-const queue = modelRecording.tape("parallel", "replay");
-assert.equal(queue.remainingAnswers()[key], 2);
-assert.equal((await queue.replay(autopilot, path, request)).order, 1);
-assert.equal(queue.remainingAnswers()[key], 1);
-assert.equal((await queue.replay(autopilot, path, request)).order, 2);
-assert.equal(Object.keys(queue.remainingAnswers()).length, 0);
-assert.equal(queue.exact, true);
+await assert.rejects(inherited.replay(autopilot, path, request), /not in recording/);
 
 const freshLocal = () => ({
   format: "jev-local-recording/1",
@@ -355,10 +347,8 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
-const sparse = new Array(3);
-sparse[0] = undefined;
-sparse[2] = Infinity;
-assert.equal(canonicalJson(sparse), "[null,null,null]");
+const customJson = { a: "ignored", toJSON: () => ({ z: 2, a: 1 }) };
+assert.equal(canonicalJson(customJson), '{"a":1,"z":2}');
 assert.equal(canonicalJson({ z: undefined, b: 2, a: 1 }), '{"a":1,"b":2}');
 assert.equal(sameResult({ pass: true, wall_ms: 1 }, { wall_ms: 2, pass: true }), true);
 assert.equal(sameResult({ pass: true }, { pass: false }), false);

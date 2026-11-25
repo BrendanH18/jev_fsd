@@ -177,13 +177,13 @@ This batch adds offline tape and report validation, local driver scaffolding, me
 173. Identify the exact map that failed to load in latitude analysis. Validated by: scripts/test_5k_submissions_cli.mjs and the Boat driver smoke check.
 174. Index baseline positions by tick for latitude branch comparison. Validated by: scripts/test_5k_submissions_cli.mjs and the Boat driver smoke check.
 175. Walk recorded decisions once when matching latitude checkpoints to the next decision. Validated by: scripts/test_5k_submissions_cli.mjs and the Boat driver smoke check.
-176. Cover identical simultaneous requests completing out of order while replay keeps the original request order. Validated by: scripts/test_5k_submissions_tapes.mjs.
-177. Cover the remaining-answer count before any requests have been replayed and after all answers have been used. Validated by: scripts/test_5k_submissions_tapes.mjs.
+176. Check that a request which exhausts its answer queue reports both the attempt number and the saved answer count. Validated by: scripts/test_5k_submissions_tapes.mjs.
+177. Check that a new replay of the same drive starts at the first answer even after a previous replay misses. Validated by: scripts/test_5k_submissions_tapes.mjs.
 178. Cover model replay applying the current tick even when a raw provider response was saved. Validated by: scripts/test_5k_submissions_tapes.mjs.
 179. Cover an Arena recording stopped between drives replaying the finished subset. Validated by: scripts/test_5k_submissions_tapes.mjs.
 180. Cover inspection distinguishing a recorded null response from timeout, cancellation, and transport error outcomes. Validated by: scripts/test_5k_submissions_tapes.mjs.
-181. Check committed model and Arena tape encoding compatibility across the recording directory. Validated by: scripts/test_5k_submissions_tapes.mjs.
-182. Pin sparse-array canonicalization for stable recording keys. Validated by: scripts/test_5k_submissions_tapes.mjs.
+181. Check that bounded CLI reads and Arena-specific validation accept the committed recordings. Validated by: scripts/test_5k_submissions_tapes.mjs.
+182. Check canonicalization of the replacement object returned by a custom toJSON method. Validated by: scripts/test_5k_submissions_tapes.mjs.
 183. Pin object canonicalization with undefined members and reordered keys. Validated by: scripts/test_5k_submissions_tapes.mjs.
 184. Check that tape result matching ignores wall-clock duration. Validated by: scripts/test_5k_submissions_tapes.mjs.
 185. Check that tape result matching still distinguishes a changed drive verdict. Validated by: scripts/test_5k_submissions_tapes.mjs.
@@ -192,7 +192,7 @@ This batch adds offline tape and report validation, local driver scaffolding, me
 188. Pin the summary mismatch diagnostic to its exact report field. Validated by: scripts/test_5k_submissions_bundle.mjs.
 189. Bound submission report difference output to twelve field changes in regression coverage. Validated by: scripts/test_5k_submissions_bundle.mjs.
 190. Check merged Arena tapes keep the answer payloads from different file encodings. Validated by: scripts/test_5k_submissions_merge.mjs and scripts/test_merge_recordings.mjs.
-191. Check that a merged benchmark report orders results by the generated suite rather than input file order. Validated by: scripts/test_5k_submissions_merge.mjs and scripts/test_merge_recordings.mjs.
+191. Check that a benchmark merge with duplicate generated scenarios leaves neither output file behind. Validated by: scripts/test_5k_submissions_merge.mjs and scripts/test_merge_recordings.mjs.
 192. Check that scaffold creation preserves an existing file. Validated by: scripts/test_5k_submissions_cli.mjs and the Boat driver smoke check.
 193. Check that the generated driver chooses the first eligible candidate when projected progress ties. Validated by: scripts/test_5k_submissions_cli.mjs and the Boat driver smoke check.
 194. Check that the generated driver can return control to Rules for an empty eligible list. Validated by: scripts/test_5k_submissions_cli.mjs and the Boat driver smoke check.

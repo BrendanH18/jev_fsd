@@ -248,6 +248,26 @@ try {
   const publishedInfo = run("driver_submission.mjs", "inspect", "--bundle", published, "--json");
   assert.equal(publishedInfo.status, 0, publishedInfo.stderr);
   assert.equal(JSON.parse(publishedInfo.stdout).tape_sha256_verified, true);
+  const publishedDigest = createHash("sha256").update(bytes).digest("hex");
+  write("published.json", {
+    format: "jev-published-submission/1",
+    submitter: "example",
+    recording_sha256: publishedDigest.toUpperCase(),
+    report,
+  });
+  assert.equal(run("driver_submission.mjs", "inspect", "--bundle", published).status, 0);
+  for (const [submitter, recording_sha256, diagnostic] of [
+    ["example", 0, /expected a recording SHA-256/],
+    ["@example", publishedDigest, /invalid submitter handle/],
+  ]) {
+    const invalid = write("invalid-published.json", {
+      format: "jev-published-submission/1",
+      submitter,
+      recording_sha256,
+      report,
+    });
+    assert.match(run("driver_submission.mjs", "inspect", "--bundle", invalid).stderr, diagnostic);
+  }
   const forged = write("forged.json", {
     format: "jev-published-submission/1",
     submitter: "example",

@@ -241,6 +241,8 @@ try {
   expect(mergeBench(one, two, "--suite", badSuite), /scenario array with drive IDs/);
   const duplicateScenario = save("repeat-scenarios.json", [scenarios[0], scenarios[0]]);
   expect(mergeBench(one, two, "--suite", duplicateScenario), /generated drive list/);
+  assert.equal(existsSync(benchOutput), false);
+  assert.equal(existsSync(benchTape), false);
   for (const [mutate, pattern] of [
     [
       (r) => {
