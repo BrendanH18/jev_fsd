@@ -161,12 +161,18 @@ def verify(output: Path) -> None:
     results = artifact_json(data / "results.json")
     if results.get("format") != "jev-results/1":
         raise ValueError("Bundled leaderboard uses an unsupported results format")
+    if not isinstance(results.get("maps"), (list, dict)):
+        raise ValueError("Bundled leaderboard has no map list")
     if not set(results["maps"]).issubset({item["id"] for item in maps}):
         raise ValueError("Bundled leaderboard names maps outside the catalog")
     for source in sorted((ROOT / "static" / "replays").glob("*.json")):
         destination = output / "replays" / source.name
         if not destination.is_file() or source.read_bytes() != destination.read_bytes():
             raise ValueError(f"Bundled replay differs from source: {source.name}")
+    sources = {path.name for path in (ROOT / "static" / "replays").glob("*.json")}
+    for stale in sorted((output / "replays").glob("*")):
+        if stale.name not in sources:
+            raise ValueError(f"Bundled replay has no source: {stale.name}")
 
 
 def build(output: Path) -> None:
@@ -176,6 +182,11 @@ def build(output: Path) -> None:
         raise ValueError("Choose a separate generated output directory.")
     if output.exists() and any(path.is_symlink() for path in output.rglob("*")):
         raise ValueError("Generated output directory contains a symbolic link")
+    # Rebuild from empty, so files deleted from the source don't survive in a reused output directory.
+    if output.exists() and any(output.iterdir()):
+        if not (output / "demo-data" / "catalog.json").is_file():
+            raise ValueError("Choose an empty directory or a previous demo build as the output.")
+        shutil.rmtree(output)
     output.mkdir(parents=True, exist_ok=True)
     for directory in ("js", "css", "vendor", "replays"):
         shutil.copytree(ROOT / "static" / directory, output / directory, dirs_exist_ok=True)

@@ -64,6 +64,12 @@ const subset = (sha, results = run.results) => ({
 });
 assert.equal(comparisonIssue(subset("abcdef"), subset("123456")), null);
 assert.match(comparisonIssue(subset("abcdef"), subset("123456", [changedRoute, run.results[1]])), /route tags/);
+assert.match(comparisonIssue({ ...run, stopped: true }, { ...run, stopped: true }), /stopped before its suite/);
+assert.match(
+  comparisonIssue(run, { ...run, config: { ...config, completed: run.results.length, count: run.results.length + 1 } }),
+  /stopped before its suite/,
+);
+assert.equal(comparisonIssue(run, { ...run, config: { ...config, completed: config.count } }), null);
 assert.match(comparisonIssue(run, { ...run, suite_version: "v1" }), /suite v1/);
 assert.equal(heldoutPlan("constructor"), HELDOUT_DEFAULT);
 assert.doesNotThrow(() => validateRunInputs(config, ["dry"]));

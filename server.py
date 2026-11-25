@@ -67,6 +67,7 @@ MAX_BODY_BYTES = 1024 * 1024
 MAX_RECORDING_BYTES = 32 * 1024 * 1024
 # The largest bundled legacy recording expands to about 448 MiB.
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+MAX_RECORDING_HEADER_BYTES = 64 * 1024  # bounds what each cached recording listing holds
 MAX_RUN_BYTES = 16 * 1024 * 1024
 MAX_QUERY_FIELDS = 64
 _save_lock = threading.Lock()
@@ -164,12 +165,21 @@ def _load_saved_object(path: Path, limit: int):
     return data if isinstance(data, dict) else None
 
 
+def _header_fits(header) -> bool:
+    """A recording header small enough to list and cache (real headers are a few kilobytes)."""
+    try:
+        return len(json.dumps(header, allow_nan=False)) <= MAX_RECORDING_HEADER_BYTES
+    except (TypeError, ValueError, RecursionError):
+        return False
+
+
 def _usable_recording(data) -> bool:
-    """A recording the catalog lists and lookup serves: current format with a header and drives."""
+    """A recording the catalog lists and lookup serves: current format with a bounded header and drives."""
     return (
         isinstance(data, dict)
         and data.get("format") == RECORDING_FORMAT
         and isinstance(data.get("header"), dict)
+        and _header_fits(data["header"])
         and isinstance(data.get("drives"), dict)
         and _drive_answers_shaped(data["drives"])
     )
@@ -642,6 +652,8 @@ def api_recording_save(body, _query):
     results, scenarios = body.get("results", {}), body.get("scenarios", {})
     if not all(isinstance(v, dict) for v in (header, drives, results, scenarios)):
         raise BadRequest("a recording needs header, drives, results and scenarios objects")
+    if not _header_fits(header):
+        raise BadRequest("a recording header must be under %d KiB" % (MAX_RECORDING_HEADER_BYTES // 1024))
     if not _drive_answers_shaped(drives):
         raise BadRequest("each drive maps request keys to lists of outcomes")
     declared, manifest = header.get("suite_version"), header.get("manifest")

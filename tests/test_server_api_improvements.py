@@ -406,6 +406,14 @@ class ArtifactTests(unittest.TestCase):
                 self.assertEqual([slot["header"]["driver"] for slot in slots], ["compressed"])
                 self.assertEqual(server.api_recordings({}, {"name": ["drive"]})["header"]["driver"], "compressed")
 
+    def test_oversized_recording_header(self):
+        """Keep huge client-supplied recording headers out of the cached catalog and refuse to save them."""
+        self.write_recording("drive", driver="x" * (server.MAX_RECORDING_HEADER_BYTES + 1))
+        self.assertEqual(server.api_recordings({}, {}), {"recordings": []})
+        body = {"format": server.RECORDING_FORMAT, "header": {"driver": "x" * server.MAX_RECORDING_HEADER_BYTES}}
+        with self.assertRaisesRegex(server.BadRequest, "header must be under 64 KiB"):
+            server.api_recording_save({**body, "drives": {}, "results": {}, "scenarios": {}}, {})
+
     def test_snapshot_expect(self):
         """Require snapshot expected answers to be stored as an object."""
         with self.assertRaisesRegex(server.BadRequest, "expect must be an object"):

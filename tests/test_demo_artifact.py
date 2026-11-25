@@ -76,6 +76,16 @@ class DemoArtifactTests(unittest.TestCase):
         self.rejects_change("demo-data/results.json", change("format", "broken"), "unsupported results format")
         self.rejects_change("demo-data/results.json", change("maps", {"new": "Unknown"}), "outside the catalog")
         self.rejects_change("replays/jev-flagger.json", lambda _: "{}", "replay differs from source")
+        self.rejects_change(
+            "demo-data/results.json", lambda _: json.dumps({"format": "jev-results/1"}), "no map list"
+        )
+        stale = self.output / "replays" / "deleted-from-source.json"
+        stale.write_text("{}", encoding="utf-8")
+        try:
+            with self.assertRaisesRegex(ValueError, "no source: deleted-from-source.json"):
+                build_demo.verify(self.output)
+        finally:
+            stale.unlink()
 
     def test_cli_verification_does_not_rewrite_and_can_list_maps(self):
         cli = [sys.executable, str(build_demo.ROOT / "scripts" / "build_demo.py")]
@@ -85,6 +95,22 @@ class DemoArtifactTests(unittest.TestCase):
         modified = artifact.stat().st_mtime_ns
         subprocess.run([*cli, "--check", "--output", str(self.output)], check=True, capture_output=True)
         self.assertEqual(artifact.stat().st_mtime_ns, modified)
+
+    def test_rebuild_clears_a_previous_build_and_refuses_other_directories(self):
+        with tempfile.TemporaryDirectory() as temp:
+            other = Path(temp) / "notes"
+            other.mkdir()
+            (other / "keep.txt").write_text("mine", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "empty directory or a previous demo build"):
+                build_demo.build(other)
+            self.assertTrue((other / "keep.txt").is_file())
+            site = Path(temp) / "site"
+            with contextlib.redirect_stdout(io.StringIO()):
+                build_demo.build(site)
+                (site / "replays" / "old.json").write_text("{}", encoding="utf-8")
+                build_demo.build(site)
+            self.assertFalse((site / "replays" / "old.json").exists())
+            build_demo.verify(site)
 
     def test_rejects_project_data_as_a_build_destination(self):
         with self.assertRaisesRegex(ValueError, "separate generated output"):

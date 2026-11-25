@@ -30,6 +30,14 @@ function routeComparisonIssue(current, baseline) {
   return null;
 }
 
+// A run stopped part way (the page's Stop, or the CLI's budget stop) holds only a prefix of its suite.
+// Browser saves record how many routes completed; held-out plans set their own route count.
+function stoppedEarly(run) {
+  if (run.stopped) return true;
+  const { completed, count, heldout } = run.config || {};
+  return !heldout && Number.isInteger(completed) && Number.isInteger(count) && completed < count;
+}
+
 // Compare the conditions that determine a drive, while allowing different drivers.
 export function comparisonIssue(current, baseline) {
   if (!compatibleSuiteVersions(current, baseline))
@@ -54,6 +62,7 @@ export function comparisonIssue(current, baseline) {
   test("route count", a.count, b.count);
   test("hour", a.hour ?? null, b.hour ?? null);
   test("feature exclusions", [...(a.without || [])].sort().join(","), [...(b.without || [])].sort().join(","));
+  if (stoppedEarly(current) || stoppedEarly(baseline)) differences.push("a run stopped before its suite finished");
   const routeIssue = routeComparisonIssue(current, baseline);
   if (routeIssue) differences.push(routeIssue);
   return differences.length ? `Benchmark conditions differ (${differences.join(", ")}). Deltas are hidden.` : null;
