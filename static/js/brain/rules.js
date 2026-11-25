@@ -3,7 +3,6 @@
 
 import { desiredSpeed, waitsItsTurn } from "./sensors.js";
 import { comfort } from "../sim/vehicle.js";
-import { isCyclistPass } from "../sim/cyclist-pass.js";
 import { featureDecisionFields, hooks, junctionPlan } from "../sim/features/index.js";
 
 const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
@@ -11,12 +10,8 @@ const FEATURE_STOP = hooks("rulesStop");
 const BEFORE_STOPS_COST = hooks("rulesCost", "beforeStops");
 const STOPS_COST = hooks("rulesCost", "stops");
 const BEFORE_PASSING_COST = hooks("rulesCost", "beforePassing");
+const AFTER_SPECIAL_COST = hooks("rulesCost", "afterSpecial");
 const FEATURE_COST = hooks("rulesCost");
-
-// Passing a cyclist through the oncoming lane (sim/cyclist-pass.js) costs this to start, so the car
-// passes only for a clear gain; and staying behind one it cannot pass yet gains this.
-const PASS_CYCLIST_COST = 1.5,
-  FOLLOW_CYCLIST_GAIN = 1.0;
 
 function explainCost(terms, name, amount) {
   if (terms) terms[name] = amount;
@@ -101,10 +96,6 @@ export class RulesBrain {
       stop = true;
       holds?.push("feature_stop");
     }
-    if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) {
-      stop = true;
-      holds?.push("merge_hold");
-    }
     // (parking, the space is the destination: sim/parallel-park.js)
     if (snap.nav?.arrived && snap.parking?.mode !== "in") {
       stop = true;
@@ -120,7 +111,6 @@ export class RulesBrain {
     const vTurnLane = !l?.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
 
     const scores = policy ? [] : null;
-    const cp = snap.cyclist_pass;
     let best = null;
     for (const c of eligible) {
       const s = c.sim;
@@ -186,9 +176,7 @@ export class RulesBrain {
         c.id === "stop_for_school_bus" ||
         c.id === "stop_for_streetcar" ||
         c.id === "stop_before_tracks" ||
-        c.id === "wait_short_of_junction" ||
-        c.id === "wait_to_merge" ||
-        c.id === "let_merge_in"
+        c.id === "wait_short_of_junction"
       )
         cost += explainCost(terms, "required_wait", -6);
       for (const [index, adjust] of STOPS_COST.entries()) {
@@ -212,9 +200,11 @@ export class RulesBrain {
       // pulling up where the car reverses into the space comes before driving on past it.
       if (c.law.kind === "park") cost += explainCost(terms, "parking", -50);
       if (c.id === "wait_to_park") cost += explainCost(terms, "parking_approach", -12);
-      if (cp && !cp.going && isCyclistPass(c.law.detour))
-        cost += explainCost(terms, "start_cyclist_pass", PASS_CYCLIST_COST);
-      if (cp && !cp.go && c.id === "follow_cyclist") cost += explainCost(terms, "follow_cyclist", -FOLLOW_CYCLIST_GAIN);
+      for (const [index, adjust] of AFTER_SPECIAL_COST.entries()) {
+        const adjustment = adjust(c, snap);
+        cost += adjustment;
+        if (terms && adjustment) terms[`feature_after_special_${index}`] = adjustment;
+      }
       if (c.law.kind === "hard_brake") cost += explainCost(terms, "hard_brake", 3);
       if (c.law.kind === "reverse") cost += explainCost(terms, "reverse", 2);
       if (!s.stays_in_lane) cost += explainCost(terms, "leave_lane", 2);

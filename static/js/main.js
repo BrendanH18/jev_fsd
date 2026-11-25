@@ -21,12 +21,9 @@ import {
   doorsOpen,
   streetcarRelation,
 } from "./sim/streetcar.js";
-import { laneClosureNotice } from "./sim/lane-closure.js";
-import { plowNotice } from "./sim/snow-plow.js";
 import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
 import { hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
-import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { SIDE_M as SCHOOL_SIDE_M, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
@@ -1313,13 +1310,10 @@ export async function boot() {
     announcedCrossing = null,
     announcedBox = null,
     announcedAdvance = null,
-    announcedClosure = null,
     announcedNightFlash = null,
-    announcedPlow = null,
     announcedPark = null,
     announcedHazard = null,
     announcedTraffic = null,
-    announcedCyclist = null,
     announcedLeftRed = null;
   let lastWeather, lastClockLabel, lastSight;
   let skyAt = world.t;
@@ -1596,13 +1590,6 @@ export async function boot() {
     }
     if (!advance) announcedAdvance = null;
     announceFeatureNotices("beforeMerge", world, autopilot, featureViews, announcedFeatures, hud);
-    // a lane closed ahead: use both lanes to the merge point, then take turns (said again as the turn changes)
-    const closure = laneClosureNotice(world);
-    if (closure && closure.key !== announcedClosure) {
-      announcedClosure = closure.key;
-      hud.badge(closure.text, closure.stop ? "safety" : "", 2500);
-    }
-    if (!closure) announcedClosure = null;
     // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
     const nightNotice = nightFlashNotice(world);
     if (nightNotice && nightNotice.key !== announcedNightFlash) {
@@ -1611,13 +1598,6 @@ export async function boot() {
     }
     if (!nightNotice) announcedNightFlash = null;
     announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
-    // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
-    const plowLine = plowNotice(world);
-    if (plowLine && plowLine.key !== announcedPlow) {
-      announcedPlow = plowLine.key;
-      hud.badge(plowLine.text, plowLine.wait ? "safety" : "", 2500);
-    }
-    if (!plowLine) announcedPlow = null;
     // parking at the destination: the space, checking behind, reversing in, parked
     const parkLine = parkNotice(world);
     if (parkLine && parkLine.key !== announcedPark) {
@@ -1639,14 +1619,7 @@ export async function boot() {
       hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500);
     }
     if (!trafficLine) announcedTraffic = null;
-    // a cyclist riding in the lane ahead, on a street with one lane each way: stay behind, and why, or
-    // the way is clear to pass with the minimum passing distance (said again as that changes)
-    const cyclistLine = cyclistNotice(world);
-    if (cyclistLine && cyclistLine.key !== announcedCyclist) {
-      announcedCyclist = cyclistLine.key;
-      hud.badge(cyclistLine.text, cyclistLine.wait ? "safety" : "", 2500);
-    }
-    if (!cyclistLine) announcedCyclist = null;
+    announceFeatureNotices("afterTraffic", world, autopilot, featureViews, announcedFeatures, hud);
     // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
     announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud);
     // a scramble crossing ahead: every light red while people cross every way; no right turn on red

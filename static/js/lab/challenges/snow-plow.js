@@ -93,7 +93,7 @@ function placePlow(world, fleet, { edge, ahead }, start) {
     spec = world.ego.spec;
   const rear =
     (start.s * e.length) / curb.length + (spec.length - spec.rearOverhang) + PLOW_AHEAD_M + SNOW_PLOW.rearOverhang;
-  const plow = fleet.addPlow(lane, (rear * lane.length) / e.length, PLOW_MPS, ahead);
+  const plow = fleet.plows.addPlow(lane, (rear * lane.length) / e.length, PLOW_MPS, ahead);
   return { plowId: plow.id, at: [plow.x, plow.y] };
 }
 

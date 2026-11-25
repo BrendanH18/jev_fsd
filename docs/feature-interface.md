@@ -6,13 +6,13 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Twenty-seven features have moved to the registry. They include driveway reversers, ball chase, spring
+Thirty features have moved to the registry. They include driveway reversers, ball chase, spring
 potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddles, traffic parking,
 road closures, double-parked vans, contraflow cyclists, low sun glare, garbage trucks, traffic calming,
 red-light runners, crossing guards, Ontario pedestrian crossovers, roadside stops, following distance,
 turn restrictions, high beams, no-turn-on-red signs, scramble crossings, work zones with flaggers and
-power cuts. Each record holds its core pipeline hooks and
-model wording.
+power cuts, snow plows, lane closures and passing cyclists. Each record holds its core pipeline hooks
+and model wording.
 
 ## A record
 
@@ -52,8 +52,10 @@ The World takes the option through `...features` and builds records in registrat
 its constructor. A record that uses `buildAt` can run earlier to preserve construction dependencies.
 Ontario crossovers set their option in the `early` position so the crowd can read it. Roadside stops
 reserve parking bays at `afterSpawn` before other features that use the same bays. The World initializes
-each declared `seen` flag to false and each declared `calls` field to an empty map. A metric requires a
-seen flag. A record's `build` can return a boolean for a feature whose only setting is on or off.
+each declared `seen` flag to false and each declared `calls` field to an empty map. By default, metrics
+require a seen flag. A boolean World option can use `metric.reportWhenEnabled` to report from the
+start of every drive that enables it. `metric.initial` initializes a counter whose zero is part of
+the World state. A record's `build` can return a boolean for a feature whose only setting is on or off.
 A record with `buildFleet` takes its option from the fleet. The fleet stores the result under the option
 key and supplies its seed and a path factory. The World still builds the record's audit state.
 `checkpointShare` adds state that can be shared across checkpoints, and `checkpoint` restores
@@ -94,6 +96,23 @@ The result can supply its present pursuit `shift`, a `lineAt(s)` delta for leade
 to `ignore` when bypassing it, a speed `limit`, and a `stop()` evaluated at the existing stop
 decision. A corridor also prevents the start of a new oncoming-lane cyclist pass. The
 `detour` slot before the merge supplies the ego's preferred path to both following and candidate laws.
+A `trafficLaneControl` supplies the lane restriction separately from a shared corridor, so their
+speed limits and lateral offsets can both apply. Its deferred `stop()` can return a gap and the
+speed of a vehicle already moving through the merge. The `detour` slot `laneControl` applies the
+matching detour to ego following and every lane candidate.
+
+`trafficOvertaking` returns a temporary lateral shift for a passing driver and the clearance the
+driver needs from the vehicle it is passing. The core supplies whether another manoeuvre prevents
+the start of a pass. An ego pass can use an `optional` detour, which sensing can follow while
+candidate generation reserves it for the passing law. The `activeManeuver` hook keeps the relevant
+candidate choices after the ego has started across and supplies the hard brake's detour.
+
+`trafficFollowingLeader` can supply a leader outside the normal following scan. `trafficLeadPolicy`
+adjusts the controller's gap and adds leader observations. `trafficPassingLaneBlocked` and
+`trafficMergeGap` handle pass eligibility and return clearance in adjacent lanes. The ego equivalents,
+`lanePassBlocked`, `laneGapBlocked` and `laneTargetFields`, govern whether it can pass, whether it
+has room to change lanes and which constraints apply to the candidate lane.
+
 An `examinerFail` hook returns a failure item or null without modifying the report.
 
 ### Registry validation
@@ -101,9 +120,10 @@ An `examinerFail` hook returns a failure item or null without modifying the repo
 Loading the registry validates the declarations before filling the hook lists. A hook can be a
 function at `end` or an object with a supported `at` and a callable `run`. Data records for metrics,
 notices and prompts have their own required fields. A notice's order is unique within its slot.
-World properties, seen flags and audit maps share one namespace, and feature snapshot fields and
-display text IDs each have one owner. Coach reports, guidance, deductions and tips take the same
-slot lists the coaching dispatcher uses. Keep label accessors lazy when a vehicle module can
+World properties, seen flags and audit maps share one namespace. Snapshot fields, display text IDs,
+replay marker IDs and prioritized candidate IDs each have one owner. Coach reports, guidance,
+deductions and tips use the dispatcher's slot lists, with an explicit order unique within each
+kind and slot. Nested declarations reject unrecognized keys. Keep label accessors lazy when a vehicle module can
 import the registry before its constants have initialized.
 
 ## Slots: why results stay exactly the same
@@ -266,6 +286,15 @@ Rules and the cautious agent each passed all 62 authored drives, including both 
 both trees. Full arena results, reports, decision traces and events matched. The guarded and
 open system prompts matched byte for byte. The stub model recording replayed on both trees,
 the Jev fixtures stayed current and all 39 offline Jev requests validated.
+
+**Snow plows, lane closures and passing cyclists** were compared against `0583591` in Boat with
+Node 22.23.5. Each migration matched all 36 Rules benchmark results on Kitsilano at seed 1,
+covering bare dry, city dry and city snow in four three-route captures per suite. Each revision
+ran against its own loopback server with `PYTHONHASHSEED=0`. Rules and the cautious agent each
+passed all 62 authored drives on every revision. Their complete arena captures and the CLI reports
+matched the base, including the full traces and coaching reports. Both LLM system prompts matched
+byte for byte. The comparison omitted timings and run provenance. The recorded stub drive replayed
+and the Jev fixtures stayed current.
 
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison

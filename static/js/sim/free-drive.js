@@ -7,8 +7,6 @@
 // whether the school buses run. Returns the `World` options and the `NpcFleet` options apart from the
 // seed, weather, vehicle and traffic count, which each caller sets itself.
 
-import { LANE_CLOSURE_COUNT } from "./lane-closure.js";
-import { PLOW_COUNT } from "./snow-plow.js";
 import { STEP_OUT_COUNT } from "./hidden-hazards.js";
 import { FEATURES } from "./features/index.js";
 
@@ -27,11 +25,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     park: on("park"),
     hazards,
     stepOuts: hazards ? STEP_OUT_COUNT : 0,
-    // lane closures where both lanes zipper merge (`?closures=0`)
-    closures: on("closures") ? LANE_CLOSURE_COUNT : 0,
-    // on two-way streets with one lane each way, everyone passes a cyclist riding in the lane through
-    // the oncoming lane once it is clear (`?cyclistpass=0`: everyone stays behind)
-    passCyclists: on("cyclistpass"),
     nightFlash: on("nightflash"),
     busLanes: on("buslanes"),
     leftOnRed: on("leftonred"),
@@ -46,8 +39,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     trains: on("trains"),
     // on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0`)
     schoolBuses: on("schoolbuses") && hour >= 7 && hour < 17 ? 2 : 0,
-    // while it snows, a snow plow clears the main streets (`?plows=0`)
-    plows: on("plows") ? PLOW_COUNT : 0,
   };
   // Each registered option is enabled unless its lowercase query flag is 0.
   for (const { key, flag = key.toLowerCase(), defaultCount, buildFleet } of FEATURES) {

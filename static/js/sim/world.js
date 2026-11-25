@@ -8,7 +8,7 @@ import { Vehicle, CAR, comfort } from "./vehicle.js";
 import { headingAt, pointAt } from "../map/mapdata.js";
 import { surfaceDistance } from "../map/junctions.js";
 import { approachPhase, movementSignal, phaseOf, StopMemory } from "./signals.js";
-import { boxGap, obbOverlap } from "./collision.js";
+import { obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
 import { Crowd, PEDESTRIANS } from "./pedestrians.js";
@@ -49,21 +49,13 @@ import {
 } from "./streetcar.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
-import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
-import {
-  EGO_ID,
-  LET_IN_DECEL,
-  OWED_DECEL as LC_OWED_DECEL,
-  LaneClosures,
-  THROUGH_M,
-  canStop as canStopForMerge,
-} from "./lane-closure.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
-import { egoPassing, oncomingPassConflict, minPassM } from "./cyclist-pass.js";
+
 import {
   FEATURES,
+  FEATURE_INITIAL_COUNTERS,
   controlDirection,
   controlAt,
   alternateSignal,
@@ -90,6 +82,8 @@ const HIDES = hooks("hides"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
+const AUDIT_PASSING = hooks("audit", "beforeReservedLane");
+const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
 const VISION_RANGE = hooks("visionRange");
@@ -213,31 +207,6 @@ const AUDIT_TRAIN_MOVING_MPS = 1;
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
-// Snow plows (sim/snow-plow.js): the car passes one when its centre draws level with the plow's,
-// going its way in the lane beside it. On its right (the plow not turning left), that is passing it on
-// the right, counted once a pass. Having passed one on the left, moving back into its lane with its
-// rear less than the stay-back distance, less AUDIT_CUT_SLACK_M, ahead of the plow's front is cutting
-// in front of it (an event for coaching, once a pass).
-const AUDIT_PLOW_M = 40;
-const AUDIT_CUT_SLACK_M = 3;
-// Lane closures (sim/lane-closure.js). In the closed lane, the car owes its wait at the merge point once,
-// at the merge (the nearest in its lane to it), it could stop there braking at up to 3.5 m/s^2 and has not
-// been let in; going through the merge point owing it is merging out of turn, forcing in (counted once a
-// visit, with the vehicle in the open lane nearest it). Moving across from the closed lane into the open
-// one more than AUDIT_EARLY_M short of the merge point is merging early; and in the open lane, going
-// AUDIT_LET_IN_PAST_M past where it would let someone in, at more than 1 m/s, once it owed that (it could
-// stop there braking at 2.5 m/s^2), is taking another's turn. Both are events for coaching, once a visit.
-const AUDIT_EARLY_M = 5;
-const AUDIT_LET_IN_PAST_M = 2;
-const AUDIT_MERGE_MOVING_MPS = 1;
-// Passing cyclists (sim/cyclist-pass.js), with `passCyclists` on. A pass is the car's body going from
-// wholly behind a cyclist going its way (within 30 m) to wholly ahead of it; it is a close pass when,
-// beside it, the gap between their bodies was ever less than the minimum passing distance on the
-// street (1 m up to 50 km/h, 1.5 m above) less AUDIT_PASS_SLACK_M. And, passing one with its centre left
-// of the centre line, the car fails to yield when it cuts off oncoming traffic: once a pass.
-const AUDIT_PASS_SLACK_M = 0.1;
-const AUDIT_PASS_NEAR_M = 30;
-
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
   // `park`: the autopilot parks at the
@@ -246,9 +215,6 @@ export class World {
   // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
   // `hazards`, road vehicles also hide other vehicles and cyclists, and the car turns left, gives way
   // and turns right on red only once it can see the lanes it must give way to (sim/hidden-traffic.js).
-  // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
-  // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
-  // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
   // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
@@ -262,8 +228,6 @@ export class World {
       park = false,
       hazards = false,
       stepOuts = 0,
-      closures = 0,
-      passCyclists = false,
       busLanes = false,
       nightFlash = false,
       leftOnRed = false,
@@ -322,12 +286,6 @@ export class World {
     this.parkedIn = null;
     this.kerbContact = false;
     this.hazards = !!hazards;
-    // passing cyclists through the oncoming lane (sim/cyclist-pass.js): whether anyone does; the
-    // cyclists the car has come up behind, and how close it has been beside each since; and the one it
-    // is passing now, and whether it failed to yield to oncoming traffic then
-    this.passCyclists = !!passCyclists;
-    this.bikePasses = new Map();
-    this.cyclistPass = null;
     this.busLanes = !!busLanes;
     this.busLanesSeen = false;
     this.leftOnRed = !!leftOnRed;
@@ -345,19 +303,14 @@ export class World {
       safety_brakes: 0,
       fallbacks: 0,
       deadlock_overrides: 0,
-      plow_right_passes: 0,
+      ...FEATURE_INITIAL_COUNTERS,
     };
-    this.plowPass = new Map(); // snow plow id -> where the car was beside it last tick, and what it has counted this pass
-    this.plowsSeen = false; // whether a snow plow has worked the streets this drive (sim/snow-plow.js)
-    this.mergeCall = null; // the lane closure the car is at, and what it owes and has counted there
-    this.closuresSeen = false; // whether a lane closure has stood this drive (sim/lane-closure.js)
     this.events = []; // transient per-step events for the UI
     this.lastRoad = null;
     this.lastSignal = null;
     this.arrowCheck = null; // the left arrow the car crossed the line on: which way did it go?
     this.spawnEgo();
     buildFeatures(this, features, seed, map, "afterSpawn");
-    this.laneClosures = new LaneClosures(this, { count: closures, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     buildFeatures(this, features, seed, map);
@@ -499,12 +452,6 @@ export class World {
     this.trainYields?.clear();
     this.onTracks = null;
     this.inBox = null;
-    this.plowPass.clear();
-    this.mergeCall = null;
-    this.mergeWait = null;
-    this.mergeLetIn = null;
-    this.bikePasses?.clear();
-    this.cyclistPass = null;
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
     // (moved by hand: whatever space it was going for, or parked in, is let go)
@@ -970,9 +917,8 @@ export class World {
     this.auditArrow();
     for (const audit of AUDIT_BEFORE_MERGE) audit(this);
     for (const audit of AUDIT_AFTER_FLAGGER) audit(this);
-    this.auditPlows();
-    this.auditClosures();
-    if (this.passCyclists) this.auditCyclistPasses(road);
+    for (const audit of AUDIT_AFTER_ROADSIDE_VEHICLES) audit(this);
+    for (const audit of AUDIT_PASSING) audit(this, road);
     if (this.busLanes) auditBusLanes(this, dt);
     for (const audit of AUDIT_AFTER_CALMING) audit(this);
     for (const audit of AUDIT_BEFORE_DRIVEWAYS) audit(this);
@@ -995,201 +941,6 @@ export class World {
     const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
     if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
     this.kerbContact = on;
-  }
-
-  // Passing a snow plow on the right, and cutting back in front of one passed on the left (see
-  // AUDIT_PLOW_M).
-  auditPlows() {
-    const npcs = this.npcs || [];
-    if (!npcs.some(isPlow)) {
-      this.plowPass.clear();
-      return;
-    }
-    this.plowsSeen = true;
-    const ego = this.ego,
-      keep = stayBack(this._road?.limit ?? 11.2);
-    for (const n of npcs) {
-      if (!isPlow(n)) continue;
-      const rel =
-        Math.abs(n.x - ego.x) < AUDIT_PLOW_M && Math.abs(n.y - ego.y) < AUDIT_PLOW_M ? plowRelation(ego, n) : null;
-      if (!rel) {
-        this.plowPass.delete(n.id);
-        continue;
-      }
-      const prev = this.plowPass.get(n.id),
-        pass = prev ? { ...prev } : { right: false, left: false, cut: false };
-      // (the car's centre drawing level with the plow's, from behind; and the plow getting ahead again
-      // starts a new pass)
-      if (prev && prev.ahead > 0 && rel.ahead_m <= 0) {
-        const beside = Math.abs(rel.right_m) > SAME_LANE_M && Math.abs(rel.right_m) < NEXT_LANE_M;
-        if (beside && rel.right_m < 0 && !turningLeft(n) && !pass.right) {
-          pass.right = true;
-          this.violations.plow_right_passes++;
-          this.events.push({ type: "passed_plow_on_right", plow: n.id });
-        }
-        if (beside && rel.right_m > 0) pass.left = true;
-      } else if (prev && prev.ahead <= 0 && rel.ahead_m > 0)
-        Object.assign(pass, { right: false, left: false, cut: false });
-      if (
-        pass.left &&
-        !pass.cut &&
-        Math.abs(rel.right_m) < SAME_LANE_M &&
-        rel.clear_m > -1 &&
-        rel.clear_m < keep - AUDIT_CUT_SLACK_M
-      ) {
-        pass.cut = true;
-        this.events.push({ type: "cut_in_front_of_plow", plow: n.id, ahead_m: Math.round(rel.clear_m * 10) / 10 });
-      }
-      pass.ahead = rel.ahead_m;
-      this.plowPass.set(n.id, pass);
-    }
-  }
-
-  // At a lane closure: merging out of turn, merging early, and not letting someone in (see AUDIT_EARLY_M).
-  auditClosures() {
-    const lc = this.laneClosures;
-    if (!lc.zones.length) {
-      this.mergeCall = null;
-      return;
-    }
-    this.closuresSeen = true;
-    const here = lc.egoAt();
-    if (!here) {
-      this.mergeCall = null;
-      return;
-    }
-    const z = here.zone,
-      ego = this.ego,
-      me = EGO_ID;
-    if (this.mergeCall?.zone !== z.id)
-      this.mergeCall = {
-        zone: z.id,
-        owed: false,
-        crossed: false,
-        lane: here.lane,
-        early: false,
-        letIn: false,
-        took: false,
-      };
-    const rec = this.mergeCall;
-    if (here.side === "closed" && here.front < z.m + THROUGH_M) {
-      rec.owed =
-        z.grant !== me &&
-        (rec.owed || (z.head === me && canStopForMerge(ego.v, z.m - 0.5 - here.front, LC_OWED_DECEL)));
-    } else if (here.side === "closed" && !rec.crossed) {
-      rec.crossed = true;
-      if (rec.owed) {
-        const e = this.map.edges.get(z.edge),
-          oo = e.lane_offsets[z.open];
-        const cut = lc
-          .movers(z)
-          .filter(
-            (x) =>
-              x.id !== me &&
-              Math.abs(x.body.lateral - oo) < 2.2 &&
-              x.body.front < here.front + 5 &&
-              x.body.front > z.m - 25,
-          )
-          .sort((a, b) => b.body.front - a.body.front)[0];
-        this.violations.merge_cut_ins = (this.violations.merge_cut_ins || 0) + 1;
-        this.events.push({ type: "merged_out_of_turn", zone: z.id, cut: cut?.id ?? null });
-      }
-    }
-    if (rec.lane === "closed" && here.lane === "open" && here.front < z.m - AUDIT_EARLY_M && !rec.early) {
-      rec.early = true;
-      this.events.push({ type: "merged_early", zone: z.id });
-    }
-    if (here.side === "open") {
-      const line = lc.letInLine(z, -Infinity),
-        owing = z.turn === "closed" && !!z.head && z.head !== me;
-      if (!owing) rec.letIn = false;
-      else if (!rec.letIn && here.front < line + 0.5 && lc.firstInOpen(z, me))
-        rec.letIn = canStopForMerge(ego.v, line - here.front, LET_IN_DECEL);
-      if (
-        rec.letIn &&
-        owing &&
-        !rec.took &&
-        here.front > line + AUDIT_LET_IN_PAST_M &&
-        ego.v > AUDIT_MERGE_MOVING_MPS
-      ) {
-        rec.took = true;
-        this.events.push({ type: "took_merge_turn", zone: z.id, from: z.head });
-      }
-    }
-    rec.lane = here.lane;
-  }
-
-  // The cyclist the car is passing now, through the oncoming lane (sim/cyclist-pass.js egoPassing), or null.
-  passingCyclist() {
-    return egoPassing(this);
-  }
-
-  // Passing a cyclist closer than the minimum passing distance, and crossing into the way of oncoming
-  // traffic while passing one (see AUDIT_PASS_SLACK_M).
-  auditCyclistPasses(road) {
-    const ego = this.ego,
-      eb = ego.obb(),
-      min = minPassM(road?.limit ?? 11.2);
-    for (const n of this.npcs) {
-      if (n.kind !== "bike") continue;
-      if (
-        Math.abs(n.x - ego.x) > AUDIT_PASS_NEAR_M ||
-        Math.abs(n.y - ego.y) > AUDIT_PASS_NEAR_M ||
-        Math.abs(wrap(n.psi - ego.psi)) > Math.PI / 4
-      ) {
-        this.bikePasses.delete(n.id);
-        continue;
-      }
-      const b = n.obb(),
-        c = Math.cos(b.heading),
-        s = Math.sin(b.heading),
-        dx = eb.center[0] - b.center[0],
-        dy = eb.center[1] - b.center[1];
-      const ahead = dx * c + dy * s,
-        reach = eb.halfLength + b.halfLength;
-      if (ahead < -reach) {
-        this.bikePasses.set(n.id, { min: Infinity });
-        continue;
-      }
-      const rec = this.bikePasses.get(n.id);
-      if (!rec) continue;
-      // (the gap between the bodies: a car still angled out of a turn, or back into its lane, has its
-      // centre line nearer the cyclist's than the side of it going by)
-      if (ahead <= reach) {
-        rec.min = Math.min(rec.min, boxGap(eb, b));
-        continue;
-      }
-      this.bikePasses.delete(n.id);
-      if (rec.min < min - AUDIT_PASS_SLACK_M) {
-        this.violations.close_passes = (this.violations.close_passes || 0) + 1;
-        this.events.push({
-          type: "close_pass",
-          with: n.id,
-          clearance_m: Math.round(Math.max(0, rec.min) * 100) / 100,
-          min_m: min,
-        });
-      }
-    }
-    const passing = egoPassing(this);
-    if (!passing) {
-      this.cyclistPass = null;
-      return;
-    }
-    const { bike, e, front, across } = passing;
-    if (this.cyclistPass?.id !== bike.id) this.cyclistPass = { id: bike.id, counted: false };
-    if (this.cyclistPass.counted || !across) return;
-    const n = oncomingPassConflict(this, e, front, bike);
-    if (n) {
-      this.cyclistPass.counted = true;
-      this.violations.failed_to_yield++;
-      this.events.push({
-        type: "failed_to_yield",
-        to: "oncoming traffic",
-        with: n.id,
-        cyclist_pass: true,
-        cyclist: bike.id,
-      });
-    }
   }
 
   // Through a junction on a left arrow: anything but a left turn (heading more than 45 deg left of

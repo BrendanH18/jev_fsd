@@ -64,8 +64,6 @@ for (const id of [
   "stop_for_streetcar",
   "stop_before_tracks",
   "wait_short_of_junction",
-  "wait_to_merge",
-  "let_merge_in",
 ])
   cost(candidate(id), "required_wait", -6);
 cost(candidate("creep_to_look"), "creep_or_give_way", -6);
@@ -75,14 +73,22 @@ cost(candidate("pull_over"), "pull_over", -15);
 cost(candidate("turn_around", { law: { kind: "turnaround" } }), "turnaround", -50);
 cost(candidate("pull_out", { law: { kind: "park" } }), "parking", -50);
 cost(candidate("wait_to_park"), "parking_approach", -12);
-cost(candidate("pass_cyclist", { law: { detour: { id: "cyclist:one" } } }), "start_cyclist_pass", 1.5, {
-  cyclist_pass: {},
-});
-cost(candidate("pass_cyclist", { law: { detour: { id: "cyclist:one" } } }), "start_cyclist_pass", undefined, {
-  cyclist_pass: { going: true },
-});
-cost(candidate("follow_cyclist"), "follow_cyclist", -1, { cyclist_pass: { go: false } });
-cost(candidate("follow_cyclist"), "follow_cyclist", undefined, { cyclist_pass: { go: true } });
+// Passing cyclists is a registered feature (sim/features/cyclist-pass.js): its costs are named by slot.
+const featureTerm = (option, props, slot) => {
+  const { scores } = rules.explain({ ...clear, ...props }, [option]);
+  const terms = Object.values(scores[0].terms).reduce((sum, value) => sum + value, 0);
+  assert.ok(Math.abs(terms - scores[0].cost) < 1e-12, slot);
+  const keys = Object.keys(scores[0].terms).filter((term) => term.startsWith(slot));
+  assert.ok(keys.length <= 1, slot);
+  return keys.length ? scores[0].terms[keys[0]] : undefined;
+};
+const passing = candidate("pass_cyclist", { law: { detour: { id: "cyclist:one" } } });
+assert.equal(featureTerm(passing, { cyclist_pass: {} }, "feature_after_special_"), 1.5);
+assert.equal(featureTerm(passing, { cyclist_pass: { going: true } }, "feature_after_special_"), undefined);
+assert.equal(featureTerm(candidate("follow_cyclist"), { cyclist_pass: { go: false } }, "feature_after_special_"), -1);
+assert.equal(featureTerm(candidate("follow_cyclist"), { cyclist_pass: { go: true } }, "feature_after_special_"), undefined);
+for (const id of ["wait_to_merge", "let_merge_in"])
+  assert.equal(featureTerm(candidate(id), {}, "feature_stops_"), -6, id);
 cost(candidate("hard_brake", { law: { kind: "hard_brake" } }), "hard_brake", 3);
 cost(candidate("reverse", { law: { kind: "reverse" } }), "reverse", 2);
 cost(candidate("drift", { sim: { stays_in_lane: false } }), "leave_lane", 2);
@@ -117,7 +123,7 @@ for (const [reason, props] of [
   ["stopped_leader", { following: { gap_m: 2, speed: 0.2 } }],
   ["crossing_pedestrian", { pedestrian: { bumper_to_crosswalk_m: 3 } }],
   ["cyclist_on_right", { right_hook: { bumper_to_yield_m: 1.9 } }],
-  ["merge_hold", { lane_closure: { stop_s_route: 10, bumper_to_stop_m: 1 } }],
+  ["feature_stop", { lane_closure: { stop_s_route: 10, bumper_to_stop_m: 1 } }],
   ["feature_stop", { geese_crossing: { wait: true, bumper_to_stop_m: 1 } }],
   ["feature_before_signal", { road_closed: { on_route: true, bumper_to_stop_m: 1 } }],
   ["destination", { nav: { arrived: true } }],

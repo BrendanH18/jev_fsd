@@ -42,7 +42,7 @@ amber. In a free drive one plow at a time works the primary, secondary and terti
 snows, put down out of the car's sight 150 to 450 m away and taken off once out of sight 500 m away,
 another coming 30 to 90 s later; when the snow stops no more come (`?plows=0` takes them off). The wing
 blade is drawn but is not part of the plow's body in the sim, and an oncoming plow asks nothing of the
-car. The seeded benchmark and the other challenges have none.
+car. The bare benchmark and the other challenges have none.
 
 ## Agent rules
 
@@ -50,3 +50,9 @@ The project rule for this feature, moved here verbatim from `AGENTS.md`, which s
 pattern every opt-in feature shares ([AGENTS.md](../../AGENTS.md#opt-in-features)).
 
 - **Snow plows are opt-in.** `NpcFleet` option `plows` (free drives, unless `?plows=0`) puts a plow on the main streets while it snows, from its own random stream (`sim/snow-plow.js`); the "Behind the plow" challenge places one itself. The audit's `plow_right_passes` reaches the metrics, and fails a drive, only once a plow has worked in it (`World.plowsSeen`), so the seeded benchmark and the other challenges report exactly as before; keep it that way.
+
+The [snow-plow feature record](../../static/js/sim/features/snow-plow.js) owns dispatch,
+traffic's stay-back distance, lane offers, prediction checks, audit, coaching, notices and model
+wording. It uses the geometry and stay-back rules in
+[`sim/snow-plow.js`](../../static/js/sim/snow-plow.js). The city snow benchmark enables
+dispatch. The authored challenge places its plow through the same fleet state.
