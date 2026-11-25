@@ -6,12 +6,14 @@ const steps = {
 };
 
 // Keep the keyboard marker in canvas coordinates so it scales with the map on phones.
-export function bindMapPicker(canvas, cursor, { fromCar, onSelect }) {
+export function bindMapPicker(canvas, cursor, { fromCar, onSelect, bounds = null }) {
   let x, y;
-  const keepInside = (value, max) => Math.min(max, Math.max(0, value));
+  const keepInside = (value, min, max) => Math.min(max, Math.max(min, value));
   function move(nextX, nextY) {
-    x = keepInside(nextX, canvas.width);
-    y = keepInside(nextY, canvas.height);
+    // Keep the marker on the map itself, not in the letterbox around a rectangular map.
+    const [minX, minY, maxX, maxY] = bounds?.() ?? [0, 0, canvas.width, canvas.height];
+    x = keepInside(nextX, minX, maxX);
+    y = keepInside(nextY, minY, maxY);
     cursor.style.left = `${(100 * x) / canvas.width}%`;
     cursor.style.top = `${(100 * y) / canvas.height}%`;
     cursor.hidden = false;

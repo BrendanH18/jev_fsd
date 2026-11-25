@@ -606,6 +606,14 @@ def check_driving_ui(page):
           const clock = app.photo.timeInput;
           clock.value = '23.75'; clock.dispatchEvent(new Event('input'));
           check('Photo lighting announces a clock time for keyboard users', clock.getAttribute('aria-valuetext') === '23:45');
+          const photoKey = (target, k) => {
+            const ev = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
+            target.dispatchEvent(ev);
+            return ev.defaultPrevented;
+          };
+          check('Photo mode lets Tab and Enter reach its controls',
+            !photoKey(app.photo.captureButton, 'Tab') && !photoKey(app.photo.captureButton, 'Enter'));
+          check('Photo mode still holds back driving shortcuts', photoKey(document.body, 'r'));
           const canvas = $('view'), capture = canvas.toBlob, render = app.view.render;
           let complete, captures = 0;
           canvas.toBlob = cb => { captures++; complete = cb; };

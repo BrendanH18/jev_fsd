@@ -518,7 +518,8 @@ export async function boot() {
   });
   bindMapPicker($("#minimap"), $("#minimap-cursor"), {
     fromCar: () => minimap.toPx(world.ego.x, world.ego.y),
-    onSelect: (x, y) => setDestination(minimap.toWorld(x, y)),
+    bounds: () => minimap.pxBounds(),
+    onSelect: (x, y) => minimap.pick(x, y),
   });
   $("#feature-switches").hidden = Boolean(challenge || replay);
   const showMapNote = () =>
@@ -818,7 +819,9 @@ export async function boot() {
           if (!repeat) photo.handleKey(key);
           return true;
         }
-        return !["escape", "o", "m", "c"].includes(key);
+        // Hold back driving and other shortcuts; Tab, Enter and other navigation keys reach the panel.
+        const shortcut = /^[a-z0-9/?]$/.test(key) || key.startsWith("arrow");
+        return shortcut && !["o", "m", "c"].includes(key);
       }
       if (key !== " " || !lab?.isReviewing()) return false;
       if (!repeat) lab.togglePlay();
@@ -1463,6 +1466,7 @@ export async function boot() {
         let road;
         try {
           road = stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
+          input.stepped();
         } catch (error) {
           simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
           console.error("Simulation stopped", error);

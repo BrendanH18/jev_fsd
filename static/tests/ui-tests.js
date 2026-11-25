@@ -321,6 +321,23 @@ export async function runUiTests() {
     cursor.remove();
   }
   {
+    const map = document.createElement("canvas");
+    map.width = 100;
+    map.height = 80;
+    map.tabIndex = 0;
+    const cursor = document.createElement("span");
+    cursor.hidden = true;
+    bindMapPicker(map, cursor, { fromCar: () => [50, 40], bounds: () => [10, 20, 90, 60], onSelect: () => {} });
+    document.body.append(map, cursor);
+    map.focus();
+    const press = (key) => map.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    for (let i = 0; i < 24; i++) press("ArrowLeft");
+    for (let i = 0; i < 24; i++) press("ArrowUp");
+    check("The keyboard marker stays on a letterboxed map", cursor.style.left === "10%" && cursor.style.top === "25%");
+    map.remove();
+    cursor.remove();
+  }
+  {
     const fixture = document.createElement("div");
     document.body.append(fixture);
     const touch = new TouchControls({ root: fixture });
@@ -345,6 +362,8 @@ export async function runUiTests() {
     check("Keyboard touch steering combines simultaneous directions", touch.state.steer === 0.5);
     key(touch.wheel, "keyup", "ArrowLeft");
     check("Keyboard touch steering can reach full lock", touch.state.steer === 1);
+    key(touch.wheel, "keyup", "ArrowRight", { ctrlKey: true });
+    check("Releasing a steering key with a modifier held still lets go", touch.state.steer === 0);
     go.focus();
     check("Blurring the touch steering pad centres it", touch.state.steer === 0);
     key(go, "keydown", " ");
@@ -355,9 +374,11 @@ export async function runUiTests() {
     check("Enter holds the touch brake", touch.state.brake === 1);
     key(brake, "keyup", "Enter");
     go.click();
+    const framesWithoutStep = touch.state.throttle === 1 && touch.state.throttle === 1;
+    touch.stepped();
     check(
-      "Assistive activation of a pedal produces one input pulse",
-      touch.poll().throttle === 1 && touch.poll().throttle === 0,
+      "Assistive activation of a pedal lasts until a physics step reads it",
+      framesWithoutStep && touch.state.throttle === 0,
     );
     hard.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 5, button: 2, bubbles: true, cancelable: true }));
     check("Right-clicking a touch control cannot engage hard braking", !touch.state.hardBrake);

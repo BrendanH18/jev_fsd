@@ -29,9 +29,24 @@ export class Minimap {
       if (!rect.width || !rect.height) return;
       const px = (ev.clientX - rect.left) * (canvas.width / rect.width);
       const py = (ev.clientY - rect.top) * (canvas.height / rect.height);
-      const [x, y] = this.toWorld(px, py);
-      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) onClick([x, y]);
+      this.pick(px, py);
     });
+    this._onPick = onClick;
+  }
+
+  // Sets a destination at a canvas pixel when it lies on the map, for pointer and keyboard alike.
+  pick(px, py) {
+    const [x0, y0, x1, y1] = this.extent;
+    const [x, y] = this.toWorld(px, py);
+    if (!(x >= x0 && x <= x1 && y >= y0 && y <= y1)) return false;
+    this._onPick([x, y]);
+    return true;
+  }
+
+  // The map's projected rectangle in canvas pixels, inside any letterbox.
+  pxBounds() {
+    const [x0, y0, x1, y1] = this.extent;
+    return [this.ox, this.oy, this.ox + (x1 - x0) * this.scale, this.oy + (y1 - y0) * this.scale];
   }
 
   onClearRoute(fn) {

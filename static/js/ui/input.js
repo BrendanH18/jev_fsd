@@ -109,6 +109,10 @@ export class Input {
     this.analog = sum;
     return sum;
   }
+  // Called after each physics step, so one-step pulses from a source are read before they end.
+  stepped() {
+    for (const source of this.sources) source.stepped?.();
+  }
   get throttle() {
     return Math.max(Number(this.keys.has("w") || this.keys.has("arrowup")), this.analog.throttle);
   }

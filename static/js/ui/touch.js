@@ -139,7 +139,9 @@ export class TouchControls {
     const syncKeys = () => this.setSteer((keys.get("ArrowRight") || 0) - (keys.get("ArrowLeft") || 0));
     for (const type of ["keydown", "keyup"]) {
       this.wheel.addEventListener(type, (ev) => {
-        if (ev.ctrlKey || ev.metaKey || ev.altKey || !["ArrowLeft", "ArrowRight"].includes(ev.key)) return;
+        if (!["ArrowLeft", "ArrowRight"].includes(ev.key)) return;
+        // A modified press is the browser's; a release always clears the held key.
+        if (type === "keydown" && (ev.ctrlKey || ev.metaKey || ev.altKey)) return;
         ev.preventDefault();
         if (this.steerPointer != null) return;
         if (type === "keydown") keys.set(ev.key, ev.shiftKey ? 1 : 0.5);
@@ -241,9 +243,8 @@ export class TouchControls {
       hardBrake: this.pedals.hardBrake.size > 0,
     };
   }
-  poll() {
-    const state = this.state;
+  // An assistive activation stays pressed until a physics step has read it (Input.stepped).
+  stepped() {
     for (const [name, held] of Object.entries(this.pedals)) if (held.delete("activate")) this.showPedal(name);
-    return state;
   }
 }

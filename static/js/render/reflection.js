@@ -58,7 +58,7 @@ export class GroundReflection {
     if (strength <= 0) return false;
     const cam = this.camera,
       m = this.mirror;
-    cam.updateMatrixWorld();
+    cam.updateWorldMatrix(true, false); // include a moved parent (a chase rig) before reading the position
     // mirror the camera's position, view target, and up vector in the plane y = 0
     const pos = this._position.setFromMatrixPosition(cam.matrixWorld);
     if (pos.y <= 0.001) {
