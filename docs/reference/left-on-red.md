@@ -1,6 +1,7 @@
 # Left turns on red
 
-`World.leftOnRed` defaults off. Free drives enable it unless `?leftonred=0`;
+`sim/features/left-on-red.js` registers `World.leftOnRed` through the
+[feature registry](../feature-interface.md). The option defaults off. Free drives enable it unless `?leftonred=0`;
 Lab enables it only for **Left on red** (seed 38042), 14 Avenue SW
 (`e594`) onto 5 Street SW (`e593`) in Calgary's committed pack. Both streets
 are one-way; two cars approach from the right on 5 Street (`e140`) on green,

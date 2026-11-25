@@ -1,4 +1,4 @@
-import { featureDecisionFields, firstHookResult, hooks } from "../sim/features/index.js";
+import { featureDecisionFields, redTurnAllowed, firstHookResult, hooks } from "../sim/features/index.js";
 
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
 const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
@@ -38,7 +38,7 @@ export class CautiousAgent {
     // (the autopilot brakes without asking it when nothing unflagged is left: brain/brain.js)
     const eligible = offered.filter((c) => !c.flagged);
     const i = snap.intersection;
-    const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
+    const amberStop = i?.amber?.stop && !redTurnAllowed(i);
     // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.
     // A legal left on red uses the shared target: zero until stopped and clear.
     const target = FEATURE_STOP.some((shouldStop) => shouldStop(snap))

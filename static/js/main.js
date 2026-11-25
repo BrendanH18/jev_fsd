@@ -1429,8 +1429,7 @@ export async function boot() {
     announcedPark = null,
     announcedHazard = null,
     announcedTraffic = null,
-    announcedCyclist = null,
-    announcedLeftRed = null;
+    announcedCyclist = null;
   let lastConditions = "",
     skyAt = world.t;
   function frame(now) {
@@ -1806,20 +1805,7 @@ export async function boot() {
     if (!cyclistLine) announcedCyclist = null;
     // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
     announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud);
-    // a scramble crossing ahead: every light red while people cross every way; no right turn on red
-    const leftRed = autopilot.snap?.intersection?.left_on_red;
-    const leftRedKey = leftRed ? `${autopilot.snap.intersection.id}:${leftRed.stop_completed}:${leftRed.clear}` : null;
-    if (leftRedKey && leftRedKey !== announcedLeftRed)
-      hud.badge(
-        leftRed.go
-          ? "LEFT ON RED · CLEAR TO TURN"
-          : !leftRed.stop_completed
-            ? "LEFT ON RED · FULL STOP FIRST"
-            : "LEFT ON RED · YIELD TO PEDESTRIANS AND TRAFFIC",
-        "safety",
-        2500,
-      );
-    announcedLeftRed = leftRedKey;
+    announceFeatureNotices("afterTurnNotice", world, autopilot, featureViews, announcedFeatures, hud);
     announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
     const ringing = (fleet.trains || [])
       .filter((n) => n.rail.gong)

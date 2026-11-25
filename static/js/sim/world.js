@@ -1,5 +1,4 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
-import { leftOnRedAllowed } from "./left-on-red.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
 import { auditBusLanes } from "./bus-lanes.js";
@@ -99,6 +98,8 @@ const CONTROL_EVENT = hooks("controlEvent");
 const RED_LIGHT_EVENT = hooks("redLightEvent");
 const AUDIT_SIGNAL = hooks("auditSignal");
 const OBSERVE_CONTROL = hooks("observeControl");
+const RED_TURN_MEMORY = hooks("redTurnMemory");
+const RED_TURN_EXIT = hooks("redTurnExit");
 const RESET_CONTACT = hooks("resetContact");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -266,7 +267,6 @@ export class World {
       closures = 0,
       passCyclists = false,
       busLanes = false,
-      leftOnRed = false,
       amberLights = false,
       ...features
     } = {},
@@ -327,8 +327,6 @@ export class World {
     this.cyclistPass = null;
     this.busLanes = !!busLanes;
     this.busLanesSeen = false;
-    this.leftOnRed = !!leftOnRed;
-    this.leftOnRedSeen = false;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -779,23 +777,16 @@ export class World {
           const state = arrow ? "green" : movementSignal(shows, "straight");
           // after a full stop, where turning right on red is allowed, which way it turns decides
 
-          // The legacy rightOnRed record below also validates enabled one-way left turns.
-          // (and only from the leftmost lane, lane 0, as for traffic: sim/npc.js `rightOnRed`)
-          const egoLane = this.leftOnRed ? this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 8)?.lane : null;
-          const leftPending =
-            this.leftOnRed &&
-            egoLane?.edge === edge.id &&
-            egoLane.idx === 0 &&
-            (this.map.out.get(edge.to) || []).some((id) => leftOnRedAllowed(this, edge.id, id));
+          // Preserve the signs in effect at entry if their schedule changes mid-turn.
+          const bannedExits = firstHookResult(SIGNED_EXITS, this, edge.id);
+          const extraTurn = firstHookResult(RED_TURN_MEMORY, this, edge, bannedExits);
           const pending =
             state === "red" &&
-            (this.map.rightOnRed || leftPending) &&
+            (this.map.rightOnRed || extraTurn) &&
             !phaseBansRedTurns(inter) &&
             inter &&
             this.egoStop.controlId === control.id &&
             this.egoStop.completed;
-          // Preserve the signs in effect at entry: a schedule changing mid-turn cannot pardon it.
-          const bannedExits = firstHookResult(SIGNED_EXITS, this, edge.id);
           const signed = bannedExits ? { bannedExits } : {};
           if (state === "red" && !pending) {
             this.violations.red_lights_run++;
@@ -831,18 +822,7 @@ export class World {
                 ? {
                     rightOnRed: {
                       ...signed,
-                      ...(leftPending
-                        ? {
-                            leftAllowed: true,
-                            ...(bannedExits
-                              ? {
-                                  leftExits: (this.map.out.get(edge.to) || []).filter((id) =>
-                                    leftOnRedAllowed(this, edge.id, id),
-                                  ),
-                                }
-                              : {}),
-                          }
-                        : {}),
+                      ...extraTurn,
                       edge: edge.id,
                       approach,
                       exit: exit ?? approach - Math.PI / 2,
@@ -1859,19 +1839,14 @@ export class World {
         on.id !== rtor.via?.id &&
         Math.abs(wrap(at.heading - this.ego.psi)) <= Math.PI / 3
       ) {
-        const legalLeft =
-          rtor.leftAllowed &&
-          (rtor.leftExits ? rtor.leftExits.includes(on.id) : leftOnRedAllowed(this, rtor.edge, on.id));
+        const extraTurn = firstHookResult(RED_TURN_EXIT, this, rtor, on);
         const legalRight =
           this.map.rightOnRed &&
           !rtor.bannedExits?.includes(on.id) &&
           this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right";
-        if ((legalRight || legalLeft) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) {
+        if ((legalRight || extraTurn) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) {
           rtor.via = on;
-          if (legalLeft) {
-            rtor.exit = this.map.headingOut(on.id);
-            this.leftOnRedSeen = true;
-          }
+          if (extraTurn) extraTurn();
         } else rtor.via = rtor.via && on.from === rtor.via.to ? on : null;
       }
       if ((out > AUDIT_RTOR_OUT_M && past > 0) || out > AUDIT_JUNCTION_M) {

@@ -33,7 +33,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     // the oncoming lane once it is clear (`?cyclistpass=0`: everyone stays behind)
     passCyclists: on("cyclistpass"),
     busLanes: on("buslanes"),
-    leftOnRed: on("leftonred"),
     amberLights: on("amberlights"),
   };
   const fleet = {

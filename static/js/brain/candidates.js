@@ -36,6 +36,7 @@ import {
   featureObstacle,
   hooks,
   primaryDetour,
+  redTurnAllowed,
 } from "../sim/features/index.js";
 
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
@@ -816,7 +817,7 @@ export function simulateAll(candidates, snap, world) {
     ((control.control === "signal" && directive?.direction === "stop") ||
       (control.control === "signal" &&
         !directive &&
-        ((control.signal === "red" && !(control.right_on_red?.go || control.left_on_red?.go)) ||
+        ((control.signal === "red" && !redTurnAllowed(control)) ||
           control.signal === "unknown" ||
           (control.signal === "yellow" &&
             (control.amber

@@ -4,7 +4,7 @@
 import { desiredSpeed, waitsItsTurn } from "./sensors.js";
 import { comfort } from "../sim/vehicle.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
-import { featureDecisionFields, hooks, junctionPlan } from "../sim/features/index.js";
+import { featureDecisionFields, redTurnAllowed, hooks, junctionPlan } from "../sim/features/index.js";
 
 const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
 const FEATURE_STOP = hooks("rulesStop");
@@ -27,7 +27,7 @@ export class RulesBrain {
     // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
     const i = snap.intersection;
     const directive = junctionPlan(i);
-    const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
+    const amberStop = i?.amber?.stop && !redTurnAllowed(i);
     const v = snap.ego.v;
     let stop = STOP_BEFORE_SIGNAL.some((shouldStop) => shouldStop(snap, eligible));
     if (i) {
@@ -36,7 +36,7 @@ export class RulesBrain {
         i.control === "signal" &&
         !directive &&
         (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") &&
-        !(i.right_on_red?.go || i.left_on_red?.go) &&
+        !redTurnAllowed(i) &&
         !i.entered &&
         i.bumper_to_line_m < brakeDist + 6 &&
         i.bumper_to_line_m > -1
@@ -97,7 +97,7 @@ export class RulesBrain {
         i &&
         !i.entered &&
         !directive &&
-        ((i.signal === "red" && !(i.right_on_red?.go || i.left_on_red?.go)) ||
+        ((i.signal === "red" && !redTurnAllowed(i)) ||
           (i.signal === "yellow" && i.amber?.stop !== false) ||
           i.signal === "unknown" ||
           (i.control === "stop" && !i.stop_completed) ||

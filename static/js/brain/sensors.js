@@ -1,5 +1,4 @@
 import { observeAmber } from "../sim/amber.js";
-import { leftOnRedExit } from "../sim/left-on-red.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
 
@@ -105,6 +104,8 @@ import {
 } from "../sim/lane-closure.js";
 import {
   alternateSignal,
+  extraRedTurn,
+  redTurnAllowed,
   specialSignalPhase,
   controlDirection,
   firstHookResult,
@@ -161,6 +162,7 @@ const FINISH_LANES = hooks("finishLanes");
 const LANE_OFFER = hooks("laneOffer");
 const AFTER_PASSING = hooks("laneOffer", "afterPassing");
 const ROUTE_RED_BANS = hooks("routeTurnOnRedBlocked");
+const SENSE_RED_TURN = hooks("senseRedTurn");
 const FOLLOWING_POLICY = hooks("followingPolicy");
 const STANDING_VEHICLE_LABELS = hooks("standingVehicleLabel");
 const HAZARD = {
@@ -571,17 +573,16 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
           : null,
       ...signed,
       ...Object.assign({}, ...INTERSECTION_FIELDS_AFTER_RIGHT.map((fields) => fields(world, inter, phaseContext))),
-      ...(world.leftOnRed &&
-      !directive &&
-      control.type === "signal" &&
+      ...(control.type === "signal" &&
       signal === "red" &&
-      c.turn === "left" &&
+      !directive &&
       inter &&
-      !phaseBansRedTurns(inter) &&
       bumperToLine > -CLEARING_M &&
-      leftOnRedExit(world, c)
-        ? { left_on_red: turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") }
-        : {}),
+      !phaseBansRedTurns(inter)
+        ? firstHookResult(SENSE_RED_TURN, world, c, () =>
+            turnOnRed(world, c, inter, frontS, visible, advance?.light === "held"),
+          )
+        : null),
       stop_completed: stopCompleted,
       all_way: control.type === "stop" ? !!control.all_way : null,
       ...replacement?.fields,
@@ -683,10 +684,10 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
   for (const sense of SENSE.junctions) sense(world, snap, senseCtx);
   // Turns on red use the outside lane for their direction and wait for crossing pedestrians.
   // Once moving past the line the car has committed and carries on.
-  const ltor = snap.intersection?.left_on_red;
-  if (ltor) world.leftOnRedSeen = true;
-  const rtor = ltor || snap.intersection?.right_on_red;
-  if (rtor && !rtor.wait_for && (lane.index !== (ltor ? 0 : lane.lanes - 1) || lane.shift))
+  const extraTurn = extraRedTurn(snap.intersection);
+  extraTurn?.observe(world);
+  const rtor = extraTurn?.move || snap.intersection?.right_on_red;
+  if (rtor && !rtor.wait_for && (lane.index !== (extraTurn?.lane ?? lane.lanes - 1) || lane.shift))
     rtor.wait_for = { kind: "lane" };
   if (
     rtor &&
@@ -2529,7 +2530,7 @@ export function desiredSpeed(snap) {
       (i.control === "signal" &&
         !directive &&
         (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") &&
-        !(i.right_on_red?.go || i.left_on_red?.go)) ||
+        !redTurnAllowed(i)) ||
       (i.control === "stop" && !i.stop_completed))
   ) {
     // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line

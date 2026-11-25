@@ -6,12 +6,12 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Twenty-eight features have moved to the registry. They include driveway reversers, ball chase, spring
+Twenty-nine features have moved to the registry. They include driveway reversers, ball chase, spring
 potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddles, traffic parking,
 road closures, double-parked vans, contraflow cyclists, low sun glare, garbage trucks, traffic calming,
 red-light runners, crossing guards, Ontario pedestrian crossovers, roadside stops, following distance,
 turn restrictions, high beams, no-turn-on-red signs, scramble crossings, work zones with flaggers and
-power cuts, and overnight flashing signals. Each record holds its core pipeline hooks and
+power cuts, overnight flashing signals, and left turns on red. Each record holds its core pipeline hooks and
 model wording.
 
 ## A record

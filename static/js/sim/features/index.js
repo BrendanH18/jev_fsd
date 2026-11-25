@@ -193,6 +193,7 @@ import redTurnSigns from "./red-turn-signs.js";
 import workZones from "./work-zones.js";
 import outages from "./outages.js";
 import nightFlash from "./night-flash.js";
+import leftOnRed from "./left-on-red.js";
 import scrambles from "./scrambles.js";
 import runners from "./red-light-runner.js";
 
@@ -225,6 +226,7 @@ export const FEATURES = [
   workZones,
   outages,
   nightFlash,
+  leftOnRed,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -234,7 +236,7 @@ export const SLOTS = {
   requestReroute: ["beforeOffRoute", "afterOffRoute"],
   checkpointShare: ["end"],
   rulesStop: ["beforeSignal", "end"],
-  notice: ["beforeMerge", "beforePlow", "beforeLeftOnRed", "end", "beforeZone"],
+  notice: ["beforeMerge", "beforePlow", "beforeLeftOnRed", "afterTurnNotice", "end", "beforeZone"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
   rulesCost: ["beforeStops", "stops", "beforePassing", "end"],
@@ -379,6 +381,7 @@ export const SLOTS = {
     "afterAllWay",
     "beforeBusLanes",
     "afterBusLanes",
+    "beforeRightOnRed",
     "afterGlare",
     "beforeRunner",
     "restrictions",
@@ -424,6 +427,11 @@ export const SLOTS = {
   visionRange: ["end"],
   redEntryBans: ["end"],
   turnOnRedBlocked: ["end"],
+  extraRedTurn: ["end"],
+  senseRedTurn: ["end"],
+  redTurnMemory: ["end"],
+  redTurnExit: ["end"],
+  trafficRedTurnLane: ["end"],
   routeTurnOnRedBlocked: ["end"],
   phaseBansRedTurns: ["end"],
   controlReplace: ["end"],
@@ -504,6 +512,10 @@ export const junctionPlan = (intersection) => firstHookResult(JUNCTION_PLAN, int
 
 const PHASE_BANS_RED_TURNS = hooks("phaseBansRedTurns");
 export const phaseBansRedTurns = (inter) => PHASE_BANS_RED_TURNS.some((blocked) => blocked(inter));
+
+const EXTRA_RED_TURNS = hooks("extraRedTurn");
+export const extraRedTurn = (intersection) => firstHookResult(EXTRA_RED_TURNS, intersection);
+export const redTurnAllowed = (intersection) => intersection?.right_on_red?.go || extraRedTurn(intersection)?.move.go;
 
 const PRIMARY_DETOURS = hooks("detour", "beforeMerge");
 export const primaryDetour = (snap) => firstHookResult(PRIMARY_DETOURS, snap);

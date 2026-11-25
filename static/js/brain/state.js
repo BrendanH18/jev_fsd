@@ -10,7 +10,7 @@ import { FOLLOW_M } from "../sim/emergency.js";
 import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
 import { STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
-import { featureMotion, hooks, junctionPlan } from "../sim/features/index.js";
+import { extraRedTurn, featureMotion, hooks, junctionPlan } from "../sim/features/index.js";
 import { flagText } from "./tracks.js";
 
 // The registered features' decision state and wording (sim/features/index.js), each where that feature's
@@ -255,15 +255,6 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     if (i.advance)
       state.intersection.advance = { light: i.advance.light, ...(i.advance.protected ? { protected_left: true } : {}) };
     for (const add of STATE.signal) add(snap, state);
-    if (i.left_on_red) {
-      const r = i.left_on_red;
-      state.intersection.left_on_red = {
-        allowed: true,
-        stop_completed: r.stop_completed,
-        clear: r.clear,
-        ...(r.wait_for ? { wait_for: r.wait_for.id || r.wait_for.kind } : {}),
-      };
-    }
     if (i.right_on_red) {
       const r = i.right_on_red,
         w = r.wait_for;
@@ -676,15 +667,16 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
       out.push(
         `The signal phase ${m} m ahead is not visible: approach cautiously and stop at the line unless a permitted phase becomes visible.`,
       );
-    else if (i.signal === "red" && i.left_on_red) out.push(turnOnRedClause(i, m, atLine, true));
-    else if (i.signal === "red" && i.right_on_red) out.push(turnOnRedClause(i, m, atLine));
-    else if (i.signal === "red")
-      out.push(
+    else if (i.signal === "red") {
+      const turn = extraRedTurn(i);
+      const move = turn?.move || i.right_on_red;
+      if (move) out.push(turnOnRedClause(move, m, atLine, turn?.direction));
+      else out.push(
         atLine
           ? "The car is at the line and the signal is red: hold still until it turns green."
           : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`,
       );
-    else if (i.signal === "yellow")
+    } else if (i.signal === "yellow")
       out.push(
         i.amber
           ? i.amber.stop
@@ -1011,12 +1003,10 @@ function advanceClause(i) {
 }
 
 // A red light where the car turns right and a right turn on red is allowed after a full stop.
-function turnOnRedClause(i, m, atLine, left = false) {
-  const r = left ? i.left_on_red : i.right_on_red,
-    w = r.wait_for;
-  const turn = left ? "left" : "right",
-    side = left ? "right" : "left",
-    lane = left ? "leftmost lane" : "curb lane";
+function turnOnRedClause(r, m, atLine, turn = "right") {
+  const w = r.wait_for;
+  const side = turn === "left" ? "right" : "left",
+    lane = turn === "left" ? "leftmost lane" : "curb lane";
   if (r.go)
     return r.entered
       ? `The car is turning ${turn} on the red light: complete the turn.`
@@ -1206,9 +1196,8 @@ export function buildQuestions(snap, eligible, meta = {}) {
     // A red light the car may turn right on is a reason to hold still only while the turn is not clear.
     const redOk =
       junctionPlan(snap.intersection)?.motionCriterion ??
-      (snap.intersection?.left_on_red?.go
-        ? " (except when intersection.left_on_red.stop_completed and clear are both true: the car may turn left on red)"
-        : snap.intersection?.right_on_red?.go
+      extraRedTurn(snap.intersection)?.motionCriterion ??
+      (snap.intersection?.right_on_red?.go
           ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)"
           : "");
     // Likewise waiting its turn at an all-way stop.
