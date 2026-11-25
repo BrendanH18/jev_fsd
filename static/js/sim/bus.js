@@ -149,7 +149,9 @@ export const canStopFor = (v, room) => Number.isFinite(v) && room >= Math.max(0,
 // traffic vehicle `o` has already chosen to yield to it.
 export function busMayPullOut(bus, others, yielding = () => false) {
   const t = bus?.transit;
-  if (!t || !Number.isFinite(t.t) || t.t < BUS_SIGNAL_S || !Number.isFinite(t.limit) || t.limit <= 0) return false;
+  if (!t || !Number.isFinite(t.t) || t.t < BUS_SIGNAL_S) return false;
+  // Authored buses can omit the limit and use the ordinary pull-out gap.
+  if (t.limit !== undefined && (!Number.isFinite(t.limit) || t.limit <= 0)) return false;
   for (const o of others) {
     if (!o || o === bus || Math.abs(o.x - bus.x) > LOOK_BEHIND_M + 15 || Math.abs(o.y - bus.y) > LOOK_BEHIND_M + 15)
       continue;
