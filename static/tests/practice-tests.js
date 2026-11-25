@@ -236,11 +236,16 @@ export async function runPracticeTests() {
         .querySelector(".challenge-practice-note")
         ?.textContent.includes("do not change your manual practice progress"),
     );
+    driveReport.show({ ...report, driver: "manual", practice: { outcome: "attempted", saved: true } });
+    check(
+      "Saved manual attempts explain how to complete the challenge",
+      driveReport.dialog.querySelector(".challenge-practice-note")?.textContent.includes("Retry for a clean arrival"),
+    );
     driveReport.show({ ...report, driver: "manual", practice: { outcome: "attempted", saved: false } });
     check(
-      "Unsaved manual reports explain retry and storage failure",
-      driveReport.dialog.querySelector(".challenge-practice-note")?.textContent.includes("Retry for a clean arrival") &&
-        driveReport.dialog.querySelector(".challenge-practice-note")?.textContent.includes("could not be saved"),
+      "Unsaved manual attempts explain why progress is unavailable",
+      driveReport.dialog.querySelector(".challenge-practice-note")?.textContent ===
+        "Manual attempt was not saved because browser storage is unavailable.",
     );
 
     const clean = {
