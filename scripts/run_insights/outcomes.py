@@ -116,6 +116,19 @@ def events(row):
     return None
 
 
+def event_log_capped(log):
+    return len(log) >= 50
+
+
+def reroute_cohort(row):
+    log = events(row)
+    if log is None:
+        return None
+    if any(event["type"] == "reroute" for event in log):
+        return "reroute observed"
+    return "unknown (retention limit)" if event_log_capped(log) else "none observed"
+
+
 def event_labels(row, transform):
     items = events(row)
     return transform(items) if items is not None else None
@@ -240,22 +253,17 @@ REPORTS = {
         "Count last event types on unfinished drives with complete event logs.",
         lambda r: counts(
             [x for x in r if arrival(x) == "unfinished"],
-            lambda x: event_labels(x, lambda es: None if len(es) >= 50 else [es[-1]["type"]] if es else []),
+            lambda x: event_labels(x, lambda es: None if event_log_capped(es) else [es[-1]["type"]] if es else []),
         ),
     ),
     "suite-first-reroute": ("Locate the first retained reroute in each affected drive.", first_reroute),
     "suite-reroute-outcomes": (
         "Compare verdicts with and without a retained reroute.",
-        lambda r: cohort(
-            r,
-            lambda x: event_labels(
-                x, lambda es: "reroute observed" if any(e["type"] == "reroute" for e in es) else "none observed"
-            ),
-        ),
+        lambda r: cohort(r, reroute_cohort),
     ),
     "suite-event-cap": (
         "Identify logs reaching the runner's 50-event retention ceiling.",
-        lambda r: [x.get("id") for x in r if len(events(x) or []) >= 50],
+        lambda r: [x.get("id") for x in r if event_log_capped(events(x) or [])],
     ),
     "suite-pass-streak": ("Find the earliest longest consecutive passing sequence in saved order.", streak),
     "suite-duplicate-ids": ("Detect repeated scenario identifiers before matching runs.", duplicate_ids),
