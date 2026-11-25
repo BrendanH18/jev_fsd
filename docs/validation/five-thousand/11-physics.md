@@ -45,7 +45,7 @@ Vehicle stepping reports invalid physical inputs early and restores motion when 
 41. Reject negative aerodynamic drag area for powered models. Validated by: `scripts/test_5k_physics_vehicle.mjs`.
 42. Reject negative rolling resistance for powered models. Validated by: `scripts/test_5k_physics_vehicle.mjs`.
 43. Compute the dynamic substep interval once per tick. Validated by: `scripts/test_5k_physics_vehicle.mjs`.
-44. Make the low-level integrators private so callers use the validated step boundary. Validated by: `scripts/test_5k_physics_vehicle.mjs`.
+44. Keep the low-level integrators module-local while preserving the validated stepping path for restored vehicle prototypes. Validated by: `scripts/test_5k_physics_vehicle.mjs`.
 45. Wrap multiply unbounded headings in constant time through the shared angle helper. Validated by: `scripts/test_5k_physics_vehicle.mjs`.
 46. Use the same rear-axle-relative projection for vehicle centres and front bumpers. Validated by: `scripts/test_5k_physics_vehicle.mjs`.
 47. Fall back to the normalized Fiala cubic when the expanded polynomial would overflow. Validated by: `scripts/test_5k_physics_vehicle.mjs`.

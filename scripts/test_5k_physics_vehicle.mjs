@@ -407,3 +407,14 @@ test("comfort floors lateral and stopping targets while hard braking remains gri
     assert.equal(comfort().hardDecel, 0.01 * 9.81 * 0.8);
   });
 });
+
+test("a checkpoint copy with a Vehicle prototype can project and advance just like a constructed vehicle", () => {
+  const car = new Vehicle(2, -3, 0.2, 8);
+  const restored = Object.assign(Object.create(Object.getPrototypeOf(car)), car);
+  const command = { steer: 0.1, accel: -2 };
+  car.step(DT, command);
+  restored.step(DT, command);
+  assertMotion(restored, car);
+  assert.equal(restored.obb().center[0], car.obb().center[0]);
+  assert.equal(restored.front[1], car.front[1]);
+});

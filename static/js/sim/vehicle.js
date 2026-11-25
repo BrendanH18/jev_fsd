@@ -424,7 +424,7 @@ export class Vehicle {
 
     const { x, y, psi, v, delta, a, vy, r, ax, latAccel, slipping } = this;
     try {
-      this.#integrate(dt, steer, accel, reverse, mu);
+      integrate(this, dt, steer, accel, reverse, mu);
       if (
         !Number.isFinite(this.x) ||
         !Number.isFinite(this.y) ||
@@ -446,147 +446,16 @@ export class Vehicle {
     }
   }
 
-  #integrate(dt, steer, accel, reverse, mu) {
-    const P = this.spec;
-    const target = Math.max(-P.maxSteer, Math.min(P.maxSteer, steer));
-    const maxDelta = P.steerRate * dt;
-    this.delta += Math.max(-maxDelta, Math.min(maxDelta, target - this.delta));
-    let cmd = Math.max(-P.maxBrake, Math.min(P.maxAccel, accel));
-    if (cmd === 0) cmd = -0.02 * this.v; // rolling drag
-    if (P.power && this.v > 0 && cmd > 0) {
-      const resist = P.crr * G + (0.5 * AIR * P.cdA * this.v * this.v) / P.mass;
-      cmd = Math.min(cmd, P.power / (P.mass * Math.max(this.v, 2)) - resist);
-    }
-    const da = (cmd - this.a) * Math.min(1, dt / P.accelLag);
-    this.a += Math.max(-P.jerkMax * dt, Math.min(P.jerkMax * dt, da));
-
-    const v0 = this.v;
-    if (Math.abs(this.v) < KINEMATIC_BELOW || !P.mass) this.#kinematic(dt, mu);
-    else {
-      const n = Math.max(1, Math.ceil(dt / SUBSTEP - 1e-9));
-      const h = dt / n;
-      for (let i = 0; i < n; i++) this.#dynamic(h, mu);
-    }
-    if (!Number.isFinite(this.v)) throw new RangeError("Vehicle integration produced non-finite speed");
-    // braking never reverses the car on its own; reversing is an explicit choice
-    if (this.a < 0 && v0 >= 0 && this.v < 0 && !reverse) this.v = 0;
-    if (this.a > 0 && v0 < 0 && this.v > 0) this.v = 0;
-    // held on the brakes at a standstill the car does not accelerate backwards
-    if (this.v === 0 && this.a < 0 && !reverse) this.a = 0;
-    if (this.v === 0) {
-      this.vy = 0;
-      this.r = 0;
-    }
-    this.v = Math.max(-P.maxReverse, Math.min(P.maxSpeed, this.v));
-    this.psi = wrapHeading(this.psi);
-  }
-
-  // Walking pace: the car goes where its wheels point, limited by the friction circle.
-  #kinematic(dt, mu) {
-    const P = this.spec;
-    // (where grip varies, the slipperier axle's: ROAD.gripAt)
-    const grip = (ROAD.gripAt ? Math.min(...axleGrip(this, mu)) : mu) * G;
-    const a = Math.max(-grip, Math.min(grip, this.a));
-    let curvature = Math.tan(this.delta) / P.wheelbase;
-    const latMax = Math.sqrt(Math.max(0, grip * grip - a * a));
-    const v2 = this.v * this.v;
-    if (v2 * Math.abs(curvature) > latMax) curvature = (Math.sign(curvature) * latMax) / v2;
-    this.latAccel = v2 * curvature;
-    this.ax = a;
-    this.slipping = 0;
-    this.x += this.v * Math.cos(this.psi) * dt;
-    this.y += this.v * Math.sin(this.psi) * dt;
-    this.psi += this.v * curvature * dt;
-    this.r = this.v * curvature;
-    this.vy = (P.wheelbase - (P.cgToFront ?? P.wheelbase / 2)) * this.r;
-    this.v += a * dt;
-  }
-
-  #dynamic(h, mu) {
-    const P = this.spec;
-    const L = P.wheelbase,
-      lf = P.cgToFront,
-      lr = L - lf,
-      m = P.mass;
-    // axle loads with longitudinal transfer (from the last step's acceleration)
-    const Fzf = Math.max(0, (m * (G * lr - this.ax * P.cgHeight)) / L);
-    const Fzr = Math.max(0, (m * (G * lf + this.ax * P.cgHeight)) / L);
-    // lateral transfer: the axle's grip falls because the outside tire is over its static load
-    const dFz = (m * Math.abs(this.latAccel) * P.cgHeight) / P.track;
-    // (where grip varies, each axle's own: ROAD.gripAt; elsewhere both are ROAD.mu, untouched)
-    let muFront = mu,
-      muRear = mu;
-    if (ROAD.gripAt) [muFront, muRear] = axleGrip(this, mu);
-    const muF = axleMu(muFront, Fzf, dFz * P.rollFront, (m * G * lr) / L);
-    const muR = axleMu(muRear, Fzr, dFz * (1 - P.rollFront), (m * G * lf) / L);
-    const vx = this.v,
-      vy = this.vy,
-      r = this.r,
-      d = this.delta;
-    const alphaF = Math.atan2(vy + lf * r, vx) - d;
-    const alphaR = Math.atan2(vy - lr * r, vx);
-    // longitudinal forces, capped per axle by anti-lock brakes, traction control, and stability
-    // control, which leave each axle the grip its cornering needs so braking in a bend does not
-    // spin the car
-    const Fx = m * this.a;
-    let Fxf, Fxr;
-    if (Fx >= 0) {
-      Fxf = Fx * P.driveFront;
-      Fxr = Fx * (1 - P.driveFront);
-    } else {
-      Fxf = Fx * P.brakeFront;
-      Fxr = Fx * (1 - P.brakeFront);
-    }
-    Fxf = clampAbs(Fxf, longCap(muF * Fzf, P.frontStiffness * Fzf * Math.abs(Math.tan(alphaF))));
-    Fxr = clampAbs(Fxr, longCap(muR * Fzr, P.rearStiffness * Fzr * Math.abs(Math.tan(alphaR))));
-    const FyMaxF = Math.sqrt(Math.max(0, (muF * Fzf) ** 2 - Fxf * Fxf));
-    const FyMaxR = Math.sqrt(Math.max(0, (muR * Fzr) ** 2 - Fxr * Fxr));
-    const Fyf = fiala(alphaF, P.frontStiffness * Fzf, FyMaxF);
-    const Fyr = fiala(alphaR, P.rearStiffness * Fzr, FyMaxR);
-    const cd = Math.cos(d),
-      sd = Math.sin(d);
-    const fx = Fxf * cd - Fyf * sd + Fxr;
-    const fy = Fxf * sd + Fyf * cd + Fyr;
-    const ax = fx / m,
-      ay = fy / m;
-    const dvx = ax + vy * r;
-    const dvy = ay - vx * r;
-    const dr = (lf * (Fxf * sd + Fyf * cd) - lr * Fyr) / P.yawInertia;
-    // the rear axle moves with the body's forward speed and the CG's sideways speed minus yaw
-    const c = Math.cos(this.psi),
-      s = Math.sin(this.psi);
-    const vyRear = vy - lr * r;
-    this.x += (vx * c - vyRear * s) * h;
-    this.y += (vx * s + vyRear * c) * h;
-    this.psi += r * h;
-    this.v += dvx * h;
-    this.vy += dvy * h;
-    this.r += dr * h;
-    this.ax = ax;
-    this.latAccel = ay;
-    const useF = FyMaxF > 1 ? Math.abs(alphaF) / Math.max(1e-6, slideAngle(P.frontStiffness * Fzf, FyMaxF)) : 1;
-    const useR = FyMaxR > 1 ? Math.abs(alphaR) / Math.max(1e-6, slideAngle(P.rearStiffness * Fzr, FyMaxR)) : 1;
-    this.slipping = Math.max(0, Math.min(1, Math.max(useF, useR) - 1));
-  }
-
   // Sideslip angle of the body at the CG (rad): how far the car is moving sideways to its heading.
   get beta() {
     return Math.abs(this.v) > 0.5 ? Math.atan2(this.vy, Math.abs(this.v)) : 0;
   }
 
   get center() {
-    return this.#pointAhead(bodyLength(this.spec) / 2 - this.spec.rearOverhang);
+    return pointAhead(this, bodyLength(this.spec) / 2 - this.spec.rearOverhang);
   }
   get front() {
-    return this.#pointAhead(bodyLength(this.spec) - this.spec.rearOverhang);
-  }
-
-  #pointAhead(metres) {
-    if (!Number.isFinite(this.psi)) throw new RangeError("Invalid heading for vehicle body projection");
-    const x = this.x + Math.cos(this.psi) * metres;
-    const y = this.y + Math.sin(this.psi) * metres;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new RangeError("Invalid projected vehicle position");
-    return [x, y];
+    return pointAhead(this, bodyLength(this.spec) - this.spec.rearOverhang);
   }
 
   obb() {
@@ -633,6 +502,139 @@ export class Vehicle {
     if (!Number.isFinite(ahead) || !Number.isFinite(right)) throw new RangeError("Invalid vehicle-local projection");
     return { ahead, right };
   }
+}
+
+// Restored replay objects keep the Vehicle prototype and ordinary motion fields. Module helpers
+// let those objects and new instances use the same integration and projection paths.
+function integrate(vehicle, dt, steer, accel, reverse, mu) {
+  const P = vehicle.spec;
+  const target = Math.max(-P.maxSteer, Math.min(P.maxSteer, steer));
+  const maxDelta = P.steerRate * dt;
+  vehicle.delta += Math.max(-maxDelta, Math.min(maxDelta, target - vehicle.delta));
+  let cmd = Math.max(-P.maxBrake, Math.min(P.maxAccel, accel));
+  if (cmd === 0) cmd = -0.02 * vehicle.v; // rolling drag
+  if (P.power && vehicle.v > 0 && cmd > 0) {
+    const resist = P.crr * G + (0.5 * AIR * P.cdA * vehicle.v * vehicle.v) / P.mass;
+    cmd = Math.min(cmd, P.power / (P.mass * Math.max(vehicle.v, 2)) - resist);
+  }
+  const da = (cmd - vehicle.a) * Math.min(1, dt / P.accelLag);
+  vehicle.a += Math.max(-P.jerkMax * dt, Math.min(P.jerkMax * dt, da));
+
+  const v0 = vehicle.v;
+  if (Math.abs(vehicle.v) < KINEMATIC_BELOW || !P.mass) kinematic(vehicle, dt, mu);
+  else {
+    const n = Math.max(1, Math.ceil(dt / SUBSTEP - 1e-9));
+    const h = dt / n;
+    for (let i = 0; i < n; i++) dynamic(vehicle, h, mu);
+  }
+  if (!Number.isFinite(vehicle.v)) throw new RangeError("Vehicle integration produced non-finite speed");
+  // braking never reverses the car on its own; reversing is an explicit choice
+  if (vehicle.a < 0 && v0 >= 0 && vehicle.v < 0 && !reverse) vehicle.v = 0;
+  if (vehicle.a > 0 && v0 < 0 && vehicle.v > 0) vehicle.v = 0;
+  // held on the brakes at a standstill the car does not accelerate backwards
+  if (vehicle.v === 0 && vehicle.a < 0 && !reverse) vehicle.a = 0;
+  if (vehicle.v === 0) {
+    vehicle.vy = 0;
+    vehicle.r = 0;
+  }
+  vehicle.v = Math.max(-P.maxReverse, Math.min(P.maxSpeed, vehicle.v));
+  vehicle.psi = wrapHeading(vehicle.psi);
+}
+
+// Walking pace: the car goes where its wheels point, limited by the friction circle.
+function kinematic(vehicle, dt, mu) {
+  const P = vehicle.spec;
+  // (where grip varies, the slipperier axle's: ROAD.gripAt)
+  const grip = (ROAD.gripAt ? Math.min(...axleGrip(vehicle, mu)) : mu) * G;
+  const a = Math.max(-grip, Math.min(grip, vehicle.a));
+  let curvature = Math.tan(vehicle.delta) / P.wheelbase;
+  const latMax = Math.sqrt(Math.max(0, grip * grip - a * a));
+  const v2 = vehicle.v * vehicle.v;
+  if (v2 * Math.abs(curvature) > latMax) curvature = (Math.sign(curvature) * latMax) / v2;
+  vehicle.latAccel = v2 * curvature;
+  vehicle.ax = a;
+  vehicle.slipping = 0;
+  vehicle.x += vehicle.v * Math.cos(vehicle.psi) * dt;
+  vehicle.y += vehicle.v * Math.sin(vehicle.psi) * dt;
+  vehicle.psi += vehicle.v * curvature * dt;
+  vehicle.r = vehicle.v * curvature;
+  vehicle.vy = (P.wheelbase - (P.cgToFront ?? P.wheelbase / 2)) * vehicle.r;
+  vehicle.v += a * dt;
+}
+
+function dynamic(vehicle, h, mu) {
+  const P = vehicle.spec;
+  const L = P.wheelbase,
+    lf = P.cgToFront,
+    lr = L - lf,
+    m = P.mass;
+  // axle loads with longitudinal transfer (from the last step's acceleration)
+  const Fzf = Math.max(0, (m * (G * lr - vehicle.ax * P.cgHeight)) / L);
+  const Fzr = Math.max(0, (m * (G * lf + vehicle.ax * P.cgHeight)) / L);
+  // lateral transfer: the axle's grip falls because the outside tire is over its static load
+  const dFz = (m * Math.abs(vehicle.latAccel) * P.cgHeight) / P.track;
+  // (where grip varies, each axle's own: ROAD.gripAt; elsewhere both are ROAD.mu, untouched)
+  let muFront = mu,
+    muRear = mu;
+  if (ROAD.gripAt) [muFront, muRear] = axleGrip(vehicle, mu);
+  const muF = axleMu(muFront, Fzf, dFz * P.rollFront, (m * G * lr) / L);
+  const muR = axleMu(muRear, Fzr, dFz * (1 - P.rollFront), (m * G * lf) / L);
+  const vx = vehicle.v,
+    vy = vehicle.vy,
+    r = vehicle.r,
+    d = vehicle.delta;
+  const alphaF = Math.atan2(vy + lf * r, vx) - d;
+  const alphaR = Math.atan2(vy - lr * r, vx);
+  // longitudinal forces, capped per axle by anti-lock brakes, traction control, and stability
+  // control, which leave each axle the grip its cornering needs so braking in a bend does not
+  // spin the car
+  const Fx = m * vehicle.a;
+  let Fxf, Fxr;
+  if (Fx >= 0) {
+    Fxf = Fx * P.driveFront;
+    Fxr = Fx * (1 - P.driveFront);
+  } else {
+    Fxf = Fx * P.brakeFront;
+    Fxr = Fx * (1 - P.brakeFront);
+  }
+  Fxf = clampAbs(Fxf, longCap(muF * Fzf, P.frontStiffness * Fzf * Math.abs(Math.tan(alphaF))));
+  Fxr = clampAbs(Fxr, longCap(muR * Fzr, P.rearStiffness * Fzr * Math.abs(Math.tan(alphaR))));
+  const FyMaxF = Math.sqrt(Math.max(0, (muF * Fzf) ** 2 - Fxf * Fxf));
+  const FyMaxR = Math.sqrt(Math.max(0, (muR * Fzr) ** 2 - Fxr * Fxr));
+  const Fyf = fiala(alphaF, P.frontStiffness * Fzf, FyMaxF);
+  const Fyr = fiala(alphaR, P.rearStiffness * Fzr, FyMaxR);
+  const cd = Math.cos(d),
+    sd = Math.sin(d);
+  const fx = Fxf * cd - Fyf * sd + Fxr;
+  const fy = Fxf * sd + Fyf * cd + Fyr;
+  const ax = fx / m,
+    ay = fy / m;
+  const dvx = ax + vy * r;
+  const dvy = ay - vx * r;
+  const dr = (lf * (Fxf * sd + Fyf * cd) - lr * Fyr) / P.yawInertia;
+  // the rear axle moves with the body's forward speed and the CG's sideways speed minus yaw
+  const c = Math.cos(vehicle.psi),
+    s = Math.sin(vehicle.psi);
+  const vyRear = vy - lr * r;
+  vehicle.x += (vx * c - vyRear * s) * h;
+  vehicle.y += (vx * s + vyRear * c) * h;
+  vehicle.psi += r * h;
+  vehicle.v += dvx * h;
+  vehicle.vy += dvy * h;
+  vehicle.r += dr * h;
+  vehicle.ax = ax;
+  vehicle.latAccel = ay;
+  const useF = FyMaxF > 1 ? Math.abs(alphaF) / Math.max(1e-6, slideAngle(P.frontStiffness * Fzf, FyMaxF)) : 1;
+  const useR = FyMaxR > 1 ? Math.abs(alphaR) / Math.max(1e-6, slideAngle(P.rearStiffness * Fzr, FyMaxR)) : 1;
+  vehicle.slipping = Math.max(0, Math.min(1, Math.max(useF, useR) - 1));
+}
+
+function pointAhead(vehicle, metres) {
+  if (!Number.isFinite(vehicle.psi)) throw new RangeError("Invalid heading for vehicle body projection");
+  const x = vehicle.x + Math.cos(vehicle.psi) * metres;
+  const y = vehicle.y + Math.sin(vehicle.psi) * metres;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) throw new RangeError("Invalid projected vehicle position");
+  return [x, y];
 }
 
 function bodyLength(spec) {
