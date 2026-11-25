@@ -317,6 +317,7 @@ for (const spec of [
   COLLECTION_TRUCK,
 ]) {
   Object.freeze(spec);
+  validateMotionSpec(spec);
 }
 
 function specRange(field, value, min, max = Infinity, { openMin = false, openMax = false } = {}) {
@@ -326,7 +327,6 @@ function specRange(field, value, min, max = Infinity, { openMin = false, openMax
 
 function validateMotionSpec(spec) {
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw new TypeError("Vehicle spec must be an object");
-  if (validatedSpecs.has(spec)) return;
   const positive = { openMin: true };
   specRange("wheelbase", spec.wheelbase, 0, Infinity, positive);
   specRange("maxSteer", spec.maxSteer, 0, Math.PI / 2, { openMax: true });
@@ -420,7 +420,7 @@ export class Vehicle {
     const mu = roadGrip();
     if (ROAD.gripAt != null && typeof ROAD.gripAt !== "function")
       throw new TypeError("ROAD.gripAt must be a function or null");
-    validateMotionSpec(this.spec);
+    if (!validatedSpecs.has(this.spec)) validateMotionSpec(this.spec);
 
     const { x, y, psi, v, delta, a, vy, r, ax, latAccel, slipping } = this;
     try {
