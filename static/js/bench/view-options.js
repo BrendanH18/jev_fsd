@@ -1,5 +1,32 @@
 import { compatibleSuiteVersions, suiteVersion } from "./suite-version.js";
 
+const ROUTE_TAGS = ["length_m", "signals", "stops", "lefts", "rights"];
+
+function routeComparisonIssue(current, baseline) {
+  const a = current.results;
+  const b = baseline.results;
+  if (!a?.length || !b?.length) return "route identity unavailable";
+  const byId = new Map(b.map((result) => [result.id, result]));
+  const ids = new Set(a.map((result) => result.id));
+  if (a.length !== b.length || ids.size !== a.length || byId.size !== b.length || a.some(({ id }) => !byId.has(id)))
+    return "completed routes";
+  const aSha = current.manifest?.suite?.route_sha;
+  const bSha = baseline.manifest?.suite?.route_sha;
+  if (aSha && bSha) return aSha === bSha ? null : "route fingerprints";
+  // Older runs have no fingerprint. Match the same geometry tags as the offline inspector.
+  for (const { id, tags } of a) {
+    const other = byId.get(id).tags;
+    for (const key of ROUTE_TAGS) {
+      const x = tags?.[key];
+      const y = other?.[key];
+      const valid = key === "length_m" ? Number.isFinite : Number.isInteger;
+      if (!valid(x) || x < 0 || !valid(y) || y < 0) return "route identity unavailable";
+      if (x !== y) return "route tags";
+    }
+  }
+  return null;
+}
+
 // Compare the conditions that determine a drive, while allowing different drivers.
 export function comparisonIssue(current, baseline) {
   if (!compatibleSuiteVersions(current, baseline))
@@ -24,18 +51,18 @@ export function comparisonIssue(current, baseline) {
   test("route count", a.count, b.count);
   test("hour", a.hour ?? null, b.hour ?? null);
   test("feature exclusions", [...(a.without || [])].sort().join(","), [...(b.without || [])].sort().join(","));
-  const aIds = current.results?.map(({ id }) => id).sort();
-  const bIds = baseline.results?.map(({ id }) => id).sort();
-  if (aIds && bIds) test("completed routes", aIds.join(","), bIds.join(","));
+  const routeIssue = routeComparisonIssue(current, baseline);
+  if (routeIssue) differences.push(routeIssue);
   return differences.length ? `Benchmark conditions differ (${differences.join(", ")}). Deltas are hidden.` : null;
 }
 
-export function validateRunInputs({ count, npcs, seed, mode, weather, heldout }, weatherNames) {
-  const whole = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
-  if (!heldout && !whole(count, 1, 60)) throw new Error("Scenarios must be a whole number from 1 to 60.");
-  if (!whole(npcs, 0, 120)) throw new Error("Traffic must be a whole number from 0 to 120.");
-  if (!heldout && !whole(seed, 0, Number.MAX_SAFE_INTEGER))
-    throw new Error("Suite seed must be a nonnegative whole number.");
+export function validateRunInputs({ count, npcs, seed, mode, weather, heldout }, weatherNames, { form = false } = {}) {
+  const whole = (value, min) => Number.isSafeInteger(value) && value >= min;
+  if (!heldout && (!whole(count, 1) || (form && count > 60)))
+    throw new Error(`Scenarios must be a whole number ${form ? "from 1 to 60" : "of at least 1"}.`);
+  if (!whole(npcs, 0) || (form && npcs > 120))
+    throw new Error(`Traffic must be a ${form ? "whole number from 0 to 120" : "nonnegative whole number"}.`);
+  if (!heldout && !whole(seed, 0)) throw new Error("Suite seed must be a nonnegative whole number.");
   if (!["lockstep", "realtime"].includes(mode)) throw new Error("Choose the lockstep or realtime clock.");
   if (!weatherNames.includes(weather)) throw new Error(`Unknown benchmark weather "${weather}".`);
 }

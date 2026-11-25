@@ -471,6 +471,18 @@ function plannedRepeat(driver, number, { track = "open", effort = "low", ids = O
 const haiku = "llm:claude-haiku-5-5";
 const jevRepeats = [1, 2, 3].map((number) => plannedRepeat("jev", number));
 const haikuRepeats = [1, 2, 3].map((number) => plannedRepeat(haiku, number));
+const unevenRepeats = [...jevRepeats.slice(0, 2), haikuRepeats[0]];
+assert.deepEqual(
+  JSON.parse(compare(...unevenRepeats)).drivers.map(({ driver, repeats }) => [driver, repeats]),
+  [
+    ["jev", 2],
+    [haiku, 1],
+  ],
+);
+assert.deepEqual(
+  JSON.parse(compare("--driver=jev", ...unevenRepeats)).drivers.map(({ driver }) => driver),
+  ["jev"],
+);
 const planned = JSON.parse(compare("--plan", plan, ...jevRepeats, ...haikuRepeats));
 assert.equal(planned.drives_per_repeat, 62);
 assert.equal(planned.drivers.length, 2);

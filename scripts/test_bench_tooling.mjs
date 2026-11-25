@@ -54,6 +54,17 @@ try {
     () => checkFiles({}, { record: join(dir, "new.gz"), json: join(directoryAlias, "new.gz") }),
     /different files/,
   );
+  mkdirSync(join(dir, "a"));
+  mkdirSync(join(dir, "b", "sub"), { recursive: true });
+  symlinkSync(join(dir, "b", "sub"), join(dir, "a", "link"));
+  const tapeThroughLink = `${dir}/a/link/../tape.json`;
+  const actualTape = write("b/tape.json", "{}");
+  write("a/tape.json", "different tape");
+  rejects(run("bench_node.mjs", "--replay", tapeThroughLink, "--json", actualTape), /different files/);
+  const outputThroughLink = `${dir}/a/link/../new.json`;
+  writeArtifact(outputThroughLink, '{"ok":true}');
+  assert.equal(readJson(join(dir, "b", "new.json")).ok, true);
+  assert.throws(() => readFileSync(join(dir, "a", "new.json")), { code: "ENOENT" });
   const dangling = join(dir, "dangling.json");
   symlinkSync(join(dir, "nowhere"), dangling);
   assert.throws(() => checkFiles({}, { json: dangling }), /dangling/);
@@ -168,6 +179,7 @@ try {
   rejects(run("soak.mjs", ...soakArgs, "--skip=unknown"), /Unknown configurations/);
   rejects(run("soak.mjs", ...soakArgs, "--weather=mist"), /Unknown weather/);
   rejects(run("soak.mjs", "--dry-run", "--maps=kitsilano,kitsilano"), /duplicate items/);
+  rejects(run("soak.mjs", "--dry-run", "--seeds=1,01"), /--seeds contains duplicate seeds/);
   const soakOutput = join(dir, "soak.json.gz");
   const empty = run(
     "soak.mjs",
@@ -262,15 +274,17 @@ try {
       "--quiet",
       "--port",
       port,
-      "--json",
-      soaked,
     ];
-    await assert.rejects(exec(process.execPath, soak), (error) => {
+    const skipped = ["city/kitsilano/seed-2"];
+    const checkFailFast = (error) => {
       assert.equal(JSON.parse(error.stdout).configurations, 1);
+      assert.deepEqual(JSON.parse(error.stdout).skipped, skipped);
       assert.match(error.stderr, /\[1\/2\] Starting/);
-      assert.deepEqual(readJson(soaked).skipped, ["city/kitsilano/seed-2"]);
       return true;
-    });
+    };
+    await assert.rejects(exec(process.execPath, soak), checkFailFast);
+    await assert.rejects(exec(process.execPath, [...soak, "--json", soaked]), checkFailFast);
+    assert.deepEqual(readJson(soaked).skipped, skipped);
   } finally {
     server.close();
   }

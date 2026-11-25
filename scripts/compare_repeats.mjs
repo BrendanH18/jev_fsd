@@ -292,7 +292,6 @@ function compare(paths, planPath, selectedDriver) {
     drives_per_repeat: first.drives.length,
     drivers: [...groups]
       .map(([driver, repeats]) => {
-        if (repeats.length < 2) throw new Error(`List at least two recordings for ${driver}.`);
         const { model, prompt, provider_settings } = repeats[0];
         if (
           repeats.some(

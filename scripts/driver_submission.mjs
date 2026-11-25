@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { driverScores } from "../static/js/bench/scores.js";
+import { canonicalJson, comparableResult } from "../static/js/brain/recording.js";
 import { benchPage } from "./cli_tools.mjs";
 import { readSubmission, SUBMISSION_FORMAT, verifySubmissionReport } from "./submission_bundle.mjs";
 
@@ -91,7 +92,19 @@ function inspect({ bundle: bundlePath, json, "expect-sha256": expectedSha }) {
         `Recording SHA-256 mismatch for ${tapePath}: expected ${parsed.recording_sha256}, actual ${actualTapeSha}.`,
       );
     }
-    readSubmission({ format: SUBMISSION_FORMAT, recording: parseBytes(tapePath, tapeBytes), report });
+    const recording = parseBytes(tapePath, tapeBytes);
+    readSubmission({ format: SUBMISSION_FORMAT, recording, report });
+    for (const drive of report.results) {
+      const id = drive.challenge;
+      const recorded = recording.results?.[id];
+      if (!Object.hasOwn(recording.results ?? {}, id) || recorded?.pass !== drive.pass)
+        throw new Error(`The published report verdict for ${id} differs from the recording.`);
+      const saved = comparableResult(recorded);
+      for (const [field, value] of Object.entries(comparableResult(drive))) {
+        if (Object.hasOwn(saved, field) && canonicalJson(saved[field]) !== canonicalJson(value))
+          throw new Error(`The published report field ${id}.${field} differs from the recording.`);
+      }
+    }
   } else {
     const bundle = readSubmission(parsed);
     format = bundle.format;

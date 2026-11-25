@@ -179,7 +179,11 @@ try {
 
   const manifest = { format: "jev-run-manifest/2", driver: "outside-driver", cost_usd: 0.1 };
   const report = { manifest, results: [{ challenge: "example", pass: true, arrived: true, time_s: 10 }] };
-  const recording = { format: "jev-local-recording/1", header: { arena: { ids: ["example"] }, manifest } };
+  const recording = {
+    format: "jev-local-recording/1",
+    header: { arena: { ids: ["example"] }, manifest },
+    results: { example: { ...report.results[0], result_sha: "fixture" } },
+  };
   const bundle = write("submission.json.gz", { format: "jev-submission/1", recording, report });
   const inspected = run("driver_submission.mjs", "inspect", "--bundle", bundle, "--json");
   assert.equal(inspected.status, 0, inspected.stderr);
@@ -253,6 +257,20 @@ try {
   assert.match(run("driver_submission.mjs", "inspect", "--bundle", forged).stderr, /tape is missing/);
   writeFileSync(`${forged}.gz`, bytes);
   assert.match(run("driver_submission.mjs", "inspect", "--bundle", forged).stderr, /same v2 run manifest/);
+  for (const [change, message] of [
+    [{ pass: false }, /verdict for example differs from the recording/],
+    [{ time_s: 11 }, /example\.time_s differs from the recording/],
+  ]) {
+    write("forged.json", {
+      format: "jev-published-submission/1",
+      submitter: "example",
+      recording_sha256: createHash("sha256").update(bytes).digest("hex"),
+      report: { ...report, results: [{ ...report.results[0], ...change }] },
+    });
+    const inspection = run("driver_submission.mjs", "inspect", "--bundle", forged);
+    assert.equal(inspection.status, 1);
+    assert.match(inspection.stderr, message);
+  }
   writeFileSync(`${published}.gz`, "corrupted");
   assert.match(run("driver_submission.mjs", "inspect", "--bundle", published).stderr, /Recording SHA-256 mismatch/);
 } finally {

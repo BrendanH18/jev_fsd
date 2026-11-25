@@ -8,7 +8,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 
 export function parseOptions(argv, names, switches = []) {
@@ -67,15 +67,18 @@ export function readJson(file) {
 }
 
 function fileIdentity(file) {
-  const absolute = resolve(file);
-  const stats = statSync(absolute, { throwIfNoEntry: false });
-  if (stats) return { path: realpathSync(absolute), inode: `${stats.dev}:${stats.ino}` };
-  const parent = dirname(absolute);
-  const realParent = realpathSync(parent);
+  // Native realpath follows symlinks before interpreting any subsequent "..".
+  const stats = statSync(file, { throwIfNoEntry: false });
+  if (stats) return { path: realpathSync.native(file), inode: `${stats.dev}:${stats.ino}`, stats };
+  const realParent = realpathSync.native(dirname(file));
   // A dangling symlink has no inode for its target. Refuse it rather than risk writing through it.
-  if (lstatSync(absolute, { throwIfNoEntry: false })?.isSymbolicLink())
+  if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink())
     throw new Error(`Path is a dangling symbolic link: ${file}`);
-  return { path: join(realParent, basename(absolute)) };
+  return { path: join(realParent, basename(file)) };
+}
+
+function checkOutput(option, file, identity) {
+  if (identity.stats && !identity.stats.isFile()) throw new Error(`--${option} must name a file: ${file}`);
 }
 
 export function checkFiles(inputs, outputs) {
@@ -87,17 +90,15 @@ export function checkFiles(inputs, outputs) {
       (entry) => entry.path === identity.path || (identity.inode && entry.inode === identity.inode),
     );
     if (previous) throw new Error(`--${option} and --${previous.option} need different files.`);
-    if (Object.hasOwn(outputs, option)) {
-      const stats = statSync(file, { throwIfNoEntry: false });
-      if (stats && !stats.isFile()) throw new Error(`--${option} must name a file: ${file}`);
-    }
+    if (Object.hasOwn(outputs, option)) checkOutput(option, file, identity);
     seen.push({ ...identity, option });
   }
 }
 
 export function writeArtifact(file, text, { gzip = false } = {}) {
-  checkFiles({}, { output: file });
-  const destination = statSync(file, { throwIfNoEntry: false }) ? realpathSync(file) : resolve(file);
+  const identity = fileIdentity(file);
+  checkOutput("output", file, identity);
+  const destination = identity.path;
   const directory = mkdtempSync(join(dirname(destination), ".jev-artifact-"));
   const temporary = join(directory, "artifact");
   try {

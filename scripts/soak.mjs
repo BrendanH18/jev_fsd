@@ -183,10 +183,12 @@ async function main() {
     throw new Error("--mode hard sets the conditions: drop --maps, --seeds, --count and --weather.");
   const shard = wholeNumber("shard", args.shard, 0);
   const shards = wholeNumber("shards", args.shards, 1, { min: 1 });
+  const seeds = commaList("seeds", args.seeds)?.map((s) => wholeNumber("seeds", s));
+  if (seeds && new Set(seeds).size !== seeds.length) throw new Error("--seeds contains duplicate seeds.");
   const planned = soakPlan({
     mode: args.mode ?? (heldout ? "city" : undefined),
     maps: commaList("maps", args.maps) ?? undefined,
-    seeds: commaList("seeds", args.seeds)?.map((s) => wholeNumber("seeds", s)),
+    seeds,
     count: wholeNumber("count", args.count, 2, { min: 1 }),
     shard,
     shards,
@@ -349,7 +351,14 @@ async function main() {
       runs,
     };
     if (args.json) writeArtifact(args.json, JSON.stringify(report, null, 1), { gzip: args.json.endsWith(".gz") });
-    console.log(JSON.stringify({ configurations: runs.length, failed, audit_policy: auditPolicy }));
+    console.log(
+      JSON.stringify({
+        configurations: runs.length,
+        failed,
+        audit_policy: auditPolicy,
+        ...(report.skipped ? { skipped: report.skipped } : {}),
+      }),
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
