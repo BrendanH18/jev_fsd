@@ -227,6 +227,13 @@ try {
     expect(merge(a, save("altered.json", altered)), pattern);
   }
 
+  const open = makeArena("open-first", { track: "open" });
+  open.results["open-first"].track = "open";
+  const missingTrack = makeArena("open-second", { track: "open" });
+  const missingTrackPath = save("missing-track.json", missingTrack);
+  expect(merge("--dry-run", save("open-first.json", open), missingTrackPath), /different track for open-second/);
+  expect(run("arena_node.mjs", "--tape-info", "--replay", missingTrackPath), /uses a different track/);
+
   const one = saveBench(0, "part-one");
   const two = saveBench(1, "part-two");
   const benchPlan = mergeBench("--dry-run", two, one);

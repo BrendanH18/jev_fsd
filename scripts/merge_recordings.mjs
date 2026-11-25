@@ -11,6 +11,7 @@ import { lstatSync, statSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording } from "../static/js/brain/recording.js";
+import { sameArenaTrack } from "./arena_tape.mjs";
 import { arenaSuiteVersion } from "./canonical_suite.mjs";
 import {
   isArenaSet,
@@ -153,8 +154,7 @@ recordings.forEach((r, i) => {
     if (!Object.hasOwn(r.drives, id)) fail(`${parts[i]} has a result for ${id} but no answers for it.`);
     if (result.map !== undefined && !Object.hasOwn(r.header.maps, result.map))
       fail(`${parts[i]} has no map fingerprint for drive ${id}.`);
-    if (result.track !== undefined && result.track !== (r.header.arena.track ?? "guarded"))
-      fail(`${parts[i]} has a result on a different track for ${id}.`);
+    if (!sameArenaTrack(result, r.header.arena)) fail(`${parts[i]} has a result on a different track for ${id}.`);
     const authored = r.header.manifest?.suite.drives[id];
     if (
       result.challenge !== id ||
