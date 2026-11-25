@@ -15,6 +15,7 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "data" / "results.json"
+RUNNERS = ("arena_node.mjs", "bench_node.mjs")
 
 
 def replay_matrix(rows: list[dict]) -> dict:
@@ -24,15 +25,17 @@ def replay_matrix(rows: list[dict]) -> dict:
         if not tape:
             continue
         manifest = row.get("manifest") or {}
+        if not isinstance(manifest, dict):
+            raise ValueError(f"{tape} needs a manifest object")
         tree = manifest.get("source_commit") or row.get("replay_source_commit")
         engine = manifest.get("engine") or row.get("engine")
-        node = re.fullmatch(r"node v(\d+\.\d+\.\d+)", engine or "")
-        if not re.fullmatch(r"[0-9a-f]{40}", tree or "") or not node:
+        node = re.fullmatch(r"node v(\d+\.\d+\.\d+)", engine) if isinstance(engine, str) else None
+        if not isinstance(tree, str) or not re.fullmatch(r"[0-9a-f]{40}", tree) or not node:
             raise ValueError(f"{tape} needs a source revision and a Node version for replay CI")
         count = row.get("total")
         if not isinstance(count, int) or isinstance(count, bool) or count < 1:
             raise ValueError(f"{tape} needs a positive drive count for replay CI")
-        if manifest.get("source_dirty"):
+        if manifest.get("source_dirty", False) is not False:
             raise ValueError(f"{tape} was recorded with uncommitted changes")
         job = {
             "tape": tape,
@@ -63,7 +66,7 @@ def replay_status(stdout: str, returncode: int, count: int) -> tuple[str, str]:
     return "Error", f"Expected {count} drives. {lines[0]}"
 
 
-def run_replay(checkout: Path, tape: Path, runner: str, count: int) -> tuple[str, str]:
+def run_replay(checkout: Path, tape: Path, runner: str, count: int, *, timeout=1200) -> tuple[str, str]:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = str(sock.getsockname()[1])
@@ -101,7 +104,7 @@ def run_replay(checkout: Path, tape: Path, runner: str, count: int) -> tuple[str
                 cwd=checkout,
                 capture_output=True,
                 text=True,
-                timeout=1200,
+                timeout=timeout,
                 check=False,
             )
             print(result.stdout, end="")
@@ -110,7 +113,8 @@ def run_replay(checkout: Path, tape: Path, runner: str, count: int) -> tuple[str
         except subprocess.TimeoutExpired as error:
             for stream in (error.stdout, error.stderr):
                 print(stream.decode(errors="replace") if isinstance(stream, bytes) else stream or "", end="")
-            return "Error", "The replay exceeded 20 minutes"
+            duration = "20 minutes" if timeout == 1200 else f"{timeout} seconds"
+            return "Error", f"The replay exceeded {duration}"
         finally:
             if server.poll() is None:
                 server.terminate()
@@ -123,34 +127,67 @@ def run_replay(checkout: Path, tape: Path, runner: str, count: int) -> tuple[str
             print(server_log.read(), end="")
 
 
-def main() -> None:
+def positive_int(value):
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("expected a positive integer")
+    return number
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_subparsers(dest="mode", required=True)
-    modes.add_parser("matrix", help="list the published tapes and their replay revisions")
+    matrix = modes.add_parser("matrix", help="list the published tapes and their replay revisions")
+    matrix.add_argument("--results", type=Path, default=OUTPUT, help="read an alternate published results index")
+    matrix.add_argument("--runner", choices=RUNNERS, help="select arena or benchmark replay jobs")
+    matrix.add_argument("--tape", action="append", help="select a specific published tape path (repeatable)")
     run = modes.add_parser("run", help="report the result of a tape replay on a checkout")
     run.add_argument("checkout", type=Path)
     run.add_argument("tape", type=Path)
-    run.add_argument("runner", choices=("arena_node.mjs", "bench_node.mjs"))
-    run.add_argument("count", type=int)
+    run.add_argument("runner", choices=RUNNERS)
+    run.add_argument("count", type=positive_int)
     run.add_argument("target", choices=("published", "main"))
+    run.add_argument("--timeout", type=positive_int, default=1200, help="runner timeout in seconds")
+    run.add_argument("--check", action="store_true", help="exit 1 on drift or runner error")
     args = parser.parse_args()
 
     if args.mode == "matrix":
-        print(json.dumps(replay_matrix(json.loads(OUTPUT.read_text())["rows"]), separators=(",", ":")))
-        return
+        try:
+            data = replay_matrix(json.loads(args.results.read_text(encoding="utf-8-sig"))["rows"])
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+            parser.error(f"{args.results}: {error}")
+        if args.runner:
+            data["include"] = [job for job in data["include"] if job["runner"] == args.runner]
+        if args.tape:
+            requested = set(args.tape)
+            missing = requested - {job["tape"] for job in data["include"]}
+            if missing:
+                parser.error(f"no matching replay jobs for: {', '.join(sorted(missing))}")
+            data["include"] = [job for job in data["include"] if job["tape"] in requested]
+        print(json.dumps(data, separators=(",", ":")))
+        return 0
 
     tape = ROOT / args.tape
     try:
-        status, detail = run_replay(args.checkout, tape, args.runner, args.count)
+        if not tape.is_file():
+            raise FileNotFoundError(f"Replay tape does not exist: {tape}")
+        status, detail = run_replay(args.checkout, tape, args.runner, args.count, timeout=args.timeout)
     except OSError as error:
         status, detail = "Error", str(error)
-    revision = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=args.checkout, text=True).strip()
+    try:
+        revision = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=args.checkout, text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        revision = "unknown revision"
     summary = f"{tape.name} on {args.target} ({revision}) — {status}. {detail}"
-    print(summary if status == "Exact" else f"::warning::{summary}")
+    annotation = summary.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(summary if status == "Exact" else f"::warning::{annotation}")
     if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
         with Path(summary_path).open("a") as output:
-            output.write(f"- {summary}\n")
+            output.write(f"- {' '.join(summary.splitlines())}\n")
+    return int(args.check and status != "Exact")
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
