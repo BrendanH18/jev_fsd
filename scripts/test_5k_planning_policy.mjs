@@ -86,7 +86,10 @@ const passing = candidate("pass_cyclist", { law: { detour: { id: "cyclist:one" }
 assert.equal(featureTerm(passing, { cyclist_pass: {} }, "feature_after_special_"), 1.5);
 assert.equal(featureTerm(passing, { cyclist_pass: { going: true } }, "feature_after_special_"), undefined);
 assert.equal(featureTerm(candidate("follow_cyclist"), { cyclist_pass: { go: false } }, "feature_after_special_"), -1);
-assert.equal(featureTerm(candidate("follow_cyclist"), { cyclist_pass: { go: true } }, "feature_after_special_"), undefined);
+assert.equal(
+  featureTerm(candidate("follow_cyclist"), { cyclist_pass: { go: true } }, "feature_after_special_"),
+  undefined,
+);
 for (const id of ["wait_to_merge", "let_merge_in"])
   assert.equal(featureTerm(candidate(id), {}, "feature_stops_"), -6, id);
 cost(candidate("hard_brake", { law: { kind: "hard_brake" } }), "hard_brake", 3);

@@ -77,9 +77,8 @@ assert.equal(taken.reserved === explicit, true);
 releaseSlot(slot, owner);
 
 const parked = new ParkedCars(map, { density: 0 });
-const lost = new Vehicle(0, 0);
-lost.x = NaN;
-assert.throws(() => parked.add(lost), /finite center/);
+// (a Vehicle itself refuses a position that is not finite, so hand the bay a body whose centre is not)
+assert.throws(() => parked.add({ center: [NaN, 0] }), /finite center/);
 assert.equal(parked.list.length, 0);
 assert.equal(parked.remove(null), false);
 const car = new Vehicle(26, 26);
