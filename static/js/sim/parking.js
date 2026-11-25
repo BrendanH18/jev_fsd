@@ -13,6 +13,7 @@ const SLOT_M = 6.4; // curb length per parked car
 const CORNER_CLEAR_M = 5.0; // no parking this close to the crossing street's curb
 const LINE_CLEAR_M = 6.0; // nor this close before a stop line or yield line
 const CELL = 25;
+const OPEN_DOOR_S = 6;
 // On the inside of a bend a straight car body leaves the curve: its ends reach out of the parking lane
 // into the travel lane. A bay whose car would reach further in than this is not a bay.
 const BEND_INTRUSION_M = 0.3;
@@ -28,8 +29,11 @@ export const PARKED_DENSITY = 0.5;
 // Vehicle reservations keep the same half-metre bumper room as parking's free-space check. A driveway
 // has no vehicle of its own, so it keeps an ordinary car's footprint clear in each bay it crosses.
 export function reserveSlot(map, slot, owner, { spec = owner.spec || CAR, sFrom, sTo } = {}) {
-  const e = map.edges.get(slot.edge),
+  let s;
+  if (sFrom == null || sTo == null) {
+    const e = map.edges.get(slot.edge);
     s = projectPoint(e.pts, e.cum, [slot.x, slot.y]).s;
+  }
   slot.reserved = {
     owner,
     sFrom: sFrom ?? s - spec.rearOverhang - 0.5,
@@ -50,6 +54,8 @@ export function bayIntrusion(e, s, lat, spec = CAR) {
 // left one of edge e: the car as actually placed, with its jitter, not only its bay.
 export function footprintIntrusion(e, cx, cy, h, right, spec = CAR) {
   const inner = right ? e.asphalt[1] - e.parking[1] : e.asphalt[0] + e.parking[0];
+  const cosine = Math.cos(h),
+    sine = Math.sin(h);
   let worst = -Infinity;
   for (const [a, b] of [
     [1, 1],
@@ -57,12 +63,17 @@ export function footprintIntrusion(e, cx, cy, h, right, spec = CAR) {
     [-1, 1],
     [-1, -1],
   ]) {
-    const x = cx + (Math.cos(h) * a * spec.length) / 2 + (Math.sin(h) * b * spec.width) / 2;
-    const y = cy + (Math.sin(h) * a * spec.length) / 2 - (Math.cos(h) * b * spec.width) / 2;
+    const x = cx + (cosine * a * spec.length) / 2 + (sine * b * spec.width) / 2;
+    const y = cy + (sine * a * spec.length) / 2 - (cosine * b * spec.width) / 2;
     const q = projectPoint(e.pts, e.cum, [x, y]);
     worst = Math.max(worst, right ? inner - q.lateral : q.lateral - inner);
   }
   return worst;
+}
+
+function parkedCell(car) {
+  const [cx, cy] = car.center;
+  return `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`;
 }
 
 export class ParkedCars {
@@ -174,6 +185,9 @@ export class ParkedCars {
   }
 
   add(car) {
+    const key = parkedCell(car);
+    const cell = this.grid.get(key);
+    if (cell?.includes(car)) return;
     car.parked = true;
     if (car.slot) {
       car.slot.occupant = car;
@@ -181,10 +195,8 @@ export class ParkedCars {
     }
     this.list.push(car);
     this.added.push(car);
-    const [cx, cy] = car.center;
-    const key = `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`;
-    if (!this.grid.has(key)) this.grid.set(key, []);
-    this.grid.get(key).push(car);
+    if (cell) cell.push(car);
+    else this.grid.set(key, [car]);
   }
 
   // Take a car out of the parking lane (it is pulling out). `removed` tells the renderer.
@@ -193,24 +205,37 @@ export class ParkedCars {
     const i = this.list.indexOf(car);
     if (i < 0) return false;
     this.list.splice(i, 1);
-    const [cx, cy] = car.center;
-    const cell = this.grid.get(`${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`);
-    if (cell) cell.splice(cell.indexOf(car), 1);
+    const key = parkedCell(car);
+    if (!this.removeFromCell(car, key)) {
+      // Recover if an authored scenario moved the parked axle without updating the index.
+      for (const other of this.grid.keys()) if (this.removeFromCell(car, other)) break;
+    }
     this.removed.push(car);
-    if (car.slot) car.slot.occupant = null;
+    if (car.slot?.occupant === car) car.slot.occupant = null;
+    return true;
+  }
+
+  removeFromCell(car, key) {
+    const cell = this.grid.get(key);
+    const index = cell?.indexOf(car) ?? -1;
+    if (index < 0) return false;
+    if (cell.length === 1) this.grid.delete(key);
+    else cell.splice(index, 1);
     return true;
   }
 
   // The street-side front door swings backward from its hinge. Its OBB is the same panel drawn
   // by the renderer, rather than an inflated whole-car box.
-  openDoor(car) {
-    if (!car.parked || car.door || !this.list.includes(car)) return null;
+  openDoor(car, { duration = OPEN_DOOR_S } = {}) {
+    if (!car?.parked || car.door || !this.list.includes(car)) return null;
+    if (!Number.isFinite(duration) || duration <= 0) throw new RangeError("Invalid door event duration");
     const door = {
       id: `${car.id}_door`,
       kind: "door",
       owner: car,
       t: 0,
       angle: 0,
+      ...(duration !== OPEN_DOOR_S ? { duration } : {}),
       v: 0,
       spec: { length: 1.1, width: 0.12, rearOverhang: 0.55 },
       get center() {
@@ -229,23 +254,28 @@ export class ParkedCars {
   poseDoor(door) {
     const car = door.owner,
       side = car.curb === "right" ? -1 : 1;
-    door.angle = (Math.PI / 3) * Math.min(1, door.t / 0.8, Math.max(0, (6 - door.t) / 0.8));
-    const hx = car.x + Math.cos(car.psi) * 2.1 + ((Math.sin(car.psi) * CAR.width) / 2) * side;
-    const hy = car.y + Math.sin(car.psi) * 2.1 - ((Math.cos(car.psi) * CAR.width) / 2) * side;
+    door.angle =
+      (Math.PI / 3) * Math.min(1, door.t / 0.8, Math.max(0, ((door.duration ?? OPEN_DOOR_S) - door.t) / 0.8));
+    const c = Math.cos(car.psi),
+      s = Math.sin(car.psi);
+    const hx = car.x + c * 2.1 + ((s * car.spec.width) / 2) * side;
+    const hy = car.y + s * 2.1 - ((c * car.spec.width) / 2) * side;
     door.psi = car.psi + side * door.angle;
     door.x = hx - Math.cos(door.psi) * 0.55;
     door.y = hy - Math.sin(door.psi) * 0.55;
   }
 
   step(dt, world) {
-    for (const door of [...this.activeDoors]) {
+    // Compact in place, retaining the order in which visible doors were opened.
+    let keep = 0;
+    for (const door of this.activeDoors) {
       door.t += dt;
       this.poseDoor(door);
-      if (door.t >= 6) {
+      if (door.t >= (door.duration ?? OPEN_DOOR_S)) {
         door.owner.door = null;
-        this.activeDoors.splice(this.activeDoors.indexOf(door), 1);
-      }
+      } else this.activeDoors[keep++] = door;
     }
+    this.activeDoors.length = keep;
     this.nextDoor -= dt;
     if (this.nextDoor > 0) return;
     this.nextDoor = 12 + this.random() * 16;
@@ -264,17 +294,14 @@ export class ParkedCars {
   // Move parked car `car` (its rear axle) to (x, y), keeping the grid in step (snowbanks push the cars
   // parked in a narrowing out from the kerb: sim/snowbanks.js).
   move(car, x, y) {
-    const key = (c) => {
-      const [cx, cy] = c.center;
-      return `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`;
-    };
-    const before = key(car);
+    const before = parkedCell(car);
+    if (!this.grid.get(before)?.includes(car)) return;
     car.x = x;
     car.y = y;
-    const after = key(car);
+    if (car.door) this.poseDoor(car.door);
+    const after = parkedCell(car);
     if (after === before) return;
-    const cell = this.grid.get(before);
-    if (cell?.includes(car)) cell.splice(cell.indexOf(car), 1);
+    this.removeFromCell(car, before);
     if (!this.grid.has(after)) this.grid.set(after, []);
     this.grid.get(after).push(car);
   }
@@ -282,17 +309,26 @@ export class ParkedCars {
   // Parked cars whose center lies within `r` meters of (x, y).
   near(x, y, r) {
     const out = [];
+    if (!Number.isFinite(r) || r < 0) return out;
     const c0 = Math.floor((x - r) / CELL),
       c1 = Math.floor((x + r) / CELL);
     const d0 = Math.floor((y - r) / CELL),
       d1 = Math.floor((y + r) / CELL);
+    if (
+      !Number.isSafeInteger(c0) ||
+      !Number.isSafeInteger(c1) ||
+      !Number.isSafeInteger(d0) ||
+      !Number.isSafeInteger(d1)
+    )
+      return out;
+    const radius2 = r * r;
     for (let i = c0; i <= c1; i++)
       for (let j = d0; j <= d1; j++) {
         const cell = this.grid.get(`${i},${j}`);
         if (!cell) continue;
         for (const car of cell) {
           const [cx, cy] = car.center;
-          if ((cx - x) ** 2 + (cy - y) ** 2 <= r * r) out.push(car);
+          if ((cx - x) ** 2 + (cy - y) ** 2 <= radius2) out.push(car);
         }
       }
     return out;
