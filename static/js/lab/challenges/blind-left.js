@@ -26,9 +26,9 @@ export const challenge = {
   hidden: true,
   street: "West 4th Avenue",
   description:
-    "A left turn on a green on West 4th Avenue. A van on the other side of the junction is waiting to turn left too, and the lane beside it is hidden behind it.",
+    "You have a green for an unprotected left on West 4th Avenue. An opposing van waiting to turn left hides the lane beside it.",
   lesson:
-    "A vehicle waiting to turn left opposite you can hide traffic coming straight through in the lane beside it. Don't turn until you can see that lane is clear: wait in the junction, and go once you can see that nothing is coming.",
+    "Hold your wheels straight while waiting and check the lane beside the van before crossing it. A gap you can see in one oncoming lane tells you little about the lane hidden from view.",
 };
 
 const BLIND_VAN_M = 5;

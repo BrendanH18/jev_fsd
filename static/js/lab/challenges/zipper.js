@@ -26,9 +26,9 @@ export const challenge = {
   hazard: "lane-closure",
   street: "14 Avenue SW",
   description:
-    "A road crew has closed the right lane of 14 Avenue SW, one-way with two lanes. The left lane is backed up to the cones, two cars in your lane are waiting at the merge, and the lane ahead of you is otherwise empty.",
+    "Cones close the right lane on 14 Avenue SW. The left lane queues beside it while two cars ahead of you wait at the merge point.",
   lesson:
-    "Where a lane is closed, zipper merge: in slow traffic, stay in your lane right up to the merge point, then take turns, one vehicle from each lane. Manitoba's driver's handbook teaches it, and Ontario cities and the Alberta Motor Association ask drivers to merge this way. Merging early makes the queue longer, and following the car ahead in out of turn forces the driver whose turn it is to brake. Wait for your turn, then go.",
+    "In this slow queue, use the open space in your lane up to the cones and merge one for one. Wait for the left-lane car whose turn comes before yours, then enter the gap.",
 };
 
 const ZIP_START_M = 30,

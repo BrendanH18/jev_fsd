@@ -14,10 +14,9 @@ export const challenge = {
   hazard: "amber",
   amberLights: true,
   street: "West 4th Avenue",
-  description:
-    "The light turns amber on West 4th Avenue, with room to stop safely. Ease off, stop before the line, and wait for green.",
+  description: "The light on West 4th Avenue turns amber while you're still far enough back to brake smoothly.",
   lesson:
-    "Amber means stop if you can do so safely. Decide when the light changes, allow for grip and braking response, and never speed up to beat it.",
+    "Start braking as soon as you judge a safe stop is possible. Allow for grip and braking response, stop before the line, and hold there until the light changes.",
 };
 
 export const scenario = amberScenario;

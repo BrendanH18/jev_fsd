@@ -178,7 +178,7 @@ export async function runRoadTestTests() {
     check(
       "The sheet's summary counts violations and demerits against the allowance",
       sheet().querySelector(".examiner-summary")?.textContent ===
-        `0 dangerous actions or violations · 2 of ${kits.maxDemerits} demerits allowed`,
+        `0 automatic failures · 2 of ${kits.maxDemerits} demerits allowed`,
     );
     check(
       "A recorded manual road test notes the result and the best attempt",

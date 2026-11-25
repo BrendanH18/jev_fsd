@@ -26,9 +26,9 @@ export const challenge = {
   scrambles: true,
   street: "Wharf Street",
   description:
-    "You're turning right from Wharf Street onto Government Street, by the Empress, where the signal has a scramble crossing: every light turns red together while people cross every way, diagonally too. Your light turns red as you arrive.",
+    "At the Empress, the lights turn red for every approach so pedestrians can cross in all directions. Your route turns right through the junction.",
   lesson:
-    "At a scramble crossing there is no turning right on red: the red stays red for everyone while people cross the junction every way at once, so wait at the line for your own green. When it comes, anyone still crossing, a slow walker finishing the diagonal say, still has the right of way: let them reach the kerb before you turn.",
+    "Wait at the line throughout the all-walk phase. When your light turns green, check for someone still finishing the diagonal before starting the turn.",
 };
 
 const SCR_START_M = 75,

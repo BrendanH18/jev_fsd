@@ -19,9 +19,10 @@ export const challenge = {
   difficulty: "Courtesy",
   hazard: "bus",
   street: "West 4th Avenue",
-  description: "A bus at its stop on West 4th Avenue signals to pull out just as you come up behind it in its lane.",
+  description:
+    "You're approaching a bus stopped in your lane on West 4th Avenue. Its indicator comes on as it prepares to pull away.",
   lesson:
-    "In BC, where the limit is 60 km/h or less, traffic behind a bus at a stop must let it pull out once it signals. Ease off early, stop behind it if you have to, and let it go first.",
+    "Here in BC, with the limit at 60 km/h or less, give a signalling transit bus room to leave the stop. Ease off as soon as its indicator comes on and be ready to stop behind it.",
 };
 
 const BUS_START_M = 100;

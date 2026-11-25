@@ -19,9 +19,9 @@ export const challenge = {
   hazard: "roundabout",
   street: "Cunard Street",
   description:
-    "Three cars circulate through the North Park roundabout as you approach on Cunard Street. Your route takes the third exit onto North Park Street.",
+    "You approach the North Park roundabout from Cunard Street while three cars circulate. You're headed for the third exit.",
   lesson:
-    "Slow down and yield to traffic already in the roundabout. Wait outside the ring until there is a safe gap, then circulate counter-clockwise and take the third exit.",
+    "Slow before the yield line and look left for a gap in circulating traffic. Enter only when it is safe, travel counter-clockwise, and signal right for the third exit onto North Park Street.",
 };
 
 const START_M = 16,

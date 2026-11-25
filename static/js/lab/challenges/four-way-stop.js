@@ -28,9 +28,9 @@ export const challenge = {
   difficulty: "Judgement",
   hazard: "all-way",
   description:
-    "An all-way stop in The Annex. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left. Who goes when?",
+    "At an Annex all-way stop, a car to your right stops first. Another queues behind it, while the oncoming driver is waiting to turn left.",
   lesson:
-    "At an all-way stop, whoever stops first goes first. Stop together and the car on the right goes first. A car that pulls up after you waits for you, even if it was queued before you arrived.",
+    "Count when each driver reaches their own stop line, including anyone who was queued behind another car. Go in stop order, yielding to the car on your right when you stop together.",
 };
 
 const allWaySiteCache = new WeakMap();

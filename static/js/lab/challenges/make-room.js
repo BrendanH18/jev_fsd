@@ -14,9 +14,9 @@ export const challenge = {
   followingDistance: true,
   street: "West 4th Avenue",
   description:
-    "A moving car merges from the next lane into your gap on West 4th Avenue. Ease off and rebuild your following room.",
+    "A moving car changes lanes into the space ahead of you on West 4th Avenue, shortening your following gap.",
   lesson:
-    "When someone moves into the gap ahead, make room by easing off or braking as needed. A short gap forced on you is a reason to respond, not to accelerate and close it further.",
+    "Ease off as soon as the car moves in. If coasting leaves too little room, brake gently until you have a usable gap again.",
 };
 
 export const scenario = followingScenario;

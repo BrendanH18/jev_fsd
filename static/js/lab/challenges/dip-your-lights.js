@@ -18,8 +18,9 @@ export const challenge = {
   hazard: "high-beams",
   highBeams: true,
   description:
-    "The streetlights are out on 13th Street East. Use high beams on the empty stretch, dip for an approaching car and the slower car ahead.",
-  lesson: "High beams help you see; dip within 150 m oncoming and 60 m following, and in fog or snow.",
+    "The streetlights on 13th Street East are out. You start on an empty stretch and later meet an oncoming car and catch another from behind.",
+  lesson:
+    "Use high beams on the unlit, clear stretch. Dip them before you are within 150 m of oncoming traffic or 60 m of a vehicle ahead, and use low beams in fog or snow.",
 };
 
 export function scenario(map, challenge) {

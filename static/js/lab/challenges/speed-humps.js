@@ -19,10 +19,9 @@ export const challenge = {
   hazard: "speed-humps",
   calming: true,
   street: "Gloucester Street",
-  description:
-    "Gloucester Street is a one-way residential street in Centretown with a 50 km/h limit and a speed hump across each block. You set off from the start of a block, with a clear run of 80 m up to the first.",
+  description: "From a standing start on Gloucester Street, you have an 80 m run to the first of several speed humps.",
   lesson:
-    "Speed humps are built to be crossed at about 30 km/h, speed tables at about 40 and speed bumps at a crawl: faster, they jolt the car and everyone in it, and can unsettle it. Slow down before you reach one, not on it, cross at an even speed, and pick up speed again only once your rear wheels are over. Then slow again for the next one.",
+    "Finish slowing before the hump and cross it at an even speed of about 30 km/h or less. Wait until the rear wheels are over before accelerating toward the next one.",
 };
 
 const HUMP_LIMIT_KMH = 40,

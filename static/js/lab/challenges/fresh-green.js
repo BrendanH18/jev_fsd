@@ -24,9 +24,9 @@ export const challenge = {
   redRunners: true,
   street: "106 Street NW",
   description:
-    "You wait at the red on 106 Street NW at Whyte Avenue NW. Your light turns green just as a car on Whyte Avenue, too late to stop, runs its red across your way.",
+    "You are waiting at Whyte Avenue NW. As your light goes green, a car from the cross street enters the intersection late.",
   lesson:
-    "When your light turns green, look both ways and let a driver who cannot stop clear the junction before you go.",
+    "Check both directions as the green appears and watch the approaching car's speed. Hold at the line until it clears your path.",
 };
 
 const SIGNAL = "sig3",

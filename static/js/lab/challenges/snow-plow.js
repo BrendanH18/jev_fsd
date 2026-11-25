@@ -23,9 +23,9 @@ export const challenge = {
   hazard: "snow-plow",
   street: "William Avenue",
   description:
-    "It's snowing on William Avenue, two lanes each way. A city plow is clearing the left lane just ahead of you at 18 km/h, its blue and amber lamps flashing, and the right lane beside it is wide open.",
+    "A plow with blue and amber lights clears the left lane of William Avenue at 18 km/h. Your approach leaves an open lane to its right.",
   lesson:
-    "Stay at least 30 m behind a snow plow with its lights flashing (100 m where the limit is over 80 km/h): that is Manitoba's law, and other provinces' handbooks say the same. Never pass one on the right, the side its blade throws snow and debris, and don't pass one at all when blowing snow hides the road ahead. Pass only on the left, where you can see the way is clear, and move back in well ahead of it.",
+    "Stay at least 30 m back on this Manitoba street. Hold behind while the only open lane is on the plow's right, where the blade throws snow and debris.",
 };
 
 const PLOW_START_M = 15,

@@ -26,9 +26,9 @@ export const challenge = {
   hazard: "double-parked",
   street: "Brunswick Avenue",
   description:
-    "A delivery van has stopped in your lane on Brunswick Avenue, its hazards flashing, beside the parked cars. The only way past is the oncoming lane, and you can't see far down it yet.",
+    "A delivery van with its hazards on blocks your lane on Brunswick Avenue. The van limits your view of oncoming traffic.",
   lesson:
-    "Going round something stopped in your lane takes you into the oncoming lane, and oncoming traffic has the right of way. Stop a car length back, where you can see past it and have room to pull out, and go round only once the way is clear for the whole distance round and back. Driver's handbooks across Canada say the same.",
+    "Stop about a car length back where you have room to pull out and see farther past the van. Wait for an opposing-lane gap long enough to get around the van and fully back into your lane.",
 };
 
 const VAN_START_M = 62,

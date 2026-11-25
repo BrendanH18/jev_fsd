@@ -18,9 +18,9 @@ export const challenge = {
   leftOnRed: true,
   street: "14 Avenue SW",
   description:
-    "Turn left from one-way 14 Avenue SW onto one-way 5 Street SW. Your light is red; two cars come from the right on their green.",
+    "Your red light controls a left turn from one-way 14 Avenue SW onto one-way 5 Street SW. Traffic from the right has green.",
   lesson:
-    "Stop fully at the line, then yield to pedestrians and traffic from the right. When clear, turn left from the leftmost lane onto the one-way street. Never do this in Québec, at a scramble, or where a sign forbids it.",
+    "Stop fully in the leftmost lane. Where this turn is permitted, check the crosswalk and wait for traffic from the right to clear before turning into the one-way street. Signs and local restrictions still apply.",
 };
 
 export function scenario(map, challenge) {

@@ -25,9 +25,9 @@ export const challenge = {
   hazard: "streetcar",
   street: "Bathurst Street",
   description:
-    "A 511 streetcar has stopped at its stop on Bathurst Street, in the lane beside yours, with its doors open. Your lane is clear.",
+    "A Bathurst Street streetcar has opened its doors in the lane to your left. Passengers have to cross your lane to board or get off.",
   lesson:
-    "In Ontario, traffic behind a streetcar that has stopped to let people on or off must stop at least 2 m behind its rear doors and wait until they have got on, or reached the curb. Its riders cross your lane to get to it.",
+    "Stop at least 2 m behind the rear doors in this Ontario drive. Hold until people have boarded or reached the kerb, then check the path in front of you.",
 };
 
 const TRAM_START_M = 75,

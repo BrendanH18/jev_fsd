@@ -25,9 +25,9 @@ export const challenge = {
   sunGlare: true,
   street: "17 Avenue SW",
   description:
-    "Westbound on 17 Avenue SW at 18:15 on a clear October evening, the sun sits just above the avenue ahead. Two signals and someone crossing mid-block are somewhere in the glare.",
+    "Low evening sun shines straight down 17 Avenue SW as you drive west toward signals and a mid-block crossing.",
   lesson:
-    "When the sun is in your eyes, slow down to what you can see, leave more room, and look for signals and people early.",
+    "Slow before glare hides the next stretch of road. Scan for signals and people near the kerb while keeping extra stopping room ahead.",
 };
 
 const CHAIN = ["e267", "e269", "e319", "e275", "e273", "e271", "e136"];

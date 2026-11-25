@@ -31,9 +31,9 @@ export const challenge = {
   difficulty: "Judgement",
   hazard: "cross",
   description:
-    "A red light in the Beltline and a right turn. Two cars are coming from the left on their green. Stop, look, and pick your moment.",
+    "Your right turn in the Beltline has a red light. Two cars approach from the left on their green while you wait at the line.",
   lesson:
-    "A right turn on red needs a full stop first, then a gap in traffic from the left and a clear crosswalk. Waiting for the green is always allowed, and on the island of Montréal it is the only option.",
+    "Stop fully first, then look left for a usable gap and check the crosswalk before turning. You can wait for green if either is unclear. On the island of Montréal, wait for green even if both are clear.",
 };
 
 const RIGHT_RED_S = [3, 30],

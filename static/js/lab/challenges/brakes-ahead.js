@@ -13,10 +13,9 @@ export const challenge = {
   hazard: "following",
   followingDistance: true,
   street: "West 6th Avenue",
-  description:
-    "The car ahead brakes hard on a wet West 6th Avenue. Leave room to stop, then follow it once it moves again.",
+  description: "You're following a car along a wet stretch of West 6th Avenue when its brake lights come on sharply.",
   lesson:
-    "Your following gap needs to allow for road grip, braking response and the car ahead stopping suddenly. Leave more room on a wet road and brake while there is still space.",
+    "Use a roadside marker to check your time gap before the lead car brakes. Build a longer gap in the rain, and start braking while there is room to stop smoothly.",
 };
 
 export const scenario = followingScenario;

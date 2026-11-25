@@ -21,9 +21,9 @@ export const challenge = {
   hazard: "school-zone",
   street: "West 11th Avenue",
   description:
-    "West 11th Avenue past Lord Tennyson Elementary, at 9 in the morning. The street's limit is 50 km/h, but this block is a school zone, and the cars parked along it hide the curb.",
+    "You reach Lord Tennyson Elementary at 9 a.m. on West 11th Avenue. Parked cars conceal part of the school-side kerb.",
   lesson:
-    "In BC a school zone's 30 km/h holds from 8:00 to 17:00 on school days, and a playground zone's from dawn to dusk every day. At 30 km/h a car stops in about a third of the distance it needs at 50, so a child running out between parked cars can be missed.",
+    "Slow to the posted 30 km/h before the school zone starts and maintain it through the zone. Scan gaps between parked cars for children before picking up speed again.",
 };
 
 const ZONE_START_M = 4,

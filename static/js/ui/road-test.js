@@ -58,7 +58,8 @@ export function examinerSheet(test, report, incidentRow) {
       h("strong", { class: "challenge-verdict" }, "Result unavailable"),
       h("p", {}, "This saved report does not contain enough information to mark the test."),
     );
-  const summary = `${sheet.fails.length} dangerous ${sheet.fails.length === 1 ? "action or violation" : "actions or violations"} · ${sheet.demerits} of ${sheet.max_demerits} demerits allowed`;
+  const disqualifications = sheet.fails.filter(({ reason }) => reason !== "demerits").length;
+  const summary = `${plural(disqualifications, "automatic failure")} · ${sheet.demerits} of ${sheet.max_demerits} demerits allowed`;
   return h(
     "section",
     {
@@ -76,7 +77,7 @@ export function examinerSheet(test, report, incidentRow) {
     h(
       "p",
       { class: "muted" },
-      "Any dangerous action or violation fails the test. Minor errors are one demerit each; a repeated one is marked at most three times.",
+      "An automatic failure or a total above the demerit allowance fails the test. Repeated errors and time spent speeding or following too closely can add up to three demerits each.",
     ),
     h(
       "ol",
@@ -93,7 +94,7 @@ export function examinerSheet(test, report, incidentRow) {
               "b",
               { class: c.fails ? "examiner-count fail" : c.demerits ? "examiner-count minor" : "examiner-count" },
               c.fails
-                ? `${plural(c.fails, "fail")}${c.demerits ? ` · ${c.demerits}` : ""}`
+                ? `${plural(c.fails, "fail")}${c.demerits ? ` · ${plural(c.demerits, "demerit")}` : ""}`
                 : c.demerits
                   ? plural(c.demerits, "demerit")
                   : "0",

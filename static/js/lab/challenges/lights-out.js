@@ -27,9 +27,9 @@ export const challenge = {
   hazard: "outage",
   street: "Barrington Street",
   description:
-    "A storm has knocked out the power in downtown Halifax, and the traffic lights where Barrington Street meets Morris Street are dark. A car from your right gets there first, another queues behind it, and an oncoming car wants to turn left.",
+    "The signal heads at Barrington and Morris are dark. A car from the right arrives first and another is waiting behind it.",
   lesson:
-    "When traffic lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stops first goes first; stop together and the car on the right goes first. Never drive through as if your light were green: the cross street has no red either. Driver's handbooks across Canada say the same.",
+    "Stop at the line and use all-way-stop order. Give priority to the driver who stopped first, or to the driver on your right when you stop together.",
 };
 
 const darkSiteCache = new WeakMap();

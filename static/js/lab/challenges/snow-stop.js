@@ -12,8 +12,10 @@ export const challenge = {
   icon: "❄",
   difficulty: "Control",
   hazard: "stop",
-  description: "A snowy Toronto block and a full stop. Stay composed when grip is limited.",
-  lesson: "Lift off early. A complete stop beats a late hard brake.",
+  description:
+    "A stop sign lies ahead on a snow-covered Toronto block. The car needs more distance than usual to stop at the line.",
+  lesson:
+    "Lift early and brake progressively while there is room. Bring the wheels to a complete stop before the line, then accelerate gently to keep traction.",
 };
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);

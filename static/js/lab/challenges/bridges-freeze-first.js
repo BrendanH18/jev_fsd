@@ -29,9 +29,9 @@ export const challenge = {
   ice: true,
   street: "Traffic Bridge",
   description:
-    "Dawn after a clear night just below freezing in Saskatoon. You are heading north over the South Saskatchewan River on the Traffic Bridge, toward downtown. The approach is dry, but the deck has iced over, and traffic is queuing for the roundabout just past the far end.",
+    "You approach Saskatoon's Traffic Bridge on dry pavement near freezing. The deck is icy and traffic is queuing near the far end.",
   lesson:
-    "Bridges and overpasses freeze before the road around them, and black ice is nearly invisible. Near freezing, ease off before a bridge and watch for a glossy sheen. Slow down on the dry road before the ice, then cross it steadily: no braking, accelerating or sharp steering on it, and leave extra room to the car ahead.",
+    "Reduce speed while the tyres still have grip on the approach. Cross the ice with gentle inputs and extra headway so the queue at the far end gives you time to stop.",
 };
 
 // The route, lane by lane: the south approach, the deck, and 3rd Avenue South to the roundabout.

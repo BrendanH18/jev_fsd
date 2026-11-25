@@ -381,6 +381,7 @@ export class DriveLab {
       province: "",
       skill: "",
       weather: "",
+      time: "",
       progress: "",
       sort: "",
     });
@@ -409,6 +410,7 @@ export class DriveLab {
                 province: "All provinces",
                 skill: "All skills",
                 weather: "Any weather",
+                time: "Any time",
                 progress: "Any progress",
                 sort: "Default order",
               }[key],
@@ -720,6 +722,11 @@ export class DriveLab {
             "weather",
             "Weather",
             unique(CHALLENGES.map((c) => c.weather)).map((value) => [value, value]),
+          ),
+          picker(
+            "time",
+            "Time of day",
+            unique(CHALLENGES.map((c) => c.time)).map((value) => [value, value]),
           ),
           picker("progress", "Progress", Object.entries(PRACTICE_LABELS)),
           picker(
