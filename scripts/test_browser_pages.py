@@ -270,6 +270,24 @@ def check_published_replay(page, url):
       await new Promise(requestAnimationFrame);
       return { hidden, removed: button.textContent === 'Play replay' };
     }""")
+    check_result_controls(page, url)
+    check_published_debrief(page, url)
+    return report(
+        "published browser replay",
+        [
+            {
+                "name": "Play, pause, seek, restart and finish the recorded drive without a POST",
+                "ok": heading_visible and ended and changed and reached_last_frame and not writes,
+            },
+            {"name": "Retry loads the selected drive without changing it", "ok": recovered},
+            {"name": "The active decision history entry exposes its current step", "ok": highlighted},
+            {"name": "Switching tabs pauses replay immediately", "ok": lifecycle["hidden"]},
+            {"name": "Removing a replay stops its animation", "ok": lifecycle["removed"]},
+        ],
+    )
+
+
+def check_result_controls(page, url):
     page.goto(url + "?replay=jev-flagger&at=12.345&city-weather=rain#replay-heading")
     city = page.locator("#results-city")
     city.get_by_role("combobox", name="Filter by weather").wait_for()
@@ -291,6 +309,9 @@ def check_published_replay(page, url):
     city.get_by_role("button", name="Reset filters").click()
     assert page.evaluate("document.activeElement.getAttribute('aria-label')") == "Search city or weather"
     assert page.evaluate("!new URL(location.href).searchParams.has('city-weather')")
+    replay = page.locator("#published-replay")
+    select = replay.get_by_role("combobox", name="Published drive")
+    slider = replay.get_by_role("slider", name="Replay time")
     slider.wait_for()
     assert select.input_value() == "jev-flagger"
     assert float(slider.input_value()) == 12.345
@@ -309,19 +330,120 @@ def check_published_replay(page, url):
     terminal = page.locator("#results-replay")
     terminal.get_by_role("searchbox", name="Search terminal replays").fill("no-such-recording")
     assert terminal.get_by_role("status").inner_text() == "No terminal replays match."
-    return report(
-        "published browser replay",
-        [
-            {
-                "name": "Play, pause, seek, restart and finish the recorded drive without a POST",
-                "ok": heading_visible and ended and changed and reached_last_frame and not writes,
-            },
-            {"name": "Retry loads the selected drive without changing it", "ok": recovered},
-            {"name": "The active decision history entry exposes its current step", "ok": highlighted},
-            {"name": "Switching tabs pauses replay immediately", "ok": lifecycle["hidden"]},
-            {"name": "Removing a replay stops its animation", "ok": lifecycle["removed"]},
-        ],
+    challenges = page.locator("#results-challenges")
+    open_track = page.locator("#results-open")
+    kinds = challenges.get_by_role("combobox", name="Drive type")
+    kinds.select_option("road-test")
+    assert all("Road test" in title for title in challenges.locator("tbody th").all_text_contents())
+    assert challenges.locator("tbody tr").count() > 1
+    challenges.get_by_role("combobox", name="Filter by map").select_option("kitsilano")
+    assert challenges.locator("tbody tr").count() == 1
+    assert "Kitsilano" in challenges.locator("tbody tr").inner_text()
+    challenges.get_by_role("combobox", name="Driver column sort metric").select_option("duration")
+    challenges.get_by_role("button", name="Rules", exact=True).click()
+    assert challenges.get_by_role("columnheader", name="Rules").get_attribute("aria-sort") == "ascending"
+    with page.expect_download() as event:
+        challenges.get_by_role("button", name="Export JSON").click()
+    with event.value.path().open(encoding="utf-8") as saved:
+        payload = json.load(saved)
+    assert payload["track"] == "guarded"
+    assert payload["filters"]["sort"] == "driver-rules"
+    assert payload["rows"][0]["kind"] == "road-test"
+    assert payload["rows"][0]["map_name"] == "Kitsilano"
+    with page.expect_download() as event:
+        challenges.get_by_role("button", name="Export CSV").click()
+    with event.value.path().open(encoding="utf-8-sig") as saved:
+        headers, row = list(csv.reader(saved))
+    assert row[2:7] == ["road test", "Kitsilano", "kitsilano", "guarded", payload["version"]]
+    assert "Rules failures" in headers and "Rules path score" in headers
+    challenges.get_by_role("button", name="Reset filters").click()
+    outcome = challenges.get_by_role("combobox", name="Result outcome")
+    outcome.select_option("fail")
+    assert challenges.locator("tbody tr").count() > 0
+    assert challenges.locator("tbody tr").count() == challenges.locator("tbody tr:has(.fail)").count()
+    outcome.select_option("pass")
+    assert challenges.locator("tbody tr:has(.fail)").count() == 0
+    outcome.select_option("split")
+    assert challenges.locator("tbody tr").count() == challenges.locator("tbody tr:has(.pass):has(.fail)").count()
+    open_track.get_by_role("combobox", name="Result outcome").select_option("flags")
+    assert open_track.locator("tbody tr").count() > 0
+    assert open_track.locator("tbody tr").count() == open_track.locator("tbody tr:has(.flagged-count)").count()
+    assert (
+        open_track.get_by_role("combobox", name="Driver column sort metric").locator("option[value='flags']").count()
+        == 1
     )
+    assert challenges.get_by_role("button", name="Map", exact=True).count() == 1
+    assert city.get_by_role("combobox", name="City driver sort metric").locator("option").count() == 5
+
+    page.evaluate("""() => Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+      configurable: true
+    })""")
+    replay.get_by_role("button", name="Start", exact=True).click()
+    replay.get_by_role("button", name="+1 s", exact=True).click()
+    replay.get_by_role("button", name="Copy link to this moment").click()
+    copied = replay.get_by_role("textbox", name="Link to replay moment")
+    copied.wait_for()
+    assert "replay=jev-flagger" in copied.input_value() and "at=1.000" in copied.input_value()
+    assert copied.evaluate("(input) => input.selectionEnd === input.value.length")
+    terminal.get_by_role("searchbox", name="Search terminal replays").fill("")
+    terminal.get_by_role("button", name="Copy command").first.click()
+    terminal.get_by_text("Use your keyboard to copy the selected command.", exact=True).wait_for()
+
+
+def check_published_debrief(page, url):
+    comparison = page.evaluate("""async () => {
+      const { DriveReport } = await import(new URL('js/ui/drive-report.js', location.href).href);
+      const { api } = await import(new URL('js/common.js', location.href).href);
+      const data = await api('/api/results');
+      const drive = data.rows.find((run) => run.suite === 'challenges' && run.driver === 'rules').drives[0];
+      const challenge = { id: drive.id };
+      const config = { ...drive, challenge: drive.id };
+      const report = {
+        config, elapsed_s: drive.time_s, status: 'arrived', incidents: [],
+        collisions: 0, red_lights: 0, stop_signs: 0, failed_to_yield: 0, off_road_s: 0, resets: 0,
+      };
+      const build = (value) => {
+        const section = DriveReport.prototype.comparison.call({}, challenge, value);
+        document.body.append(section);
+        return section;
+      };
+      const sections = [
+        build({ ...report, config: { ...config, map_sha: undefined }, off_road_s: undefined }),
+        build(report),
+        build({ ...report, config: { ...config, map_sha: 'other' } }),
+      ];
+      for (let i = 0; i < 60 && sections[2].querySelectorAll('tbody tr').length < 4; i++)
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      const [missing, matched, changed] = sections;
+      const link = new URL(matched.querySelector('a').href);
+      const observed = {
+        unavailable: missing.querySelector('tbody td').textContent,
+        missingFingerprint: missing.querySelector('[role=status]').textContent,
+        query: link.searchParams.get('challenges-query'),
+        jump: link.hash,
+        challenge: drive.id,
+        tied: matched.textContent.includes('Tied at this precision'),
+        mismatched: changed.querySelector('[role=status]').textContent,
+      };
+      sections.forEach((section) => section.remove());
+      return observed;
+    }""")
+    assert comparison["unavailable"] == "Unavailable"
+    assert "no map fingerprint" in comparison["missingFingerprint"]
+    assert comparison["query"] == comparison["challenge"] and comparison["jump"] == "#challenges-heading"
+    assert comparison["tied"]
+    assert "No guarded results match" in comparison["mismatched"]
+
+    for endpoint in ("**/api/results", "**/demo-data/results.json"):
+        page.route(endpoint, lambda route: route.fulfill(status=503))
+    page.goto(url)
+    retry = page.get_by_role("button", name="Retry results")
+    retry.wait_for()
+    for endpoint in ("**/api/results", "**/demo-data/results.json"):
+        page.unroute(endpoint)
+    retry.click()
+    page.get_by_text("committed runs,", exact=False).wait_for()
 
 
 def check_snapshot_form(page):

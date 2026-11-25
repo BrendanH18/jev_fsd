@@ -163,7 +163,7 @@ The leaderboard supports shareable filters and richer exports. The replay galler
 159. Recover from a corrupt last-record counter without overwriting a valid run. Validated by: `scripts/test_arena_storage.mjs`.
 160. Refuse new saves when all representable IndexedDB IDs are exhausted. Validated by: `scripts/test_arena_storage.mjs`.
 161. Ignore damaged migration ledger entries. Validated by: `scripts/test_arena_storage.mjs`.
-162. Display an unavailable benchmark verdict for older manual reports without audit evidence. Validated by: `scripts/test_browser_pages.py`.
+162. Keep the comparison component usable when a manual report lacks benchmark audit evidence. Validated by: `scripts/test_browser_pages.py`.
 163. Describe why published comparison cannot run when a legacy report has no map fingerprint. Validated by: `scripts/test_browser_pages.py`.
 164. Link the same-drive comparison to its filtered leaderboard on both the server and demo. Validated by: `scripts/test_browser_pages.py`.
 165. Identify when no published drivers match the report's guarded conditions. Validated by: `scripts/test_browser_pages.py`.

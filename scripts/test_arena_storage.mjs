@@ -23,6 +23,8 @@ class Request {
 class FakeIndexedDB {
   constructor({ quota = Infinity, quotaOnWrite = false, failOpen = false, throwOpen = false } = {}) {
     Object.assign(this, { quota, quotaOnWrite, failOpen, throwOpen, dbs: new Map(), failWrites: false });
+    this.reads = [];
+    this.failReads = false;
   }
   open(name, version) {
     if (this.throwOpen) throw fail("SecurityError");
@@ -61,7 +63,12 @@ class FakeDatabase {
     this.data.stores.set(name, { keyPath, records: new Map() });
   }
   transaction(names, mode = "readonly") {
-    return new Transaction(this, [names].flat(), mode);
+    const stores = [names].flat();
+    if (mode === "readonly") {
+      this.idb.reads.push(stores.join("|"));
+      if (this.idb.failReads) throw fail("UnknownError", "temporary read failure");
+    }
+    return new Transaction(this, stores, mode);
   }
   close() {}
 }
@@ -142,7 +149,9 @@ class Transaction {
       return;
     }
     this.state = "done";
-    this.oncomplete?.();
+    const pauseRead = this.mode === "readonly" && this.db.idb.pauseRead;
+    if (pauseRead) pauseRead(() => this.oncomplete?.());
+    else this.oncomplete?.();
   }
   abort() {
     if (this.state !== "active") throw fail("InvalidStateError");
@@ -698,6 +707,46 @@ await test("an invalid migration ledger leaves a new migration possible", async 
   const migrated = await openEvaluationHistory({ indexedDB: idb, storage });
   assert.equal(migrated.kind, "indexedDB");
   assert.equal(times(await migrated.list()).join("|"), minutes(2, 1).join("|"));
+});
+
+await test("reads pair the index and payloads in one transaction", async () => {
+  const idb = new FakeIndexedDB();
+  const a = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await a.save(at(1));
+  idb.reads.length = 0;
+  const b = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  assert.equal((await b.list())[0].created_at, at(1).created_at);
+  assert.equal(idb.reads.join(","), "evaluation-index|evaluations");
+});
+
+await test("temporary index read failures cannot undo successful writes or deletes in the visible list", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  idb.failReads = true;
+  const saved = await store.save(at(2));
+  assert.equal(times(saved).join("|"), minutes(2, 1).join("|"));
+  assert.equal(times(await store.remove(saved[1])).join("|"), at(2).created_at);
+  idb.failReads = false;
+  const reopened = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  assert.equal(times(await reopened.list()).join("|"), at(2).created_at);
+});
+
+await test("an older IndexedDB read cannot replace the visible history after a save", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  const paused = Promise.withResolvers();
+  idb.pauseRead = paused.resolve;
+  const oldList = store.list();
+  const resume = await paused.promise;
+  delete idb.pauseRead;
+  try {
+    assert.equal(times(await store.save(at(2))).join("|"), minutes(2, 1).join("|"));
+  } finally {
+    resume();
+  }
+  assert.equal(times(await oldList).join("|"), minutes(2, 1).join("|"));
 });
 
 console.log(`${checks} arena storage checks passed`);
