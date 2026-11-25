@@ -135,9 +135,13 @@ export function roadTestNote(test, report) {
   const outcome = report.practice?.outcome;
   return [
     outcome === "passed"
-      ? "Manual road test passed and recorded."
+      ? report.practice.saved === false
+        ? "Manual road test passed. Browser storage is unavailable."
+        : "Manual road test passed and recorded."
       : outcome === "failed"
-        ? "Manual road test recorded. Retry to pass."
+        ? report.practice.saved === false
+          ? "Manual road test failed. Browser storage is unavailable."
+          : "Manual road test recorded. Retry to pass."
         : "AI, mixed-driver, modified and replay drives are not recorded as your road test attempts.",
     best
       ? ` Your best: ${best.pass ? "Pass" : "Fail"} · ${plural(best.demerits, "demerit")} (${new Date(best.at).toLocaleDateString()}).`

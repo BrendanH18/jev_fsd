@@ -26,7 +26,7 @@ export function cloneState(value, shared = new Set(), seen = new Map()) {
     for (const entry of value) copy.add(cloneState(entry, shared, seen));
     return copy;
   }
-  const copy = Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));
+  const copy = Array.isArray(value) ? new Array(value.length) : Object.create(Object.getPrototypeOf(value));
   seen.set(value, copy);
   for (const key of Object.keys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
@@ -218,6 +218,8 @@ export class DriveRecorder {
     return frame;
   }
   branch(index) {
+    if (!this.frames.length || !Number.isFinite(index)) return;
+    index = Math.max(0, Math.min(this.frames.length - 1, Math.round(index)));
     this.frames.splice(index + 1);
     this.at = this.frames.at(-1)?.t ?? -Infinity;
     this.markers = this.markers.filter((m) => m.t <= this.at);
