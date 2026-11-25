@@ -321,14 +321,17 @@ class UnrealBloomPass extends Pass {
 
 			this._fsQuad.material = this.separableBlurMaterials[ i ];
 
+			const horizontalTarget = this.renderTargetsHorizontal[ i ];
 			this.separableBlurMaterials[ i ].uniforms[ 'colorTexture' ].value = inputRenderTarget.texture;
 			this.separableBlurMaterials[ i ].uniforms[ 'direction' ].value = UnrealBloomPass.BlurDirectionX;
-			renderer.setRenderTarget( this.renderTargetsHorizontal[ i ] );
+			this.separableBlurMaterials[ i ].uniforms[ 'pairTaps' ].value = inputRenderTarget.width === horizontalTarget.width;
+			renderer.setRenderTarget( horizontalTarget );
 			renderer.clear();
 			this._fsQuad.render( renderer );
 
-			this.separableBlurMaterials[ i ].uniforms[ 'colorTexture' ].value = this.renderTargetsHorizontal[ i ].texture;
+			this.separableBlurMaterials[ i ].uniforms[ 'colorTexture' ].value = horizontalTarget.texture;
 			this.separableBlurMaterials[ i ].uniforms[ 'direction' ].value = UnrealBloomPass.BlurDirectionY;
+			this.separableBlurMaterials[ i ].uniforms[ 'pairTaps' ].value = true;
 			renderer.setRenderTarget( this.renderTargetsVertical[ i ] );
 			renderer.clear();
 			this._fsQuad.render( renderer );
@@ -406,14 +409,17 @@ class UnrealBloomPass extends Pass {
 		return new ShaderMaterial( {
 
 			defines: {
-				'KERNEL_PAIRS': offsets.length
+				'KERNEL_PAIRS': offsets.length,
+				'KERNEL_RADIUS': kernelRadius
 			},
 
 			uniforms: {
 				'colorTexture': { value: null },
 				'invSize': { value: new Vector2( 0.5, 0.5 ) }, // inverse texture size
 				'direction': { value: new Vector2( 0.5, 0.5 ) },
+				'pairTaps': { value: true },
 				'centerWeight': { value: coefficients[ 0 ] },
+				'gaussianCoefficients': { value: coefficients },
 				'gaussianOffsets': { value: offsets },
 				'gaussianWeights': { value: weights }
 			},
@@ -438,7 +444,9 @@ class UnrealBloomPass extends Pass {
 				uniform sampler2D colorTexture;
 				uniform vec2 invSize;
 				uniform vec2 direction;
+				uniform bool pairTaps;
 				uniform float centerWeight;
+				uniform float gaussianCoefficients[KERNEL_RADIUS];
 				uniform float gaussianOffsets[KERNEL_PAIRS];
 				uniform float gaussianWeights[KERNEL_PAIRS];
 
@@ -446,12 +454,28 @@ class UnrealBloomPass extends Pass {
 
 					vec3 diffuseSum = texture2D( colorTexture, vUv ).rgb * centerWeight;
 
-					for ( int i = 0; i < KERNEL_PAIRS; i ++ ) {
+					if ( pairTaps ) {
 
-						vec2 uvOffset = direction * invSize * gaussianOffsets[ i ];
-						vec3 sample1 = texture2D( colorTexture, vUv + uvOffset ).rgb;
-						vec3 sample2 = texture2D( colorTexture, vUv - uvOffset ).rgb;
-						diffuseSum += ( sample1 + sample2 ) * gaussianWeights[ i ];
+						for ( int i = 0; i < KERNEL_PAIRS; i ++ ) {
+
+							vec2 uvOffset = direction * invSize * gaussianOffsets[ i ];
+							vec3 sample1 = texture2D( colorTexture, vUv + uvOffset ).rgb;
+							vec3 sample2 = texture2D( colorTexture, vUv - uvOffset ).rgb;
+							diffuseSum += ( sample1 + sample2 ) * gaussianWeights[ i ];
+
+						}
+
+					} else {
+
+						// Downsampling spaces the taps farther apart than one source texel.
+						for ( int i = 1; i < KERNEL_RADIUS; i ++ ) {
+
+							vec2 uvOffset = direction * invSize * float( i );
+							vec3 sample1 = texture2D( colorTexture, vUv + uvOffset ).rgb;
+							vec3 sample2 = texture2D( colorTexture, vUv - uvOffset ).rgb;
+							diffuseSum += ( sample1 + sample2 ) * gaussianCoefficients[ i ];
+
+						}
 
 					}
 
