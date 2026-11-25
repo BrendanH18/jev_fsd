@@ -1,4 +1,4 @@
-// The close-pass audit (World.auditCyclistPasses, with passing cyclists on) measures the gap between the
+// The close-pass audit (with passing cyclists on) measures the gap between the
 // car's body and the cyclist's (Kitsilano city, seed 1, s1-7, West 8th Avenue). It took the car's centre
 // line across the cyclist's heading less both half-widths, as if the two were side by side and parallel:
 // going on past a cyclist stopped just round a corner, the car angled 5 degrees back into its lane, the
@@ -12,6 +12,8 @@ const { MapData } = await import("../static/js/map/mapdata.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Route } = await import("../static/js/map/route.js");
 const { Vehicle, BIKE } = await import("../static/js/sim/vehicle.js");
+const { hooks } = await import("../static/js/sim/features/index.js");
+const passingAudits = hooks("audit", "beforeReservedLane");
 
 // A two-way street, one 3.5 m lane each way, 50 km/h (a metre's passing distance); the car's lane
 // centre at y = 0 and a cyclist stopped in it, 2.6 m to the right of it.
@@ -97,7 +99,7 @@ function pass(angle, y0) {
     road = { limit: 13.8 };
   for (let d = -16; d <= 16; d += 0.1) {
     Object.assign(world.ego, { x: d * Math.cos(angle), y: y0 - d * Math.sin(angle), psi: -angle, v: 5 });
-    world.auditCyclistPasses(road);
+    for (const audit of passingAudits) audit(world, road);
   }
   return {
     count: world.violations.close_passes || 0,

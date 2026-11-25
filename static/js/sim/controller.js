@@ -17,9 +17,11 @@ export function lookahead(v) {
 export function purePursuit(vehicle, route, s, offset = 0, Ld = lookahead(vehicle.v)) {
   if (!Number.isFinite(s) || !Number.isFinite(offset)) throw new RangeError("Invalid pursuit route position or offset");
   if (!Number.isFinite(Ld) || Ld < 0) throw new RangeError("Invalid pursuit lookahead distance");
-  if (typeof route?.offsetPointAt !== "function" || !Number.isFinite(route.length) || route.length < 0)
-    throw new TypeError("Pursuit requires route geometry with a finite length");
-  const target = route.offsetPointAt(Math.min(s + Ld, route.length), offset);
+  // Turnarounds extend the exit lane beyond the destination and use Infinity for that line.
+  const length = route?.length;
+  if (typeof route?.offsetPointAt !== "function" || typeof length !== "number" || !(length >= 0))
+    throw new TypeError("Pursuit requires route geometry with a nonnegative length");
+  const target = route.offsetPointAt(Math.min(s + Ld, length), offset);
   return pursuitAngle(vehicle, target, false);
 }
 

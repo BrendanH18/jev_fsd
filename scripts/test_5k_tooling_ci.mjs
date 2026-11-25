@@ -164,7 +164,8 @@ esac
   assert.match(completed.stderr, /warning\n/);
   assert.doesNotMatch(completed.stderr, /without a valid command exit/);
   assert.match(fs.readFileSync(actions, "utf8"), /^stop bx_fixture --json$/m);
-  fs.writeFileSync(join(repo, "tracked.txt"), "changed");
+  // A different size makes Git see the edit even if the filesystem timestamps still match.
+  fs.writeFileSync(join(repo, "tracked.txt"), "changed fixture");
   fs.writeFileSync(join(repo, "path with spaces.txt"), "new");
   const missing = fixture({ ...env, MOCK_FRAMES: "", MOCK_EXEC_EXIT: "7" }, "--", "true");
   assert.equal(missing.status, 7, missing.stderr);

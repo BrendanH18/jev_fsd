@@ -483,3 +483,4 @@ console.log("✓ a destination just beyond the U-turn: the drive ends once the c
   assert.ok(Math.abs(world.ego.y - LANE) < 1, `in the lane out at the end (y=${world.ego.y.toFixed(2)})`);
   console.log("✓ switched off and on partway round, the car finishes turning round before it arrives");
 }
+process.exit(0);
