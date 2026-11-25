@@ -18,13 +18,14 @@
     <label>brain
       <select id="brain">
         <option value="rules">Rules (code only)</option>
+        <option value="cautious">Cautious agent</option>
         <option value="jev">Jev (TypeSafe)</option>
       </select>
     </label>
     <label>map <select id="bench-map"></select></label>
     <label>scenarios <input id="count" type="number" min="1" max="60" value="12"></label>
     <label>traffic <input id="npcs" type="number" min="0" max="120" value="40"></label>
-    <label>suite seed <input id="seed" type="number" min="1" value="1"></label>
+    <label>suite seed <input id="seed" type="number" min="0" value="1"></label>
     <label>weather
       <select id="weather">
         <option value="dry">dry</option>
@@ -46,8 +47,11 @@
       </select>
     </label>
     <label>park at destination <input id="park" type="checkbox"></label>
-    <label>hour <input id="hour" type="number" min="0" max="23.99" step="0.5" placeholder="default"></label>
+    <label>hour <input id="hour" type="number" min="0" max="23.99" step="any" placeholder="default"></label>
     <label>without (city) <input id="without" type="text" placeholder="geese,ice"></label>
+    <label>covering row (city) <input id="cover" type="number" min="0" placeholder="none"></label>
+    <label><input id="bench-diagnostics" type="checkbox"> Incident diagnostics</label>
+    <label><input id="bench-save" type="checkbox" checked> Save run</label>
     <label title="The map's held-out routes, which no fix was tuned against (docs/rules-baseline.md); they replace the scenario count and suite seed">held-out routes <input id="heldout" type="checkbox"></label>
     <label>clock
       <select id="mode">
@@ -57,13 +61,14 @@
     </label>
     <label>compare with <select id="compare"><option value="">none</option></select></label>
     <label>view saved run <select id="saved-run"><option value="">choose a run</option></select></label>
-    <button id="run" class="toggle on">Run</button>
-    <span id="status" class="muted"></span>
+    <button id="run" class="toggle on" disabled>Run</button>
+    <span id="status" class="muted" role="status"></span>
   </section>
 
   <section id="summary" class="cards"></section>
   <p id="comparison-note" class="muted" role="status" hidden></p>
   <div class="bench-table-tools">
+    <label>Find routes <input id="bench-search" type="search" placeholder="Route ID or failure"></label>
     <label><input id="bench-failures" type="checkbox"> Failures only</label>
     <button id="bench-csv" class="toggle" disabled>Export CSV</button>
     <button id="bench-json" class="toggle" disabled>Export JSON</button>
@@ -74,8 +79,8 @@
       <tbody><tr><td class="muted">No run yet. Pick a brain and press Run.</td></tr></tbody>
     </table>
   </section>
-  <p class="muted foot">A drive passes when it arrives with no collision, red light, rolled stop sign, or a second or more off
-    the road. Comfort columns are reported, not graded. Score, comfort, margin and time lost rank drivers that both pass; they are
+  <p class="muted foot">The result lists any failed driving checks, including arrival, collisions and road rules.
+    Comfort measurements help compare drives. Score, comfort, margin and time lost rank drivers that both pass; they are
     computed from the saved results when shown (formulas in bench/scores.js and docs/rules-baseline.md). Lockstep with the Rules brain is fully reproducible: the same
     suite seed gives the same numbers until the sim changes.</p>
 
