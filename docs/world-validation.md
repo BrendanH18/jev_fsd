@@ -49,8 +49,8 @@ was limited to DOM geometry. Keyboard driving remains required.
 Cold module downloads exposed connection resets with the server's default request backlog.
 The server now queues 128 connections, and the simulator successfully loaded all 15 local
 Three.js modules. Startup module, map and WebGL failures also show an actionable retry.
-The renderer is pinned to 0.183.0 with upstream license and verified archive integrity in
-[`static/vendor/three/README.md`](../static/vendor/three/README.md).
+Those checks used Three.js 0.183.0. The current version, upstream license and verified archive
+integrity are documented in [`static/vendor/three/README.md`](../static/vendor/three/README.md).
 
 ## Seeded Rules comparison
 
