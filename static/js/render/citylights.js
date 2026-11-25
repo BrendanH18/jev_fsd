@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { sceneryFor } from "../map/scenery.js";
-import { toThree, LAYER } from "./scene.js";
+import { LAYER } from "./scene.js";
 import { lampPoolTexture } from "./textures.js";
 import { glowsAtNight, lighting } from "./atmosphere.js";
 
@@ -39,7 +39,7 @@ function design(tall) {
     .rotateX(Math.PI / 2)
     .scale(tall ? 1.1 : 0.8, 1, tall ? 1.7 : 1.4)
     .translate(0, h - 0.07, -reach - 0.1);
-  return { pole, head: head.toNonIndexed(), lens, h, reach };
+  return { pole, head, lens };
 }
 
 export function buildStreetLights(map, group) {
@@ -48,7 +48,6 @@ export function buildStreetLights(map, group) {
 
   const luminous = new THREE.Group();
   group.add(luminous);
-  const designs = { true: design(true), false: design(false) };
   const metal = new THREE.MeshStandardMaterial({ color: 0x5b6066, roughness: 0.5, metalness: 0.6 });
   const headMat = new THREE.MeshStandardMaterial({ color: 0x3c4046, roughness: 0.45, metalness: 0.5 });
   const lensMat = glowsAtNight(
@@ -69,17 +68,18 @@ export function buildStreetLights(map, group) {
     "opacity",
   );
   const q = new THREE.Quaternion(),
-    one = new THREE.Vector3(1, 1, 1),
+    position = new THREE.Vector3(),
+    scale = new THREE.Vector3(1, 1, 1),
     m = new THREE.Matrix4();
   for (const tall of [true, false]) {
     const list = lamps.filter((l) => l.tall === tall);
     if (!list.length) continue;
-    const d = designs[tall];
+    const d = design(tall);
     const emit = (geo, mat, shadow) => {
       const mesh = new THREE.InstancedMesh(geo, mat, list.length);
       list.forEach((l, i) => {
         q.setFromAxisAngle(Y_AXIS, l.heading);
-        mesh.setMatrixAt(i, m.compose(toThree(l.x, l.y, 0), q, one));
+        mesh.setMatrixAt(i, m.compose(position.set(l.x, 0, -l.y), q, scale));
       });
       mesh.castShadow = shadow;
       mesh.receiveShadow = true;
@@ -95,53 +95,78 @@ export function buildStreetLights(map, group) {
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, lamps.length);
   lamps.forEach((l, i) => {
     const r = l.tall ? 22 : 17;
-    pools.setMatrixAt(i, m.compose(toThree(l.lx, l.ly, 0.035), q.identity(), new THREE.Vector3(r, 1, r)));
+    pools.setMatrixAt(i, m.compose(position.set(l.lx, 0.035, -l.ly), q.identity(), scale.set(r, 1, r)));
   });
   pools.renderOrder = LAYER.pool;
   pools.computeBoundingSphere();
   luminous.add(pools);
-  const lights = new NearLights(luminous, lamps);
+  pools.matrixAutoUpdate = false;
+  const lights = new NearLights(luminous, lamps, pools);
   return {
     lamps,
     lights,
     setOutage: (out) => {
       luminous.visible = !out;
+      if (out) lights.next = 0;
     },
   };
 }
 
 // A handful of real point lights, moved to the lamps nearest the camera.
 class NearLights {
-  constructor(group, lamps) {
+  constructor(group, lamps, pools) {
     this.lamps = lamps;
+    this.group = group;
+    this.pools = pools;
+    this.pools.visible = lighting.night.value > 0;
     this.lights = [];
-    for (let i = 0; i < REAL_LIGHTS; i++) {
+    for (let i = 0; i < Math.min(REAL_LIGHTS, lamps.length); i++) {
       const l = new THREE.PointLight(LAMP_COLOR, 0, 24, 1.8);
       group.add(l);
       this.lights.push(l);
     }
     this.next = 0;
     this.dir = new THREE.Vector3();
+    this.lastDir = new THREE.Vector3();
+    this.position = new THREE.Vector3();
+    this.lastPosition = new THREE.Vector3(Infinity, Infinity, Infinity);
+    this.distances = new Float64Array(this.lights.length);
+    this.nearest = new Array(this.lights.length);
   }
 
   update(camera, dt) {
+    if (!this.group.visible) return;
     const k = lighting.night.value;
-    this.next -= dt;
-    if (this.next <= 0 && k > 0.01) {
+    this.pools.visible = k > 0;
+    if (k <= 0.01) {
+      this.next = 0;
+      for (const l of this.lights) l.intensity = 0;
+      return;
+    }
+    if (Number.isFinite(dt) && dt > 0) this.next -= dt;
+    const center = camera.getWorldPosition(this.position);
+    const dir = camera.getWorldDirection(this.dir);
+    // Reselect immediately when changing views or jumping in a replay.
+    if (this.next <= 0 || center.distanceToSquared(this.lastPosition) > 24 ** 2 || dir.dot(this.lastDir) < 0.85) {
       this.next = 0.25;
-      const cx = camera.position.x,
-        cy = -camera.position.z;
-      const dir = camera.getWorldDirection(this.dir);
-      const fx = dir.x,
-        fy = -dir.z;
-      const ranked = this.lamps
-        .map((l) => ({
-          l,
-          d: Math.hypot(l.lx - cx, l.ly - cy) - 0.3 * Math.max(0, (l.lx - cx) * fx + (l.ly - cy) * fy),
-        }))
-        .sort((a, b) => a.d - b.d)
-        .slice(0, this.lights.length);
-      ranked.forEach(({ l }, i) => this.lights[i].position.copy(toThree(l.lx, l.ly, l.h - 0.3)));
+      this.lastPosition.copy(center);
+      this.lastDir.copy(dir);
+      this.distances.fill(Infinity);
+      for (const lamp of this.lamps) {
+        const dx = lamp.lx - center.x,
+          dy = lamp.ly + center.z;
+        const score = Math.hypot(dx, dy) - 0.3 * Math.max(0, dx * dir.x - dy * dir.z);
+        let i = this.lights.length - 1;
+        if (score >= this.distances[i]) continue;
+        while (i > 0 && score < this.distances[i - 1]) {
+          this.distances[i] = this.distances[i - 1];
+          this.nearest[i] = this.nearest[i - 1];
+          i--;
+        }
+        this.distances[i] = score;
+        this.nearest[i] = lamp;
+      }
+      this.nearest.forEach((l, i) => this.lights[i].position.set(l.lx, l.h - 0.3, -l.ly));
     }
     for (const l of this.lights) l.intensity = k * 28;
   }

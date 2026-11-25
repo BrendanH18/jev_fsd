@@ -6,7 +6,7 @@ import * as THREE from "three";
 
 let maxAnisotropy = 8;
 export function setMaxAnisotropy(n) {
-  maxAnisotropy = Math.max(1, n);
+  maxAnisotropy = Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
 }
 
 function hash(x, y, seed) {
@@ -348,6 +348,7 @@ export const leafTexture = () =>
 export const LEAF_CUTOFF = 0.5;
 
 const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const linearByByte = Float32Array.from({ length: 256 }, (_, i) => toLinear(i / 255));
 const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
 
 // Mip levels for an alpha-tested texture, built by hand because the GPU's own chain fails it in two
@@ -365,7 +366,7 @@ export function cutoutTexture(image, cutoff) {
   for (let i = 0; i < w * h; i++) {
     const a = image.data[i * 4 + 3] / 255;
     alpha[i] = a;
-    for (let k = 0; k < 3; k++) rgb[i * 3 + k] = toLinear(image.data[i * 4 + k] / 255) * a; // premultiplied
+    for (let k = 0; k < 3; k++) rgb[i * 3 + k] = linearByByte[image.data[i * 4 + k]] * a; // premultiplied
   }
   pyramid.push({ w, h, rgb, alpha });
   while (w > 1 || h > 1) {
@@ -376,11 +377,20 @@ export function cutoutTexture(image, cutoff) {
     for (let y = 0; y < nh; y++)
       for (let x = 0; x < nw; x++) {
         const o = y * nw + x;
-        for (let dy = 0; dy < 2; dy++)
-          for (let dx = 0; dx < 2; dx++) {
-            const i = Math.min(h - 1, y * 2 + dy) * w + Math.min(w - 1, x * 2 + dx);
-            nalpha[o] += alpha[i] / 4;
-            for (let k = 0; k < 3; k++) nrgb[o * 3 + k] += rgb[i * 3 + k] / 4;
+        // The mip dimensions round down. Area weighting includes the last row and column
+        // when either dimension is odd, and gives the surviving axis full weight for 1D tiles.
+        const left = (x * w) / nw,
+          right = ((x + 1) * w) / nw,
+          top = (y * h) / nh,
+          bottom = ((y + 1) * h) / nh;
+        const area = (right - left) * (bottom - top);
+        for (let sy = Math.floor(top); sy < Math.ceil(bottom); sy++)
+          for (let sx = Math.floor(left); sx < Math.ceil(right); sx++) {
+            const weight =
+              ((Math.min(sx + 1, right) - Math.max(sx, left)) * (Math.min(sy + 1, bottom) - Math.max(sy, top))) / area;
+            const i = sy * w + sx;
+            nalpha[o] += alpha[i] * weight;
+            for (let k = 0; k < 3; k++) nrgb[o * 3 + k] += rgb[i * 3 + k] * weight;
           }
       }
     w = nw;
@@ -404,15 +414,16 @@ export function cutoutTexture(image, cutoff) {
     for (let y = 0; y < lh; y++)
       for (let x = 0; x < lw; x++) {
         const i = y * lw + x;
-        const c = coarser ? (Math.min(coarser.h - 1, y >> 1) * coarser.w + Math.min(coarser.w - 1, x >> 1)) * 3 : -1;
+        const c = coarser ? (Math.floor((y * coarser.h) / lh) * coarser.w + Math.floor((x * coarser.w) / lw)) * 3 : -1;
         for (let k = 0; k < 3; k++)
           color[i * 3 + k] = la[i] > 1e-3 ? lrgb[i * 3 + k] / la[i] : c >= 0 ? coarser.color[c + k] : 0;
       }
     coarser = { w: lw, h: lh, color };
-    let lo = 1,
-      hi = 1;
-    if (l > 0 && target > 0) {
-      hi = 16;
+    let hi = 1;
+    const unscaled = l > 0 ? coverage(la, 1) : target;
+    if (unscaled !== target) {
+      let lo = unscaled > target ? 0 : 1;
+      hi = unscaled > target ? 1 : 16;
       for (let it = 0; it < 18; it++) {
         const mid = (lo + hi) / 2;
         if (coverage(la, mid) < target) lo = mid;
@@ -781,7 +792,10 @@ export const beamTexture = () =>
 // map tiles one macro tile spans (inverse); `strength` is the brightness swing.
 export function withMacroVariation(material, macroScale, strength = 0.35) {
   const macro = macroTexture();
-  material.onBeforeCompile = (shader) => {
+  const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey();
+  material.onBeforeCompile = (shader, renderer) => {
+    prev.call(material, shader, renderer);
     shader.uniforms.macroMap = { value: macro };
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <map_pars_fragment>", "#include <map_pars_fragment>\nuniform sampler2D macroMap;")
@@ -792,6 +806,7 @@ export function withMacroVariation(material, macroScale, strength = 0.35) {
         diffuseColor.rgb *= 1.0 + (macroV - 0.5) * ${(strength * 2).toFixed(3)};`,
       );
   };
-  material.customProgramCacheKey = () => `macro${macroScale}:${strength}`;
+  material.customProgramCacheKey = () => `macro${macroScale}:${strength}-${prevKey}`;
+  material.needsUpdate = true;
   return material;
 }

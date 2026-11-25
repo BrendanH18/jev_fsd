@@ -22,13 +22,13 @@ export class GeoBuilder {
     this.pos.push(p[0], p[2], -p[1]);
     this.nrm.push(n[0], n[2], -n[1]);
     this.uv.push(uv[0], uv[1]);
-    if (this.col) this.col.push(color.r, color.g, color.b);
+    if (this.col) this.col.push(color?.r ?? 1, color?.g ?? 1, color?.b ?? 1);
   }
 
   // Triangle with a flat normal computed from its winding (counter-clockwise seen from the front).
   tri(a, b, c, uvs, color, flipTo = null) {
     let n = normalOf(a, b, c);
-    if (n[0] === 0 && n[1] === 0 && n[2] === 0) return;
+    if (!n.every(Number.isFinite) || (n[0] === 0 && n[1] === 0 && n[2] === 0)) return;
     if (flipTo && n[0] * flipTo[0] + n[1] * flipTo[1] + n[2] * flipTo[2] < 0) {
       [b, c] = [c, b];
       uvs = uvs && [uvs[0], uvs[2], uvs[1]];
@@ -55,48 +55,33 @@ export class GeoBuilder {
   // (right of travel is positive). uv: "world" tiles in world meters / scale; "along" runs u
   // along the line and v across it.
   ribbon(pts, left, right, z = 0, { uv = "world", scale = 1, color = null, from = 0, to = Infinity } = {}) {
-    if (from >= to || left === right) return;
-    pts = pts.filter(([x, y], i) => i === 0 || x !== pts[i - 1][0] || y !== pts[i - 1][1]);
-    const n = pts.length;
-    if (n < 2) return;
-    const segN = [];
-    for (let i = 0; i < n - 1; i++) {
-      const dx = pts[i + 1][0] - pts[i][0],
-        dy = pts[i + 1][1] - pts[i][1];
-      const l = Math.hypot(dx, dy) || 1;
-      segN.push([dy / l, -dx / l]);
-    }
-    const rows = [];
-    let s = 0;
-    for (let i = 0; i < n; i++) {
-      if (i > 0) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-      let nx,
-        ny,
-        k = 1;
-      if (i === 0) [nx, ny] = segN[0];
-      else if (i === n - 1) [nx, ny] = segN[n - 2];
-      else {
-        const a = segN[i - 1],
-          b = segN[i];
-        nx = a[0] + b[0];
-        ny = a[1] + b[1];
-        const l = Math.hypot(nx, ny);
-        if (l < 1e-6) [nx, ny] = a;
-        else {
-          nx /= l;
-          ny /= l;
-          k = Math.min(2, 1 / Math.max(0.3, a[0] * nx + a[1] * ny));
-        }
-      }
-      rows.push({ s, x: pts[i][0], y: pts[i][1], nx: nx * k, ny: ny * k });
+    if (
+      !Number.isFinite(left) ||
+      !Number.isFinite(right) ||
+      !Number.isFinite(z) ||
+      !(scale > 0 && Number.isFinite(scale)) ||
+      !(from < to) ||
+      left === right
+    )
+      return;
+    const rows = (pts instanceof RibbonPath ? pts : new RibbonPath(pts)).rows;
+    const n = rows.length;
+    if (n < 2 || from >= rows[n - 1].s || to <= 0) return;
+    // Find the first segment intersecting the requested span. Dashed markings only visit
+    // the few segments they cover even on a long, highly sampled centreline.
+    let lo = 0,
+      hi = n - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (rows[mid].s <= from) lo = mid;
+      else hi = mid;
     }
     const up = [0, 0, 1];
     const at = (r, lat) => [r.x + r.nx * lat, r.y + r.ny * lat, z];
     const uvOf = (p, r, lat) => (uv === "along" ? [r.s / scale, lat / scale] : [p[0] / scale, p[1] / scale]);
-    for (let i = 0; i < n - 1; i++) {
+    for (let i = lo; i < n - 1 && rows[i].s < to; i++) {
       let r0 = rows[i],
         r1 = rows[i + 1];
-      if (r1.s <= from || r0.s >= to) continue;
       if (r0.s < from) r0 = lerpRow(r0, r1, (from - r0.s) / (r1.s - r0.s));
       if (r1.s > to) r1 = lerpRow(rows[i], r1, (to - rows[i].s) / (r1.s - rows[i].s));
       const a = at(r0, right),
@@ -110,9 +95,10 @@ export class GeoBuilder {
 
   // Filled convex or simple polygon (sim xy) at height z, facing up.
   polygon(pts, z = 0, { scale = 1, color = null } = {}) {
-    if (pts.length < 3) return;
+    if (pts.length < 3 || !Number.isFinite(z) || !(scale > 0 && Number.isFinite(scale))) return;
+    if (pts.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) return;
     const contour = pts.map(([x, y]) => new THREE.Vector2(x, y));
-    const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+    const tris = contour.length === 3 ? [[0, 1, 2]] : THREE.ShapeUtils.triangulateShape(contour, []);
     for (const [i, j, k] of tris) {
       const a = [pts[i][0], pts[i][1], z],
         b = [pts[j][0], pts[j][1], z],
@@ -134,6 +120,7 @@ export class GeoBuilder {
 
   // A rectangle on the ground centered at (x, y) with the given heading, length along it and width.
   rect(x, y, heading, length, width, z = 0, color = null) {
+    if (!(length > 0 && width > 0)) return;
     const c = Math.cos(heading),
       s = Math.sin(heading);
     const hl = length / 2,
@@ -163,6 +150,54 @@ export class GeoBuilder {
     if (this.col) geo.setAttribute("color", new THREE.Float32BufferAttribute(this.col, 3));
     geo.computeBoundingSphere();
     return geo;
+  }
+}
+
+// Reuse the prepared distance and miter rows across ribbons on the same static street.
+export class RibbonPath {
+  constructor(pts) {
+    if (pts.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) {
+      this.rows = [];
+      return;
+    }
+    pts = pts.filter(([x, y], i) => i === 0 || x !== pts[i - 1][0] || y !== pts[i - 1][1]);
+    const n = pts.length;
+    if (n < 2) {
+      this.rows = [];
+      return;
+    }
+    const segments = [];
+    for (let i = 0; i < n - 1; i++) {
+      const dx = pts[i + 1][0] - pts[i][0],
+        dy = pts[i + 1][1] - pts[i][1];
+      const l = Math.hypot(dx, dy) || 1;
+      segments.push({ nx: dy / l, ny: -dx / l, length: l });
+    }
+    const rows = [];
+    let s = 0;
+    for (let i = 0; i < n; i++) {
+      if (i > 0) s += segments[i - 1].length;
+      let nx,
+        ny,
+        k = 1;
+      if (i === 0) ({ nx, ny } = segments[0]);
+      else if (i === n - 1) ({ nx, ny } = segments[n - 2]);
+      else {
+        const a = segments[i - 1],
+          b = segments[i];
+        nx = a.nx + b.nx;
+        ny = a.ny + b.ny;
+        const l = Math.hypot(nx, ny);
+        if (l < 1e-6) ({ nx, ny } = a);
+        else {
+          nx /= l;
+          ny /= l;
+          k = Math.min(2, 1 / Math.max(0.3, a.nx * nx + a.ny * ny));
+        }
+      }
+      rows.push({ s, x: pts[i][0], y: pts[i][1], nx: nx * k, ny: ny * k });
+    }
+    this.rows = rows;
   }
 }
 
