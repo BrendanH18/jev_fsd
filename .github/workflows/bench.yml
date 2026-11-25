@@ -62,25 +62,33 @@ jobs:
       - name: Start the local server
         run: |
           PORT=8331 uv run --locked server.py > server.log 2>&1 &
-          for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8331/bench && exit 0; sleep 1; done
-          cat server.log; exit 1
+          bash .github/workflows/wait-for-local-server.sh 8331 /bench "$!"
       - name: Rules, Kitsilano, suite seed 1
         if: ${{ !matrix.hard }}
+        env:
+          FEATURES: ${{ matrix.features }}
+          WEATHER: ${{ matrix.weather }}
         run: >
           node --experimental-default-type=module scripts/bench_node.mjs --port 8331 --map kitsilano
-          --features ${{ matrix.features }} --weather ${{ matrix.weather }} --check 1
+          --features "$FEATURES" --weather "$WEATHER" --check 1 --json benchmark.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && !matrix.hard && hashFiles('benchmark.json') != '' }}
+        with:
+          name: benchmark-${{ matrix.features }}-${{ matrix.weather }}
+          path: benchmark.json
+          retention-days: 7
       - name: Rules, fixed hard city slice
         if: ${{ matrix.hard }}
         run: >
           node --experimental-default-type=module scripts/soak.mjs --port 8331
           --mode hard --json hard-city.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: ${{ always() && matrix.hard }}
+        if: ${{ !cancelled() && matrix.hard && hashFiles('hard-city.json') != '' }}
         with:
           name: hard-city
           path: hard-city.json
       - name: Server log
-        if: failure()
+        if: failure() && hashFiles('server.log') != ''
         run: tail -n 200 server.log
 
   # The check the main ruleset requires. A job that a failed job `needs` is skipped, and a skipped
@@ -89,12 +97,18 @@ jobs:
     name: Benchmark passed
     needs: [suite]
     if: always()
+    permissions: {}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every job passed
         run: |
-          echo "Results: $RESULTS"
-          test "$(echo "$RESULTS" | tr ' ' '\n' | sort -u)" = success
+          set -o pipefail
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<< "$RESULTS")
+          if [[ -n "$failed" ]]; then
+            printf 'Required jobs did not pass:\n%s\n' "$failed"
+            exit 1
+          fi
+          jq -e 'type == "object" and length > 0' <<< "$RESULTS" >/dev/null
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          RESULTS: ${{ toJSON(needs) }}
