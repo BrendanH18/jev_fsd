@@ -20,7 +20,7 @@ from .buildings import extract_buildings
 from .cache import write_json
 from .controls import attach_controls
 from .graph import RoadGraph, build_graph
-from .parse import OsmData, parse_xml
+from .parse import OsmData
 from .project import Projection
 
 PACK_VERSION = "6"
@@ -39,22 +39,32 @@ def build_pack(
     include_service: bool = False,
     *,
     before_publish: Callable[[], None] | None = None,
+    load_osm: Callable[[], OsmData] | None = None,
 ) -> dict:
     """Cached pack for a bbox. Raises fetch.FetchError when the map cannot be downloaded."""
     path = pack_path(maps_dir, bbox)
     if path.is_file() and not force:
         try:
-            cached = json.loads(path.read_text())
-        except (json.JSONDecodeError, UnicodeError) as err:
+            cached = json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, ValueError, RecursionError) as err:
             log("map: rebuilding unreadable pack %s (%s)" % (path.name, err))
         else:
-            if isinstance(cached, dict) and cached.get("pack_version") == PACK_VERSION:
-                return cached
-            log("map: rebuilding %s because it is not a v%s pack" % (path.name, PACK_VERSION))
-    xml_path = fetch.fetch_osm_xml(bbox, maps_dir, log=log)
-    started = time.perf_counter()
-    osm = parse_xml(xml_path)
+            if _is_pack(cached):
+                if fetch.cache_key(cached["bbox"]) == fetch.cache_key(bbox):
+                    return cached
+                log(f"map: rebuilding {path.name} because its bbox does not match")
+            else:
+                log("map: rebuilding %s because it is not a complete v%s pack" % (path.name, PACK_VERSION))
+    if load_osm is not None:
+        osm = load_osm()
+        started = time.perf_counter()
+    else:
+        xml_path = fetch.fetch_osm_xml(bbox, maps_dir, log=log)
+        started = time.perf_counter()
+        osm = fetch.read_xml(xml_path)
     pack = pack_from_osm(osm, bbox, include_service=include_service, name=fetch.cache_key(bbox))
+    if not pack["lanes"]:
+        raise fetch.FetchError("The OSM extract has no connected drivable streets for this bounding box.")
     pack["stats"]["build_ms"] = round((time.perf_counter() - started) * 1000)
     log(
         "map: built pack %s in %d ms (%d edges, %d intersections, %d stops, %d buildings)"
@@ -72,6 +82,19 @@ def build_pack(
         before_publish()
     write_json(path, pack)
     return pack
+
+
+def _is_pack(data) -> bool:
+    if not isinstance(data, dict) or data.get("pack_version") != PACK_VERSION:
+        return False
+    arrays = ("bbox", "extent", "nodes", "edges", "lanes", "intersections", "stops", "buildings")
+    return (
+        all(isinstance(data.get(key), list) for key in arrays)
+        and all(isinstance(data.get(key), dict) for key in ("origin", "stats"))
+        and len(data["bbox"]) == 4
+        and all(type(coord) in (float, int) and -180 <= coord <= 180 for coord in data["bbox"])
+        and bool(data["edges"] and data["lanes"])
+    )
 
 
 def pack_from_osm(osm: OsmData, bbox: Bbox, include_service: bool = False, name: str = "") -> dict:

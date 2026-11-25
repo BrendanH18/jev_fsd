@@ -28,15 +28,14 @@ were. Nothing reads it but the geese.
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .. import geometry as g
 from . import fetch
-from .cache import write_json
-from .parse import OsmData, parse_xml
+from .cache import read_layer, write_json
+from .parse import OsmData
 from .project import Projection
 from .zones import _inside, _join, _to_segment
 
@@ -57,23 +56,30 @@ def parks_path(maps_dir: Path, bbox: Bbox) -> Path:
     return maps_dir / ("%s.parks.v%s.json" % (fetch.cache_key(bbox), PARKS_VERSION))
 
 
-def load_parks(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
-    path = parks_path(maps_dir, bbox)
-    return json.loads(path.read_text()) if path.is_file() else None
+def load_parks(bbox: Bbox, maps_dir: Path, *, log=lambda _msg: None) -> Optional[dict]:
+    return read_layer(parks_path(maps_dir, bbox), "parks", PARKS_VERSION, ("areas", "spans"), log)
 
 
 def build_parks(
-    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+    bbox: Bbox,
+    maps_dir: Path,
+    pack: dict,
+    force: bool = False,
+    log: Callable[[str], None] = lambda m: None,
+    *,
+    load_osm: Callable[[], OsmData | None] | None = None,
 ) -> Optional[dict]:
     """The cached parks for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = parks_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
-    xml_path = fetch.cache_path(maps_dir, bbox)
-    if not xml_path.is_file():
+    if not force:
+        cached = load_parks(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
         return None
-    layer = parks_from_osm(parse_xml(xml_path), pack)
+    layer = parks_from_osm(osm, pack)
     write_json(path, layer)
     log(
         "map: built %s (%d parks and waters, %d street spans beside them)"

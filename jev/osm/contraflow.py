@@ -12,12 +12,10 @@ side of the street the contraflow cyclist rides on, seen from a driver going the
 
 from __future__ import annotations
 
-import json
 import math
 
 from . import fetch
-from .cache import write_json
-from .parse import parse_xml
+from .cache import read_layer, write_json
 
 LANE_VALUES = {"lane", "track", "opposite_lane", "opposite_track"}
 SHARED_VALUES = {"opposite", "opposite_share_busway", "shared_lane", "share_busway"}
@@ -28,19 +26,20 @@ def contraflow_path(maps_dir, bbox):
     return maps_dir / (fetch.cache_key(bbox) + ".contraflow.v1.json")
 
 
-def load_contraflow(bbox, maps_dir):
-    path = contraflow_path(maps_dir, bbox)
-    return json.loads(path.read_text()) if path.is_file() else None
+def load_contraflow(bbox, maps_dir, *, log=lambda _msg: None):
+    return read_layer(contraflow_path(maps_dir, bbox), "contraflow", "1", ("edges",), log)
 
 
-def build_contraflow(bbox, maps_dir, pack, force=False, log=lambda m: None):
+def build_contraflow(bbox, maps_dir, pack, force=False, log=lambda m: None, *, load_osm=None):
     path = contraflow_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
-    raw = fetch.cache_path(maps_dir, bbox)
-    if not raw.is_file():
+    if not force:
+        cached = load_contraflow(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
         return None
-    layer = contraflow_from_osm(parse_xml(raw), pack)
+    layer = contraflow_from_osm(osm, pack)
     write_json(path, layer)
     log("map: built %s (%d contraflow edges)" % (path.name, len(layer["edges"])))
     return layer

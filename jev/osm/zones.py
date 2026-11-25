@@ -23,7 +23,6 @@ and `to` in metres along its centreline. The file is separate from the pack
 
 from __future__ import annotations
 
-import json
 import math
 import re
 from pathlib import Path
@@ -31,8 +30,8 @@ from typing import Callable, List, Optional, Sequence, Tuple
 
 from .. import geometry as g
 from . import fetch
-from .cache import write_json
-from .parse import OsmData, parse_xml
+from .cache import read_layer, write_json
+from .parse import OsmData
 from .project import Projection
 
 ZONES_VERSION = "1"
@@ -51,23 +50,30 @@ def zones_path(maps_dir: Path, bbox: Bbox) -> Path:
     return maps_dir / ("%s.zones.v%s.json" % (fetch.cache_key(bbox), ZONES_VERSION))
 
 
-def load_zones(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
-    path = zones_path(maps_dir, bbox)
-    return json.loads(path.read_text()) if path.is_file() else None
+def load_zones(bbox: Bbox, maps_dir: Path, *, log=lambda _msg: None) -> Optional[dict]:
+    return read_layer(zones_path(maps_dir, bbox), "zones", ZONES_VERSION, ("zones",), log)
 
 
 def build_zones(
-    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+    bbox: Bbox,
+    maps_dir: Path,
+    pack: dict,
+    force: bool = False,
+    log: Callable[[str], None] = lambda m: None,
+    *,
+    load_osm: Callable[[], OsmData | None] | None = None,
 ) -> Optional[dict]:
     """The cached zones for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = zones_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
-    xml_path = fetch.cache_path(maps_dir, bbox)
-    if not xml_path.is_file():
+    if not force:
+        cached = load_zones(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
         return None
-    zones = zones_from_osm(parse_xml(xml_path), pack)
+    zones = zones_from_osm(osm, pack)
     log("map: built %s (%d school and playground zones)" % (path.name, len(zones["zones"])))
     write_json(path, zones)
     return zones
