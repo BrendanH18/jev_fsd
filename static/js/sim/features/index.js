@@ -12,14 +12,14 @@
 //   defaultCount  the free-drive default for a feature whose option is a count
 //   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations
 //   snapshot  default sensing fields kept in the snapshot even when the feature is inactive
-//   seen      required with a metric: the World flag that says the feature has met the driven car this drive (its audit's metric
-//             reaches the results, and fails a drive, only once it is set)
+//   seen      the World flag that gates the metric after the feature has met the driven car
+//             (required unless metric.reportWhenEnabled uses a boolean World option)
 //   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
 //   buildFleet(fleet, { enabled, seed, makePath })   fleet state, stored under the option key
 //   metric    { at, name, failure, label, category?, decimals?, threshold?, traceType? }: the violation,
 //             failure text, trace label and examiner category. `eventType` supplies a world event's replay marker.
-//             A duration can round to `decimals` and
+//             `initial` supplies an existing counter at World creation. A duration can round to `decimals` and
 //             fail above `threshold`. With `traceType` it emits a single named event at the threshold
 //             instead of logging every increase.
 //   obstacle  { test(o), traffic?, likePedestrian?, fixed?, predict(o, t)?, visible(world, observer, o)?, label? }:
@@ -28,7 +28,8 @@
 //             `predict` and `visible` override its position in predictions and its local visibility.
 //             `oncoming(o, vehicle)` identifies an opposing rider instead of a leader or cyclist to pass.
 //             `long` uses the long-vehicle leader check. `parkedClearance(o)` eases by cars at the kerb.
-//             `noParking(o)` skips the fleet's parking scheduler.
+//             `noParking(o)` skips the fleet's parking scheduler. `fixedCruise` keeps the actor's
+//             own free speed in all weathers. `noCyclistPass` keeps it behind cyclists.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
@@ -130,6 +131,21 @@
 //   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
 //   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
 //   trafficCorridor(world, n, path, front) first corridor { shift, lineAt(s), ignore, limit, stop() }, or null
+//   trafficLaneControl(world, n, path, front) a separate lane restriction with the corridor fields above
+//                                       and a deferred stop returning { gap, v } or null
+//   trafficOvertaking(world, n, edge, all, dt, held, driver) { vehicle, shift, clearance } of a current pass
+//   activeManeuver(snap, passing)       { keep(candidate), brake } or null, for a passing law under way
+//   activeOutcome(candidate, snap)    how a passing candidate finishes, checked after the road edge
+//   passClearance(world, snap)          { metres, rejection } for bicycle clearance, or null for the default
+//   driveCriterion(snap)               wording appended to the motion question's drive criterion
+//   followingOmitted(snap, vehicle)     true if this vehicle is left out of ordinary leader sensing
+//   laneGapBlocked(snap, side)          true if the destination lane's rear gap is too short
+//   laneTargetFields(sideSnap, offset) adjust constraints for the destination lane's speed calculation
+//   lanePassBlocked(snap, side, leader) true if a pass of this leader in the destination lane is prohibited
+//   trafficFollowingLeader(fleet, n, path, front, offset, limit, look) { vehicle, gap }, or null
+//   trafficLeadPolicy(n, leader, limit, standstillGap) { fields, extraGap } for a special leader
+//   trafficPassingLaneBlocked(world, n, dir) true if traffic cannot pass in the proposed direction
+//   trafficMergeGap(vehicle, distance, limit) minimum extra gap from a vehicle across a lane change
 //   coachCorridor(world, limit)        temporary passage through a restricted area for the coach
 //   coachCorridorFrame(score, corridor, context) record a passage incident and return immediate guidance
 //   examinerFail(report)              an examiner failure item or null ("beforeTracks")
@@ -518,6 +534,9 @@ if (problem) throw new Error(`Feature registry: ${problem}.`);
 // through an import cycle (the snowbanks record's simulation reaches sim/npc.js, say): the list it is
 // handed is then filled once they have all loaded, before any of it can run.
 export function hooks(name, slot = "end") {
+  // This module may be re-entered before its own top-level constants have initialized.
+  if (name === "metric" || name === "notice" || name === "prompt")
+    throw new Error(`Feature registry: use recordsAt for ${name} declarations.`);
   const out = [];
   if (hooks.ready) fillHooks(out, name, slot);
   else (hooks.pending ||= []).push([out, name, slot]);
@@ -525,7 +544,7 @@ export function hooks(name, slot = "end") {
 }
 function fillHooks(out, name, slot) {
   if (!Object.hasOwn(SLOTS, name) || !SLOTS[name].includes(slot))
-    throw new Error(`Feature registry: no slot "${slot}" for ${name}.`);
+    throw new Error(`Feature registry: no slot "${String(slot)}" for ${String(name)}.`);
   for (const f of FEATURES) {
     const h = f[name];
     if (!h) continue;
@@ -571,7 +590,11 @@ export const controlAt = (world, control, edge) =>
 export const alternateSignal = (world, id) => firstHookResult(SIGNAL_OVERRIDES, world, id);
 
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
-export const recordsAt = (name, slot) => FEATURES.filter((f) => f[name] && slotOf(f[name]) === slot);
+export function recordsAt(name, slot) {
+  if (!Object.hasOwn(SLOTS, name) || !SLOTS[name].includes(slot))
+    throw new Error(`Feature registry: no slot "${String(slot)}" for ${String(name)}.`);
+  return FEATURES.filter((f) => f[name] && slotOf(f[name]) === slot);
+}
 
 const NOTICES = Object.fromEntries(
   SLOTS.notice.map((slot) => [slot, recordsAt("notice", slot).sort((a, b) => a.notice.order - b.notice.order)]),
@@ -600,6 +623,11 @@ export const featurePerceptionRejection = (id) => PERCEPTION_REJECTIONS[id];
 
 // Metrics in slot order, with registration order within each slot.
 export const FEATURE_METRICS = SLOTS.metric.flatMap((slot) => recordsAt("metric", slot).map((f) => f.metric));
+export const FEATURE_INITIAL_COUNTERS = Object.freeze(
+  Object.fromEntries(
+    FEATURE_METRICS.filter(({ initial }) => initial !== undefined).map(({ name, initial }) => [name, initial]),
+  ),
+);
 
 // The obstacle descriptor of the feature `o` belongs to, or null.
 const OBSTACLES = FEATURES.filter((f) => f.obstacle).map((f) => f.obstacle);
@@ -626,16 +654,16 @@ export const isParkingTraffic = (vehicle) => !!vehicle.parking || PARKING_TRAFFI
 const MOTION = FEATURES.filter((f) => f.motion).map((f) => f.motion);
 export const featureMotion = (snap) => MOTION.some((m) => m(snap));
 
-// The metrics of the features at `slot` that have met the car this drive.
+// Most metrics start when a feature meets the car. A boolean World option can report for the whole drive.
+export function featureMetricEnabled(world, { key, property, seen, metric }) {
+  return metric.reportWhenEnabled ? world[property ?? key] === true : !!world[seen];
+}
+
 export function featureMetrics(world, violations, slot) {
   const out = {};
-  for (const {
-    key,
-    property,
-    seen,
-    metric: { name, decimals, reportWhenEnabled },
-  } of recordsAt("metric", slot)) {
-    if (!(reportWhenEnabled ? world[property ?? key] : world[seen])) continue;
+  for (const feature of recordsAt("metric", slot)) {
+    if (!featureMetricEnabled(world, feature)) continue;
+    const { name, decimals } = feature.metric;
     const value = violations[name] || 0;
     const scale = 10 ** decimals;
     out[name] = decimals === undefined ? value : Number.isFinite(value) ? Math.round(value * scale) / scale : null;
@@ -680,7 +708,6 @@ export function buildFeatures(world, options, seed, map, position) {
     const enabled = options[f.key] ?? (f.defaultCount === undefined ? false : 0);
     world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
     if (f.seen) world[f.seen] = false;
-    if (f.metric?.initial !== undefined) world.violations[f.metric.name] = f.metric.initial;
     if (f.calls) world[f.calls] = new Map();
   }
 }

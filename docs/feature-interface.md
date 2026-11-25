@@ -120,9 +120,10 @@ An `examinerFail` hook returns a failure item or null without modifying the repo
 Loading the registry validates the declarations before filling the hook lists. A hook can be a
 function at `end` or an object with a supported `at` and a callable `run`. Data records for metrics,
 notices and prompts have their own required fields. A notice's order is unique within its slot.
-World properties, seen flags and audit maps share one namespace, and feature snapshot fields and
-display text IDs each have one owner. Coach reports, guidance, deductions and tips take the same
-slot lists the coaching dispatcher uses. Keep label accessors lazy when a vehicle module can
+World properties, seen flags and audit maps share one namespace. Snapshot fields, display text IDs,
+replay marker IDs and prioritized candidate IDs each have one owner. Coach reports, guidance,
+deductions and tips use the dispatcher's slot lists, with an explicit order unique within each
+kind and slot. Nested declarations reject unrecognized keys. Keep label accessors lazy when a vehicle module can
 import the registry before its constants have initialized.
 
 ## Slots: why results stay exactly the same
@@ -285,6 +286,15 @@ Rules and the cautious agent each passed all 62 authored drives, including both 
 both trees. Full arena results, reports, decision traces and events matched. The guarded and
 open system prompts matched byte for byte. The stub model recording replayed on both trees,
 the Jev fixtures stayed current and all 39 offline Jev requests validated.
+
+**Snow plows, lane closures and passing cyclists** were compared against `0583591` in Boat with
+Node 22.23.5. Each migration matched all 36 Rules benchmark results on Kitsilano at seed 1,
+covering bare dry, city dry and city snow in four three-route captures per suite. Each revision
+ran against its own loopback server with `PYTHONHASHSEED=0`. Rules and the cautious agent each
+passed all 62 authored drives on every revision. Their complete arena captures and the CLI reports
+matched the base, including the full traces and coaching reports. Both LLM system prompts matched
+byte for byte. The comparison omitted timings and run provenance. The recorded stub drive replayed
+and the Jev fixtures stayed current.
 
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison

@@ -1,4 +1,4 @@
-import { FEATURE_METRICS, FEATURES } from "../sim/features/index.js";
+import { FEATURE_METRICS, FEATURES, featureMetricEnabled } from "../sim/features/index.js";
 
 const round = (value) => Math.round(value * 1000) / 1000;
 const auditPair = ({ name, label }) => [name, label];
@@ -132,11 +132,13 @@ export class EvaluationTrace {
       if (count > 0) this.event(key, message, world.t, { count });
       this.audit[key] = world.violations[key] || 0;
     }
-    for (const {
-      seen,
-      metric: { name, label, threshold, traceType },
-    } of THRESHOLD_AUDITS) {
-      if (world[seen] && world.violations[name] > threshold && !this.thresholdAudits.has(name)) {
+    for (const feature of THRESHOLD_AUDITS) {
+      const { name, label, threshold, traceType } = feature.metric;
+      if (
+        featureMetricEnabled(world, feature) &&
+        world.violations[name] > threshold &&
+        !this.thresholdAudits.has(name)
+      ) {
         this.event(traceType, label, world.t);
         this.thresholdAudits.add(name);
       }

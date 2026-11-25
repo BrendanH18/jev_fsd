@@ -55,6 +55,7 @@ import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 
 import {
   FEATURES,
+  FEATURE_INITIAL_COUNTERS,
   controlDirection,
   controlAt,
   alternateSignal,
@@ -302,6 +303,7 @@ export class World {
       safety_brakes: 0,
       fallbacks: 0,
       deadlock_overrides: 0,
+      ...FEATURE_INITIAL_COUNTERS,
     };
     this.events = []; // transient per-step events for the UI
     this.lastRoad = null;

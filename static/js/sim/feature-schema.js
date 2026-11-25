@@ -49,26 +49,57 @@ const optional = (value, test) => value === undefined || test(value);
 const callback = (value) => typeof value === "function";
 const boolean = (value) => typeof value === "boolean";
 const nonnegative = (value) => Number.isFinite(value) && value >= 0;
+const obstacleFlags = ["traffic", "fixed", "likePedestrian", "long", "fixedCruise", "noCyclistPass"];
+const obstacleCallbacks = ["predict", "visible", "oncoming", "parkedClearance", "noParking"];
+const metricFields = [
+  "at",
+  "name",
+  "failure",
+  "label",
+  "category",
+  "decimals",
+  "threshold",
+  "traceType",
+  "eventType",
+  "initial",
+  "reportWhenEnabled",
+];
+const noticeFields = ["at", "read", "order", "duration", "style", "hold"];
+const coachEntryFields = {
+  reports: ["at", "order", "read"],
+  guidance: ["at", "order", "read"],
+  tips: ["at", "order", "when", "text"],
+  deductions: ["at", "order", "counter", "weight", "category"],
+};
+
+function unknownField(name, value, allowed) {
+  for (const key of Reflect.ownKeys(value)) {
+    if (!allowed.includes(key)) return `${name} has an unknown field "${String(key)}"`;
+  }
+  return null;
+}
 
 function mapProblem(name, map, test) {
   if (!object(map)) return `${name} must be an object`;
-  for (const [key, value] of Object.entries(map)) {
-    if (!fieldName(key)) return `${name} has an invalid key "${key}"`;
-    if (!test(value)) return `${name} has an invalid value for "${key}"`;
+  for (const key of Reflect.ownKeys(map)) {
+    if (!fieldName(key)) return `${name} has an invalid key "${String(key)}"`;
+    if (!Object.getOwnPropertyDescriptor(map, key).enumerable) return `${name} has a hidden entry "${key}"`;
+    if (!test(map[key])) return `${name} has an invalid value for "${key}"`;
   }
   return null;
 }
 
 function obstacleProblem(obstacle) {
   if (!object(obstacle) || !callback(obstacle.test)) return "obstacle needs a test function";
-  for (const field of ["traffic", "fixed", "likePedestrian", "long", "fixedCruise", "noCyclistPass"])
+  for (const field of obstacleFlags)
     if (!optional(obstacle[field], boolean)) return `obstacle.${field} must be a boolean`;
-  for (const field of ["predict", "visible", "oncoming", "parkedClearance", "noParking"])
+  for (const field of obstacleCallbacks)
     if (!optional(obstacle[field], callback)) return `obstacle.${field} must be a function`;
   // An accessor can refer to a model constant in a module that is still loading.
   const label = Object.getOwnPropertyDescriptor(obstacle, "label");
+  if (label?.set) return "obstacle.label must be read-only";
   if (label && !label.get && !text(label.value)) return "obstacle.label must be nonempty text";
-  return null;
+  return unknownField("obstacle", obstacle, ["test", "label", ...obstacleFlags, ...obstacleCallbacks]);
 }
 
 function metricProblem(metric) {
@@ -83,7 +114,10 @@ function metricProblem(metric) {
   if (!optional(metric.threshold, nonnegative)) return "metric.threshold must be a nonnegative finite number";
   for (const field of ["traceType", "eventType"])
     if (!optional(metric[field], fieldName)) return `metric.${field} has an invalid event type`;
-  return null;
+  if (metric.traceType !== undefined && metric.threshold === undefined) return "metric.traceType needs a threshold";
+  if (metric.traceType !== undefined && metric.eventType !== undefined)
+    return "metric must choose traceType or eventType";
+  return unknownField("metric", metric, metricFields);
 }
 
 function noticeProblem(notice) {
@@ -92,13 +126,13 @@ function noticeProblem(notice) {
   if (!Number.isFinite(notice.duration) || notice.duration <= 0) return "notice.duration must be a positive number";
   if (typeof notice.style !== "string" && !callback(notice.style)) return "notice.style must be text or a function";
   if (!optional(notice.hold, boolean)) return "notice.hold must be a boolean";
-  return null;
+  return unknownField("notice", notice, noticeFields);
 }
 
 function coachEntryProblem(field, entry) {
   if (!object(entry)) return `coach.${field} entries must be objects`;
   const prefix = `coach.${field}`;
-  if (!COACH_SLOTS[field].includes(entry.at)) return `${prefix} has an unknown slot "${entry.at}"`;
+  if (!COACH_SLOTS[field].includes(entry.at)) return `${prefix} has an unknown slot "${String(entry.at)}"`;
   if (!Number.isSafeInteger(entry.order)) return `${prefix} order must be an integer`;
   if ((field === "reports" || field === "guidance") && !callback(entry.read)) return `${prefix} needs a read function`;
   if (field === "tips") {
@@ -110,8 +144,9 @@ function coachEntryProblem(field, entry) {
     if (!nonnegative(entry.weight)) return `${prefix} weight must be a nonnegative finite number`;
     if (entry.at === "post" && !["safety", "legality", "comfort", "control"].includes(entry.category))
       return `${prefix} needs a score category at "post"`;
+    if (entry.at !== "post" && entry.category !== undefined) return `${prefix} can specify a category only at "post"`;
   }
-  return null;
+  return unknownField(prefix, entry, coachEntryFields[field]);
 }
 
 function coachProblem(coach, seen) {
@@ -143,25 +178,30 @@ const dataChecks = {
   prompt: (prompt) => {
     if (!text(prompt.text)) return "prompt needs text";
     if (!optional(prompt.inline, boolean)) return "prompt.inline must be a boolean";
-    return null;
+    return unknownField("prompt", prompt, ["at", "text", "inline"]);
   },
 };
 
 function hookProblem(name, hook, slots) {
   if (!Object.hasOwn(slots, name)) return `has an unknown hook or field ${name}`;
   if (Object.hasOwn(dataChecks, name) && !object(hook)) return `${name} must be an object`;
-  const at = slotOf(hook);
+  const at = hook?.at === null && !callback(hook) ? null : slotOf(hook);
   if (!slots[name].includes(at))
-    return `${name} is at "${at}", which the core never runs: use ${slots[name].join(", ")}`;
+    return `${name} is at "${String(at)}", which the core never runs: use ${slots[name].join(", ")}`;
   if (Object.hasOwn(dataChecks, name)) return dataChecks[name](hook);
-  if (!callback(hook) && !(object(hook) && callback(hook.run))) return `${name} needs a run function`;
-  return null;
+  if (callback(hook)) return null;
+  if (!object(hook) || !callback(hook.run)) return `${name} needs a run function`;
+  return unknownField(name, hook, ["at", "run"]);
 }
 
 export function featureRecordProblem(record, slots) {
   if (!object(record)) return "a record must be an object";
   const { key } = record;
   if (!fieldName(key)) return "a record has no valid key";
+  for (const field of Reflect.ownKeys(record)) {
+    if (typeof field !== "string") return `${key}: invalid symbol field ${String(field)}`;
+    if (!Object.getOwnPropertyDescriptor(record, field).enumerable) return `${key}: hidden declaration "${field}"`;
+  }
   const problem = recordFieldsProblem(record, slots);
   return problem ? `${key}: ${problem}` : null;
 }
@@ -183,8 +223,13 @@ function recordFieldsProblem(record, slots) {
   if (!optional(record.buildFleet, callback)) return "buildFleet must be a function";
   for (const field of PREDICATES) if (!optional(record[field], callback)) return `${field} must be a function`;
   for (const field of CLOCK_FIELDS) if (!optional(record[field], boolean)) return `${field} must be a boolean`;
-  if (record.priority !== undefined && (!Array.isArray(record.priority) || !record.priority.every(fieldName)))
+  if (record.priority !== undefined && (!Array.isArray(record.priority) || ![...record.priority].every(fieldName)))
     return "priority must contain candidate names";
+  if (record.metric?.reportWhenEnabled === true) {
+    if (record.seen !== undefined) return "metric.reportWhenEnabled cannot also use a seen flag";
+    if (record.buildFleet) return "metric.reportWhenEnabled needs a World option";
+    if (record.defaultCount !== undefined) return "metric.reportWhenEnabled needs a boolean option";
+  }
   for (const field of DISPLAY_MAPS) {
     if (record[field] === undefined) continue;
     const problem = mapProblem(
@@ -215,6 +260,7 @@ function recordFieldsProblem(record, slots) {
 }
 
 export function featureRegistryProblem(records, slots) {
+  if (!Array.isArray(records)) return "records must be an array";
   const owners = new Map();
   for (const record of records) {
     const problem = featureRecordProblem(record, slots);
@@ -226,7 +272,16 @@ export function featureRegistryProblem(records, slots) {
       ["World field", record.property ?? key],
     ];
     for (const field of ["seen", "calls"]) if (record[field]) reserved.push(["World field", record[field]]);
-    if (metric) reserved.push(["metric", metric.name]);
+    if (metric) {
+      reserved.push(["metric", metric.name]);
+      const marker = metric.eventType ?? metric.traceType;
+      if (marker !== undefined) reserved.push(["replay marker", marker]);
+    }
+    for (const id of record.priority ?? []) reserved.push(["priority candidate", id]);
+    for (const [field, entries] of Object.entries(record.coach ?? {})) {
+      if (Object.hasOwn(COACH_SLOTS, field))
+        for (const { at, order } of entries) reserved.push([`coach.${field} order`, `${at}/${order}`]);
+    }
     if (notice) reserved.push(["notice order", `${notice.at ?? "end"}/${notice.order}`]);
     for (const field of ["snapshot", ...DISPLAY_MAPS])
       for (const name of Object.keys(record[field] || {})) reserved.push([field, name]);

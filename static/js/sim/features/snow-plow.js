@@ -115,7 +115,7 @@ class Plows {
       plow = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), v, SNOW_PLOW);
     Object.assign(plow, {
       id: `plow_${++this.plowCount}`,
-      kind: "snow_plow",
+      kind: SNOW_PLOW.kind,
       color: PLOW_COLOR,
       v0: PLOW_MPS,
       beacons: true,
