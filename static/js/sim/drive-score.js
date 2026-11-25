@@ -86,7 +86,6 @@ export class DriveScore {
     this.cyclists = !!world.passCyclists;
     this.closePasses = 0;
     this.cyclistCutoffs = 0;
-    this.busLanesSeen = false;
     this.closeFollowing = 0;
     this.danger = 0;
     this.offRoad = 0;
@@ -223,7 +222,6 @@ export class DriveScore {
         this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id });
       }
     }
-    if (world.busLanesSeen) this.busLanesSeen = true;
     observeFeatureCoach(this, world);
     for (const ev of world.events || []) {
       featureCoachEvent(this, ev);
@@ -442,10 +440,11 @@ export class DriveScore {
     );
     const initialLegality = featureCoachDeduct("firstLegality", this, 100);
     const beforeLegality = featureCoachDeduct("beforeLegality", this, initialLegality);
+    const beforeTraffic = featureCoachDeduct("beforeTrafficLegality", this, beforeLegality);
     const afterSpeed = featureCoachDeduct(
       "afterSpeed",
       this,
-      beforeLegality - delta("bus_lane_driving") * 0.5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2,
+      beforeTraffic - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2,
     );
     const legality = featureCoachDeduct(
       "legality",
@@ -557,10 +556,6 @@ export class DriveScore {
           : "Aim for at least a two-second following gap when conditions allow.",
       );
     featureCoachTips("afterFollowing", this, tips);
-    if (delta("bus_lane_driving") > 1)
-      tips.push(
-        "Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.",
-      );
     featureCoachTips("afterBusLanes", this, tips);
     if (this.harsh + this.jerk + this.cornering > 2)
       tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
@@ -615,7 +610,6 @@ export class DriveScore {
         ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges }
         : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
-      ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
       ...featureCoachReport("beforeFeatureSummary", this, round),
       ...featureCoachReport("end", this, round),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),

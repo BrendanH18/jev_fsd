@@ -2,7 +2,7 @@ import { FEATURE_METRICS, FEATURES } from "../sim/features/index.js";
 
 const round = (value) => Math.round(value * 1000) / 1000;
 const auditPair = ({ name, label }) => [name, label];
-const COUNTER_AUDITS = FEATURE_METRICS.filter(({ traceType }) => !traceType);
+const COUNTER_AUDITS = FEATURE_METRICS.filter(({ trace, traceType }) => trace !== false && !traceType);
 const countersAt = (slot) => COUNTER_AUDITS.filter(({ at }) => at === slot).map(auditPair);
 const THRESHOLD_AUDITS = FEATURES.filter(({ metric }) => metric?.traceType);
 const CORE_AUDITS = {

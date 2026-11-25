@@ -1,7 +1,6 @@
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
 
-import { routeBusLane, legalBusLane } from "../sim/bus-lanes.js";
 import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
 import { advanceHolds, approachPhase, movementSignal, protectedLeft, STOP_ZONE_M } from "../sim/signals.js";
@@ -124,6 +123,7 @@ import {
 const SENSE_SIGNAL_CONTROL = hooks("senseSignalControl");
 const INTERSECTION_FIELDS_AFTER_RIGHT = hooks("intersectionFields", "afterRightTurn");
 const SENSE = {
+  beforeLaneState: hooks("sense", "beforeLaneState"),
   afterPedestrians: hooks("sense", "afterPedestrians"),
   beforeWorkZone: hooks("sense", "beforeWorkZone"),
   beforeTarget: hooks("sense", "beforeTarget"),
@@ -160,6 +160,7 @@ const TARGET = {
 };
 const FINISH_LANES = hooks("finishLanes");
 const LANE_OFFER = hooks("laneOffer");
+const LANE_OFFER_BLOCKED = hooks("laneOfferBlocked");
 const AFTER_PASSING = hooks("laneOffer", "afterPassing");
 const ROUTE_RED_BANS = hooks("routeTurnOnRedBlocked");
 const SENSE_RED_TURN = hooks("senseRedTurn");
@@ -634,19 +635,7 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
   // (what a registered feature puts in the road, geese or a closed road's barricades, is never followed
   // or passed: sim/features/index.js)
   const vehicles = visible.filter((o) => o.kind !== "pedestrian" && isTrafficObstacle(o));
-  if (world.busLanes) {
-    route.busLanePolicy = { clock: world.clock, curb: !!world.parking || !!world.parkedIn };
-    const b = routeBusLane(route, p.s, world.clock, route.busLanePolicy.curb);
-    if (b)
-      snap.bus_lane = {
-        edge: b.edge,
-        lanes: b.lanes.map((l) => l.lane),
-        in_effect: b.active,
-        entering_allowed: b.entering_allowed,
-        approach_m: b.approach_m,
-        block_end_in_m: b.remaining,
-      };
-  }
+  for (const sense of SENSE.beforeLaneState) sense(world, snap, { p, route });
   const lane = (snap.lane = laneState(route, p, executing?.law));
   snap.right_hook = rightHook(world, p, frontS, lane);
   snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection, executing);
@@ -2401,22 +2390,8 @@ function laneOptions(snap, world) {
         inJunction,
         junctionMargin: PASS_JUNCTION_M,
       });
-    if (world.busLanes) {
-      const b = routeBusLane(route, s, world.clock, route.busLanePolicy?.curb);
-      if (
-        b &&
-        !legalBusLane(
-          world.map,
-          b.edge,
-          lane.route_index + delta,
-          world.clock,
-          b.turn,
-          b.remaining,
-          route.busLanePolicy?.curb,
-        )
-      )
-        side.offer = null;
-    }
+    if (LANE_OFFER_BLOCKED.some((blocked) => blocked(world, route, s, lane.route_index + delta)))
+      side.offer = null;
     lane.sides[dir] = side;
   }
 }

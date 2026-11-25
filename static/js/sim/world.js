@@ -1,6 +1,5 @@
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
-import { auditBusLanes } from "./bus-lanes.js";
 import { Vehicle, CAR, comfort } from "./vehicle.js";
 import { headingAt, pointAt } from "../map/mapdata.js";
 import { surfaceDistance } from "../map/junctions.js";
@@ -89,6 +88,7 @@ const HIDES = hooks("hides"),
 const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
+const AUDIT_AFTER_PASSING = hooks("audit", "afterPassing");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
 const VISION_RANGE = hooks("visionRange");
 const SIGNED_EXITS = hooks("redEntryBans");
@@ -267,7 +267,6 @@ export class World {
       stepOuts = 0,
       closures = 0,
       passCyclists = false,
-      busLanes = false,
       ...features
     } = {},
   ) {
@@ -323,8 +322,6 @@ export class World {
     this.passCyclists = !!passCyclists;
     this.bikePasses = new Map();
     this.cyclistPass = null;
-    this.busLanes = !!busLanes;
-    this.busLanesSeen = false;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -914,7 +911,7 @@ export class World {
     this.auditPlows();
     this.auditClosures();
     if (this.passCyclists) this.auditCyclistPasses(road);
-    if (this.busLanes) auditBusLanes(this, dt);
+    for (const audit of AUDIT_AFTER_PASSING) audit(this, dt);
     for (const audit of AUDIT_AFTER_CALMING) audit(this);
     for (const audit of AUDIT_BEFORE_DRIVEWAYS) audit(this);
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this, frontOnPath);

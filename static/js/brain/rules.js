@@ -6,6 +6,7 @@ import { comfort } from "../sim/vehicle.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
 import { featureDecisionFields, signalDecision, stopAtLineDrive, redTurnAllowed, hooks, junctionPlan } from "../sim/features/index.js";
 
+const BEFORE_SPEED_COST = hooks("rulesCost", "beforeSpeedCost");
 const BEFORE_SIGNAL_STOP_COST = hooks("rulesCost", "beforeSignalStop");
 
 const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
@@ -71,8 +72,6 @@ export class RulesBrain {
     let best = null;
     for (const c of eligible) {
       const s = c.sim;
-      // Prefer leaving an active reserved lane as soon as the gap allows.
-
       // a lane change is judged against the speed the car could keep in the new lane
       const vWant = Math.min(c.laneTarget ?? vDesired, snap.limit, c.law.lane ? vTurnLane : Infinity);
       // (a pull-over is judged by how near it ends to where it pulls over to, across lanes to the
@@ -83,14 +82,7 @@ export class RulesBrain {
         2.0 * Math.abs(laneErr) +
         0.05 * Math.abs(s.heading_err_deg) +
         0.8 * Math.abs(s.end_speed - vWant);
-      if (
-        snap.bus_lane?.in_effect &&
-        !snap.bus_lane.entering_allowed &&
-        snap.bus_lane.lanes.includes(snap.lane?.index) &&
-        c.change &&
-        !snap.bus_lane.lanes.includes(c.law.laneIdx)
-      )
-        cost -= 20;
+      for (const adjust of BEFORE_SPEED_COST) cost += adjust(c, snap);
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
       for (const adjust of BEFORE_SIGNAL_STOP_COST) cost += adjust(c, snap);

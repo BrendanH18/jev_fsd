@@ -14,7 +14,7 @@ export const COACH_SLOTS = {
   ],
   reports: ["afterSpeed", "afterFlagger", "afterBrakes", "beforeFeatureSummary", "end"],
   guidance: ["afterDirection", "afterBlind", "beforeSample", "afterSample"],
-  deductions: ["safety", "firstLegality", "beforeLegality", "afterSpeed", "legality", "comfort", "post"],
+  deductions: ["safety", "firstLegality", "beforeLegality", "beforeTrafficLegality", "afterSpeed", "legality", "comfort", "post"],
 };
 
 const WORLD_FIELDS = ["property", "seen", "calls"];
@@ -77,6 +77,7 @@ function metricProblem(metric) {
     return "metric has an unknown category";
   if (!optional(metric.decimals, (n) => Number.isSafeInteger(n) && n >= 0 && n <= 15))
     return "metric.decimals must be an integer from 0 to 15";
+  if (!optional(metric.trace, boolean)) return "metric.trace must be a boolean";
   if (!optional(metric.threshold, nonnegative)) return "metric.threshold must be a nonnegative finite number";
   for (const field of ["traceType", "eventType"])
     if (!optional(metric[field], fieldName)) return `metric.${field} has an invalid event type`;

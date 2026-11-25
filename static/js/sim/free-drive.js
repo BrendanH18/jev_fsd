@@ -32,7 +32,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     // on two-way streets with one lane each way, everyone passes a cyclist riding in the lane through
     // the oncoming lane once it is clear (`?cyclistpass=0`: everyone stays behind)
     passCyclists: on("cyclistpass"),
-    busLanes: on("buslanes"),
   };
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)

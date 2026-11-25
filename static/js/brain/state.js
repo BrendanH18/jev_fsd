@@ -22,6 +22,7 @@ const SIGNAL_CLAUSES = hooks("signalClause");
 const YELLOW_SIGNAL_CLAUSES = hooks("yellowSignalClause");
 const AFTER_CROSS_TRAFFIC = hooks("intersectionModelFields", "afterCrossTraffic");
 const STATE = {
+  beforeRoadConstraints: hooks("state", "beforeRoadConstraints"),
   beforeMerge: hooks("state", "beforeMerge"),
   signal: hooks("state", "signal"),
   afterFollowing: hooks("state", "afterFollowing"),
@@ -49,6 +50,7 @@ const CLAUSE = {
   following: hooks("clause", "following"),
   restrictions: hooks("clause", "restrictions"),
   afterCalming: hooks("clause", "afterCalming"),
+  beforeCalming: hooks("clause", "beforeCalming"),
   driveways: hooks("clause", "driveways"),
   beforeRunner: hooks("clause", "beforeRunner"),
   streetHazards: hooks("clause", "streetHazards"),
@@ -174,7 +176,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       ...(z.ends_in_m !== null ? { ends_in_m: r1(z.ends_in_m) } : {}),
     };
   }
-  if (snap.bus_lane) state.bus_lane = snap.bus_lane;
+  for (const add of STATE.beforeRoadConstraints) add(snap, state);
   for (const add of STATE.restrictions) add(snap, state);
   for (const add of STATE.afterCalming) add(snap, state);
   if (snap.lane && snap.lane.lanes > 1) {
@@ -769,10 +771,7 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
         : `A ${ZONE_NAMES[z.kind]}${where}, in effect now (${ZONE_HOURS[z.kind]}), starts ${Math.round(Math.max(0, z.starts_in_m))} m ahead: slow to ${kmh} km/h by its sign; \`car.target_speed\` already does.`,
     );
   }
-  if (snap.bus_lane?.in_effect)
-    out.push(
-      `Bus-only lane: stay out except within the final 50 m before a right turn or to park/pull out at the curb.`,
-    );
+  pushClauses(out, CLAUSE.beforeCalming, snap);
   pushClauses(out, CLAUSE.afterCalming, snap);
   if (snap.right_hook) out.push(rightHookClause(snap.right_hook));
   pushClauses(out, CLAUSE.beforeRunner, snap);

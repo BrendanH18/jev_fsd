@@ -53,7 +53,6 @@ import {
   BUS_DWELL_S,
   BUS_SIGNAL_M,
   BUS_TAPER_M,
-  busTravelLane,
   busMayPullOut,
   busStopFront,
   busYield,
@@ -62,7 +61,6 @@ import {
   isBus,
 } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
-import { legalBusLane } from "./bus-lanes.js";
 import {
   DEPART_S,
   DOORS_DELAY_S,
@@ -124,6 +122,7 @@ import {
   controlAt,
   FLEET_FEATURES,
   featureObstacle,
+  applyTrafficPathPolicy,
   firstHookResult,
   hooks,
   isParkingTraffic,
@@ -170,6 +169,11 @@ const TRAFFIC_BYPASS = hooks("trafficBypass"),
   SIGNAL_HOLD = hooks("trafficSignalHold"),
   SIGNAL_POLICY = hooks("trafficSignalPolicy"),
   SIGNAL_DECISION = hooks("trafficSignalDecision"),
+  TRAFFIC_LANE_INTO = hooks("trafficLaneInto"),
+  TRAFFIC_SUCCESSOR_POOL = hooks("trafficSuccessorPool"),
+  TRAFFIC_SPAWN_LANE_BLOCKED = hooks("trafficSpawnLaneBlocked"),
+  BUS_SPAWN_LANE = hooks("busSpawnLane"),
+  TRAFFIC_LANE_DIRECTION = hooks("trafficLaneDirection"),
   RED_TURN_LANE = hooks("trafficRedTurnLane"),
   PRIORITY_JUNCTION = hooks("priorityJunction"),
   PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside"),
@@ -486,52 +490,8 @@ export class NpcPath {
   laneInto(from, lane, next) {
     const edge = this.map.edges.get(next),
       turn = this.map.classifyTurn(this.map.turnAngle(from, next));
-    if (this.busLanePolicy?.bus) return busTravelLane(this.map, edge, this.busLanePolicy.clock);
-    if (this.busLanePolicy) {
-      const desired = turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);
-      if (
-        !legalBusLane(
-          this.map,
-          next,
-          desired,
-          this.busLanePolicy.clock,
-          "straight",
-          Infinity,
-          false,
-          this.bike ? "bicycle" : "car",
-        )
-      ) {
-        for (let k = desired - 1; k >= 0; k--)
-          if (
-            legalBusLane(
-              this.map,
-              next,
-              k,
-              this.busLanePolicy.clock,
-              "straight",
-              Infinity,
-              false,
-              this.bike ? "bicycle" : "car",
-            )
-          )
-            return k;
-        // (a bus lane on the left, as on some one-way streets: the nearest lane to its right)
-        for (let k = desired + 1; k < edge.lanes; k++)
-          if (
-            legalBusLane(
-              this.map,
-              next,
-              k,
-              this.busLanePolicy.clock,
-              "straight",
-              Infinity,
-              false,
-              this.bike ? "bicycle" : "car",
-            )
-          )
-            return k;
-      }
-    }
+    const laneOverride = firstHookResult(TRAFFIC_LANE_INTO, this, edge, turn, lane);
+    if (laneOverride) return laneOverride.index;
     return this.bike
       ? edge.lanes - 1
       : turn === "left"
@@ -570,23 +530,7 @@ export class NpcPath {
       // no U-turns, nor turns so sharp they double back (the tip of a traffic island)
       const noU = succ.filter((e) => Math.abs(this.map.turnAngle(last.id, e)) < SHARP_TURN);
       let pool = noU.length ? noU : succ;
-      if (this.busLanePolicy && !this.busLanePolicy.bus) {
-        const legal = pool.filter((id) =>
-          Array.from({ length: this.map.edges.get(id).lanes }, (_, k) => k).some((k) =>
-            legalBusLane(
-              this.map,
-              id,
-              k,
-              this.busLanePolicy.clock,
-              "straight",
-              Infinity,
-              false,
-              this.bike ? "bicycle" : "car",
-            ),
-          ),
-        );
-        if (legal.length) pool = legal;
-      }
+      for (const filter of TRAFFIC_SUCCESSOR_POOL) pool = filter(this, pool);
       // a snow plow keeps to the main streets it works where it can: 2.6 m wide, on a residential street's
       // 3.2 m lane it cannot pass the cars parked at the kerb (sim/snow-plow.js)
       if (this.classes) {
@@ -950,9 +894,7 @@ export class NpcFleet {
           e.id,
           tram
             ? Math.min(run.lane ?? 0, e.lanes - 1)
-            : this.world.busLanes
-              ? busTravelLane(map, e, this.world.clock)
-              : e.lanes - 1,
+            : (firstHookResult(BUS_SPAWN_LANE, this.world, e)?.index ?? e.lanes - 1),
         );
       if (!lane) continue;
       const s = Math.max(1, Math.min(lane.length - 1, (along * lane.length) / Math.max(1, e.length)));
@@ -979,7 +921,7 @@ export class NpcFleet {
         waiting: 0,
       });
       v.path = new NpcPath(map, random, { world: this.world });
-      if (this.world.busLanes && !tram) v.path.busLanePolicy = { clock: this.world.clock, bus: true };
+      if (!tram) applyTrafficPathPolicy(this.world, v.path, "bus");
       this.startRun(v, run.edges, k, lane.idx, s, tram);
       // the route's stops still ahead, as where its front stops along each street (see busStopFront)
       const firstAt =
@@ -1044,8 +986,7 @@ export class NpcFleet {
         l.edgeRef.bike &&
         l.idx === l.edgeRef.lanes - 1 &&
         !l.edgeRef.ring &&
-        (!this.world.busLanes ||
-          legalBusLane(this.map, l.edge, l.idx, this.world.clock, "straight", Infinity, false, "bicycle")),
+        !TRAFFIC_SPAWN_LANE_BLOCKED.some((blocked) => blocked(this.world, l, "bicycle")),
     );
     if (!lanes.length) return;
     const totalLen = lanes.reduce((a, l) => a + l.length, 0);
@@ -1070,7 +1011,7 @@ export class NpcFleet {
       v.kind = "bike";
       v.color = BIKE_COLORS[made % BIKE_COLORS.length];
       v.path = new NpcPath(this.map, this.random, { bike: true });
-      if (this.world.busLanes) v.path.busLanePolicy = { clock: this.world.clock };
+      applyTrafficPathPolicy(this.world, v.path);
       v.path.start(lane.edge, lane.idx, s);
       v.v0 = 4.2 + this.random() * 2.3;
       v.driver = driverProfile(this.drivers, true);
@@ -1083,7 +1024,7 @@ export class NpcFleet {
 
   spawn(count) {
     const lanes = this.map.laneList.filter(
-      (l) => l.length > 25 && (!this.world.busLanes || legalBusLane(this.map, l.edge, l.idx, this.world.clock)),
+      (l) => l.length > 25 && !TRAFFIC_SPAWN_LANE_BLOCKED.some((blocked) => blocked(this.world, l, "car")),
     );
     const totalLen = lanes.reduce((a, l) => a + l.length, 0);
     let attempts = 0;
@@ -1105,7 +1046,7 @@ export class NpcFleet {
       v.id = `car_${this.vehicles.length + 1}`;
       v.color = PALETTE[this.vehicles.length % PALETTE.length];
       v.path = new NpcPath(this.map, this.random, { world: this.world });
-      if (this.world.busLanes) v.path.busLanePolicy = { clock: this.world.clock };
+      applyTrafficPathPolicy(this.world, v.path);
       v.path.start(lane.edge, lane.idx, s);
       v.v0 = lane.edgeRef.limit * (0.85 + this.random() * 0.2);
       v.driver = driverProfile(this.drivers);
@@ -1216,8 +1157,7 @@ export class NpcFleet {
         continue;
       }
       const path = n.path;
-      if (this.world.busLanes && !n.transit?.tram && !n.school)
-        path.busLanePolicy = { clock: this.world.clock, ...(n.transit ? { bus: true } : {}) };
+      if (!n.transit?.tram && !n.school) applyTrafficPathPolicy(world, path, n.transit ? "bus" : null);
       if (n.lc && n.lc.t >= n.lc.T) {
         const lane = this.map.lane(n.lc.edge, n.lc.to);
         if (lane && path.currentEdge().id === n.lc.edge)
@@ -3433,12 +3373,7 @@ export class NpcFleet {
       // (a snow plow only on the left, and only with a clear view ahead: sim/snow-plow.js)
       if (n.lead.plow && (dir > 0 || this.world.visibility.range < PASS_SIGHT_M)) dir = 0;
     }
-    if (this.world.busLanes && !n.transit && !n.school) {
-      const allowed = (k) =>
-        legalBusLane(this.map, e.id, k, this.world.clock, turn, toEnd, !!n.pull || !!n.parking, n.kind || "car");
-      if (!allowed(edge.lane) && edge.lane > 0) dir = -1;
-      if (!allowed(edge.lane + dir)) dir = 0;
-    }
+    for (const choose of TRAFFIC_LANE_DIRECTION) dir = choose(this.world, n, edge, e, turn, toEnd, dir);
     if (!dir) return;
     const to = edge.lane + dir;
     if (to < 0 || to >= e.lanes) return;

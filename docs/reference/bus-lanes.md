@@ -8,7 +8,8 @@ retained and conservatively active. The day comes from the world clock's `weekda
 (Monday = 0, the default; `?weekday=` in free drives, and the app clock moves it on at
 midnight), as for turn restrictions. No clock means inactive.
 
-`World.busLanes` enables `sim/bus-lanes.js`, sensing `bus_lane`, route lane choice,
+The [feature registry](../feature-interface.md) record in `sim/features/bus-lanes.js` enables
+`sim/bus-lanes.js` through `World.busLanes`. The policy covers sensing `bus_lane`, route lane choice,
 NPC lane choice and gap-checked lane changes, candidate filtering and both local
 agents. Cars may enter a reserved lane in the final **50 m** before a right turn,
 or during the actual curb parking/pull-out manoeuvre. Buses retain access;

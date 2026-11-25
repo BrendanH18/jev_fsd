@@ -114,7 +114,7 @@ export class DriveMetrics {
       ...(world.closuresSeen ? { merge_cut_ins: v.merge_cut_ins || 0 } : {}),
       // (only for a drive in which traffic passes cyclists: sim/cyclist-pass.js)
       ...(world.passCyclists ? { close_passes: v.close_passes || 0 } : {}),
-      ...(world.busLanesSeen ? { bus_lane_driving: v.bus_lane_driving || 0 } : {}),
+      ...featureMetrics(world, v, "afterPassing"),
       ...featureMetrics(world, v, "headlights"),
       ...featureMetrics(world, v, "afterHeadlights"),
       ...featureMetrics(world, v, "pxo"),
@@ -180,7 +180,7 @@ export function failures(m) {
   if (m.plow_right_passes) f.push("passed plow on the right");
   if (m.merge_cut_ins) f.push("merged out of turn");
   if (m.close_passes) f.push("passed a cyclist too close");
-  if (m.bus_lane_driving > 1) f.push("drove in a reserved bus lane");
+  f.push(...featureFailures(m, "afterPassing"));
   f.push(...featureFailures(m, "headlights"));
   f.push(...featureFailures(m, "afterHeadlights"));
   f.push(...featureFailures(m, "turns"));

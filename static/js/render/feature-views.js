@@ -1,4 +1,5 @@
 // Rendering adapters live here so the simulation registry can also load in Node without Three.js.
+import { buildBusLanes } from "./bus-lanes.js";
 import { BallView } from "./ball-chase.js";
 import { IceView } from "./black-ice.js";
 import { buildContraflow } from "./contraflow.js";
@@ -18,6 +19,7 @@ import { egoGlare } from "../sim/sun-glare.js";
 export function mountFeatureViews(view, world) {
   const { scene } = view;
   const { map } = world;
+  if (world.busLanes) scene.add(buildBusLanes(map));
   if (world.restrictions || world.redTurnSigns) {
     scene.add(
       buildRestrictions(map, [

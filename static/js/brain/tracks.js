@@ -45,7 +45,6 @@ export const unflagged = (eligible) => eligible.filter((c) => !c.flagged);
 // What each road-rule check means, for a driver reading a flagged manoeuvre: what the prediction found,
 // in the words the situation clauses use. A check without an entry reads by its id.
 export const FLAG_TEXT = {
-  bus_lane_driving: "it drives in a reserved bus lane while the lane is in effect",
   lane_change_gap: "the gap in the next lane is too small for this lane change",
   lane_change_too_late: "it changes lanes too late, too close to the turn or junction",
   must_return_to_route_lane: "it leaves no room to get back to the route's lane before that lane ends",

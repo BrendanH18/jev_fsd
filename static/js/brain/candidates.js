@@ -63,6 +63,7 @@ const PULL_OVER_DETOUR = hooks("pullOverDetour");
 const ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
   ADJUST_LAST = hooks("adjust"),
   ADJUST_FINISH = hooks("adjust", "finish");
+const CANDIDATE_LANE_REJECT = hooks("candidateLaneReject");
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
   afterCollision: hooks("sim", "afterCollision"),
@@ -1131,16 +1132,7 @@ export function simulateAll(candidates, snap, world) {
     if (reject);
     else if (collision) reject = "collision";
     else if ((reject = rejectBy(sims.afterCollision, c)));
-    else if (
-      snap.bus_lane?.in_effect &&
-      !snap.bus_lane.entering_allowed &&
-      snap.bus_lane.lanes.includes(c.law.laneIdx) &&
-      !c.change &&
-      c.law.vTarget > 0.1 &&
-      !obliged &&
-      c.law.kind !== "hard_brake"
-    )
-      reject = "bus_lane_driving";
+    else if ((reject = firstHookResult(CANDIDATE_LANE_REJECT, snap, c, obliged)));
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
     else if (c.change && (c.change.too_late || lateLeaving)) reject = "lane_change_too_late";
     else if (laneEnds) reject = "must_return_to_route_lane";

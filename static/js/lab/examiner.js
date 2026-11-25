@@ -349,7 +349,6 @@ const CORE_FAIL_CATEGORY = {
   "passed plow on the right": "space",
   "merged out of turn": "right_of_way",
   "passed a cyclist too close": "space",
-  "drove in a reserved bus lane": "steering",
   "not parked": "parking",
 };
 const FAIL_CATEGORY = new Map([

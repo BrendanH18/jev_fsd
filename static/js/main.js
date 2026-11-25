@@ -39,7 +39,6 @@ import { trafficNotice } from "./sim/hidden-traffic.js";
 import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
-import { buildBusLanes } from "./render/bus-lanes.js";
 import { syncReverseLamps } from "./render/driveway-reversers.js";
 import { potholeJolt } from "./render/potholes.js";
 import { tailgaterFlash } from "./sim/tailgaters.js";
@@ -251,7 +250,6 @@ export async function boot() {
     fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, ...free.fleet });
     autopilot = new Autopilot(world, callbacks);
   }
-  if (world.busLanes) view.scene.add(buildBusLanes(map));
   const featureViews = mountFeatureViews(view, world);
   // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));

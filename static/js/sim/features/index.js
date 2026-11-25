@@ -195,6 +195,7 @@ import outages from "./outages.js";
 import nightFlash from "./night-flash.js";
 import leftOnRed from "./left-on-red.js";
 import amber from "./amber.js";
+import busLanes from "./bus-lanes.js";
 import scrambles from "./scrambles.js";
 import runners from "./red-light-runner.js";
 
@@ -229,6 +230,7 @@ export const FEATURES = [
   nightFlash,
   leftOnRed,
   amber,
+  busLanes,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -241,8 +243,8 @@ export const SLOTS = {
   notice: ["beforeMerge", "beforePlow", "beforeLeftOnRed", "afterTurnNotice", "end", "beforeZone"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
-  rulesCost: ["beforeSignalStop", "beforeStops", "stops", "beforePassing", "end"],
-  cautious: ["beforeBusLanes", "afterBusLanes", "afterPassing", "end", "beforeAmber", "signalStop", "afterAmber"],
+  rulesCost: ["beforeSpeedCost", "beforeSignalStop", "beforeStops", "stops", "beforePassing", "end"],
+  cautious: ["beforeBusLanes", "reservedLane", "afterBusLanes", "afterPassing", "end", "beforeAmber", "signalStop", "afterAmber"],
   cautiousStop: ["end"],
   cautiousDrive: ["end"],
   legitimateStop: ["end"],
@@ -250,6 +252,7 @@ export const SLOTS = {
   stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
   audit: [
+    "afterPassing",
     "beforeCollisions",
     "beforeMerge",
     "afterFlagger",
@@ -261,6 +264,7 @@ export const SLOTS = {
     "late",
   ],
   sense: [
+    "beforeLaneState",
     "afterPedestrians",
     "beforeWorkZone",
     "afterCalming",
@@ -275,6 +279,16 @@ export const SLOTS = {
     "end",
   ],
   finishLanes: ["end"],
+  laneOfferBlocked: ["end"],
+  candidateLaneReject: ["end"],
+  routeLaneIndex: ["end"],
+  routeLaneMerges: ["end"],
+  trafficLaneInto: ["end"],
+  trafficSuccessorPool: ["end"],
+  trafficSpawnLaneBlocked: ["end"],
+  busSpawnLane: ["end"],
+  trafficPathPolicy: ["end"],
+  trafficLaneDirection: ["end"],
   limit: ["beforeWorkZone", "beforeRunner", "passing", "driveways", "streetHazards", "parking"],
   target: [
     "beforeMerge",
@@ -347,6 +361,7 @@ export const SLOTS = {
     "end",
   ],
   state: [
+    "beforeRoadConstraints",
     "beforeMerge",
     "signal",
     "afterFollowing",
@@ -365,6 +380,7 @@ export const SLOTS = {
   outcome: ["ids", "laneChange"],
   slowOutcome: ["lane", "end"],
   clause: [
+    "beforeCalming",
     "stopStart",
     "signal",
     "afterJunctionBox",
@@ -390,6 +406,7 @@ export const SLOTS = {
     "afterPlow",
     "afterAllWay",
     "beforeBusLanes",
+    "reservedLane",
     "afterBusLanes",
     "beforeRightOnRed",
     "amberDecision",
@@ -406,6 +423,7 @@ export const SLOTS = {
   ],
   metric: [
     "afterRedLights",
+    "afterPassing",
     "headlights",
     "afterHeadlights",
     "pxo",
@@ -536,6 +554,10 @@ const EXTRA_RED_TURNS = hooks("extraRedTurn");
 export const extraRedTurn = (intersection) => firstHookResult(EXTRA_RED_TURNS, intersection);
 export const redTurnAllowed = (intersection) => intersection?.right_on_red?.go || extraRedTurn(intersection)?.move.go;
 
+const TRAFFIC_PATH_POLICY = hooks("trafficPathPolicy");
+export function applyTrafficPathPolicy(world, path, transit = null) {
+  for (const apply of TRAFFIC_PATH_POLICY) apply(world, path, transit);
+}
 const PRIMARY_DETOURS = hooks("detour", "beforeMerge");
 export const primaryDetour = (snap) => firstHookResult(PRIMARY_DETOURS, snap);
 
