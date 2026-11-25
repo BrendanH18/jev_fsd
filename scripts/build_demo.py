@@ -176,6 +176,9 @@ def verify(output: Path) -> None:
 
 
 def build(output: Path) -> None:
+    # A rebuild clears the output, so a link would let it delete files in the link's target.
+    if Path(output).is_symlink():
+        raise ValueError("The output directory must not be a symbolic link.")
     output = output.resolve()
     protected = [ROOT / name for name in ("static", "data", "docs", "jev", "scripts", "tests", ".git", ".github")]
     if ROOT.is_relative_to(output) or any(output.is_relative_to(path) for path in protected):

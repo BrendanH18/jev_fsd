@@ -476,7 +476,7 @@ async function runBenchmark({
     try {
       saved = await api("/api/bench/save", {
         suite_version: state.suite_version,
-        config: { ...config, completed: state.results.length },
+        config: { ...config, completed: state.results.length, ...(stopRequested ? { stopped: true } : {}) },
         summary: state.summary,
         results: state.results,
       });

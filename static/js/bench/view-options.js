@@ -30,12 +30,11 @@ function routeComparisonIssue(current, baseline) {
   return null;
 }
 
-// A run stopped part way (the page's Stop, or the CLI's budget stop) holds only a prefix of its suite.
-// Browser saves record how many routes completed; held-out plans set their own route count.
+// A run stopped part way holds only a prefix of its suite: the page's Stop (state.stopped, and
+// config.stopped once saved) or the CLI's budget stop (a top-level reason). A suite can be shorter
+// than the requested count without having stopped, so the counts alone prove nothing.
 function stoppedEarly(run) {
-  if (run.stopped) return true;
-  const { completed, count, heldout } = run.config || {};
-  return !heldout && Number.isInteger(completed) && Number.isInteger(count) && completed < count;
+  return Boolean(run.stopped || run.config?.stopped);
 }
 
 // Compare the conditions that determine a drive, while allowing different drivers.

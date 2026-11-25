@@ -109,6 +109,12 @@ class DemoArtifactTests(unittest.TestCase):
                 build_demo.build(site)
             self.assertFalse((site / "replays" / "old.json").exists())
             build_demo.verify(site)
+            (site / "notes.txt").write_text("mine", encoding="utf-8")
+            link = Path(temp) / "link"
+            link.symlink_to(site, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "must not be a symbolic link"):
+                build_demo.build(link)
+            self.assertTrue((site / "notes.txt").is_file())
 
     def test_rejects_project_data_as_a_build_destination(self):
         with self.assertRaisesRegex(ValueError, "separate generated output"):
