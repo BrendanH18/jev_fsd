@@ -1,4 +1,3 @@
-import { nightFlashNotice } from "./sim/night-flash.js";
 // Bootstrap: load the map, build the scene, wire the UI, run the loop.
 
 import { api, $, h } from "./common.js";
@@ -8,8 +7,14 @@ import { World } from "./sim/world.js";
 import { actorTime } from "./render/actor-motion.js";
 import { SceneView } from "./render/scene.js";
 import { mountActorViews, mountFeatureViews, mountTransitScenery, replayActorPose } from "./render/feature-views.js";
-import { announceFeatureNotices, featureEventBadge, featureRouteOptions } from "./sim/features/index.js";
-import { buildRoads, buildScrambleMarkings } from "./render/roads.js";
+import {
+  announceFeatureNotices,
+  featureEventBadge,
+  featureNeedsDay,
+  featureNeedsWeekday,
+  featureRouteOptions,
+} from "./sim/features/index.js";
+import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
 import { busYield, isBus } from "./sim/bus.js";
@@ -239,8 +244,6 @@ export async function boot() {
     autopilot = new Autopilot(world, callbacks);
   }
   const featureViews = mountFeatureViews(view, world);
-  // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
-  if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
   const actors = mountActorViews(view, world, fleet);
   const previousEgo = {};
   loadingText.textContent = "Preparing the drive…";
@@ -259,7 +262,7 @@ export async function boot() {
     // (a sun glare challenge's clock has its date and time zone, and the sky draws that day's sun:
     // sim/sun-glare.js)
     const sunDay =
-      world.sunGlare.enabled && world.clock?.day !== undefined
+      featureNeedsDay(world) && world.clock?.day !== undefined
         ? { day: world.clock.day, utcOffset: world.clock.utc_offset ?? pack.origin.lon / 15 }
         : {};
     const a = atmosphereFor(skyHour, skyWeather, {
@@ -279,7 +282,7 @@ export async function boot() {
   // (and, with sun glare on, so does the sun: a challenge's date and time zone stay; a free drive has the
   // sky's sun, at the city's offset: sim/sun-glare.js)
   const sunClock = () =>
-    !world.sunGlare.enabled
+    !featureNeedsDay(world)
       ? {}
       : world.clock?.day !== undefined
         ? {
@@ -293,7 +296,7 @@ export async function boot() {
     if (!replay)
       world.setClock({
         ...mapClock(hour, map),
-        ...(world.restrictions || world.busLanes || world.redTurnSigns ? { weekday: clock.weekday } : {}),
+        ...(featureNeedsWeekday(world) ? { weekday: clock.weekday } : {}),
         ...sunClock(),
       });
   }
@@ -1310,11 +1313,9 @@ export async function boot() {
     announcedCrossing = null,
     announcedBox = null,
     announcedAdvance = null,
-    announcedNightFlash = null,
     announcedPark = null,
     announcedHazard = null,
-    announcedTraffic = null,
-    announcedLeftRed = null;
+    announcedTraffic = null;
   let lastWeather, lastClockLabel, lastSight;
   let skyAt = world.t;
   function frame(now) {
@@ -1590,13 +1591,6 @@ export async function boot() {
     }
     if (!advance) announcedAdvance = null;
     announceFeatureNotices("beforeMerge", world, autopilot, featureViews, announcedFeatures, hud);
-    // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
-    const nightNotice = nightFlashNotice(world);
-    if (nightNotice && nightNotice.key !== announcedNightFlash) {
-      announcedNightFlash = nightNotice.key;
-      hud.badge(nightNotice.text, "stop", 2500);
-    }
-    if (!nightNotice) announcedNightFlash = null;
     announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
     // parking at the destination: the space, checking behind, reversing in, parked
     const parkLine = parkNotice(world);
@@ -1622,20 +1616,7 @@ export async function boot() {
     announceFeatureNotices("afterTraffic", world, autopilot, featureViews, announcedFeatures, hud);
     // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
     announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud);
-    // a scramble crossing ahead: every light red while people cross every way; no right turn on red
-    const leftRed = autopilot.snap?.intersection?.left_on_red;
-    const leftRedKey = leftRed ? `${autopilot.snap.intersection.id}:${leftRed.stop_completed}:${leftRed.clear}` : null;
-    if (leftRedKey && leftRedKey !== announcedLeftRed)
-      hud.badge(
-        leftRed.go
-          ? "LEFT ON RED · CLEAR TO TURN"
-          : !leftRed.stop_completed
-            ? "LEFT ON RED · FULL STOP FIRST"
-            : "LEFT ON RED · YIELD TO PEDESTRIANS AND TRAFFIC",
-        "safety",
-        2500,
-      );
-    announcedLeftRed = leftRedKey;
+    announceFeatureNotices("afterTurnNotice", world, autopilot, featureViews, announcedFeatures, hud);
     announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
     if (audio.enabled) {
       let ringing = Infinity;

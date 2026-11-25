@@ -62,19 +62,30 @@ export function featureCoachMessage(at, score, context) {
   return message;
 }
 
+function coachCounter(score, name, delta = false) {
+  const value = delta ? score.counterDelta(name) : score[name];
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 export function featureCoachDeduct(at, score, start) {
   let result = start;
-  for (const { counter, weight } of DEDUCTIONS[at]) result -= score[counter] * weight;
+  for (const { counter, weight, delta } of DEDUCTIONS[at]) result -= coachCounter(score, counter, delta) * weight;
   return result;
 }
 
 export function finishFeatureCoachCategories(score, categories) {
-  for (const { category, counter, weight } of DEDUCTIONS.post)
-    if (score[counter]) categories[category] = Math.max(0, categories[category] - score[counter] * weight);
+  for (const { category, counter, weight, delta } of DEDUCTIONS.post) {
+    const value = coachCounter(score, counter, delta);
+    if (value) categories[category] = Math.max(0, categories[category] - value * weight);
+  }
 }
 
 export function featureCoachCap(score) {
-  return COACH.some(({ coach }) => coach.cap && score[coach.cap]);
+  return COACH.some(
+    ({ coach }) =>
+      (coach.cap && (score[coach.cap] === true || coachCounter(score, coach.cap))) ||
+      (coach.capDelta && coachCounter(score, coach.capDelta, true)),
+  );
 }
 
 export function featureCoachTips(at, score, tips) {

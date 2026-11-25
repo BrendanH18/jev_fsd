@@ -6,13 +6,13 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Thirty features have moved to the registry. They include driveway reversers, ball chase, spring
+Thirty-four of 41 features have moved to the registry. They include driveway reversers, ball chase, spring
 potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddles, traffic parking,
 road closures, double-parked vans, contraflow cyclists, low sun glare, garbage trucks, traffic calming,
 red-light runners, crossing guards, Ontario pedestrian crossovers, roadside stops, following distance,
 turn restrictions, high beams, no-turn-on-red signs, scramble crossings, work zones with flaggers and
-power cuts, snow plows, lane closures and passing cyclists. Each record holds its core pipeline hooks
-and model wording.
+power cuts, overnight flashing signals, left turns on red, amber-light decisions, bus-only lanes,
+snow plows, lane closures and passing cyclists. Each record holds its core pipeline hooks and model wording.
 
 ## A record
 
@@ -115,16 +115,44 @@ has room to change lanes and which constraints apply to the candidate lane.
 
 An `examinerFail` hook returns a failure item or null without modifying the report.
 
+### Signal and lane policies
+
+- `specialSignalPhase` supplies a physical phase before advance greens or scramble timing.
+  `visibleSignalPolicy` supplies the signal, replacement stop and optional speed and yield policy
+  the driver can see. Replacement controls such as a power cut still take precedence.
+- `priorityLevel` changes an approach's priority for gap checks. `priorityJunction` lets a replacement
+  stop or a traffic junction check use the grouped signal's reference point, and
+  `priorityTrafficOutside` excludes traffic still waiting outside that junction.
+- `senseRedTurn` calls the existing gap calculation when an additional red turn is permitted.
+  `extraRedTurn` supplies its required lane and observed turn. The independent crossing audit takes
+  entry data through `redTurnMemory` and confirms the actual exit through `redTurnExit`. Traffic can
+  nominate its entry lane through `trafficRedTurnLane`.
+- `signalDecision` exposes the latched stopping profile to the planner and local drivers.
+  `observeSignal` observes the physical lamp before the crossing audit and can return an action for
+  entry. If that action returns fields for an arrow crossing, `arrowExitAudit` checks them on the
+  actual left-turn exit. `trafficSignalDecision` supplies the profile to traffic using the same policy.
+- `routeLaneIndex` selects a lane after ordinary route lane preparation. `routeLaneMerges` supplies
+  frame transitions where the lane selection changes at a street join. `laneOfferBlocked` filters
+  lane-change offers, and `candidateLaneReject` applies the restriction after collision checks and
+  before ordinary lane-change checks. The traffic hooks supply independent spawn, path, and live
+  lane-change decisions while leaving the normal gap check in the fleet.
+
 ### Registry validation
 
 Loading the registry validates the declarations before filling the hook lists. A hook can be a
 function at `end` or an object with a supported `at` and a callable `run`. Data records for metrics,
 notices and prompts have their own required fields. A notice's order is unique within its slot.
 World properties, seen flags and audit maps share one namespace. Snapshot fields, display text IDs,
-replay marker IDs and prioritized candidate IDs each have one owner. Coach reports, guidance,
-deductions and tips use the dispatcher's slot lists, with an explicit order unique within each
-kind and slot. Nested declarations reject unrecognized keys. Keep label accessors lazy when a vehicle module can
-import the registry before its constants have initialized.
+priority candidate IDs, audit failure reasons, and trace markers each have one owner. Snapshot
+defaults are scalar values copied into every snapshot. Declarations use enumerable data properties
+except that an obstacle label can use a getter for constants in modules that are still loading.
+Coach reports, guidance, deductions and tips follow the coaching dispatcher’s slot lists. Each order
+is unique within its kind and slot.
+
+Set `metric.trace` to false for an aggregate metric that should appear in the report and verdict
+without emitting trace events. A `traceType` needs a threshold, while `eventType` identifies the
+World event used for replay markers. Score deductions can read a World counter's change since coaching
+began with `delta: true`. `capDelta` applies the same baseline when a violation caps the score.
 
 ## Slots: why results stay exactly the same
 
@@ -295,6 +323,31 @@ passed all 62 authored drives on every revision. Their complete arena captures a
 matched the base, including the full traces and coaching reports. Both LLM system prompts matched
 byte for byte. The comparison omitted timings and run provenance. The recorded stub drive replayed
 and the Jev fixtures stayed current.
+**Overnight flashing, left turns on red, steady amber, and bus lanes** each had a
+separate comparison against their preceding tree in Boat with Node 22.23.5. The city
+route and the named arena drives matched for each move. Each arena comparison ran Rules
+and the cautious agent.
+
+| Move | Rules city comparison at seed 1 | Arena comparison |
+|---|---|---|
+| Overnight flashing | Halifax, dry at 23:30, `s1-1` | After midnight |
+| Left turns on red | Calgary, dry, `s1-1` | Left on red |
+| Steady amber | Kitsilano, rain `s1-4` and snow `s1-6` | Room to stop and Keep going safely |
+| Bus lanes | Mount Pleasant, dry at 08:00, `s1-3`, on a route using an active reserved edge | Buses only |
+
+The whole batch matched an archive of `0583591` with separate loopback servers and
+`PYTHONHASHSEED=0`. The comparison covered 47 Rules routes at seed 1, including all
+12 routes each on Kitsilano dry bare, dry city and dry city at 23:30. It also covered
+two rainy and one snowy Kitsilano city routes, two Halifax city routes at 23:30, two
+dry city routes each in Calgary and Toronto, and two dry Mount Pleasant city routes
+at 08:00. Both trees passed 45 routes. Mount Pleasant `s1-3` logged 4.51 m of
+reserved-lane driving, and `s1-4` got stuck and failed to yield on both trees.
+
+Rules and the cautious agent each passed all 62 authored drives, including both road
+tests. The full arena results, coaching reports, decision traces and events matched.
+The comparisons excluded timing and run provenance fields. The guarded and open LLM
+prompts matched byte for byte, the committed stub recording replayed exactly and all
+39 offline Jev requests validated.
 
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison

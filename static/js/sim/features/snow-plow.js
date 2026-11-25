@@ -306,6 +306,8 @@ export default {
     name: "plow_right_passes",
     initial: 0,
     failure: "passed plow on the right",
+    examinerRemark: "Passed an operating snow plow on the side that throws snow and debris",
+    examinerIncident: "plow_right_pass",
     label: "Passed a snow plow on the right",
     category: "space",
   },

@@ -77,6 +77,10 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "plows",
       "closures",
       "passCyclists",
+      "nightFlash",
+      "leftOnRed",
+      "amberLights",
+      "busLanes",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -106,8 +110,17 @@ test("the core runs every slot, and names no registered feature", () => {
     perceptionFocus: source("render/perception.js"),
     controlDirection: source("sim/features/index.js"),
     junctionPlan: source("sim/features/index.js"),
+    specialSignalPhase: source("sim/features/index.js"),
+    priorityLevel: source("sim/priority.js"),
     controlReplace: source("sim/features/index.js"),
     alternateSignal: source("sim/features/index.js"),
+    signalDecision: source("sim/features/index.js"),
+    clearingLimit: source("sim/features/index.js"),
+    stopAtLineDrive: source("sim/features/index.js"),
+    routeLaneIndex: source("map/route.js"),
+    routeLaneMerges: source("map/route.js"),
+    trafficPathPolicy: source("sim/features/index.js"),
+    extraRedTurn: source("sim/features/index.js"),
     phaseBansRedTurns: source("sim/features/index.js"),
     detour: [core, source("sim/features/index.js")].join("\n"),
     coachCorridor: source("sim/feature-coach.js"),
@@ -176,6 +189,10 @@ test("the core runs every slot, and names no registered feature", () => {
       'turn-restrictions.js"',
       'high-beams.js"',
       'red-turn-signs.js"',
+      'night-flash.js"',
+      'left-on-red.js"',
+      'amber.js"',
+      'bus-lanes.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -183,6 +200,18 @@ test("the core runs every slot, and names no registered feature", () => {
       assert.equal(imports.length, 0, `${path} imports ${name}`);
     }
     for (const field of [
+      "world.nightFlash",
+      "this.nightFlash",
+      "world.leftOnRed",
+      "this.leftOnRed",
+      "world.amberLights",
+      "this.amberLights",
+      "world.busLanes",
+      "this.busLanes",
+      "snap.bus_lane",
+      "snap.amber_clear",
+      "amber_lights_run",
+      "bus_lane_driving",
       "snap.contraflow_cyclist",
       "snap.sun_glare",
       "snap.traffic_calming",
@@ -397,6 +426,10 @@ test("the World builds each feature from its option, with its seen flag and its 
     closures: 1,
     passCyclists: true,
     outages: 1,
+    nightFlash: true,
+    leftOnRed: true,
+    amberLights: true,
+    busLanes: true,
   });
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;

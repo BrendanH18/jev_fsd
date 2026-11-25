@@ -182,6 +182,7 @@
 // reaches sim/npc.js, which loads this registry while that record is still loading
 // (scripts/test_feature_registry.mjs checks each record loads after it).
 import { featureRecordProblem, featureRegistryProblem, slotOf } from "../feature-schema.js";
+import { setSignalPhaseResolver } from "../signals.js";
 import balls from "./balls.js";
 import contraflow from "./contraflow.js";
 import collection from "./collection-truck.js";
@@ -207,7 +208,10 @@ import highBeams from "./high-beams.js";
 import redTurnSigns from "./red-turn-signs.js";
 import workZones from "./work-zones.js";
 import outages from "./outages.js";
-import { flashControl } from "../night-flash.js";
+import nightFlash from "./night-flash.js";
+import leftOnRed from "./left-on-red.js";
+import amber from "./amber.js";
+import busLanes from "./bus-lanes.js";
 import scrambles from "./scrambles.js";
 import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
@@ -245,6 +249,10 @@ export const FEATURES = [
   plows,
   closures,
   cyclistPassing,
+  nightFlash,
+  leftOnRed,
+  amber,
+  busLanes,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -254,11 +262,20 @@ export const SLOTS = {
   requestReroute: ["beforeOffRoute", "afterOffRoute"],
   checkpointShare: ["end"],
   rulesStop: ["beforeSignal", "end"],
-  notice: ["beforeMerge", "beforePlow", "afterTraffic", "beforeLeftOnRed", "end", "beforeZone"],
+  notice: ["beforeMerge", "beforePlow", "afterTraffic", "beforeLeftOnRed", "afterTurnNotice", "end", "beforeZone"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
-  rulesCost: ["beforeStops", "stops", "afterSpecial", "beforePassing", "end"],
-  cautious: ["beforeBusLanes", "afterBusLanes", "afterPassing", "end", "beforeAmber", "afterAmber"],
+  rulesCost: ["beforeSpeedCost", "beforeSignalStop", "beforeStops", "stops", "afterSpecial", "beforePassing", "end"],
+  cautious: [
+    "beforeBusLanes",
+    "reservedLane",
+    "afterBusLanes",
+    "afterPassing",
+    "end",
+    "beforeAmber",
+    "signalStop",
+    "afterAmber",
+  ],
   cautiousStop: ["end"],
   cautiousDrive: ["end"],
   legitimateStop: ["end"],
@@ -266,6 +283,7 @@ export const SLOTS = {
   stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
   audit: [
+    "afterPassing",
     "beforeCollisions",
     "beforeMerge",
     "afterFlagger",
@@ -279,6 +297,7 @@ export const SLOTS = {
     "late",
   ],
   sense: [
+    "beforeLaneState",
     "afterPedestrians",
     "beforeWorkZone",
     "afterCalming",
@@ -295,6 +314,16 @@ export const SLOTS = {
     "end",
   ],
   finishLanes: ["end"],
+  laneOfferBlocked: ["end"],
+  candidateLaneReject: ["end"],
+  routeLaneIndex: ["end"],
+  routeLaneMerges: ["end"],
+  trafficLaneInto: ["end"],
+  trafficSuccessorPool: ["end"],
+  trafficSpawnLaneBlocked: ["end"],
+  busSpawnLane: ["end"],
+  trafficPathPolicy: ["end"],
+  trafficLaneDirection: ["end"],
   limit: [
     "beforeWorkZone",
     "beforeRunner",
@@ -335,12 +364,28 @@ export const SLOTS = {
   laneOffer: ["afterPassing", "end"],
   laneChangeCandidate: ["end"],
   laneChangeStyle: ["end"],
-  lineStop: ["end"],
+  lineStop: ["beforeFollower", "end"],
   predictionIgnore: ["end"],
   candidateSettle: ["end"],
   controlDirection: ["end"],
   controlAudit: ["end"],
   auditSignal: ["end"],
+  observeControl: ["end"],
+  observeSignal: ["end"],
+  arrowExitAudit: ["end"],
+  routeControlSense: ["end"],
+  signalDecision: ["end"],
+  clearingLimit: ["end"],
+  yellowSignalClause: ["end"],
+  stopAtLineDrive: ["end"],
+  trafficSignalDecision: ["end"],
+  specialSignalPhase: ["end"],
+  priorityLevel: ["end"],
+  priorityJunction: ["end"],
+  priorityTrafficOutside: ["end"],
+  trafficSignalPolicy: ["end"],
+  visibleSignalPolicy: ["end"],
+  signalClause: ["end"],
   resetContact: ["end"],
   controlSense: ["end"],
   junctionPlan: ["end"],
@@ -361,7 +406,7 @@ export const SLOTS = {
     "afterParking",
     "parking",
   ],
-  adjust: ["streetHazards", "end"],
+  adjust: ["streetHazards", "end", "finish"],
   brakeDetour: ["end"],
   sim: [
     "beforeRunner",
@@ -378,6 +423,7 @@ export const SLOTS = {
     "end",
   ],
   state: [
+    "beforeRoadConstraints",
     "beforeMerge",
     "signal",
     "afterFollowing",
@@ -399,6 +445,7 @@ export const SLOTS = {
   outcome: ["ids", "laneChange"],
   slowOutcome: ["lane", "end"],
   clause: [
+    "beforeCalming",
     "stopStart",
     "signal",
     "afterJunctionBox",
@@ -418,6 +465,7 @@ export const SLOTS = {
   ],
   holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "beforeParking", "parking"],
   prompt: [
+    "introduction",
     "headlights",
     "pedestrian",
     "beforeSchoolBus",
@@ -426,7 +474,10 @@ export const SLOTS = {
     "afterPlow",
     "afterAllWay",
     "beforeBusLanes",
+    "reservedLane",
     "afterBusLanes",
+    "beforeRightOnRed",
+    "amberDecision",
     "afterGlare",
     "beforeRunner",
     "restrictions",
@@ -441,7 +492,9 @@ export const SLOTS = {
     "afterParking",
   ],
   metric: [
+    "afterRedLights",
     "vehiclePassing",
+    "afterPassing",
     "headlights",
     "afterHeadlights",
     "pxo",
@@ -476,12 +529,17 @@ export const SLOTS = {
   trafficActors: ["end"],
   trafficLane: ["beforeLaneMoves", "laneMoves", "late"],
   trafficYield: ["end"],
-  trafficSpeed: ["beforeControl", "limit", "following", "ordinary", "end"],
+  trafficSpeed: ["beforeControl", "clearing", "limit", "following", "ordinary", "end"],
   trafficParkingReach: ["end"],
   trafficTurnBlocked: ["end"],
   visionRange: ["end"],
   redEntryBans: ["end"],
   turnOnRedBlocked: ["end"],
+  extraRedTurn: ["end"],
+  senseRedTurn: ["end"],
+  redTurnMemory: ["end"],
+  redTurnExit: ["end"],
+  trafficRedTurnLane: ["end"],
   routeTurnOnRedBlocked: ["end"],
   phaseBansRedTurns: ["end"],
   controlReplace: ["end"],
@@ -490,9 +548,10 @@ export const SLOTS = {
   senseSignalControl: ["end"],
   controlEvent: ["end"],
   trafficReleaseControl: ["end"],
-  intersectionModelFields: ["beforeCrossTraffic"],
+  intersectionModelFields: ["beforeCrossTraffic", "afterCrossTraffic"],
   redLightEvent: ["end"],
-  intersectionFields: ["afterRightTurn"],
+  intersectionFields: ["beforeLine", "afterRightTurn"],
+  signalEntryFields: ["end"],
   followingPolicy: ["end"],
   handlesPedestrian: ["end"],
   returnClause: ["end"],
@@ -528,29 +587,43 @@ export const recordProblem = (record) => featureRecordProblem(record, SLOTS);
 export const registryProblem = (records) => featureRegistryProblem(records, SLOTS);
 const problem = registryProblem(FEATURES);
 if (problem) throw new Error(`Feature registry: ${problem}.`);
+freezeDeclarations(FEATURES);
+freezeDeclarations(SLOTS);
 
-// The functions of hook `name` at `slot`, in registration order (bound to their record as `this`).
-// A core module asks for its hooks when it loads, and that may be while the records are still loading,
-// through an import cycle (the snowbanks record's simulation reaches sim/npc.js, say): the list it is
-// handed is then filled once they have all loaded, before any of it can run.
+function freezeDeclarations(object) {
+  if (!object || typeof object !== "object" || Object.isFrozen(object)) return;
+  Object.freeze(object);
+  for (const { value } of Object.values(Object.getOwnPropertyDescriptors(object))) freezeDeclarations(value);
+}
+
+// A core module can ask before the registry finishes loading through an import cycle.
+// Keep its list identity and fill the list in registration order once all records are ready.
+function hookLists() {
+  return (hookLists.state ??= { byName: new Map(), pending: [], ready: false });
+}
+
 export function hooks(name, slot = "end") {
-  // This module may be re-entered before its own top-level constants have initialized.
-  if (name === "metric" || name === "notice" || name === "prompt")
-    throw new Error(`Feature registry: use recordsAt for ${name} declarations.`);
+  const state = hookLists();
+  if (!state.byName.has(name)) state.byName.set(name, new Map());
+  const slots = state.byName.get(name);
+  if (slots.has(slot)) return slots.get(slot);
   const out = [];
-  if (hooks.ready) fillHooks(out, name, slot);
-  else (hooks.pending ||= []).push([out, name, slot]);
+  if (state.ready) fillHooks(out, name, slot);
+  else state.pending.push([out, name, slot]);
+  slots.set(slot, out);
   return out;
 }
+
 function fillHooks(out, name, slot) {
+  if (name === "metric" || name === "prompt" || name === "notice")
+    throw new Error(`Feature registry: ${name} is data. use recordsAt().`);
   if (!Object.hasOwn(SLOTS, name) || !SLOTS[name].includes(slot))
-    throw new Error(`Feature registry: no slot "${String(slot)}" for ${String(name)}.`);
-  for (const f of FEATURES) {
-    const h = f[name];
-    if (!h) continue;
-    const at = slotOf(h);
-    if (at === slot) out.push((typeof h === "function" ? h : h.run).bind(f));
+    throw new Error(`Feature registry: no slot "${slot}" for ${name}.`);
+  for (const record of FEATURES) {
+    const hook = record[name];
+    if (hook && slotOf(hook) === slot) out.push((typeof hook === "function" ? hook : hook.run).bind(record));
   }
+  Object.freeze(out);
 }
 
 // Return the first result when a feature takes over a core decision.
@@ -562,8 +635,11 @@ export function firstHookResult(list, ...args) {
   return null;
 }
 
+const ROUTE_OPTIONS = hooks("routeOptions");
 export function featureRouteOptions(world, rerouting = false) {
-  return Object.assign({}, ...hooks("routeOptions").map((options) => options(world, rerouting)));
+  const result = {};
+  for (const options of ROUTE_OPTIONS) Object.assign(result, options(world, rerouting));
+  return result;
 }
 
 const CONTROL_DIRECTION = hooks("controlDirection");
@@ -571,9 +647,25 @@ const JUNCTION_PLAN = hooks("junctionPlan");
 export const controlDirection = (world, vehicle, edgeId) => firstHookResult(CONTROL_DIRECTION, world, vehicle, edgeId);
 export const junctionPlan = (intersection) => firstHookResult(JUNCTION_PLAN, intersection);
 
+const SIGNAL_DECISIONS = hooks("signalDecision");
+export const signalDecision = (intersection) => firstHookResult(SIGNAL_DECISIONS, intersection);
+const STOP_AT_LINE_DRIVE = hooks("stopAtLineDrive");
+const CLEARING_LIMITS = hooks("clearingLimit");
+export const clearingLimits = (snap) => CLEARING_LIMITS.map((limit) => limit(snap)).filter(Boolean);
+export const stopAtLineDrive = (snap, candidate) =>
+  STOP_AT_LINE_DRIVE.some((keepDriving) => keepDriving(snap, candidate));
+
 const PHASE_BANS_RED_TURNS = hooks("phaseBansRedTurns");
 export const phaseBansRedTurns = (inter) => PHASE_BANS_RED_TURNS.some((blocked) => blocked(inter));
 
+const EXTRA_RED_TURNS = hooks("extraRedTurn");
+export const extraRedTurn = (intersection) => firstHookResult(EXTRA_RED_TURNS, intersection);
+export const redTurnAllowed = (intersection) => intersection?.right_on_red?.go || extraRedTurn(intersection)?.move.go;
+
+const TRAFFIC_PATH_POLICY = hooks("trafficPathPolicy");
+export function applyTrafficPathPolicy(world, path, transit = null) {
+  for (const apply of TRAFFIC_PATH_POLICY) apply(world, path, transit);
+}
 const PRIMARY_DETOURS = hooks("detour", "beforeMerge");
 export const primaryDetour = (snap) => firstHookResult(PRIMARY_DETOURS, snap);
 
@@ -585,8 +677,10 @@ export const featureOptionalDetour = (snap) => firstHookResult(OPTIONAL_DETOURS,
 
 const CONTROL_REPLACEMENTS = hooks("controlReplace");
 const SIGNAL_OVERRIDES = hooks("alternateSignal");
+const SPECIAL_SIGNAL_PHASE = hooks("specialSignalPhase");
+export const specialSignalPhase = (inter, world) => firstHookResult(SPECIAL_SIGNAL_PHASE, inter, world);
 export const controlAt = (world, control, edge) =>
-  firstHookResult(CONTROL_REPLACEMENTS, world, control, edge) ?? flashControl(world, control, edge);
+  firstHookResult(CONTROL_REPLACEMENTS, world, control, edge) ?? control;
 export const alternateSignal = (world, id) => firstHookResult(SIGNAL_OVERRIDES, world, id);
 
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
@@ -603,26 +697,33 @@ const EVENT_BADGES = Object.assign(Object.create(null), ...FEATURES.map((f) => f
 const PERCEPTION_REJECTIONS = Object.assign(Object.create(null), ...FEATURES.map((f) => f.perceptionRejections));
 
 export function announceFeatureNotices(slot, world, autopilot, views, announced, hud) {
+  if (!Object.hasOwn(NOTICES, slot)) throw new Error(`Feature registry: no notice slot "${slot}".`);
   for (const { key, notice } of NOTICES[slot]) {
     const previous = announced.get(key);
     const line = notice.read(world, autopilot, views, previous);
     if (line && line.key !== previous) {
-      announced.set(key, line.key);
+      if (line.key == null || typeof line.text !== "string" || !line.text.trim())
+        throw new Error(`Feature registry: ${key} returned a notice without a key or text.`);
       const style = typeof notice.style === "function" ? notice.style(line) : notice.style;
-      hud.badge(line.text, style, notice.duration);
+      hud.badge(line.text, style ?? "", notice.duration);
+      announced.set(key, line.key);
     } else if (!line && !notice.hold) announced.delete(key);
   }
 }
 
 export function featureEventBadge(event) {
-  const badge = EVENT_BADGES[event.type];
+  const badge = EVENT_BADGES[event?.type];
   return typeof badge === "function" ? badge(event) : badge;
 }
 
 export const featurePerceptionRejection = (id) => PERCEPTION_REJECTIONS[id];
 
 // Metrics in slot order, with registration order within each slot.
-export const FEATURE_METRICS = SLOTS.metric.flatMap((slot) => recordsAt("metric", slot).map((f) => f.metric));
+const METRIC_RECORDS = new Map(SLOTS.metric.map((slot) => [slot, recordsAt("metric", slot)]));
+export const FEATURE_METRICS = Object.freeze(
+  [...METRIC_RECORDS.values()].flatMap((records) => records.map((f) => f.metric)),
+);
+
 export const FEATURE_INITIAL_COUNTERS = Object.freeze(
   Object.fromEntries(
     FEATURE_METRICS.filter(({ initial }) => initial !== undefined).map(({ name, initial }) => [name, initial]),
@@ -661,20 +762,28 @@ export function featureMetricEnabled(world, { key, property, seen, metric }) {
 
 export function featureMetrics(world, violations, slot) {
   const out = {};
-  for (const feature of recordsAt("metric", slot)) {
+  for (const feature of METRIC_RECORDS.get(slot) || []) {
     if (!featureMetricEnabled(world, feature)) continue;
     const { name, decimals } = feature.metric;
-    const value = violations[name] || 0;
-    const scale = 10 ** decimals;
-    out[name] = decimals === undefined ? value : Number.isFinite(value) ? Math.round(value * scale) / scale : null;
+    const value = Object.hasOwn(violations, name) ? (violations[name] ?? 0) : 0;
+    if (!Number.isFinite(value) || value < 0) out[name] = null;
+    else if (decimals === undefined) out[name] = value;
+    else {
+      const scale = 10 ** decimals;
+      const scaled = value * scale;
+      out[name] = Number.isFinite(scaled) ? Math.round(scaled) / scale : value;
+    }
   }
   return out;
 }
 
 // The failure texts of the features at `slot`, for a drive's metrics `m`.
 export const featureFailures = (m, slot) =>
-  recordsAt("metric", slot)
-    .filter(({ metric: { name, threshold } }) => (threshold === undefined ? m[name] : m[name] > threshold))
+  (METRIC_RECORDS.get(slot) || [])
+    .filter(
+      ({ metric: { name, threshold = 0 } }) =>
+        Object.hasOwn(m, name) && Number.isFinite(m[name]) && m[name] > threshold,
+    )
     .map((f) => f.metric.failure);
 
 // The LLM system prompt's lines at `slot`, each with its newline.
@@ -686,7 +795,12 @@ export const promptLines = (slot) =>
 // Whether a registered feature that is on reads the day of the year from the World's clock.
 const DAY = FEATURES.filter((f) => f.day);
 const UTC_OFFSET = FEATURES.filter((f) => f.utcOffset);
-const enabled = (world, f) => world[f.property ?? f.key]?.enabled;
+const WEEKDAY = FEATURES.filter((f) => f.weekday);
+function enabled(world, f) {
+  const state = world[f.property ?? f.key];
+  return state === true || (state?.enabled ?? state?.count > 0);
+}
+export const featureNeedsWeekday = (world) => WEEKDAY.some((f) => enabled(world, f));
 export const featureNeedsDay = (world) => DAY.some((f) => enabled(world, f));
 export const featureNeedsUtcOffset = (world) => UTC_OFFSET.some((f) => enabled(world, f));
 
@@ -699,13 +813,18 @@ export function featureDecisionFields(snap) {
 }
 
 // Every World option a registered feature takes.
-export const FEATURE_OPTIONS = FEATURES.filter((f) => !f.buildFleet).map((f) => f.key);
-export const FLEET_FEATURES = FEATURES.filter((f) => f.buildFleet);
+export const FEATURE_OPTIONS = Object.freeze(FEATURES.filter((f) => !f.buildFleet).map((f) => f.key));
+export const FLEET_FEATURES = Object.freeze(FEATURES.filter((f) => f.buildFleet));
+const FEATURES_BY_POSITION = new Map(
+  [undefined, "early", "afterSpawn"].map((position) => [position, FEATURES.filter((f) => f.buildAt === position)]),
+);
 
 export function buildFeatures(world, options, seed, map, position) {
-  for (const f of FEATURES) {
-    if (f.buildAt !== position) continue;
-    const enabled = options[f.key] ?? (f.defaultCount === undefined ? false : 0);
+  const records = FEATURES_BY_POSITION.get(position);
+  if (!records) throw new Error(`Feature registry: unknown build position "${position}".`);
+  for (const f of records) {
+    const value = Object.hasOwn(options, f.key) ? options[f.key] : undefined;
+    const enabled = value ?? (f.defaultCount === undefined ? false : 0);
     world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
     if (f.seen) world[f.seen] = false;
     if (f.calls) world[f.calls] = new Map();
@@ -713,9 +832,11 @@ export function buildFeatures(world, options, seed, map, position) {
 }
 
 // Default snapshot fields that older readers expect even when the feature is inactive.
-export const FEATURE_SNAPSHOT_FIELDS = Object.assign({}, ...FEATURES.map((f) => f.snapshot));
+export const FEATURE_SNAPSHOT_FIELDS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.snapshot)));
 
 // (the records have loaded: fill the lists handed out before)
-hooks.ready = true;
-for (const [out, name, slot] of hooks.pending || []) fillHooks(out, name, slot);
-hooks.pending = null;
+const hookState = hookLists();
+for (const [out, name, slot] of hookState.pending) fillHooks(out, name, slot);
+hookState.pending.length = 0;
+hookState.ready = true;
+setSignalPhaseResolver(specialSignalPhase);

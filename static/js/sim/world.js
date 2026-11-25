@@ -1,9 +1,5 @@
-import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
-import { setNightFlash, flashState } from "./night-flash.js";
-import { leftOnRedAllowed } from "./left-on-red.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
-import { auditBusLanes } from "./bus-lanes.js";
 import { Vehicle, CAR, comfort } from "./vehicle.js";
 import { headingAt, pointAt } from "../map/mapdata.js";
 import { surfaceDistance } from "../map/junctions.js";
@@ -59,6 +55,7 @@ import {
   controlDirection,
   controlAt,
   alternateSignal,
+  specialSignalPhase,
   featureNeedsDay,
   featureNeedsUtcOffset,
   featureObstacle,
@@ -85,6 +82,7 @@ const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_PASSING = hooks("audit", "beforeReservedLane");
 const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
+const AUDIT_AFTER_PASSING = hooks("audit", "afterPassing");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
 const VISION_RANGE = hooks("visionRange");
 const SIGNED_EXITS = hooks("redEntryBans");
@@ -92,6 +90,11 @@ const CONTROL_AUDIT = hooks("controlAudit");
 const CONTROL_EVENT = hooks("controlEvent");
 const RED_LIGHT_EVENT = hooks("redLightEvent");
 const AUDIT_SIGNAL = hooks("auditSignal");
+const OBSERVE_CONTROL = hooks("observeControl");
+const OBSERVE_SIGNAL = hooks("observeSignal");
+const ARROW_EXIT_AUDIT = hooks("arrowExitAudit");
+const RED_TURN_MEMORY = hooks("redTurnMemory");
+const RED_TURN_EXIT = hooks("redTurnExit");
 const RESET_CONTACT = hooks("resetContact");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -228,25 +231,16 @@ export class World {
       park = false,
       hazards = false,
       stepOuts = 0,
-      busLanes = false,
-      nightFlash = false,
-      leftOnRed = false,
-      amberLights = false,
       ...features
     } = {},
   ) {
     this.map = map;
-    this.amberLights = !!amberLights;
-    this.amberLightsSeen = false;
     buildFeatures(this, features, seed, map, "early");
     this.seed = seed;
     this.visibility = new Visibility(map);
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
-    this.nightFlash = !!nightFlash;
-    this.nightFlashSeen = false;
-    setNightFlash(this);
     this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
     this.t = 0;
     this.tick = 0;
@@ -286,10 +280,6 @@ export class World {
     this.parkedIn = null;
     this.kerbContact = false;
     this.hazards = !!hazards;
-    this.busLanes = !!busLanes;
-    this.busLanesSeen = false;
-    this.leftOnRed = !!leftOnRed;
-    this.leftOnRedSeen = false;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -419,8 +409,8 @@ export class World {
     const override = alternateSignal(this, intersectionId);
     if (override) return override;
     const inter = this.map.intersections.get(intersectionId);
-    const flash = flashState(inter, this.map.edges.get(edgeId)?.control?.group, this);
-    if (flash) return flash;
+    const special = specialSignalPhase(inter, this)?.[this.map.edges.get(edgeId)?.control?.group];
+    if (special) return special;
     if (!inter?.plan?.advance) return this.phase(intersectionId)[this.map.edges.get(edgeId)?.control?.group];
     return movementSignal(approachPhase(inter, edgeId, this.t), turn);
   }
@@ -675,56 +665,22 @@ export class World {
       // sensors measure it (a lane polyline's length differs from the centerline's on a bend), else
       // along the lane
       const past = rc ? frontS - rc.sRoute : road.s + FRONT - control.s_line;
-      if (
-        this.nightFlash &&
-        Math.abs(past) < 60 &&
-        (control.night_flash ||
-          (control.type === "signal" && flashState(this.map.intersections.get(control.id), control.group, this)))
-      )
-        this.nightFlashSeen = true;
+      for (const observe of OBSERVE_CONTROL) observe(this, control, past);
       const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
       const entered = this.lastRoad?.edgeId === key && !this.lastRoad.crossed && crossed;
       const handled =
         control.type === "signal" && firstHookResult(CONTROL_AUDIT, this, control, edge, rc, past, entered);
-      // Observe independently of the selected manoeuvre, before auditing the real line crossing.
-      const amberInter =
-        this.amberLights && control.type === "signal" && !handled ? this.map.intersections.get(control.id) : null;
-      const amberShows = amberInter ? approachPhase(amberInter, edge.id, this.t) : null;
-      // A manual takeover can keep navigation for a different turn. Observe the
-      // physical arrow independently; auditArrow judges the actual exit.
-      const amberArrow = amberShows === "arrow_yellow";
-      const amberSignal = amberInter ? movementSignal(amberShows, amberArrow ? "left" : rc?.turn || "straight") : null;
-      const amber =
-        amberInter && this.visibility.canSee(this.ego, amberInter.x, amberInter.y)
-          ? observeAmber(
-              this.ego,
-              `${edge.id}:${control.id}${amberArrow ? ":arrow" : ""}`,
-              amberSignal,
-              -past,
-              amberInter,
-              amberShows,
-              this.t,
-            )
+      const signalAudit =
+        control.type === "signal" && !handled
+          ? firstHookResult(OBSERVE_SIGNAL, this, control, edge, rc, past, crossed)
           : null;
-      if (amber && !crossed) this.amberLightsSeen = true;
       if (control.type === "signal" && !handled)
         for (const audit of AUDIT_SIGNAL) audit(this, control, edge, rc, past, entered);
       if (entered && handled) this.giveWay = null;
       if (entered && !handled) {
         if (control.type === "signal") {
-          const amberViolation =
-            amberSignal === "yellow" &&
-            amber &&
-            (amber.stop
-              ? "safe_stop"
-              : amber.max_speed_mps > amber.speed_mps + AMBER_SPEED_SLACK_MPS
-                ? "sped_up"
-                : null);
-          if (amberViolation && amberShows !== "arrow_yellow") {
-            this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
-            this.events.push({ type: "amber_light", reason: amberViolation });
-          }
+          const arrowAudit = signalAudit?.();
           const inter = this.map.intersections.get(control.id);
           const shows = inter?.plan?.advance
             ? approachPhase(inter, rc ? rc.edge : edge.id, this.t)
@@ -735,23 +691,16 @@ export class World {
           const state = arrow ? "green" : movementSignal(shows, "straight");
           // after a full stop, where turning right on red is allowed, which way it turns decides
 
-          // The legacy rightOnRed record below also validates enabled one-way left turns.
-          // (and only from the leftmost lane, lane 0, as for traffic: sim/npc.js `rightOnRed`)
-          const egoLane = this.leftOnRed ? this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 8)?.lane : null;
-          const leftPending =
-            this.leftOnRed &&
-            egoLane?.edge === edge.id &&
-            egoLane.idx === 0 &&
-            (this.map.out.get(edge.to) || []).some((id) => leftOnRedAllowed(this, edge.id, id));
+          // Preserve the signs in effect at entry if their schedule changes mid-turn.
+          const bannedExits = firstHookResult(SIGNED_EXITS, this, edge.id);
+          const extraTurn = firstHookResult(RED_TURN_MEMORY, this, edge, bannedExits);
           const pending =
             state === "red" &&
-            (this.map.rightOnRed || leftPending) &&
+            (this.map.rightOnRed || extraTurn) &&
             !phaseBansRedTurns(inter) &&
             inter &&
             this.egoStop.controlId === control.id &&
             this.egoStop.completed;
-          // Preserve the signs in effect at entry: a schedule changing mid-turn cannot pardon it.
-          const bannedExits = firstHookResult(SIGNED_EXITS, this, edge.id);
           const signed = bannedExits ? { bannedExits } : {};
           if (state === "red" && !pending) {
             this.violations.red_lights_run++;
@@ -765,7 +714,7 @@ export class World {
                   id: control.id,
                   centre: [inter.x, inter.y],
                   approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
-                  ...(amberShows === "arrow_yellow" && amberViolation ? { amberViolation } : {}),
+                  ...arrowAudit,
                   ...signed,
                   stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed,
                 }
@@ -787,18 +736,7 @@ export class World {
                 ? {
                     rightOnRed: {
                       ...signed,
-                      ...(leftPending
-                        ? {
-                            leftAllowed: true,
-                            ...(bannedExits
-                              ? {
-                                  leftExits: (this.map.out.get(edge.to) || []).filter((id) =>
-                                    leftOnRedAllowed(this, edge.id, id),
-                                  ),
-                                }
-                              : {}),
-                          }
-                        : {}),
+                      ...extraTurn,
                       edge: edge.id,
                       approach,
                       exit: exit ?? approach - Math.PI / 2,
@@ -919,7 +857,7 @@ export class World {
     for (const audit of AUDIT_AFTER_FLAGGER) audit(this);
     for (const audit of AUDIT_AFTER_ROADSIDE_VEHICLES) audit(this);
     for (const audit of AUDIT_PASSING) audit(this, road);
-    if (this.busLanes) auditBusLanes(this, dt);
+    for (const audit of AUDIT_AFTER_PASSING) audit(this, dt);
     for (const audit of AUDIT_AFTER_CALMING) audit(this);
     for (const audit of AUDIT_BEFORE_DRIVEWAYS) audit(this);
     for (const audit of AUDIT_AFTER_DRIVEWAYS) audit(this, frontOnPath);
@@ -958,10 +896,7 @@ export class World {
     const turned = wrap(ego.psi - a.approach);
     const exit = a.bannedExits?.length ? this.map.nearestLane(ego.x, ego.y, ego.psi, 8)?.lane.edge : null;
     if (turned > Math.PI / 4) {
-      if (a.amberViolation) {
-        this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
-        this.events.push({ type: "amber_light", reason: a.amberViolation });
-      }
+      for (const audit of ARROW_EXIT_AUDIT) audit(this, a);
       return;
     }
     if (a.stopped && turned < -Math.PI / 4 && !a.bannedExits?.includes(exit)) return;
@@ -1619,19 +1554,14 @@ export class World {
         on.id !== rtor.via?.id &&
         Math.abs(wrap(at.heading - this.ego.psi)) <= Math.PI / 3
       ) {
-        const legalLeft =
-          rtor.leftAllowed &&
-          (rtor.leftExits ? rtor.leftExits.includes(on.id) : leftOnRedAllowed(this, rtor.edge, on.id));
+        const extraTurn = firstHookResult(RED_TURN_EXIT, this, rtor, on);
         const legalRight =
           this.map.rightOnRed &&
           !rtor.bannedExits?.includes(on.id) &&
           this.map.classifyTurn(this.map.turnAngle(rtor.edge, on.id)) === "right";
-        if ((legalRight || legalLeft) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) {
+        if ((legalRight || extraTurn) && (j.nodes.has(on.from) || on.from === this.map.edges.get(rtor.edge)?.to)) {
           rtor.via = on;
-          if (legalLeft) {
-            rtor.exit = this.map.headingOut(on.id);
-            this.leftOnRedSeen = true;
-          }
+          if (extraTurn) extraTurn();
         } else rtor.via = rtor.via && on.from === rtor.via.to ? on : null;
       }
       if ((out > AUDIT_RTOR_OUT_M && past > 0) || out > AUDIT_JUNCTION_M) {

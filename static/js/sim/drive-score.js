@@ -37,7 +37,6 @@ export class DriveScore {
     this.route = route;
     this.baseline = { ...world.violations };
     this.lastCounters = { ...world.violations };
-    this.amberLightsSeen = false;
     this.elapsed = 0;
     this.distance = 0;
     this.moving = 0;
@@ -64,7 +63,6 @@ export class DriveScore {
     // (and with hidden traffic, sim/hidden-traffic.js: failures to yield to a vehicle the car could
     // not see as it pulled out, hidden behind another)
     this.hiddenCutoffs = 0;
-    this.busLanesSeen = false;
     this.closeFollowing = 0;
     this.danger = 0;
     this.offRoad = 0;
@@ -187,16 +185,9 @@ export class DriveScore {
       }
     }
     const followingGuidance = featureCoachMessage("afterBlindSpeed", this, coachContext);
-    if (world.amberLightsSeen) this.amberLightsSeen = true;
-    if (world.busLanesSeen) this.busLanesSeen = true;
     observeFeatureCoach(this, world);
     for (const ev of world.events || []) {
       featureCoachEvent(this, ev);
-      if (ev.type === "amber_light")
-        this.incident(
-          "amber_light",
-          ev.reason === "sped_up" ? "Sped up to beat an amber light" : "Passed amber when a safe stop was possible",
-        );
       if (ev.type === "failed_to_yield" && ev.unseen) {
         this.hiddenCutoffs++;
         this.incident("hidden_cutoff", "Pulled out in front of a vehicle hidden behind another", { with: ev.with });
@@ -353,8 +344,15 @@ export class DriveScore {
     }
   }
 
+  counterDelta(name) {
+    const current = this.lastCounters[name];
+    const original = this.baseline[name];
+    if (!Number.isFinite(current)) return 0;
+    return Math.max(0, current - (Number.isFinite(original) ? original : 0));
+  }
+
   snapshot() {
-    const delta = (k) => Math.max(0, (this.lastCounters[k] || 0) - (this.baseline[k] || 0));
+    const delta = (k) => this.counterDelta(k);
     const collisions = delta("collisions"),
       atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"),
@@ -365,11 +363,13 @@ export class DriveScore {
       this,
       100 - collisions * 35 - atFault * 15 - this.danger * 3 - this.closeFollowing * 0.6 - this.blindSpeeding * 1.2,
     );
-    const afterAmber = featureCoachDeduct("beforeLegality", this, 100 - delta("amber_lights_run") * 25);
+    const initialLegality = featureCoachDeduct("firstLegality", this, 100);
+    const beforeLegality = featureCoachDeduct("beforeLegality", this, initialLegality);
+    const beforeTraffic = featureCoachDeduct("beforeTrafficLegality", this, beforeLegality);
     const afterSpeed = featureCoachDeduct(
       "afterSpeed",
       this,
-      afterAmber - delta("bus_lane_driving") * 0.5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2,
+      beforeTraffic - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2,
     );
     const legality = featureCoachDeduct("legality", this, featureCoachDeduct("followingRules", this, afterSpeed));
     const comfort = featureCoachDeduct("comfort", this, 100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8);
@@ -385,7 +385,7 @@ export class DriveScore {
     );
     // A collision or a red-light violation cannot be averaged into an excellent drive.
     if (collisions) score = Math.min(score, 59);
-    if (reds || yields || delta("amber_lights_run") || featureCoachCap(this)) score = Math.min(score, 69);
+    if (reds || yields || featureCoachCap(this)) score = Math.min(score, 69);
     const qualified = this.distance >= 100 && this.elapsed >= 10;
     const grade = !qualified
       ? "—"
@@ -401,10 +401,7 @@ export class DriveScore {
     const tips = [];
     if (collisions)
       tips.push("Leave more stopping room and anticipate crossing traffic. Collision fault is reported separately.");
-    if (delta("amber_lights_run"))
-      tips.push(
-        "When the light turns amber, stop if you can do so safely. If you are too close to stop safely, continue carefully without speeding up; keep yielding to people and traffic, and never enter on red.",
-      );
+    featureCoachTips("beforeGeneralJunction", this, tips);
     if (reds || stops || yields) tips.push("Slow early for junctions. Stop fully and check crossings before entering.");
     if (this.zoneSpeeding > 1)
       tips.push(
@@ -453,10 +450,6 @@ export class DriveScore {
           : "Aim for at least a two-second following gap when conditions allow.",
       );
     featureCoachTips("afterFollowing", this, tips);
-    if (delta("bus_lane_driving") > 1)
-      tips.push(
-        "Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.",
-      );
     featureCoachTips("afterBusLanes", this, tips);
     if (this.harsh + this.jerk + this.cornering > 2)
       tips.push("Lift off earlier, brake progressively and reduce speed before turning.");
@@ -502,8 +495,7 @@ export class DriveScore {
       resets: this.resets,
       ...featureCoachReport("beforeMerge", this, round),
       ...featureCoachReport("passingCyclists", this, round),
-      ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
-      ...(this.amberLightsSeen ? { amber_lights_run: delta("amber_lights_run") } : {}),
+      ...featureCoachReport("beforeFeatureSummary", this, round),
       ...featureCoachReport("end", this, round),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes

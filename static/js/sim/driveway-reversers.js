@@ -1,3 +1,4 @@
+import { applyTrafficPathPolicy } from "./features/index.js";
 import { reserveSlot } from "./parking.js";
 // Cars backing out of driveways (World option `driveways`). Now and then, from its own random stream, a
 // car parked nose-in in a driveway (jev/osm/driveways.py) near the driven car's way backs out: reverse
@@ -582,7 +583,7 @@ export class DrivewayReversers {
       waiting: 0,
     });
     car.path = new NpcPath(map, rng(Math.floor(this.random() * 2 ** 31) + 1), { world: this.world });
-    if (this.world.busLanes) car.path.busLanePolicy = { clock: this.world.clock };
+    applyTrafficPathPolicy(this.world, car.path);
     car.path.start(g.e.id, g.laneIdx, s);
     fleet.vehicles.push(car);
     r.phase = "gone";

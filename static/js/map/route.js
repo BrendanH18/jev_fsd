@@ -4,7 +4,7 @@
 
 import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js";
 import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
-import { legalBusLane, routeBusLane } from "../sim/bus-lanes.js";
+import { firstHookResult, hooks } from "../sim/features/index.js";
 import { CAR } from "../sim/vehicle.js";
 import { PEEK_SHORT_M } from "../sim/priority.js";
 
@@ -13,7 +13,8 @@ import { PEEK_SHORT_M } from "../sim/priority.js";
 // lane, so the car changes into it as a lane change instead of sliding across with the polyline.
 export const PREPARE_LANE_M = 150;
 const RAMP_M = 40; // the polyline's own move between lanes is measured up to this far either side of the join
-const MERGE_ALIGN_M = 1.0; // a lane ending within this of the next street's lane carries on into it
+const ROUTE_LANE_INDEX = hooks("routeLaneIndex");
+const ROUTE_LANE_MERGES = hooks("routeLaneMerges");
 const NO_MERGES = Object.freeze([]);
 
 function routeGeometry(data, map) {
@@ -367,7 +368,8 @@ export class Route {
   // where the polyline moves to another one.
   frameShift(s) {
     const sum = shiftSum(this.laneShifts(), s);
-    return this.busLanePolicy ? sum + shiftSum(this.busMerges(), s) : sum;
+    const moves = this.busMerges();
+    return moves.length ? sum + shiftSum(moves, s) : sum;
   }
   frameMove(s0, s) {
     return Number.isFinite(s0) && (this.laneShifts().length || this.busMerges().length)
@@ -403,87 +405,12 @@ export class Route {
       if (sh.at - s > PREPARE_LANE_M) break;
       idx = sh.to;
     }
-    if (this.busLanePolicy) {
-      const b = routeBusLane(this, s, this.busLanePolicy.clock, this.busLanePolicy.curb);
-      if (
-        b &&
-        !legalBusLane(this.map, b.edge, idx, this.busLanePolicy.clock, b.turn, b.remaining, this.busLanePolicy.curb)
-      ) {
-        const legal = info.offsets
-          .map((_, k) => k)
-          .filter((k) =>
-            legalBusLane(this.map, b.edge, k, this.busLanePolicy.clock, b.turn, b.remaining, this.busLanePolicy.curb),
-          );
-        if (legal.length) idx = legal.reduce((a, k) => (Math.abs(k - idx) < Math.abs(a - idx) ? k : a));
-      }
-      // Prepare in the general lane before a straight continuation becomes reserved.
-      const starts = this.laneEdgeStarts();
-      for (let j = i + 1; j < this.edges.length && starts[j] - s < PREPARE_LANE_M && this.sameLanes(j - 1); j++) {
-        if (!legalBusLane(this.map, this.edges[j], idx, this.busLanePolicy.clock)) {
-          for (let k = idx - 1; k >= 0; k--)
-            if (legalBusLane(this.map, this.edges[j], k, this.busLanePolicy.clock)) {
-              idx = k;
-              break;
-            }
-        }
-      }
-    }
+    for (const select of ROUTE_LANE_INDEX) idx = select(this, s, i, info, idx, PREPARE_LANE_M);
     return { i, info, chain, idx };
   }
-  // Where a reserved bus lane keeps the car out of the route's own lane (laneIndexAt) up to the end of
-  // a street whose lanes do not carry on as they are (fewer lanes, say), and the lane the car keeps to
-  // runs straight on into the route's lane beyond: the router follows the curb lane (jev/routing.py),
-  // so the polyline moves across to the car's lane there, and lane laws move with it instead of
-  // holding their offset off the road. The same shape as laneShifts; only with a bus-lane policy.
+  // Kept for callers inspecting reserved-lane transitions.
   busMerges() {
-    const policy = this.busLanePolicy,
-      clock = policy?.clock;
-    if (!policy) return NO_MERGES;
-    const minute = Number.isFinite(clock?.hour) ? Math.floor(clock.hour * 60) : null,
-      day = clock?.weekday ?? 0,
-      curb = !!policy.curb;
-    const memo = this._merges;
-    if (memo && memo.minute === minute && memo.day === day && memo.curb === curb) return memo.list;
-    const list = [];
-    this._merges = { minute, day, curb, list };
-    const starts = this.laneEdgeStarts();
-    for (let i = 1; i < this.edges.length; i++) {
-      const at = starts[i];
-      if (
-        this.sameLanes(i - 1) ||
-        this.laneInfo(i - 1).ring ||
-        this.laneInfo(i).ring ||
-        this.map.classifyTurn(this.map.turnAngle(this.edges[i - 1], this.edges[i])) !== "straight"
-      )
-        continue;
-      const a = this.laneIndexAt(at - 0.5),
-        b = this.laneIndexAt(at + 0.5);
-      if (a.i !== i - 1 || b.i !== i || a.idx === a.info.idx) continue;
-      const laneA = this.map.lane(this.edges[i - 1], a.idx),
-        laneB = this.map.lane(this.edges[i], b.idx);
-      if (!laneA || !laneB || dist(laneA.pts[laneA.pts.length - 1], laneB.pts[0]) > MERGE_ALIGN_M) continue;
-      const before = a.info.offsets[a.idx] - a.info.offsets[a.info.idx],
-        after = b.info.offsets[b.idx] - b.info.offsets[b.info.idx];
-      const by = before - after;
-      if (Math.abs(by) < 0.5) continue;
-      // the fraction of the move the polyline has made d metres from the join, measured from the lane
-      // the car keeps to on either side of it
-      const made = (d) => {
-        const lane = d < 0 ? laneA : laneB;
-        const q = projectPoint(lane.pts, lane.cum, this.pointAt(Math.max(0, Math.min(this.length, at + d))));
-        return Math.max(0, Math.min(1, (before + q.lateral) / by));
-      };
-      const ramp = [made(0)];
-      let lo = 0;
-      for (let d = -1; d >= Math.max(-RAMP_M, starts[i - 1] - at) && ramp[0] > 0.001; d--, lo--)
-        ramp.unshift(Math.min(ramp[0], made(d)));
-      for (let d = 1; d <= Math.min(RAMP_M, starts[i + 1] - at) && ramp[ramp.length - 1] < 0.999; d++)
-        ramp.push(Math.max(ramp[ramp.length - 1], made(d)));
-      ramp[0] = 0;
-      ramp[ramp.length - 1] = 1;
-      list.push({ i, at, by, lo, ramp });
-    }
-    return list;
+    return firstHookResult(ROUTE_LANE_MERGES, this, RAMP_M) ?? NO_MERGES;
   }
   // Centre of lane k of the edge at s, in metres right of the polyline there.
   laneOffsetAt(s, k) {

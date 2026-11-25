@@ -37,6 +37,8 @@ import {
   featureOptionalDetour,
   laneControlDetour,
   primaryDetour,
+  redTurnAllowed,
+  signalDecision,
 } from "../sim/features/index.js";
 
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
@@ -47,6 +49,7 @@ const PASS_CLEARANCE = hooks("passClearance");
 const LANE_CHANGE = hooks("laneChangeCandidate");
 const LANE_CHANGE_STYLE = hooks("laneChangeStyle");
 const LINE_STOP = hooks("lineStop");
+const LINE_STOP_BEFORE_FOLLOWER = hooks("lineStop", "beforeFollower");
 const PREDICTION_IGNORE = hooks("predictionIgnore");
 const SETTLE = hooks("candidateSettle");
 const CANDIDATES = {
@@ -64,7 +67,9 @@ const CANDIDATES = {
 };
 const PULL_OVER_DETOUR = hooks("pullOverDetour");
 const ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
-  ADJUST_LAST = hooks("adjust");
+  ADJUST_LAST = hooks("adjust"),
+  ADJUST_FINISH = hooks("adjust", "finish");
+const CANDIDATE_LANE_REJECT = hooks("candidateLaneReject");
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
   beforeOffRoad: hooks("sim", "beforeOffRoad"),
@@ -351,13 +356,7 @@ export function sampleCandidates(snap, world) {
           kind: "lane",
           offset: nudge,
           vTarget: approach,
-          ...(snap.intersection.amber?.stop
-            ? {
-                stopDecel: snap.intersection.amber.stop_decel,
-                stopReaction: snap.intersection.amber.reaction_s,
-                ...(snap.intersection.amber.firm ? { stopFirm: true } : {}),
-              }
-            : {}),
+          ...firstHookResult(LINE_STOP_BEFORE_FOLLOWER, snap),
           ...firstHookResult(LINE_STOP, snap),
           stopAtRoute: stopAt(snap.intersection.s_line_route - FRONT - 0.5),
         }),
@@ -694,9 +693,7 @@ export function sampleCandidates(snap, world) {
     steer: "hold lane",
     speed: "brake hard",
   });
-  const amber = snap.amber_clear || snap.intersection?.amber;
-  for (const c of list)
-    if (amber && !amber.stop && c.law.vTarget != null) c.law.vTarget = Math.min(c.law.vTarget, amber.speed_mps);
+  for (const adjust of ADJUST_FINISH) adjust({ snap }, list);
   return list;
 }
 
@@ -752,6 +749,7 @@ export function simulateAll(candidates, snap, world) {
   const control = snap.intersection;
   // A car well past the line is clearing the junction: a light that changes now does not stop it.
   const directive = junctionPlan(control);
+  const decision = signalDecision(control);
   const mustStop =
     control &&
     !control.clear_entered &&
@@ -759,11 +757,11 @@ export function simulateAll(candidates, snap, world) {
     ((control.control === "signal" && directive?.direction === "stop") ||
       (control.control === "signal" &&
         !directive &&
-        ((control.signal === "red" && !(control.right_on_red?.go || control.left_on_red?.go)) ||
+        ((control.signal === "red" && !redTurnAllowed(control)) ||
           control.signal === "unknown" ||
           (control.signal === "yellow" &&
-            (control.amber
-              ? control.amber.stop
+            (decision
+              ? decision.stop
               : control.bumper_to_line_m > (snap.ego.v * snap.ego.v) / (2 * comfort().hardDecel) + 2)))) ||
       (control.control === "stop" && !control.stop_completed) ||
       waitsItsTurn(control) ||
@@ -1037,16 +1035,7 @@ export function simulateAll(candidates, snap, world) {
     if (reject);
     else if (collision) reject = "collision";
     else if ((reject = rejectBy(sims.afterCollision, c)));
-    else if (
-      snap.bus_lane?.in_effect &&
-      !snap.bus_lane.entering_allowed &&
-      snap.bus_lane.lanes.includes(c.law.laneIdx) &&
-      !c.change &&
-      c.law.vTarget > 0.1 &&
-      !obliged &&
-      c.law.kind !== "hard_brake"
-    )
-      reject = "bus_lane_driving";
+    else if ((reject = firstHookResult(CANDIDATE_LANE_REJECT, snap, c, obliged)));
     else if (c.change && !c.change.gap_ok) reject = "lane_change_gap";
     else if (c.change && (c.change.too_late || lateLeaving)) reject = "lane_change_too_late";
     else if (laneEnds) reject = "must_return_to_route_lane";

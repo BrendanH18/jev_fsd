@@ -404,6 +404,7 @@ export default {
     name: "close_passes",
     reportWhenEnabled: true,
     failure: "passed a cyclist too close",
+    examinerIncident: "close_pass",
     label: "Passed a cyclist closer than the minimum passing distance",
     category: "space",
     eventType: "close_pass",

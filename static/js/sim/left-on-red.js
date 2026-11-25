@@ -16,17 +16,19 @@ const REGIONS = [
   [-63.59, 44.64, -63.57, 44.652], // Nova Scotia: Halifax
 ];
 export function leftOnRedRegion(bbox) {
-  if (!Array.isArray(bbox) || bbox.length !== 4) return false;
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !Array.from(bbox).every(Number.isFinite)) return false;
+  if (bbox[0] > bbox[2] || bbox[1] > bbox[3]) return false;
   const x = (bbox[0] + bbox[2]) / 2,
     y = (bbox[1] + bbox[3]) / 2;
   return REGIONS.some(([w, south, east, north]) => x >= w && x <= east && y >= south && y <= north);
 }
 // Geometry and signs only; the shared turn-on-red machinery checks stops, pedestrians and gaps.
 export function leftOnRedAllowed(world, from, to) {
-  if (!world.leftOnRed || !leftOnRedRegion(world.map.routingBbox)) return false;
-  const map = world.map,
-    a = map.edges.get(from),
-    b = map.edges.get(to);
+  if (!world?.leftOnRed || from == null || to == null || from === to || !leftOnRedRegion(world.map?.routingBbox))
+    return false;
+  const map = world.map;
+  const a = map.edges?.get(from),
+    b = map.edges?.get(to);
   return !!(
     a?.oneway &&
     b?.oneway &&
@@ -38,7 +40,8 @@ export function leftOnRedAllowed(world, from, to) {
   );
 }
 export function leftOnRedExit(world, control) {
-  const edges = world.route?.edges || [],
+  if (!world?.leftOnRed || !control || !Array.isArray(world.route?.edges)) return false;
+  const edges = world.route.edges,
     i = edges.indexOf(control.edge);
   return i >= 0 && leftOnRedAllowed(world, control.edge, edges[i + 1]);
 }

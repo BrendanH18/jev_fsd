@@ -11,6 +11,7 @@ import { RoadClosureView } from "./road-closures.js";
 import { buildSnowbanks } from "./snowbanks.js";
 import { SunGlareView } from "./sun-glare.js";
 import { OfficerView } from "./traffic-officer.js";
+import { buildScrambleMarkings } from "./roads.js";
 import { buildRestrictions } from "./turn-restrictions.js";
 import { egoGlare } from "../sim/sun-glare.js";
 
@@ -75,6 +76,7 @@ export function mountFeatureViews(view, world) {
   if (world.snowbanks?.geo.runs.length) scene.add(buildSnowbanks(world));
   const crossing = world.pxo ? buildPxos(world) : null;
   if (crossing) scene.add(crossing.group);
+  if (world.scrambles && map.scrambles.size) scene.add(buildScrambleMarkings(map, world.crowd));
   return {
     balls,
     roadClosures,

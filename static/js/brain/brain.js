@@ -10,7 +10,7 @@
 import { applyLaw, lateralAt, lookahead, purePursuit } from "../sim/controller.js";
 import { endLeg, linedUp } from "../sim/turnaround.js";
 import { ParkPlanner, leftSpace, parkedPose } from "../sim/parallel-park.js";
-import { featureRouteOptions, hooks } from "../sim/features/index.js";
+import { clearingLimits, featureRouteOptions, hooks } from "../sim/features/index.js";
 import { buildSnapshot, hazardFlags } from "./sensors.js";
 import { sampleCandidates, simulateAll, pathHazard } from "./candidates.js";
 import { toJevState, buildQuestions, DEFAULT_STYLE } from "./state.js";
@@ -209,11 +209,10 @@ export class Autopilot {
         ? this.parker.update(world, world.route.project(world.ego.x, world.ego.y).s, dt)
         : null;
     const snap = (this.snap = buildSnapshot(world, this.executing));
-    // A model's pending response must not let the last green-light law accelerate through amber.
-    const amber = snap.amber_clear || snap.intersection?.amber;
-    if (amber && !amber.stop && this.executing?.law.vTarget != null) {
-      this.executing.law.vTarget = Math.min(this.executing.law.vTarget, amber.speed_mps);
-    }
+    // Apply clearing limits to the current law while a new decision is pending.
+    const currentLaw = this.executing?.law;
+    if (currentLaw?.vTarget != null)
+      for (const { speed } of clearingLimits(snap)) currentLaw.vTarget = Math.min(currentLaw.vTarget, speed);
     const nav = snap.nav;
     // (a U-turn signals left, the way it turns, and so does turning round)
     world.ego.signal = snap.turnaround

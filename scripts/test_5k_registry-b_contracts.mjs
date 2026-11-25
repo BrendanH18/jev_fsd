@@ -43,7 +43,7 @@ assert.equal(recordProblem({ ...record, obstacle: lazyLabel }), null);
 const writableLabel = { test: noop, set label(_value) {} };
 assert.match(recordProblem({ ...record, obstacle: writableLabel }), /label must be read-only/);
 assert.match(recordProblem({ ...record, priority: Array(1) }), /priority must contain/);
-assert.match(registryProblem([{ ...record, priority: ["stop", "stop"] }]), /priority candidate "stop"/);
+assert.match(registryProblem([{ ...record, priority: ["stop", "stop"] }]), /priority repeats a candidate name/);
 assert.match(registryProblem([record, null]), /record must be an object/);
 assert.match(registryProblem(new Set([record])), /records must be an array/);
 assert.match(recordProblem({ ...record, sense: { at: Symbol("parking"), run: noop } }), /Symbol\(parking\)/);
@@ -71,7 +71,7 @@ assert.match(
       ...auditRecord,
       key: "another",
       seen: "anotherSeen",
-      metric: { ...metric, name: "anotherMetric", eventType: "sameMarker" },
+      metric: { ...metric, name: "anotherMetric", failure: "another failure", eventType: "sameMarker" },
     },
   ]),
   /replay marker "sameMarker"/,
@@ -122,10 +122,10 @@ for (const [key, group, flag] of [
   );
 }
 const hidden = (value, key, entry) => Object.defineProperty(value, key, { value: entry });
-assert.match(recordProblem({ ...record, [Symbol("candidate")]: noop }), /invalid symbol field/);
-assert.match(recordProblem(hidden({ ...record }, "sense", noop)), /hidden declaration "sense"/);
-assert.match(recordProblem({ ...record, flagText: { [Symbol("stop")]: "Stop." } }), /invalid key "Symbol\(stop\)"/);
-assert.match(recordProblem({ ...record, snapshot: hidden({}, "entry", null) }), /hidden entry "entry"/);
+assert.match(recordProblem({ ...record, [Symbol("candidate")]: noop }), /record has a symbol field/);
+assert.match(recordProblem(hidden({ ...record }, "sense", noop)), /record.sense must be enumerable/);
+assert.match(recordProblem({ ...record, flagText: { [Symbol("stop")]: "Stop." } }), /flagText has a symbol field/);
+assert.match(recordProblem({ ...record, snapshot: hidden({}, "entry", null) }), /snapshot.entry must be enumerable/);
 assert.match(recordProblem({ ...record, sense: { at: null, run: noop } }), /is at "null"/);
 const enabledMetric = { ...metric, reportWhenEnabled: true };
 assert.match(recordProblem({ ...record, metric: enabledMetric, buildFleet: noop }), /needs a World option/);
@@ -133,7 +133,7 @@ assert.match(recordProblem({ ...record, metric: enabledMetric, defaultCount: 1 }
 const deduction = { at: "safety", order: 0, counter: "count", weight: 2 };
 assert.match(
   recordProblem({ ...record, coach: { deductions: [{ ...deduction, category: "control" }] } }),
-  /category only at "post"/,
+  /category only applies at "post"/,
 );
 assert.match(
   registryProblem([
