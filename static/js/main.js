@@ -5,8 +5,9 @@ import { api, $, h } from "./common.js";
 import { MapData } from "./map/mapdata.js";
 import { Route } from "./map/route.js";
 import { World } from "./sim/world.js";
+import { actorTime } from "./render/actor-motion.js";
 import { SceneView } from "./render/scene.js";
-import { mountActorViews, mountFeatureViews, mountTransitScenery } from "./render/feature-views.js";
+import { mountActorViews, mountFeatureViews, mountTransitScenery, replayActorPose } from "./render/feature-views.js";
 import { announceFeatureNotices, featureEventBadge, featureRouteOptions } from "./sim/features/index.js";
 import { buildRoads, buildScrambleMarkings } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
@@ -1024,7 +1025,7 @@ export async function boot() {
     input.keys.clear();
     arrivalPending = false;
     capturePose(world.ego, previousEgo);
-    actors.restore();
+    actors.restore(egoMesh, !lab.playing);
     world._road = world.roadInfo();
     panel.set(autopilot.lastDecision);
     hud.setBrain(autopilot.brainName);
@@ -1417,7 +1418,7 @@ export async function boot() {
     const replayNext = lab.reviewing ? recorder.frames[Number(lab.slider.value) + 1]?.state : null;
     const replayAlpha = lab.replayAlpha;
     const renderEgo = replayNext
-      ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
+      ? replayActorPose(world.ego, replayNext.world.ego, replayAlpha)
       : Number.isFinite(previousEgo.x)
         ? interpolatePose(world.ego, previousEgo, alpha)
         : world.ego;
@@ -1452,11 +1453,12 @@ export async function boot() {
         manualSignal = null;
       }
     }
-    const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
+    const lightsOn = syncCarLights(lighting.night.value, weatherView.name !== "dry");
+    const actorDt = (world.paused || photo.active) && !lab.playing ? 0 : dt;
     beamIndicator.hidden = !world.highBeams || !world.ego.highBeam;
-    actors.updateEgo(egoMesh, renderEgo, dt, lightsOn);
+    actors.updateEgo(egoMesh, renderEgo, actorDt, lightsOn, actorTime(world.t, replayNext?.world.t, replayAlpha));
     featureViews.updateSignals();
-    actors.updateVehicles(dt, lightsOn, alpha, replayNext, replayAlpha);
+    actors.updateVehicles(actorDt, lightsOn, alpha, replayNext, replayAlpha);
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
     const evs = fleet.vehicles.filter(isEmergency);
     const call = evs.length ? nearestCall(world.ego, evs) : null;
@@ -1628,14 +1630,14 @@ export async function boot() {
     if (zone && zone.id !== announcedZone)
       hud.badge(`${ZONE_NAMES[zone.kind].toUpperCase()} · ${Math.round(world._road.limit * 3.6)} KM/H`, "", 2500);
     announcedZone = zone?.id ?? null;
-    actors.updatePeople(alpha, replayNext, replayAlpha);
+    actors.updatePeople(alpha, replayNext, replayAlpha, weatherView.name);
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision, autopilot.executing));
     weatherView.update(dt);
     roads.streetLights.setOutage?.(!!world.streetLightsOut);
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
-    featureViews.update(fleet, actors.people, dt, lightsOn);
+    featureViews.update(fleet, actors.people, actorDt, lightsOn);
     view.render(dt, photo.active);
     cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
     audio.update(world.ego, world.weather, world.paused, view.mode === "hood");

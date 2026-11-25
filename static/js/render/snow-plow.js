@@ -1,3 +1,13 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_AMBER,
+} from "./actor-details.js";
+import { rollWheels, flashPhase, syncHeadMaterial, syncBrakeMaterial } from "./actor-motion.js";
 // The snow plow (sim/snow-plow.js): a single-axle dump truck built from boxes at its simulated size,
 // with a salt spreader at the back of its box, a one-way blade angled across its nose (its left end
 // leading, so the snow comes off to the right), the wing blade folded up along its right side, raised
@@ -6,6 +16,7 @@
 // cars.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SNOW_PLOW } from "../sim/vehicle.js";
 import { PLOW_COLOR } from "../sim/snow-plow.js";
@@ -33,6 +44,8 @@ const tail = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.6,
   roughness: 0.3,
 });
+
+shareActorResources([steel, blade, tail]);
 
 export function createPlowMesh(vehicle) {
   const spec = SNOW_PLOW,
@@ -108,15 +121,17 @@ export function createPlowMesh(vehicle) {
   wing.position.set(cabRear - 1.8, 1.75, w / 2 - 0.08);
   wing.rotation.x = -0.12;
   // (raised headlamps on posts above the blade, and the tail lamps)
+  const head = shared.head.clone();
   add(
     merge([-1, 1].map((side) => box(0.12, 0.2, 0.3, hoodFront + 0.1, 2.05, side * (w / 2 - 0.45)))),
-    shared.head,
+    head,
     false,
     "headlamps",
   );
+  const brake = tail.clone();
   add(
     merge([-1, 1].map((side) => box(0.05, 0.3, 0.2, xr - 0.01, 1.0, side * (bodyW / 2 - 0.15)))),
-    tail,
+    brake,
     false,
     "tail-lamps",
   );
@@ -134,6 +149,23 @@ export function createPlowMesh(vehicle) {
     body.add(m);
     (colour === BLUE ? blue : amber).push(m);
   }
+  addActorDetails(moldboard, "plow-blade", () => [
+    detail("blade-cutting-edge", STEEL, 0.18, 0.085, BLADE_M, 0.015, -0.48, 0),
+    ...sides((side) => [
+      detail("blade-edge-guides", REFLECT_AMBER, 0.055, 0.43, 0.045, 0, 0.68, side * (BLADE_M / 2 - 0.07)),
+      detail("blade-end-grip", RUBBER, 0.155, 0.24, 0.055, 0, -0.32, side * (BLADE_M / 2 - 0.04)),
+    ]),
+  ]);
+  addActorDetails(body, "snow-plow", () => [
+    ...sides((side) => [
+      detail("headlamp-supports", STEEL, 0.06, 0.36, 0.06, hoodFront + 0.1, 1.83, side * (w / 2 - 0.45)),
+      detail("tailgate-chain-housing", STEEL, 0.08, 0.35, 0.07, xr + 0.32, 1.94, side * (bodyW / 2 + 0.02)),
+      detail("spreader-reflectors", REFLECT_RED, 0.025, 0.071, 0.23, xr - 0.013, 1.39, side * (bodyW / 2 - 0.24)),
+    ]),
+    detail("spreader-spinner", RUBBER, 0.37, 0.075, 0.55, xr + 0.12, 0.66, 0),
+    detail("dump-body-top-rail", STEEL, 0.21, 0.069, bodyW + 0.02, xr + 0.45, 2.55, 0),
+    detail("wing-pivot-bracket", STEEL, 0.33, 0.21, 0.13, cabRear - 0.55, 1.64, w / 2 - 0.005),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.8, w + 0.8).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(spec.length / 2 - spec.rearOverhang, 0.02, 0);
   blob.renderOrder = 1;
@@ -153,23 +185,32 @@ export function createPlowMesh(vehicle) {
     g.add(pivot);
     wheels.push({ pivot, wheel: wh, steer });
   }
-  g.userData = { plow: true, wheels, spin: 0, amber, blue, phase: hash01(vehicle.id, 11) * FLASH_S };
+  g.userData = {
+    head,
+    brake,
+    prevV: null,
+    brakeLevel: 0,
+    plow: true,
+    wheels,
+    spin: 0,
+    amber,
+    blue,
+    phase: hash01(vehicle.id, 11) * FLASH_S,
+  };
   g.position.set(vehicle.x, 0, -vehicle.y);
   g.rotation.y = vehicle.psi;
   return g;
 }
 
-export function syncPlow(mesh, vehicle, dt = 0, t = 0) {
+export function syncPlow(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   if (!mesh) return;
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
-  u.spin += ((vehicle.v || 0) * dt) / TIRE;
-  for (const w of u.wheels) {
-    w.wheel.rotation.z = -u.spin;
-    w.pivot.rotation.y = w.steer ? vehicle.delta || 0 : 0;
-  }
-  const phase = ((t + u.phase) % FLASH_S) / FLASH_S,
+  syncHeadMaterial(u.head, lightsOn);
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn);
+  rollWheels(u, vehicle, dt, TIRE);
+  const phase = flashPhase(t, FLASH_S, u.phase),
     on = !!vehicle.beacons;
   for (const m of u.amber) m.material.emissiveIntensity = on && phase < 0.5 ? 7 : 0;
   for (const m of u.blue) m.material.emissiveIntensity = on && phase >= 0.5 ? 9 : 0;

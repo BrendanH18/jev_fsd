@@ -57,13 +57,15 @@ export function buildDriveways(map) {
 }
 
 // White reverse lamps at the rear of a car mesh (render/cars.js createCarMesh), lit while it backs out.
-export function syncReverseLamps(mesh, vehicle) {
+export function syncReverseLamps(mesh, vehicle, enabled = true) {
   if (!mesh) return;
   const u = mesh.userData;
+  const lit = enabled && !!vehicle.reverseLamps;
   if (!u.reverseLamps) {
-    if (!vehicle.reverseLamps) return;
-    const spec = vehicle.spec,
-      xr = -spec.rearOverhang,
+    if (!lit) return;
+    const spec = vehicle.spec ?? u.spec;
+    if (!spec) return;
+    const xr = -spec.rearOverhang,
       w = spec.width;
     u.reverseLamps = [];
     for (const z of [-(w / 2 - 0.45), w / 2 - 0.45]) {
@@ -83,5 +85,5 @@ export function syncReverseLamps(mesh, vehicle) {
       u.reverseLamps.push(sprite);
     }
   }
-  for (const s of u.reverseLamps) s.visible = !!vehicle.reverseLamps;
+  for (const s of u.reverseLamps) s.visible = lit;
 }

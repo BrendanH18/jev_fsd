@@ -5,6 +5,7 @@
 // backpack. People far from the camera are not drawn.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hash01 } from "./geo.js";
 
@@ -21,6 +22,7 @@ const DRAW_WITHIN_M = 130;
 const HIP = 0.92;
 
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0 });
+shareActorResources([material]);
 
 // Give a geometry one flat vertex color.
 function tint(geo, hex) {
@@ -185,10 +187,10 @@ export function syncPerson(mesh, ped, camera, rain = false) {
   mesh.rotation.y = ped.psi;
   mesh.rotation.x = ped.frozen > 0 ? Math.PI / 2 : 0; // knocked down
   const u = mesh.userData;
-  const moving = ped.v > 0.1;
-  const phi = ped.phase * 4.2;
+  const moving = !(ped.frozen > 0) && ped.v > 0.1;
+  const phi = Number.isFinite(ped.phase) ? ped.phase * 4.2 : 0;
   const stride = moving ? Math.min(1, ped.v / 1.3) : 0;
-  const umbrellaUp = rain && u.carries;
+  const umbrellaUp = rain && u.carries && !(ped.frozen > 0);
   u.umbrella.visible = umbrellaUp;
   for (const { hip, knee, side } of u.legs) {
     const p = phi + (side > 0 ? Math.PI : 0);

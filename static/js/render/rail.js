@@ -1,3 +1,5 @@
+import { addActorDetails, boxDetail as detail, mirroredDetails as sides, RUBBER, STEEL } from "./actor-details.js";
+import { syncBrakeMaterial, syncHeadMaterial } from "./actor-motion.js";
 // Railway tracks and level crossings (sim/rail.js), and the heritage streetcars that run on them.
 // A track is a pair of rails on ties and ballast (drawn under the road surface, so where it crosses a
 // street only the rails show, set in the asphalt), with its trolley wire 5.6 m over it on poles beside
@@ -8,6 +10,7 @@
 // trolley pole trailing up to the wire. Local +X is forward, +Z is right, the rear axle at the origin.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { HERITAGE_STREETCAR } from "../sim/vehicle.js";
 import { RAIL_HALF_M, alongStreet, railIndex } from "../sim/rail.js";
@@ -71,6 +74,7 @@ const shared = {
   red: new THREE.MeshStandardMaterial({ color: 0xc8202a, roughness: 0.5 }),
   post: new THREE.MeshStandardMaterial({ color: 0xb8bcbf, metalness: 0.6, roughness: 0.45 }),
 };
+shareActorResources(Object.values(shared));
 
 export function createTrainMesh(id = "train") {
   const spec = HERITAGE_STREETCAR,
@@ -156,11 +160,19 @@ export function createTrainMesh(id = "train") {
     true,
     "trucks",
   );
+  const head = shared.head.clone();
+  add(box(0.08, 0.2, 0.2, xf + 0.02, floor + 0.45, 0), head, false, "headlamp");
+  const marker = new THREE.MeshStandardMaterial({
+    color: 0x6a0b0b,
+    emissive: 0xf72418,
+    emissiveIntensity: 0.8,
+    roughness: 0.28,
+  });
   add(
-    merge([box(0.08, 0.2, 0.2, xf + 0.02, floor + 0.45, 0), box(0.08, 0.2, 0.2, xr - 0.02, top + 0.32, 0)]),
-    shared.head,
+    merge(sides((side) => box(0.04, 0.13, 0.13, xr - 0.124, sill - 0.14, side * (w / 2 - 0.32)))),
+    marker,
     false,
-    "headlamp",
+    "rear-markers",
   );
   const brake = new THREE.MeshStandardMaterial({
     color: 0x6a0b0b,
@@ -177,11 +189,23 @@ export function createTrainMesh(id = "train") {
     false,
     "brake-lamps",
   );
+  addActorDetails(g, "heritage-streetcar", () => [
+    ...sides((side) => [
+      detail("clerestory-vent", RUBBER, len - 4, 0.09, 0.025, mid, top + 0.36, side * 0.655),
+      detail("boarding-step", STEEL, 0.63, 0.06, 0.24, xr + 0.62, floor - 0.18, side * (w / 2 - 0.045)),
+      detail("platform-grab-rail", STEEL, 0.035, 0.63, 0.035, xr + 0.52, sill - 0.34, side * (w / 2 - 0.12)),
+      detail("front-fender-ribbing", RUBBER, 0.1, 0.04, 0.75, xf + 0.42, 0.32, side * (w / 2 - 0.53)),
+      detail("rear-marker-housing", RUBBER, 0.12, 0.2, 0.2, xr - 0.055, sill - 0.14, side * (w / 2 - 0.32)),
+    ]),
+    detail("trolley-contact-shoe", STEEL, 0.21, 0.03, 0.14, tip[0], tip[1] + 0.04, 0),
+    detail("front-tow-coupler", STEEL, 0.17, 0.14, 0.32, xf + 0.49, 0.42, 0),
+    detail("rear-coupler", STEEL, 0.17, 0.14, 0.32, xr - 0.49, 0.42, 0),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(len + 0.6, w + 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(mid, 0.02, 0);
   blob.renderOrder = 1;
   g.add(blob);
-  g.userData = { train: true, brake, prevV: 0, brakeLevel: 0 };
+  g.userData = { head, train: true, brake, prevV: null, brakeLevel: 0 };
   return g;
 }
 
@@ -189,13 +213,8 @@ export function syncTrain(mesh, vehicle, dt = 0, _t = 0, lightsOn = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
-  if (dt > 0) {
-    const decel = (u.prevV - vehicle.v) / dt;
-    const target = decel > 0.4 || Math.abs(vehicle.v) < 0.15 ? 1 : 0;
-    u.brakeLevel += (target - u.brakeLevel) * Math.min(1, dt * 12);
-    u.prevV = vehicle.v;
-    u.brake.emissiveIntensity = 0.3 + lightsOn * 1.5 + u.brakeLevel * (2.2 + lightsOn * 2);
-  }
+  syncHeadMaterial(u.head, lightsOn);
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn, 0.4);
 }
 
 // The map's tracks (rails, ties and ballast, the trolley wire on its poles where the line has one)

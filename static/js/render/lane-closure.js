@@ -1,3 +1,4 @@
+import { flashPhase } from "./actor-motion.js";
 // A lane closure with a zipper merge (sim/lane-closure.js): orange cones angled across the closed lane
 // from the merge point, lining it past the work and angling back after it, the crew's truck with its
 // amber light bar and flashing arrow board pointing traffic left, two workers in hi-vis, an orange "right
@@ -132,7 +133,7 @@ export function syncLaneClosure(mesh, zone, t = 0, camera = null) {
   const u = mesh?.userData.laneClosure;
   if (!u) return;
   flashLights(u.lenses, true, t, 0.17);
-  u.arrow.emissiveIntensity = t % 1 < 0.55 ? 6 : 0;
+  u.arrow.emissiveIntensity = flashPhase(t, 1) < 0.55 ? 6 : 0;
   const view = camera || { position: { x: zone.x, z: -zone.y } };
   for (const p of u.people) syncPerson(p.mesh, p.pose, view);
 }

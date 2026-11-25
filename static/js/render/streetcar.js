@@ -1,3 +1,13 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_AMBER,
+} from "./actor-details.js";
+import { followAnimation, syncBrakeMaterial, syncHeadMaterial } from "./actor-motion.js";
 // Streetcars (sim/streetcar.js), their tracks and the trolley wire above them. A Flexity Outlook built
 // from boxes at its simulated size: five sections in TTC red joined by dark bellows, a band of
 // windows over a white stripe, a black-glass cab at the front with the route and destination lit
@@ -8,6 +18,7 @@
 // their middle.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { STREETCAR } from "../sim/vehicle.js";
 import { DOOR_M } from "../sim/streetcar.js";
@@ -66,6 +77,7 @@ const shared = {
   rail: new THREE.MeshStandardMaterial({ color: 0x8c8f93, metalness: 0.85, roughness: 0.35 }),
   wire: new THREE.MeshBasicMaterial({ color: 0x1c1c1c }),
 };
+shareActorResources(Object.values(shared));
 const signs = new Map();
 
 // The route and destination sign: amber LED lettering on black.
@@ -93,6 +105,7 @@ function destination(text) {
     emissiveIntensity: 1.4,
     roughness: 0.4,
   });
+  shareActorResources([material]);
   signs.set(text, material);
   return material;
 }
@@ -128,7 +141,8 @@ export function createStreetcarMesh(id = "streetcar", text = "") {
   const shells = [],
     windows = [],
     stripes = [],
-    bellows = [];
+    bellows = [],
+    roofPanels = [];
   for (let i = 0; i < ends.length - 1; i++) {
     const a = xr + ends[i] + (i ? 0.25 : 0),
       b = xr + ends[i + 1] - (i < ends.length - 2 ? 0.25 : 0),
@@ -136,6 +150,7 @@ export function createStreetcarMesh(id = "streetcar", text = "") {
       mid = (a + b) / 2;
     shells.push(box(len, h - floor, w, mid, floor + (h - floor) / 2, 0));
     windows.push(box(len - 0.5, 1.15, w + 0.02, mid, 2.25, 0));
+    roofPanels.push(box(len - 0.1, 0.25, w - 0.3, mid, h + 0.12, 0));
     stripes.push(box(len + 0.01, 0.12, w + 0.02, mid, 1.55, 0));
   }
   for (const j of JOINTS) bellows.push(box(0.5, h - floor - 0.25, w - 0.12, xr + j, floor + (h - floor) / 2, 0));
@@ -145,7 +160,7 @@ export function createStreetcarMesh(id = "streetcar", text = "") {
   // the windscreen, wrapping round the cab, and the rear window
   windows.push(box(0.06, 1.7, w - 0.2, xf + 0.005, 2.1, 0), box(0.06, 1.0, w - 0.5, xr - 0.005, 2.3, 0));
   add(merge(windows), shared.glass, false, "windows");
-  add(box(xf - xr - 0.6, 0.25, w - 0.3, (xr + xf) / 2, h + 0.12, 0), shared.roof, true, "roof");
+  add(merge(roofPanels), shared.roof, true, "roof");
   // pods on the roof and the pantograph over the middle section, its head up on the wire
   add(
     merge([
@@ -177,9 +192,10 @@ export function createStreetcarMesh(id = "streetcar", text = "") {
     false,
     "bumpers",
   );
+  const head = shared.head.clone();
   add(
     merge([box(0.06, 0.16, 0.3, xf + 0.03, 0.85, -(w / 2 - 0.3)), box(0.06, 0.16, 0.3, xf + 0.03, 0.85, w / 2 - 0.3)]),
-    shared.head,
+    head,
     false,
     "headlamps",
   );
@@ -226,11 +242,40 @@ export function createStreetcarMesh(id = "streetcar", text = "") {
     false,
     "brake-lamps",
   );
+  addActorDetails(body, "streetcar", () => [
+    ...JOINTS.flatMap((joint) =>
+      Array.from({ length: 5 }, (_, i) =>
+        detail(
+          "bellows-ribs",
+          0x303239,
+          0.03,
+          h - floor - 0.39,
+          w - 0.09,
+          xr + joint + (i - 2) * 0.1,
+          (floor + h) / 2,
+          0,
+        ),
+      ),
+    ),
+    ...DOORS.map((offset) =>
+      detail("platform-threshold", REFLECT_AMBER, DOOR_W, 0.04, 0.065, xr + offset, floor + 0.05, w / 2 + 0.026),
+    ),
+    ...sides((side) => [
+      detail("cab-corner-post", RUBBER, 0.055, 1.42, 0.05, xf + 0.033, 2.16, side * (w / 2 - 0.12)),
+      detail("rear-visibility-marker", REFLECT_RED, 0.031, 0.12, 0.13, xr - 0.026, h - 0.38, side * (w / 2 - 0.15)),
+      detail("low-side-reflector", REFLECT_AMBER, 0.28, 0.062, 0.025, xr + 4.5, floor + 0.23, side * (w / 2 + 0.02)),
+    ]),
+    ...Array.from({ length: 7 }, (_, i) =>
+      detail("roof-vent-slats", RUBBER, 0.064, 0.02, 1.15, xr + 25.05 + i * 0.16, h + 0.67, 0),
+    ),
+    detail("front-coupler-socket", STEEL, 0.19, 0.17, 0.39, xf + 0.21, floor + 0.12, 0),
+    detail("pantograph-insulator", 0xad6f4e, 0.55, 0.16, 0.66, px, h + 0.43, 0),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.6, w + 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set((xr + xf) / 2, 0.02, 0);
   blob.renderOrder = 1;
   g.add(blob);
-  g.userData = { streetcar: true, doors, brake, prevV: 0, brakeLevel: 0, open: 0 };
+  g.userData = { head, streetcar: true, doors, brake, prevV: null, brakeLevel: 0, open: 0 };
   return g;
 }
 
@@ -238,19 +283,14 @@ export function syncStreetcar(mesh, vehicle, dt = 0, _t = 0, lightsOn = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
+  syncHeadMaterial(u.head, lightsOn);
   // the leaves slide out and apart, over about a second
-  u.open += ((vehicle.doors ? 1 : 0) - u.open) * Math.min(1, dt * 3);
+  u.open = followAnimation(u.open, Number(!!vehicle.doors), dt, 3);
   for (const d of u.doors) {
     d.leaf.position.z = 0.1 * u.open;
     d.leaf.position.x = d.side * 0.55 * u.open;
   }
-  if (dt > 0) {
-    const decel = (u.prevV - vehicle.v) / dt;
-    const target = decel > 0.5 || Math.abs(vehicle.v) < 0.15 ? 1 : 0;
-    u.brakeLevel += (target - u.brakeLevel) * Math.min(1, dt * 12);
-    u.prevV = vehicle.v;
-    u.brake.emissiveIntensity = 0.3 + lightsOn * 1.5 + u.brakeLevel * (2.2 + lightsOn * 2);
-  }
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn, 0.5);
 }
 
 // The map's streetcar tracks: two rails along the lane each run is laid in, on every street of it,

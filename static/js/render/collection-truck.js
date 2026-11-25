@@ -1,3 +1,12 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+} from "./actor-details.js";
+import { rollWheels, flashPhase, syncHeadMaterial, syncBrakeMaterial, syncAmberLenses } from "./actor-motion.js";
 // The garbage truck (sim/collection-truck.js): a rear-loader built from boxes at its simulated size, a
 // white cab ahead of a packer body in the city's colour, the hopper and its tailgate at the back with a
 // riding step and a grab handle each side for the crew, amber beacons on the cab roof turning while it
@@ -5,6 +14,7 @@
 // right, rear axle at the origin, as for cars.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { COLLECTION_TRUCK } from "../sim/vehicle.js";
 import { lamp, shared, wheel } from "./emergency.js";
@@ -32,6 +42,8 @@ const tail = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.6,
   roughness: 0.3,
 });
+
+shareActorResources([steel, cabPaint, tail]);
 
 export function createTruckMesh(vehicle) {
   const spec = COLLECTION_TRUCK,
@@ -102,15 +114,17 @@ export function createTruckMesh(vehicle) {
     false,
     "windows",
   );
+  const head = shared.head.clone();
   add(
     merge([-1, 1].map((side) => box(0.08, 0.22, 0.32, cabFront + 0.04, 1.35, side * (w / 2 - 0.4)))),
-    shared.head,
+    head,
     false,
     "headlamps",
   );
+  const brake = tail.clone();
   add(
     merge([-1, 1].map((side) => box(0.05, 0.3, 0.2, xr - 0.01, 1.05, side * (bodyW / 2 - 0.15)))),
-    tail,
+    brake,
     false,
     "tail-lamps",
   );
@@ -137,8 +151,32 @@ export function createTruckMesh(vehicle) {
     const m = new THREE.Mesh(box(0.05, 0.14, 0.18, x, x > 0 ? 1.1 : 1.35, z), lamp(AMBER));
     m.name = "hazard";
     body.add(m);
-    hazards.push(m);
+    hazards.push({ mesh: m, side: z < 0 ? "left" : "right" });
   }
+  addActorDetails(body, "collection-truck", () => [
+    ...sides((side) => [
+      detail("rear-worker-step-surface", RUBBER, 0.38, 0.043, 0.49, xr - 0.23, 0.607, side * (bodyW / 2 - 0.35)),
+      detail("hopper-control-panel", RUBBER, 0.23, 0.31, 0.07, hopper - 0.31, 1.69, side * (bodyW / 2 + 0.014)),
+      detail("tailgate-hinges", STEEL, 0.32, 0.21, 0.07, hopper - 0.31, 3.3, side * (bodyW / 2 + 0.015)),
+      detail(
+        "packer-lower-rail",
+        STEEL,
+        packFront - hopper - 0.1,
+        0.09,
+        0.11,
+        (packFront + hopper) / 2,
+        1.27,
+        side * (bodyW / 2 + 0.03),
+      ),
+      detail("rear-hopper-reflectors", REFLECT_RED, 0.031, 0.11, 0.34, xr - 0.021, 1.23, side * (bodyW / 2 - 0.44)),
+      detail("cab-access-step", STEEL, 0.55, 0.08, 0.23, cabRear + 0.43, 0.77, side * (bodyW / 2 - 0.05)),
+    ]),
+    ...Array.from({ length: 7 }, (_, i) =>
+      detail("cab-grille", RUBBER, 0.024, 0.044, bodyW * 0.54, cabFront + 0.016, 1.22 + i * 0.07, 0),
+    ),
+    detail("rollaway-protection", STEEL, 0.12, 0.17, bodyW - 0.17, xr + 0.11, 0.47, 0),
+    detail("rear-camera", RUBBER, 0.1, 0.086, 0.13, xr - 0.06, 3.23, 0),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.8, w + 0.8).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(spec.length / 2 - spec.rearOverhang, 0.02, 0);
   blob.renderOrder = 1;
@@ -158,27 +196,35 @@ export function createTruckMesh(vehicle) {
     g.add(pivot);
     wheels.push({ pivot, wheel: wh, steer });
   }
-  g.userData = { truck: true, wheels, spin: 0, beacons, hazards, phase: hash01(vehicle.id, 13) * BEACON_S };
+  g.userData = {
+    head,
+    brake,
+    prevV: null,
+    brakeLevel: 0,
+    truck: true,
+    wheels,
+    spin: 0,
+    beacons,
+    hazards,
+    phase: hash01(vehicle.id, 13) * BEACON_S,
+  };
   g.position.set(vehicle.x, 0, -vehicle.y);
   g.rotation.y = vehicle.psi;
   return g;
 }
 
-export function syncTruck(mesh, vehicle, dt = 0, t = 0) {
+export function syncTruck(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   if (!mesh) return;
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
-  u.spin += ((vehicle.v || 0) * dt) / TIRE;
-  for (const w of u.wheels) {
-    w.wheel.rotation.z = -u.spin;
-    w.pivot.rotation.y = w.steer ? vehicle.delta || 0 : 0;
-  }
+  syncHeadMaterial(u.head, lightsOn);
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn);
+  rollWheels(u, vehicle, dt, TIRE);
   // (the beacons turn in pairs, the hazards blink together)
-  const phase = ((t + u.phase) % BEACON_S) / BEACON_S;
+  const phase = flashPhase(t, BEACON_S, u.phase);
   u.beacons.forEach((m, i) => {
     m.material.emissiveIntensity = vehicle.beacons && phase < 0.5 === (i % 2 === 0) ? 7 : 0;
   });
-  const blink = vehicle.hazards && (t % HAZARD_S) / HAZARD_S < 0.5;
-  for (const m of u.hazards) m.material.emissiveIntensity = blink ? 6 : 0;
+  syncAmberLenses(u.hazards, vehicle, flashPhase(t, HAZARD_S) < 0.5);
 }

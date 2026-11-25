@@ -1,48 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { registerHooks } from "node:module";
 import { test } from "node:test";
-
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    const three = new URL("../static/vendor/three/", import.meta.url);
-    if (specifier === "three") return nextResolve(new URL("build/three.module.js", three).href, context);
-    if (specifier.startsWith("three/addons/"))
-      return nextResolve(new URL(specifier.replace("three/addons/", "examples/jsm/"), three).href, context);
-    return nextResolve(specifier, context);
-  },
-});
-
-// Canvas drawing is outside these scene-graph checks. Preserve the drawing inputs, including sign text.
-const drawing = () => {
-  const trace = [];
-  return new Proxy(
-    {
-      trace,
-      createRadialGradient: () => ({ addColorStop: () => {} }),
-      createLinearGradient: () => ({ addColorStop: () => {} }),
-      measureText: (value) => ({ width: String(value).length * 12 }),
-      createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
-    },
-    {
-      get(target, key) {
-        return (
-          target[key] ?? ((...args) => trace.push([key, ...args.slice(0, 6).filter((a) => typeof a !== "object")]))
-        );
-      },
-    },
-  );
-};
-globalThis.document = {
-  querySelector: () => null,
-  createElement() {
-    const ctx = drawing();
-    return { width: 0, height: 0, trace: ctx.trace, getContext: () => ctx };
-  },
-};
+import "./render_actor_test_support.mjs";
 
 const THREE = await import("three");
-const { mountActorViews, mountFeatureViews, mountTransitScenery } = await import(
+const { mountActorViews, mountFeatureViews, mountTransitScenery, replayActorPose } = await import(
   "../static/js/render/feature-views.js"
 );
 const { createCarMesh, addHeadlights } = await import("../static/js/render/cars.js");
@@ -246,7 +208,7 @@ test("mixed traffic, parked features, pedestrians and replay go through the brow
     actors.updateVehicles(0.1, 0.6, 0.25, replay, 0.5);
     actors.updatePeople(0.25, replay, 0.5);
     features.update(fleet, actors.people, 0.1, 0.6);
-    frames.push(graphDigest(view.scene));
+    if (process.argv.includes("--scene-digest")) frames.push(graphDigest(view.scene));
   };
 
   render();
@@ -290,4 +252,117 @@ test("mixed traffic, parked features, pedestrians and replay go through the brow
   assert.equal(actors.people.get("guard").position.z, -6);
   assert.equal(view.scene.children.filter((child) => child.userData.van && child.visible).length, 1);
   if (process.argv.includes("--scene-digest")) console.log(frames.join("\n"));
+});
+
+test("checkpoint motion preserves lights, door latches, and other discrete state", () => {
+  const old = pose("bus", { kind: "bus", doors: false, signal: "left" });
+  const next = pose("bus", { kind: "bus", doors: true, signal: "right", x: old.x + 6, psi: 0.4 });
+  const between = replayActorPose(old, next, 0.5);
+  assert.equal(between.x, old.x + 3);
+  assert.ok(Math.abs(between.psi - 0.2) < 1e-8);
+  assert.equal(between.doors, false);
+  assert.equal(between.signal, "left");
+  assert.equal(next.doors, true);
+  assert.equal(replayActorPose(old, { ...next, x: 113 }, 0.5) === old, true);
+  assert.equal(replayActorPose(old, { ...next, kind: "bike" }, 0.5) === old, true);
+  assert.equal(replayActorPose(old, null, 0.5) === old, true);
+});
+
+test("moving, parking again and reinstating an earlier bay preserve one drawing", () => {
+  const { view, world, fleet } = sample();
+  const actors = mountActorViews(view, world, fleet);
+  const original = world.parked.list[0];
+  const { mesh, i } = original.instances[0];
+  const m = new THREE.Matrix4();
+  mesh.getMatrixAt(i, m);
+  assert.equal(m.elements[12], original.x);
+  world.parked.list.shift();
+  world.parked.removed.push(original);
+  const sameIdElsewhere = pose(original.id, { x: 65 });
+  world.parked.list.push(sameIdElsewhere);
+  world.parked.added.push(sameIdElsewhere, sameIdElsewhere);
+  actors.sync();
+  mesh.getMatrixAt(i, m);
+  assert.equal(m.elements[0], 0);
+  const at = () => view.scene.children.filter((node) => node.userData.style && node.position.x === 65);
+  assert.equal(at().length, 1);
+
+  world.parked.list.pop();
+  world.parked.list.unshift({ ...original });
+  world.parked.removed.push(original);
+  const transient = at()[0].userData.pool.geometry;
+  let retired = 0;
+  transient.addEventListener("dispose", () => retired++);
+  actors.restore();
+  actors.sync();
+  mesh.getMatrixAt(i, m);
+  assert.equal(m.elements[12], original.x);
+  assert.equal(at().length, 0);
+  assert.equal(retired, 1);
+});
+
+test("retired traffic frees its resources and a reused ID can show a new vehicle kind", () => {
+  const { view, world, fleet } = sample();
+  const actors = mountActorViews(view, world, fleet);
+  const bus = view.scene.children.find((node) => node.userData.bus);
+  const destination = bus.getObjectByName("destination").material;
+  const ownedHead = bus.userData.head;
+  let ownedDisposed = 0;
+  let sharedDisposed = 0;
+  ownedHead.addEventListener("dispose", () => ownedDisposed++);
+  destination.addEventListener("dispose", () => sharedDisposed++);
+  const busState = fleet.vehicles.find((v) => v.id === "bus");
+  busState.kind = "bike";
+  actors.sync();
+  assert.equal(bus.parent === null, true);
+  assert.equal(ownedDisposed, 1);
+  assert.equal(sharedDisposed, 0);
+  actors.updateVehicles(0, 0, 1, null, 0);
+  assert.equal(view.scene.children.filter((node) => node.userData.bike).length, 3);
+});
+
+test("render-side high-beam policy cannot overwrite the pose supplied by the simulation", () => {
+  const { view, world, fleet } = sample();
+  const actors = mountActorViews(view, world, fleet);
+  const ego = createCarMesh();
+  addHeadlights(ego);
+  const supplied = { ...world.ego, highBeam: false };
+  actors.updateEgo(ego, supplied, 0, 1);
+  assert.equal(supplied.highBeam, false);
+  assert.equal(ego.userData.headlights[0].intensity, 180);
+});
+
+test("feature badges retain their references to mounted visual state", () => {
+  const { view, world } = sample();
+  world.balls = { enabled: true };
+  world.ice = { enabled: true };
+  world.roadClosures = { enabled: true };
+  const features = mountFeatureViews(view, world);
+  assert.equal(features.balls.meshes.size, 0);
+  assert.equal(features.roadClosures.meshes.size, 0);
+  assert.equal(features.ice.group.visible, false);
+  assert.equal(features.puddles, null);
+});
+
+test("unbatched feature poses follow their own scenario records", () => {
+  const { view, world, fleet } = sample();
+  const actors = mountActorViews(view, world, fleet);
+  actors.updateVehicles(0, 0, 1, null, 0);
+  const reversing = view.scene.children.find((node) => node.position.x === 43 && node.userData.reverseLamps);
+  assert.equal(
+    reversing.userData.reverseLamps.every((m) => m.visible),
+    true,
+  );
+  const tow = view.scene.getObjectByName("roadside-tow_truck") ?? view.scene.getObjectByName("roadside-tow");
+  assert.ok(tow?.userData.roadside);
+  assert.equal(view.scene.getObjectByName("roadside-police").userData.roadside.kind, "police");
+  assert.equal(view.scene.children.filter((node) => node.userData.schoolBus).length, 1);
+  assert.ok(view.scene.children.some((node) => node.userData.emergency && node.userData.kind === "fire_truck"));
+  const ordinary = view.scene.children.find((node) => node.userData.style && node.userData.flashHead);
+  assert.ok(!!ordinary?.userData.flashHead);
+  assert.equal(view.scene.children.filter((node) => node.position.x === 40 && node.userData.bike).length, 1);
+  const { world: state } = sample();
+  const frozen = mountActorViews(view, state, { vehicles: [] });
+  frozen.updatePeople(1, null, 0, "dry");
+  assert.equal(frozen.people.get("adult").userData.umbrella.visible, false);
 });
