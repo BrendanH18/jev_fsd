@@ -1,4 +1,4 @@
-# 24 · Public demo and documentation
+# Public demo and documentation
 
 The static build verifies its staged artifact before publication, the browser adapter diagnoses bad data and preserves local runs, and the documentation checker covers relative URLs and anchors used in the guides.
 

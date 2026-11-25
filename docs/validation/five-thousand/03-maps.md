@@ -1,4 +1,4 @@
-# 03 Maps and map tooling
+# Maps and map tooling
 
 Add a read-only audit for prepared map artifacts, harden imports and drive-lab fixtures, and document the evidence needed to select a Phase 6 map or provincial rule.
 

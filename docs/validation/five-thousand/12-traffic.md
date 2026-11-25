@@ -1,4 +1,4 @@
-# Five-thousand batch · Road traffic
+# Road traffic
 
 Traffic lane, control and curb queries handle missing map records. The traffic fleet also exposes a read-only diagnostic report through `window.__jev.fleet.inspectTraffic()`. Pause a drive before collecting the report. Issue codes locate a vehicle, path sample, edge or queue entry without advancing the simulation.
 
