@@ -323,6 +323,9 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   Crossing guards, Ontario pedestrian crossovers, roadside vehicles, following distance, turn
   restrictions, high beams and signed turn-on-red bans bring the total to **24 of 41**. The
   [November batch inventory](docs/validation/november-improvements.md) lists the migrations.
+  Scramble crossings, work zones and power cuts bring the total to **27 of 41**. Their bare and city
+  suites, all 62 Rules and cautious drives and the stub recording matched before and after
+  ([thousand-improvement batch](docs/validation/thousand/04-registry.md)).
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
   under about 150 lines, with the same before-and-after record as 3.2.

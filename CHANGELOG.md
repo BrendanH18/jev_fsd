@@ -28,6 +28,10 @@
 - Measure open-track flagged choices in replay and keep driving scores based on outcomes.
 - Publish complete Jev and Claude Haiku results for the dry Kitsilano city suite beside the local drivers.
 - Version the benchmark suite and keep rankings within each suite version.
+- Add 1000 improvements across the server, map tooling, offline analysis, simulation, driving
+  brain, rendering, the driving app, the lab and leaderboard, and benchmark tooling. Register
+  scramble crossings, work zones and power cuts through the feature interface
+  ([inventory](docs/validation/thousand/README.md)).
 - Watch four published model drives and replay a retained manual incident beside Jev.
 - Run CI on GitHub-hosted standard runners, free for this public repository, instead of Namespace.
 - Trace where the same tuned Rules drive first differs across JavaScript engines.
