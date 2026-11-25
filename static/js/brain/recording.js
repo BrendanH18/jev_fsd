@@ -422,10 +422,16 @@ function storedOutcome(res, body) {
   const copy = JSON.parse(JSON.stringify(res ?? null));
   if (!isObject(copy)) return { response: copy };
   const { tick, epoch, ...kept } = copy;
-  // A reply whose echo did not match its request was refused when it was recorded (model-contract.js):
-  // keep it as it came, so the replay refuses it too.
-  if ((Object.hasOwn(copy, "tick") && tick !== body?.tick) || (Object.hasOwn(copy, "epoch") && epoch !== body?.epoch))
-    return { response: copy, raw_response: true };
+  // A reply whose echo did not match its request was refused when it was recorded (model-contract.js).
+  // Keep it raw with each mismatched echo as null, which matches no request's counters, so the replay
+  // refuses it with the same message whatever its own tick and epoch are.
+  const tickWrong = Object.hasOwn(copy, "tick") && tick !== body?.tick,
+    epochWrong = Object.hasOwn(copy, "epoch") && epoch !== body?.epoch;
+  if (tickWrong || epochWrong)
+    return {
+      response: { ...kept, ...(tickWrong ? { tick: null } : {}), ...(epochWrong ? { epoch: null } : {}) },
+      raw_response: true,
+    };
   const request = kept.trace?.request;
   // Do not interpret literal provider values as the compactor's placeholders.
   if (

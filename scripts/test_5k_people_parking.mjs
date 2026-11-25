@@ -340,5 +340,16 @@ assert.equal(slot.reserved.owner === rival, true);
 assert.equal(traffic.parkers.active.length, 0);
 assert.equal(car.signal === null, true);
 
+// The arrival and departure notes keep only the newest 256 cars, whatever drains them.
+{
+  const notes = new ParkedCars(map, { density: 0 });
+  for (let i = 0; i < 300; i++) notes.add(new Vehicle(26 + i * 0.01, 26));
+  assert.equal(notes.added.length, 256);
+  assert.equal(notes.list.length, 300);
+  for (const car of notes.list.slice()) notes.remove(car);
+  assert.equal(notes.removed.length, 256);
+  assert.equal(notes.list.length, 0);
+}
+
 console.log(`Parking boundaries checked in ${((performance.now() - start) / 1000).toFixed(3)} s`);
 process.exit(0);

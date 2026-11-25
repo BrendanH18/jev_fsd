@@ -117,12 +117,21 @@ function parkedCell(car) {
   return `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`;
 }
 
+// The newest arrivals and departures, for code that drains them (driveway reversers drain `removed`
+// every step). Nothing has to drain them, so keep only the newest: a long drive must not hold every
+// car that ever parked, nor copy them into each replay checkpoint.
+const CHANGE_LOG = 256;
+function noteChange(list, car) {
+  list.push(car);
+  if (list.length > CHANGE_LOG) list.splice(0, list.length - CHANGE_LOG);
+}
+
 export class ParkedCars {
   constructor(map, { seed = 1, density = PARKED_DENSITY, zones = null } = {}) {
     this.map = map;
     this.list = [];
     this.grid = new Map();
-    this.removed = []; // pulled out since the renderer last looked
+    this.removed = []; // the newest pulled out (noteChange)
     this.added = [];
     this.slots = [];
     this.activeDoors = [];
@@ -243,12 +252,12 @@ export class ParkedCars {
       car.slot.reserved = null;
     }
     this.list.push(car);
-    this.added.push(car);
+    noteChange(this.added, car);
     if (cell) cell.push(car);
     else this.grid.set(key, [car]);
   }
 
-  // Take a car out of the parking lane (it is pulling out). `removed` tells the renderer.
+  // Take a car out of the parking lane (it is pulling out). `removed` notes it.
   remove(car) {
     if (!car || car.door) return false;
     const i = this.list.indexOf(car);
@@ -259,7 +268,7 @@ export class ParkedCars {
       // Recover if an authored scenario moved the parked axle without updating the index.
       for (const other of this.grid.keys()) if (this.removeFromCell(car, other)) break;
     }
-    this.removed.push(car);
+    noteChange(this.removed, car);
     if (car.slot?.occupant === car) car.slot.occupant = null;
     return true;
   }

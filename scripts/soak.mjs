@@ -189,6 +189,7 @@ function validateReusedRun(task, run, policy) {
         typeof r.arrived !== "boolean" ||
         !Array.isArray(r.failures) ||
         r.pass !== (r.failures.length === 0) ||
+        (r.pass && (!r.arrived || r.simulation_error != null)) ||
         r.stopped,
     ) ||
     new Set(run.results.map(({ id }) => id)).size !== run.results.length

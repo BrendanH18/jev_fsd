@@ -180,15 +180,22 @@ assert.equal(firstAnswer.trace.request.state, "$body");
 assert.equal(firstAnswer.trace.meta, "$meta");
 assert.equal(firstAnswer.trace.anthropic_prompt[0], "messages");
 assert.equal(firstReplay.exact, true);
-// A reply whose echo did not match its request (refused when recorded) replays with the same echo.
+// A reply whose echo did not match its request (refused when recorded) is refused on replay too, even
+// when the replay's own counters happen to equal the stale echo.
 const echoed = new ModelRecording({ header: model });
-await echoed.tape("echo", "record").record(autopilot, async () => ({ tick: 5, epoch: 1, answers: {} }), path, request);
+await echoed.tape("echo", "record").record(autopilot, async () => ({ tick: 4, epoch: 2, answers: {} }), path, request);
 assert.equal(echoed.drives.echo[key][0].raw_response, true);
 const echoReplay = await ModelRecording.parse(echoed.serialize())
   .tape("echo", "replay")
   .replay(autopilot, path, request);
-assert.equal(echoReplay.tick, 5);
-assert.equal(echoReplay.epoch, 1);
+assert.equal(echoReplay.tick, 4);
+assert.equal(echoReplay.epoch, null);
+const laterKey = requestKey(model, path, { ...request, epoch: 2 });
+assert.equal(laterKey === key, true);
+const laterReplay = await ModelRecording.parse(echoed.serialize())
+  .tape("echo", "replay")
+  .replay(autopilot, path, { ...request, epoch: 2 });
+assert.equal(laterReplay.epoch, null);
 const matched = new ModelRecording({ header: model });
 await matched.tape("echo", "record").record(autopilot, async () => ({ tick: 4, epoch: 1, answers: {} }), path, request);
 assert.equal(Object.hasOwn(matched.drives.echo[key][0], "raw_response"), false);

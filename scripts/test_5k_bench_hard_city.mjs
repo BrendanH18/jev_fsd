@@ -275,6 +275,14 @@ for (const [run, reason] of [
     },
     /results fail the soak verdict/,
   ],
+  [
+    { ...passingRun, results: [{ ...passingRun.results[0], arrived: false }, passingRun.results[1]] },
+    /finished route results/,
+  ],
+  [
+    { ...passingRun, results: [{ ...passingRun.results[0], simulation_error: "thrown" }, passingRun.results[1]] },
+    /finished route results/,
+  ],
 ]) {
   assert.throws(() => retrySoakPlan(plan, { ...previous, runs: [run] }, 0, 1, policy), reason);
 }
