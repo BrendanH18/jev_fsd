@@ -265,7 +265,7 @@ export function aggregate(results) {
   };
   const min = (k) => {
     const xs = results.map((r) => r[k]).filter((x) => x !== null && Number.isFinite(x));
-    return xs.length ? Math.min(...xs) : null;
+    return xs.length ? xs.reduce((a, b) => Math.min(a, b)) : null;
   };
   const km = sum("distance_m") / 1000;
   return {

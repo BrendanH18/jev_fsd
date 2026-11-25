@@ -5,7 +5,15 @@ const ROUTE_TAGS = ["length_m", "signals", "stops", "lefts", "rights"];
 function routeComparisonIssue(current, baseline) {
   const a = current.results;
   const b = baseline.results;
-  if (!a?.length || !b?.length) return "route identity unavailable";
+  if (
+    ![a, b].every(
+      (rows) =>
+        Array.isArray(rows) &&
+        rows.length &&
+        rows.every((result) => typeof result?.id === "string" && result.id.trim()),
+    )
+  )
+    return "route identity unavailable";
   const byId = new Map(b.map((result) => [result.id, result]));
   const ids = new Set(a.map((result) => result.id));
   if (a.length !== b.length || ids.size !== a.length || byId.size !== b.length || a.some(({ id }) => !byId.has(id)))
@@ -41,8 +49,9 @@ function stoppedEarly(run) {
 export function comparisonIssue(current, baseline) {
   if (!compatibleSuiteVersions(current, baseline))
     return `The selected run uses suite ${suiteVersion(baseline)}. Deltas require compatible suite versions.`;
-  const a = current.config || {};
-  const b = baseline.config || {};
+  if (!current?.config || !baseline?.config) return "Benchmark conditions are unavailable. Deltas are hidden.";
+  const a = current.config;
+  const b = baseline.config;
   const differences = [];
   const test = (name, x, y) => {
     if (x !== undefined && y !== undefined && x !== y) differences.push(name);
@@ -50,6 +59,8 @@ export function comparisonIssue(current, baseline) {
   if (Array.isArray(a.bbox) && Array.isArray(b.bbox)) test("map", a.bbox.join(","), b.bbox.join(","));
   else test("map", a.map, b.map);
   test("map pack", a.pack, b.pack);
+  test("map fingerprint", current.manifest?.maps?.[a.map]?.fingerprint, baseline.manifest?.maps?.[b.map]?.fingerprint);
+  test("JavaScript engine", a.engine?.split(" ")[0], b.engine?.split(" ")[0]);
   test("traffic", a.npcs, b.npcs);
   test("clock mode", a.mode, b.mode);
   test("weather", a.weather || "dry", b.weather || "dry");
@@ -58,9 +69,12 @@ export function comparisonIssue(current, baseline) {
   test("parking", Boolean(a.park), Boolean(b.park));
   test("held-out policy", Boolean(a.heldout), Boolean(b.heldout));
   test("suite seed", a.seed, b.seed);
+  if (a.heldout && b.heldout) test("held-out seeds", a.seeds?.join(","), b.seeds?.join(","));
   test("route count", a.count, b.count);
-  test("hour", a.hour ?? null, b.hour ?? null);
+  test("hour", a.hour ?? (a.features === "city" ? 15.5 : null), b.hour ?? (b.features === "city" ? 15.5 : null));
+  test("covering row", a.cover ?? null, b.cover ?? null);
   test("feature exclusions", [...(a.without || [])].sort().join(","), [...(b.without || [])].sort().join(","));
+  if (current.complete === false || baseline.complete === false) differences.push("a run is in progress");
   if (stoppedEarly(current) || stoppedEarly(baseline)) differences.push("a run stopped before its suite finished");
   const routeIssue = routeComparisonIssue(current, baseline);
   if (routeIssue) differences.push(routeIssue);
@@ -79,7 +93,17 @@ export function validateRunInputs({ count, npcs, seed, mode, weather, heldout },
 }
 
 export function routeMatches(query, scenario, result) {
-  const text = [scenario.id, ...(result?.failures || []), result?.simulation_error || ""].join(" ").toLowerCase();
+  const verdict = result ? (result.pass ? "verdict:pass" : "verdict:fail") : "verdict:pending";
+  const parking = result?.no_space
+    ? "parking:no-space"
+    : result?.parked === true
+      ? "parking:parked"
+      : result?.parked === false
+        ? "parking:failed"
+        : "";
+  const text = [scenario.id, verdict, parking, ...(result?.failures || []), result?.simulation_error || ""]
+    .join(" ")
+    .toLowerCase();
   return query
     .trim()
     .toLowerCase()
@@ -94,6 +118,11 @@ export function benchmarkDownloadName(config, extension) {
     config.features || "bare",
     config.weather || "dry",
     config.heldout ? "heldout" : `s${config.seed}`,
+    config.track === "open" ? "open" : null,
+    config.park ? "park" : null,
+    config.hour !== undefined ? `hour-${config.hour}` : null,
+    config.cover !== undefined ? `cover-${config.cover}` : null,
+    config.mode === "realtime" ? "realtime" : null,
   ]
     .filter(Boolean)
     .join("-")

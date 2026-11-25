@@ -1,6 +1,6 @@
 import { DEFAULT_TRACK, TRACKS, isTrack } from "../brain/tracks.js";
 import { FEATURE_NAMES, coveringArray, featureSubset } from "./features.js";
-export const FEATURE_PRESETS = ["bare", "city"];
+export const FEATURE_PRESETS = Object.freeze(["bare", "city"]);
 export const CITY_HOUR = 15.5,
   CITY_WEEKDAY = 0;
 
@@ -19,7 +19,8 @@ export function benchmarkConfig({
   if (typeof park !== "boolean") throw new Error("park must be true or false.");
   if (hour !== undefined && (typeof hour !== "number" || !Number.isFinite(hour) || hour < 0 || hour >= 24))
     throw new Error("hour must be a number from 0 inclusive to 24 exclusive.");
-  if (typeof without === "string") without = without ? without.split(",") : [];
+  if (typeof without === "string") without = without.trim() ? without.split(",").map((name) => name.trim()) : [];
+  if (Array.isArray(without)) without = Array.from(without);
   if (!Array.isArray(without) || without.some((name) => !FEATURE_NAMES.includes(name)))
     throw new Error(`Unknown feature in without: use ${FEATURE_NAMES.join(",")}.`);
   if (features === "bare" && (without.length || cover !== undefined))
@@ -32,7 +33,7 @@ export function benchmarkConfig({
     without = [...without, ...row.without];
     park = park || row.park;
   }
-  without = [...new Set(without)].sort();
+  without = [...new Set(without)];
   if (without.includes("hazards") && !without.includes("stepOuts")) without.push("stepOuts");
   without.sort();
   // --without park always wins, including over a covering row's parking choice.
@@ -46,6 +47,17 @@ export function benchmarkConfig({
     // (the open track, brain/tracks.js; a guarded run's config stays as every earlier one)
     ...(track !== DEFAULT_TRACK ? { track } : {}),
   };
+}
+
+export function validateScenarioOptions({ npcs, weather, brain, diagnostics, mode }, weatherNames) {
+  if (!Number.isSafeInteger(npcs) || npcs < 0) throw new Error("Benchmark traffic must be a nonnegative integer.");
+  if (!weatherNames.includes(weather)) throw new Error(`Unknown benchmark weather "${weather}".`);
+  if (typeof brain !== "string" || !brain.trim() || ["__proto__", "constructor", "prototype"].includes(brain))
+    throw new Error("Benchmark driver must be a valid ID.");
+  if (diagnostics !== undefined && typeof diagnostics !== "boolean")
+    throw new Error("Benchmark diagnostics must be true or false.");
+  if (mode !== undefined && !["lockstep", "realtime"].includes(mode))
+    throw new Error("Choose the lockstep or realtime clock.");
 }
 
 export function presetOptions(features = "bare", options = {}) {

@@ -17,7 +17,7 @@ import { WEATHER } from "../sim/weather.js";
 // Defaults preserve the historical bare and city suites; parking and a clock can also be
 // exercised independently in the bare world. Feature subsets still come from freeDriveOptions.
 export { FEATURE_PRESETS, CITY_HOUR, CITY_WEEKDAY, presetOptions, benchmarkConfig } from "./options.js";
-import { CITY_HOUR, CITY_WEEKDAY, presetOptions, benchmarkConfig } from "./options.js";
+import { CITY_HOUR, CITY_WEEKDAY, presetOptions, benchmarkConfig, validateScenarioOptions } from "./options.js";
 export function suiteOptions(features = "bare", options = {}) {
   const config = benchmarkConfig({ ...options, features });
   return presetOptions(features, config).world.restrictions
@@ -42,7 +42,9 @@ export const yieldNow = () =>
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function scenarioTimeLimit(sc, { features = "bare", weather = "dry" } = {}) {
-  const limit = Math.max(120, sc.tags.length_m / 2.5);
+  const length = sc.tags?.length_m;
+  if (!Number.isFinite(length) || length < 0) throw new Error(`Invalid route length for scenario ${sc.id}.`);
+  const limit = Math.max(120, length / 2.5);
   // The city adds single-file snowbank stretches and blind-corner creeps to the slower winter
   // cruise. Allow that weather's speed factor in its deadline too; keep historical bare limits.
   return features === "city" && weather === "snow" ? limit / WEATHER.snow.speed : limit;
@@ -69,7 +71,12 @@ export function setupScenario(
     tape = null,
   } = {},
 ) {
-  const options = benchmarkConfig({ features, park, hour, without, cover });
+  validateScenarioOptions({ brain, npcs, weather }, Object.keys(WEATHER));
+  const options = benchmarkConfig({ features, park, hour, without, cover, track });
+  const lane = map.lane(sc.start?.edge, sc.start?.lane);
+  if (!lane) throw new Error(`Scenario ${sc.id} has no starting lane on this map.`);
+  if (!Number.isFinite(sc.start.s) || sc.start.s < 0 || sc.start.s > lane.length)
+    throw new Error(`Scenario ${sc.id} has an invalid starting position.`);
   const preset = presetOptions(features, options);
   const world = new World(map, { seed: sc.traffic_seed, weather, vehicleSpec, ...preset.world });
   // (a city world keeps the app's clock: school zones, bus lane hours, turn restrictions and the sun go by it)
@@ -89,7 +96,6 @@ export function setupScenario(
       ),
     );
   }
-  const lane = map.lane(sc.start.edge, sc.start.lane);
   world.placeOnLane(lane, sc.start.s);
   const fleet = new NpcFleet(world, { count: npcs, seed: sc.traffic_seed, ...preset.fleet });
   const events = [];
@@ -109,6 +115,8 @@ export function setupScenario(
       brain,
       brain !== "__proto__" && Object.hasOwn(autopilot.brains, brain) ? autopilot.brains[brain] : null,
     );
+  if (!Object.hasOwn(autopilot.brains, brain) || !autopilot.brains[brain])
+    throw new Error(`Benchmark driver "${brain}" is unavailable.`);
   autopilot.setBrain(brain);
   world.route = new Route(sc.route, map, world.ego.spec);
   world.destination = sc.goal;
@@ -162,8 +170,11 @@ export async function runScenario(
     shouldStop = () => false,
     tape = null,
     onStep = null,
+    signal,
   } = {},
 ) {
+  validateScenarioOptions({ brain, npcs, weather, diagnostics, mode }, Object.keys(WEATHER));
+  let limit = scenarioTimeLimit(sc, { features, weather });
   if (tape && mode !== "lockstep") throw new Error("Model recordings record and replay only on the lockstep clock.");
   const metrics = new DriveMetrics(new Route(sc.route, map).length);
   const ctx = setupScenario(map, sc, {
@@ -185,10 +196,10 @@ export async function runScenario(
     },
   });
   const { world, autopilot, events } = ctx;
-  let limit = scenarioTimeLimit(sc, { features, weather });
   const wallStart = performance.now();
   const incidents = [],
     previous = diagnostics ? { ...world.violations } : null;
+  const incidentCounts = diagnostics ? new Map() : null;
   const context = () => {
     const road = world.roadInfo(),
       car = world.ego;
@@ -222,9 +233,13 @@ export async function runScenario(
   const closureReplans = watchClosureReplans(autopilot, world, metrics, (length_m) => {
     limit = Math.max(limit, scenarioTimeLimit({ tags: { length_m } }, { features, weather }));
   });
+  let stopped = false;
+  const isStopped = () => signal?.aborted || shouldStop();
+  const halt = () => autopilot.setEnabled(false);
+  signal?.addEventListener("abort", halt, { once: true });
   try {
-    onStep?.(world, autopilot);
-    while (world.t < limit && !shouldStop()) {
+    if (!isStopped()) onStep?.(world, autopilot);
+    while (world.t < limit && !isStopped()) {
       const road = stepWorld(ctx, DT, world.t * 1000);
       closureReplans();
       // (the parking plan's last status before arrival clears it, and whether the car ever had a space
@@ -238,8 +253,11 @@ export async function runScenario(
       metrics.record(world, autopilot.snap, road, DT);
       if (diagnostics)
         for (const [audit, value] of Object.entries(world.violations)) {
-          if (value > (previous[audit] || 0) && incidents.filter((e) => e.audit === audit).length < 8)
+          const count = incidentCounts.get(audit) || 0;
+          if (value > (previous[audit] || 0) && count < 8) {
             incidents.push({ audit, value, ...context(), events: world.events.map((e) => ({ ...e })) });
+            incidentCounts.set(audit, count + 1);
+          }
           previous[audit] = value;
         }
       steps++;
@@ -250,9 +268,9 @@ export async function runScenario(
       }
       if (mode === "lockstep") {
         if (autopilot.inFlight && autopilot.firing) await autopilot.firing;
-        while (autopilot.rerouting) await sleep(5);
+        while (autopilot.rerouting && !isStopped()) await sleep(5);
         // (and a route round a closed road, so the detour comes at the same step every run: sim/road-closures.js)
-        if (autopilot.detourRouting) await autopilot.detourRouting;
+        if (autopilot.detourRouting && !isStopped()) await autopilot.detourRouting;
         if (steps % 240 === 0) await yieldNow();
       } else {
         // keep sim time from running ahead of the wall clock
@@ -263,10 +281,14 @@ export async function runScenario(
     }
     // (a decision that failed during the last wait never reached stepWorld: it still fails the drive)
     if (autopilot.stepFailure) throw autopilot.stepFailure.error;
+    stopped = !arrived && isStopped();
+    if (stopped && autopilot.enabled) halt();
   } catch (error) {
     simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
     autopilot.setEnabled(false);
     events.push({ type: "simulation_error", t: Math.round(world.t * 10) / 10, message: simulationError });
+  } finally {
+    signal?.removeEventListener("abort", halt);
   }
   const result = metrics.summary(world, autopilot, arrived);
   // Reuse the challenge verdict: arrival alone is insufficient when parking was requested. With no
@@ -296,6 +318,7 @@ export async function runScenario(
     id: sc.id,
     tags: sc.tags,
     ...result,
+    ...(stopped ? { stopped: true } : {}),
     ...(diagnostics ? { diagnostics: { incidents, final: context() } } : {}),
     events: events.slice(0, 50),
     wall_ms: Math.round(performance.now() - wallStart),

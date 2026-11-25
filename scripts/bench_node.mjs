@@ -21,6 +21,7 @@
 // result; --replay rec.json drives again from those answers with no model call and no key, taking the
 // driver, map and suite from the recording, and reports whether each drive played out as recorded
 // (--check 1 also checks verdicts; --check replay checks replay fidelity alone).
+import { routeCoverage, routeRanges, selectBenchRoutes, SELECTION_OPTIONS } from "./bench_selection.mjs";
 import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
 import {
   benchPage,
@@ -62,6 +63,8 @@ const OPTIONS = [
   "skip",
   "start-at",
   "limit",
+  "checkpoint",
+  ...SELECTION_OPTIONS,
 ];
 
 const USAGE = [
@@ -93,6 +96,15 @@ const USAGE = [
   "  --skip <id,id>            exclude selected scenario IDs",
   "  --start-at <id>           start from this scenario, inclusive",
   "  --limit <N>              drive at most N selected scenarios",
+  "  --min-length / --max-length <m>  select routes by length in metres",
+  "  --min-signals / --max-signals <N>  select routes by signal count",
+  "  --min-stops / --max-stops <N>      select routes by stop sign count",
+  "  --min-lefts / --max-lefts <N>      select routes by left turns",
+  "  --min-rights / --max-rights <N>    select routes by right turns",
+  "  --checkpoint <path[.gz]>   save an explicitly partial report after each completed drive",
+  "  --coverage                include generated, selected, completed and failed route coverage",
+  "  --require-count           fail if suite generation returns fewer routes than requested",
+  "  --progress-finish         emit route verdicts and suite planning progress to stderr",
   "  --list                   print the selected route IDs and tags without driving",
   "  --quiet                  emit only the final JSON to stdout",
   "  --progress               report route starts to stderr",
@@ -108,13 +120,26 @@ function replayResultDiffs(recorded, actual, recordingModule, maxDiffs = 12) {
   );
 }
 
+process.on("uncaughtException", (error) => {
+  console.error(`Benchmark error: ${error.message}`);
+  process.exitCode = 1;
+  process.stderr.write("", () => process.exit(1));
+});
+
 const fail = (message) => {
   console.error(message);
   process.exit(1);
 };
 let parsed;
 try {
-  parsed = parseOptions(process.argv.slice(2), OPTIONS, ["list", "quiet", "progress"]);
+  parsed = parseOptions(process.argv.slice(2), OPTIONS, [
+    "list",
+    "quiet",
+    "progress",
+    "coverage",
+    "require-count",
+    "progress-finish",
+  ]);
 } catch (error) {
   fail(error.message);
 }
@@ -125,11 +150,25 @@ if (parsed.help) {
 const args = parsed.args;
 const say = args.quiet ? () => {} : console.log;
 const integer = (name, fallback, min) => wholeNumber(name, args[name], fallback, { min });
-let only, skip, limit;
+let only, skip, limit, ranges;
 try {
   checkMode(args.check, ["0", "1", "replay"]);
   only = commaList("only", args.only);
   skip = commaList("skip", args.skip);
+  ranges = routeRanges(args);
+  if (args["start-at"] !== undefined) {
+    args["start-at"] = args["start-at"].trim();
+    if (!args["start-at"]) fail("--start-at needs a scenario ID.");
+  }
+  if (only && skip && only.some((id) => skip.includes(id))) fail("--only and --skip overlap.");
+  if (args.heldout === "1" && !args.replay && (args.seed !== undefined || args.count !== undefined))
+    fail("--heldout sets the seeds and routes: drop --seed and --count.");
+  if (args.brain !== undefined && !args.brain.trim()) fail("--brain needs a driver ID.");
+  if (args.hour !== undefined && (!/^\d+(?:\.\d+)?$/.test(args.hour) || Number(args.hour) >= 24))
+    fail("--hour must be a number from 0 inclusive to 24 exclusive.");
+  if (args.without !== undefined) args.without = commaList("without", args.without).join(",");
+  if (args.reserve !== undefined && !/^\d+(?:\.\d+)?$/.test(args.reserve))
+    fail("--reserve needs a positive decimal dollar amount.");
   limit = integer("limit", Number.MAX_SAFE_INTEGER, 1);
   for (const name of ["count", "seed", "npcs", "cover"])
     if (args[name] !== undefined) integer(name, 0, name === "count" ? 1 : 0);
@@ -142,6 +181,7 @@ try {
       json: args.json,
       "prompt-audit": args["prompt-audit"],
       trace: args.trace,
+      checkpoint: args.checkpoint,
     },
   );
 } catch (error) {
@@ -149,12 +189,20 @@ try {
 }
 if (
   args.list &&
-  (args.record || args.trace || args.json || args["prompt-audit"] || args.reserve || (args.check && args.check !== "0"))
+  (args.record ||
+    args.trace ||
+    args.json ||
+    args.checkpoint ||
+    args["prompt-audit"] ||
+    args.reserve ||
+    (args.check && args.check !== "0"))
 )
   fail("--list only plans the suite. Drop drive and output options.");
 
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
 if (args["trace-from"] && !args.trace) fail("--trace-from needs --trace.");
+if (args["trace-from"] && args["require-count"]) fail("--require-count requires suite generation.");
+if (args.trace && args.checkpoint) fail("--checkpoint is unavailable with --trace.");
 if (
   args.trace &&
   ((args.brain || "rules") !== "rules" || args.heldout === "1" || args.record || args.replay || args.json)
@@ -196,10 +244,15 @@ if (args.replay) {
     fail(`Cannot read the recording ${args.replay}: ${error.message}`);
   }
   if (typeof replayJson?.header?.driver !== "string") fail(`${args.replay} is not a model recording.`);
+  if (!replayJson.header.bench || typeof replayJson.header.bench !== "object" || Array.isArray(replayJson.header.bench))
+    fail(`${args.replay} is not a benchmark recording.`);
+  if (args["require-count"]) fail("--require-count requires suite generation.");
+  if (replayJson.header.bench.mode && replayJson.header.bench.mode !== "lockstep")
+    fail("Benchmark recordings require the lockstep clock.");
   const given = SUITE_OPTIONS.filter((name) => args[name] !== undefined);
   if (given.length)
     fail(`The recording sets the driver and suite: drop ${given.map((name) => `--${name}`).join(", ")}.`);
-  const b = replayJson.header.bench || {};
+  const b = replayJson.header.bench;
   Object.assign(args, {
     map: b.map,
     count: String(b.count),
@@ -288,12 +341,13 @@ try {
   fail(error.message);
 }
 const heldout = args.heldout === "1";
-if (heldout && !replaying && (args.seed !== undefined || args.count !== undefined))
-  fail("--heldout sets the seeds and routes: drop --seed and --count.");
 // (a held-out run records its seeds; `seed` and `count` are the first seed and the number of routes)
 const plan = heldout ? heldoutPlan(preset) : null;
 const map = new MapData(await api(`/api/map?bbox=${encodeURIComponent(preset)}`));
-if (map.routingBbox.some((v, i) => Math.abs(v - wanted[i]) > 1e-6))
+if (
+  map.routingBbox.length !== 4 ||
+  map.routingBbox.some((v, i) => !Number.isFinite(v) || Math.abs(v - wanted[i]) > 1e-6)
+)
   fail(`The server loaded ${map.routingBbox.join(",")} instead of "${preset}".`);
 const config = {
   brain: String(args.brain || "rules"),
@@ -324,6 +378,15 @@ if (replaying)
 // (a replay drives the recorded scenarios, so a router changed since cannot move them)
 const mapSha = recordingModule.mapFingerprint(map);
 const traceModule = args.trace ? await import("./bench_trace.mjs") : null;
+const routing = {
+  ...suiteOptions(features, options),
+  ...(args["progress-finish"]
+    ? {
+        onRoute: ({ id, ready, count, attempt }) =>
+          console.error(`[plan ${ready}/${count}] Found ${id} after ${attempt} attempts`),
+      }
+    : {}),
+};
 let suite;
 if (args["trace-from"]) {
   try {
@@ -335,25 +398,25 @@ if (args["trace-from"]) {
   suite =
     replaying?.suite() ||
     (heldout
-      ? await buildHeldoutSuite(map, preset, suiteOptions(features, options))
-      : await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features, options) }));
+      ? await buildHeldoutSuite(map, preset, routing)
+      : await buildSuite(map, { count: config.count, seed: config.seed, ...routing }));
 }
 if (!suite.length) fail(`No routable scenarios on "${preset}".`);
-const partial = Boolean(only || skip || args["start-at"] || args.limit);
-const missing = [...(only || []), ...(skip || []), ...[args["start-at"]].filter(Boolean)].filter(
-  (id) => !suite.some((sc) => sc.id === id),
-);
-if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);
-const first = args["start-at"] ? suite.findIndex((sc) => sc.id === args["start-at"]) : 0;
-const selected = suite
-  .slice(first)
-  .filter((sc) => (!only || only.includes(sc.id)) && !skip?.includes(sc.id))
-  .slice(0, limit);
-if (!selected.length) fail("The selection leaves no scenarios.");
+if (args["require-count"] && suite.length !== config.count)
+  fail(`Expected ${config.count} scenarios on "${preset}"; generated ${suite.length}.`);
+if (args["progress-finish"] && !replaying && !args["trace-from"] && suite.length < config.count)
+  console.error(`Generated ${suite.length} of ${config.count} requested scenarios on "${preset}".`);
+const partial = Boolean(only || skip || args["start-at"] || args.limit || ranges.length);
+let selected;
+try {
+  selected = selectBenchRoutes(suite, { only, skip, limit, startAt: args["start-at"], ranges });
+} catch (error) {
+  fail(error.message);
+}
 if (args.list) {
   await new Promise((resolve) =>
     process.stdout.write(
-      `${JSON.stringify({ config, scenarios: selected.map(({ id, tags }) => ({ id, tags })) })}\n`,
+      `${JSON.stringify({ config, scenarios: selected.map(({ id, tags }) => ({ id, tags })), ...(args.coverage ? { coverage: routeCoverage(suite, selected, []) } : {}) })}\n`,
       resolve,
     ),
   );
@@ -464,6 +527,25 @@ for (const [index, sc] of selected.entries()) {
     promptSizes[sc.id] = prompt.result();
     writeArtifact(auditPath, `${JSON.stringify(promptSizes, null, 2)}\n`);
   }
+  if (args.checkpoint) {
+    checkFiles(
+      { replay: args.replay },
+      { checkpoint: args.checkpoint, record: args.record, json: args.json, audit: auditPath },
+    );
+    const checkpoint = {
+      suite_version: CUSTOM_SUITE,
+      config: { ...config, stopped: true, completed: results.length },
+      stopped: "intermediate checkpoint",
+      summary: aggregate(results),
+      coverage: routeCoverage(suite, selected, results),
+      results: results.map((result) => ({ ...result, suite_version: CUSTOM_SUITE })),
+    };
+    writeArtifact(args.checkpoint, `${JSON.stringify(checkpoint, null, 1)}\n`, {
+      gzip: args.checkpoint.endsWith(".gz"),
+    });
+  }
+  if (args["progress-finish"])
+    console.error(`[${index + 1}/${selected.length}] Finished ${r.id} (${r.pass ? "pass" : "fail"} in ${r.time_s}s)`);
   const hits = r.events
     .filter((e) => e.type === "collision")
     .map((e) => `${e.with}:${e.kind}@${e.t}`)
@@ -473,6 +555,7 @@ for (const [index, sc] of selected.entries()) {
   );
 }
 const summary = aggregate(results);
+const coverage = args.coverage ? { coverage: routeCoverage(suite, selected, results) } : {};
 const replayProvenance = replaying?.header.manifest;
 const replayDate = replaying?.header.recorded_at;
 const replayManifest =
@@ -500,7 +583,14 @@ if (heldout)
   );
 if (args.json) {
   audit?.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
-  const saved = { suite_version, config, summary, results, ...(budgetStop ? { stopped: budgetStop } : {}) };
+  const saved = {
+    suite_version,
+    config,
+    summary,
+    ...coverage,
+    results,
+    ...(budgetStop ? { stopped: budgetStop } : {}),
+  };
   if (manifest) {
     manifest.suite_version = suite_version;
     manifest.cost_usd = summary.cost_usd;
@@ -530,6 +620,6 @@ if (failed.length)
     `${failed.length} of ${results.length} routes failed${drifted.length ? " or did not replay as recorded" : ""}: ${failed.join(", ")}`,
   );
 const failedReplay = args.check === "replay" && drifted.length > 0;
-process.stdout.write(`${JSON.stringify({ suite_version, config, summary })}\n`, () =>
+process.stdout.write(`${JSON.stringify({ suite_version, config, summary, ...coverage })}\n`, () =>
   process.exit(failed.length || failedReplay || budgetStop ? 1 : 0),
 );

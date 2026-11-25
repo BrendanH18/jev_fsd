@@ -2,7 +2,7 @@
 import { statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { checkFiles, readJson, writeArtifact } from "./cli_tools.mjs";
+import { checkFiles, commaList, readJson, wholeNumber, writeArtifact } from "./cli_tools.mjs";
 
 const VERSION = 1;
 const STATE_TOLERANCE = 1e-9;
@@ -17,6 +17,15 @@ const USAGE = [
   "  --speed-tolerance <N>     tolerance for speed in metres per second",
   "  --exact                   treat every state difference as a divergence",
   "  --output <path[.gz]>      write the comparison to a file",
+  "  --from-tick <N>           begin comparison at this absolute tick",
+  "  --to-tick <N>             end comparison at this absolute tick, inclusive",
+  "  --actor <id>              compare just this traffic actor's state",
+  "  --state <all|ego|traffic> choose which state to compare",
+  "  --ignore-traffic-order   match traffic actors by ID instead of array position",
+  "  --wrap-heading           measure headings by their shortest angular difference",
+  "  --strict-capture         require all pose and decision fields produced by the runner",
+  "  --explain <N>             include up to N separate state differences at the first divergent tick",
+  "  --ignore <a,b>            exclude named comparison categories: decision, result, length",
   "  --compact                 emit JSON without indentation",
   "  --help, -h       show this help",
 ].join("\n");
@@ -52,29 +61,100 @@ export function captureTrace(config, mapSha, scenario) {
   };
 }
 
-function difference(left, right, tolerance, path = "") {
-  if (left === right) return null;
-  if (typeof left === "number" && typeof right === "number") {
-    const threshold = typeof tolerance === "function" ? tolerance(path) : tolerance;
-    if (Math.abs(left - right) <= threshold) return null;
+function angularDistance(a, b) {
+  const circle = 2 * Math.PI;
+  const delta = Math.abs((a - b) % circle);
+  return Math.min(delta, circle - delta);
+}
+
+function differences(left, right, tolerance, path = "", { limit = 1, wrapHeading = false } = {}) {
+  const found = [];
+  function walk(a, b, key) {
+    if (a === b || found.length >= limit) return;
+    if (typeof a === "number" && typeof b === "number") {
+      const threshold = typeof tolerance === "function" ? tolerance(key) : tolerance;
+      const drift = wrapHeading && key.endsWith(".heading") ? angularDistance(a, b) : Math.abs(a - b);
+      if (drift <= threshold) return;
+    }
+    if (a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b)) {
+      for (const field of new Set([...Object.keys(a), ...Object.keys(b)])) {
+        if (found.length >= limit) break;
+        walk(
+          Object.hasOwn(a, field) ? a[field] : undefined,
+          Object.hasOwn(b, field) ? b[field] : undefined,
+          key ? `${key}.${field}` : field,
+        );
+      }
+      return;
+    }
+    found.push({ path: key, left: a ?? null, right: b ?? null });
   }
+  walk(left, right, path);
+  return found;
+}
+const difference = (...args) => differences(...args)[0] ?? null;
+
+const POSE_FIELDS = ["x", "y", "heading", "speed"];
+const validPose = (pose, strict) =>
+  pose &&
+  typeof pose === "object" &&
+  !Array.isArray(pose) &&
+  POSE_FIELDS.every((field) => Number.isFinite(pose[field]) || (!strict && pose[field] === undefined));
+const validId = (id) => Number.isSafeInteger(id) || (typeof id === "string" && id.length > 0);
+
+function validateTrace(trace, side, strict) {
   if (
-    left &&
-    right &&
-    typeof left === "object" &&
-    typeof right === "object" &&
-    Array.isArray(left) === Array.isArray(right)
-  ) {
-    for (const key of Object.keys(left)) {
-      const diff = difference(left[key], right[key], tolerance, path ? `${path}.${key}` : key);
-      if (diff) return diff;
+    trace?.version !== VERSION ||
+    typeof trace.inputs?.scenario?.id !== "string" ||
+    !trace.inputs.scenario.id.trim() ||
+    !Array.isArray(trace.steps) ||
+    !trace.steps.length ||
+    typeof trace.result?.pass !== "boolean" ||
+    typeof trace.result.arrived !== "boolean" ||
+    !Number.isFinite(trace.result.time_s) ||
+    trace.result.time_s < 0
+  )
+    throw new Error(`Invalid benchmark trace on the ${side}.`);
+  for (const [tick, step] of trace.steps.entries()) {
+    const bad = (field) => {
+      throw new Error(`Invalid benchmark trace on the ${side} at tick ${tick} (${field}).`);
+    };
+    if (!validPose(step?.ego, strict)) bad("ego pose");
+    if (!Array.isArray(step.traffic)) bad("traffic list");
+    const actors = new Set();
+    for (const actor of step.traffic) {
+      if (!validPose(actor, strict)) bad("traffic pose");
+      if (!validId(actor.id)) bad("traffic actor ID");
+      if (actors.has(actor.id)) bad(`duplicate traffic actor ${actor.id}`);
+      actors.add(actor.id);
     }
-    for (const key of Object.keys(right)) {
-      if (!Object.hasOwn(left, key)) return { path: path ? `${path}.${key}` : key, left: null, right: right[key] };
-    }
-    return null;
+    const d = step.decision;
+    if (d === null || (!strict && d === undefined)) continue;
+    if (!d || typeof d !== "object" || Array.isArray(d)) bad("decision");
+    if ((strict || d.count !== undefined) && (!Number.isSafeInteger(d.count) || d.count < 0)) bad("decision count");
+    for (const field of ["motion", "choice", "headlights"])
+      if (
+        (d[field] !== undefined && d[field] !== null && typeof d[field] !== "string") ||
+        (strict && field === "motion" && typeof d[field] !== "string") ||
+        (strict && field === "choice" && d[field] === undefined)
+      )
+        bad(`decision ${field}`);
   }
-  return { path, left: left ?? null, right: right ?? null };
+}
+
+function projectStep(step, state, actor, unordered) {
+  const { decision, ...poseState } = step;
+  const ordered = (cars) =>
+    unordered
+      ? [...cars].sort((a, b) =>
+          a.id === b.id ? 0 : typeof a.id === typeof b.id ? (a.id < b.id ? -1 : 1) : typeof a.id === "number" ? -1 : 1,
+        )
+      : cars;
+  if (actor !== undefined)
+    return { decision, state: { traffic: step.traffic.filter((car) => String(car.id) === actor) } };
+  if (state === "ego") return { decision, state: { ego: step.ego } };
+  if (state === "traffic") return { decision, state: { traffic: ordered(step.traffic) } };
+  return { decision, state: { ...poseState, traffic: ordered(step.traffic) } };
 }
 
 function emptyDriftStats() {
@@ -88,7 +168,7 @@ function emptyDriftStats() {
   };
 }
 
-function recordPoseDrift(stats, a, b, tick) {
+function recordPoseDrift(stats, a, b, tick, wrapHeading) {
   if (!a || !b) return;
   if (Number.isFinite(a.x) && Number.isFinite(b.x)) {
     const dx = a.x - b.x;
@@ -100,7 +180,7 @@ function recordPoseDrift(stats, a, b, tick) {
     }
   }
   if (Number.isFinite(a.heading) && Number.isFinite(b.heading)) {
-    const heading = Math.abs(a.heading - b.heading);
+    const heading = wrapHeading ? angularDistance(a.heading, b.heading) : Math.abs(a.heading - b.heading);
     if (heading > stats.maxHeadingDrift) {
       stats.maxHeadingDrift = heading;
       stats.maxHeadingTick = tick;
@@ -139,6 +219,15 @@ export function compareTraces(
     speedTolerance,
     summary = false,
     window = null,
+    fromTick = 0,
+    toTick,
+    state = "all",
+    actor,
+    ignoreTrafficOrder = false,
+    wrapHeading = false,
+    strictCapture = false,
+    explain = 0,
+    ignore = [],
   } = {},
 ) {
   const tolerances = [tolerance, positionTolerance, headingTolerance, speedTolerance];
@@ -155,23 +244,21 @@ export function compareTraces(
   };
   if (window !== null && (!Number.isSafeInteger(window) || window < 0))
     throw new Error("Window must be a nonnegative integer.");
-  for (const [side, trace] of [
-    ["left", left],
-    ["right", right],
-  ]) {
-    if (
-      trace?.version !== VERSION ||
-      typeof trace.inputs?.scenario?.id !== "string" ||
-      !Array.isArray(trace.steps) ||
-      !trace.steps.length ||
-      typeof trace.result?.pass !== "boolean" ||
-      typeof trace.result.arrived !== "boolean" ||
-      !Number.isFinite(trace.result.time_s)
-    )
-      throw new Error(`Invalid benchmark trace on the ${side}.`);
-    const badStep = trace.steps.findIndex((step) => !step?.ego || !Array.isArray(step.traffic));
-    if (badStep !== -1) throw new Error(`Invalid benchmark trace on the ${side} at tick ${badStep}.`);
-  }
+  if (
+    !Number.isSafeInteger(fromTick) ||
+    fromTick < 0 ||
+    (toTick !== undefined && (!Number.isSafeInteger(toTick) || toTick < fromTick))
+  )
+    throw new Error("Tick range must use ordered, nonnegative integers.");
+  if (!["all", "ego", "traffic"].includes(state)) throw new Error("State must be all, ego or traffic.");
+  if (actor !== undefined && (typeof actor !== "string" || !actor.trim() || state === "ego"))
+    throw new Error("Actor selection requires a nonempty ID and traffic state.");
+  if (!Number.isSafeInteger(explain) || explain < 0 || explain > 100)
+    throw new Error("Explain must be a whole number from 0 to 100.");
+  if (!Array.isArray(ignore) || ignore.some((key) => !["decision", "result", "length"].includes(key)))
+    throw new Error("Ignore accepts decision, result and length.");
+  validateTrace(left, "left", strictCapture);
+  validateTrace(right, "right", strictCapture);
   const mismatch = difference(left.inputs, right.inputs, 0);
   if (mismatch) throw new Error(`Benchmark trace inputs differ at ${mismatch.path}.`);
 
@@ -184,46 +271,73 @@ export function compareTraces(
   let divergentDecisionTicks = 0;
   let unmatchedTrafficTicks = 0;
   const shared = Math.min(left.steps.length, right.steps.length);
-  for (let tick = 0; tick < shared; tick++) {
-    const { decision: aDecision, ...aState } = left.steps[tick];
-    const { decision: bDecision, ...bState } = right.steps[tick];
+  const captureEnd = Math.max(left.steps.length, right.steps.length) - 1;
+  if (fromTick > captureEnd || (toTick !== undefined && toTick > captureEnd))
+    throw new Error(`Tick range exceeds the last captured tick (${captureEnd}).`);
+  const end = toTick ?? captureEnd;
+  const sharedEnd = Math.min(shared - 1, end);
+  const scope = { fromTick, toTick: end, state, ...(actor !== undefined ? { actor } : {}) };
+  const projected = (step) => projectStep(step, state, actor, ignoreTrafficOrder);
+  if (
+    actor !== undefined &&
+    ![left, right].some((trace) =>
+      trace.steps.slice(fromTick, end + 1).some((step) => step.traffic.some((car) => String(car.id) === actor)),
+    )
+  )
+    throw new Error(`Traffic actor ${actor} is absent from the selected ticks.`);
+  const comparisonOptions = { wrapHeading };
+  let firstStateDetails;
+  for (let tick = fromTick; tick <= sharedEnd; tick++) {
+    const { decision: aDecision, state: aState } = projected(left.steps[tick]);
+    const { decision: bDecision, state: bState } = projected(right.steps[tick]);
     const exact = exactState ? null : difference(aState, bState, 0);
     if (exact) exactState = { tick, ...exact };
-    const state = !stateOverTolerance || summary ? difference(aState, bState, stateTolerance) : null;
-    if (state) {
-      if (!stateOverTolerance) stateOverTolerance = { tick, ...state };
+    const drift =
+      !stateOverTolerance || summary ? difference(aState, bState, stateTolerance, "", comparisonOptions) : null;
+    if (drift) {
+      if (!stateOverTolerance) {
+        stateOverTolerance = { tick, ...drift };
+        if (explain)
+          firstStateDetails = differences(aState, bState, stateTolerance, "", { ...comparisonOptions, limit: explain });
+      }
       if (summary) ticksOverTolerance++;
     }
-    const choice = !decision || summary ? difference(aDecision, bDecision, 0, "decision") : null;
+    const choice =
+      !ignore.includes("decision") && (!decision || summary) ? difference(aDecision, bDecision, 0, "decision") : null;
     if (choice) {
       if (!decision) decision = { tick, ...choice };
       if (summary) divergentDecisionTicks++;
     }
     if (summary) {
-      recordPoseDrift(egoDrift, aState.ego, bState.ego, tick);
+      recordPoseDrift(egoDrift, aState.ego, bState.ego, tick, wrapHeading);
       const aTraffic = Array.isArray(aState.traffic) ? aState.traffic : [];
       const bTraffic = Array.isArray(bState.traffic) ? bState.traffic : [];
       const bById = new Map(bTraffic.map((car, index) => [car?.id ?? index, car]));
       if (aTraffic.length !== bTraffic.length || aTraffic.some((car, index) => !bById.has(car?.id ?? index)))
         unmatchedTrafficTicks++;
       for (const [index, aCar] of aTraffic.entries()) {
-        recordPoseDrift(trafficDrift, aCar, bById.get(aCar?.id ?? index), tick);
+        recordPoseDrift(trafficDrift, aCar, bById.get(aCar?.id ?? index), tick, wrapHeading);
       }
     }
-    if (!summary && exactState && stateOverTolerance && decision) break;
+    if (!summary && exactState && stateOverTolerance && (decision || ignore.includes("decision"))) break;
   }
 
   const lengthDifference =
-    left.steps.length === right.steps.length
+    left.steps.length === right.steps.length || end < shared || ignore.includes("length")
       ? null
-      : { tick: shared, ended: left.steps.length === shared ? "left" : "right" };
+      : { tick: Math.max(shared, fromTick), ended: left.steps.length === shared ? "left" : "right" };
   const result = {
     scenario: left.inputs.scenario.id,
     runtimes: [left.runtime, right.runtime],
     steps: [left.steps.length - 1, right.steps.length - 1],
     results: [left.result, right.result],
     lengthDifference,
-    resultDifference: difference(left.result, right.result, 0, "result"),
+    resultDifference: ignore.includes("result") ? null : difference(left.result, right.result, 0, "result"),
+    ...(fromTick || toTick !== undefined || state !== "all" || actor !== undefined ? { scope } : {}),
+    ...(ignore.length ? { ignored: [...ignore] } : {}),
+    ...(ignoreTrafficOrder ? { trafficMatchedById: true } : {}),
+    ...(wrapHeading ? { wrapHeading: true } : {}),
+    ...(explain ? { firstStateDetails: firstStateDetails ?? [] } : {}),
     exactState,
     stateTolerance: tolerance,
     ...(positionTolerance !== undefined || headingTolerance !== undefined || speedTolerance !== undefined
@@ -240,7 +354,7 @@ export function compareTraces(
   };
   if (summary) {
     result.summary = {
-      sharedTicks: shared,
+      sharedTicks: Math.max(0, sharedEnd - fromTick + 1),
       ticksOverTolerance,
       divergentDecisionTicks,
       unmatchedTrafficTicks,
@@ -257,12 +371,12 @@ export function compareTraces(
       decision?.tick ?? Infinity,
       lengthDifference?.tick ?? Infinity,
     );
-    const anchor = !Number.isFinite(diverged) && result.resultDifference ? shared - 1 : diverged;
+    const anchor = !Number.isFinite(diverged) && result.resultDifference ? Math.max(fromTick, sharedEnd) : diverged;
     if (!Number.isFinite(anchor)) {
       result.window = null;
     } else {
-      const from = Math.max(0, anchor - window);
-      const to = Math.min(Math.max(left.steps.length, right.steps.length) - 1, anchor + window);
+      const from = Math.max(fromTick, anchor - window);
+      const to = Math.min(end, anchor + window);
       const ticks = [];
       for (let tick = from; tick <= to; tick++) {
         const leftStep = left.steps[tick] ?? null;
@@ -270,10 +384,10 @@ export function compareTraces(
         let stateDiff = null;
         let decisionDiff = null;
         if (leftStep && rightStep) {
-          const { decision: aDecision, ...aState } = leftStep;
-          const { decision: bDecision, ...bState } = rightStep;
-          stateDiff = difference(aState, bState, stateTolerance);
-          decisionDiff = difference(aDecision, bDecision, 0, "decision");
+          const { decision: aDecision, state: aState } = projected(leftStep);
+          const { decision: bDecision, state: bState } = projected(rightStep);
+          stateDiff = difference(aState, bState, stateTolerance, "", comparisonOptions);
+          if (!ignore.includes("decision")) decisionDiff = difference(aDecision, bDecision, 0, "decision");
         }
         ticks.push({ tick, left: leftStep, right: rightStep, stateDiff, decisionDiff });
       }
@@ -297,6 +411,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         exact: { type: "boolean" },
         output: { type: "string" },
         compact: { type: "boolean" },
+        "from-tick": { type: "string" },
+        "to-tick": { type: "string" },
+        state: { type: "string" },
+        actor: { type: "string" },
+        "ignore-traffic-order": { type: "boolean" },
+        "wrap-heading": { type: "boolean" },
+        "strict-capture": { type: "boolean" },
+        explain: { type: "string" },
+        ignore: { type: "string" },
         help: { type: "boolean", short: "h" },
       },
       allowPositionals: true,
@@ -333,13 +456,22 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       speedTolerance,
       summary: Boolean(values.summary),
       window,
+      fromTick: wholeNumber("from-tick", values["from-tick"], 0),
+      toTick: values["to-tick"] === undefined ? undefined : wholeNumber("to-tick", values["to-tick"]),
+      state: values.state,
+      actor: values.actor,
+      ignoreTrafficOrder: values["ignore-traffic-order"],
+      wrapHeading: values["wrap-heading"],
+      strictCapture: values["strict-capture"],
+      explain: wholeNumber("explain", values.explain, 0, { max: 100 }),
+      ignore: commaList("ignore", values.ignore) ?? [],
     });
     const output = JSON.stringify(comparison, null, values.compact ? 0 : 2);
     if (values.output) writeArtifact(values.output, `${output}\n`, { gzip: values.output.endsWith(".gz") });
     else console.log(output);
     if (
       values.check &&
-      (comparison.stateOverTolerance ||
+      ((values.exact ? comparison.exactState : comparison.stateOverTolerance) ||
         comparison.decision ||
         comparison.lengthDifference ||
         comparison.resultDifference)
