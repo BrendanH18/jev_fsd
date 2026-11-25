@@ -12,7 +12,7 @@ import { rng } from "../common.js";
 import { LAYER, groundLayer } from "./scene.js";
 import { wetReflective } from "./reflection.js";
 import { puddlesLie, splashRisk, wheelsInWater } from "../sim/puddles.js";
-import { wheelPoints } from "../sim/potholes.js";
+import { inPothole, wheelPoints } from "../sim/potholes.js";
 
 const POINTS = 20;
 // Droplets: at most this many at once; each lives this long, under gravity.
@@ -103,10 +103,12 @@ export class PuddleView {
         metalness: 0,
         transparent: true,
         opacity: 0.75,
+        depthWrite: false,
       }),
       CAPACITY,
     );
     this.mesh.frustumCulled = false;
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.count = 0;
     scene.add(this.mesh);
     this.drops = [];
@@ -119,6 +121,14 @@ export class PuddleView {
   update(world, vehicles, people, camera, dt) {
     const lie = puddlesLie(world);
     if (this.group) this.group.visible = lie;
+    if (this.lastT !== null && world.t < this.lastT) {
+      this.drops.length = 0;
+      for (const id of this.flinch.keys()) {
+        const mesh = people.get(id);
+        if (mesh) mesh.rotation.z = 0;
+      }
+      this.flinch.clear();
+    }
     // (paused, or a frame replayed: nothing new is thrown)
     const fresh = this.lastT !== null && world.t > this.lastT;
     this.lastT = world.t;
@@ -150,7 +160,11 @@ export class PuddleView {
     }
     this.drops = this.drops.filter((d) => d.age < LIFE_S);
     this.mesh.count = n;
-    this.mesh.instanceMatrix.needsUpdate = true;
+    if (n > 0) {
+      this.mesh.instanceMatrix.clearUpdateRanges();
+      this.mesh.instanceMatrix.addUpdateRange(0, n * 16);
+      this.mesh.instanceMatrix.needsUpdate = true;
+    }
     // (a splashed person leans away from the road, arms up, and steps back toward the buildings)
     for (const [id, f] of this.flinch) {
       f.t += dt;
@@ -177,24 +191,25 @@ export class PuddleView {
 
   // Droplets thrown out to the kerb side from the tyres in puddle `h`, more the faster over the splash
   // speed the vehicle is going.
-  spray(v, _h, over, dt) {
-    const wheels = wheelPoints(v),
-      c = Math.cos(v.psi),
-      s = Math.sin(v.psi),
-      sp = Math.abs(v.v);
+  spray(v, h, over, dt) {
+    const c = Math.cos(h.heading),
+      s = Math.sin(h.heading),
+      vx = Math.cos(v.psi) * v.v,
+      vy = Math.sin(v.psi) * v.v;
     const count = Math.min(14, Math.round((6 + 30 * over) * dt * 10));
-    for (const [x, y] of [wheels[1], wheels[3]]) {
+    for (const [x, y] of wheelPoints(v)) {
+      if (!inPothole(h, x, y)) continue;
       for (let i = 0; i < count && this.drops.length < CAPACITY; i++) {
         const out = 1.5 + this.random() * (2 + over * 1.5),
           up = 1.2 + this.random() * (1.5 + over),
-          fwd = sp * (0.2 + this.random() * 0.4);
-        // (right of the vehicle, toward the kerb: (sin psi, -cos psi))
+          fwd = 0.2 + this.random() * 0.4;
+        // The patch's road heading points the spray toward its kerb.
         this.drops.push({
           x: x + (this.random() - 0.5) * 0.3,
           y: y + (this.random() - 0.5) * 0.3,
           z: 0.05,
-          vx: c * fwd + s * out,
-          vy: s * fwd - c * out,
+          vx: vx * fwd + s * out,
+          vy: vy * fwd - c * out,
           vz: up,
           age: this.random() * 0.1,
         });

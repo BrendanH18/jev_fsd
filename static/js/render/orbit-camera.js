@@ -24,12 +24,14 @@ export class OrbitCamera {
 
   setDistance(distance, spec) {
     // Leave clearance around the longest vehicle, even at the lowest camera angle.
-    this.distance = clamp(distance, Math.max(4.2, (spec?.length || 4.5) * 0.9), 35);
+    if (!Number.isFinite(distance)) return;
+    const min = Math.max(4.2, (spec?.length ?? 4.5) * 0.9);
+    this.distance = clamp(distance, min, Math.max(35, min));
   }
 
   pose(ego, height = 1.45) {
     this.setDistance(this.distance, ego.spec);
-    const center = (ego.spec?.length || 4.5) / 2 - (ego.spec?.rearOverhang || 0.9);
+    const center = (ego.spec?.length ?? 4.5) / 2 - (ego.spec?.rearOverhang ?? 0.9);
     const cx = ego.x + Math.cos(ego.psi) * center,
       cy = ego.y + Math.sin(ego.psi) * center;
     const z = height * 0.55,

@@ -13,9 +13,8 @@ export class Minimap {
     this.clearButton?.addEventListener("click", () => this._onClearRoute?.());
     const [x0, y0, x1, y1] = map.extent;
     this.x0 = x0;
-    this.y0 = y0;
-    this.x1 = x1;
     this.y1 = y1;
+    this.extent = map.extent;
     const w = canvas.width,
       h = canvas.height;
     this.scale = Math.min(w / (x1 - x0), h / (y1 - y0));
@@ -27,9 +26,11 @@ export class Minimap {
     this.drawRoads();
     canvas.addEventListener("click", (ev) => {
       const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
       const px = (ev.clientX - rect.left) * (canvas.width / rect.width);
       const py = (ev.clientY - rect.top) * (canvas.height / rect.height);
-      onClick(this.toWorld(px, py));
+      const [x, y] = this.toWorld(px, py);
+      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) onClick([x, y]);
     });
   }
 
@@ -44,29 +45,68 @@ export class Minimap {
     return [this.x0 + (px - this.ox) / this.scale, this.y1 - (py - this.oy) / this.scale];
   }
 
+  trace(path, points) {
+    for (const [i, [x, y]] of points.entries()) {
+      const [px, py] = this.toPx(x, y);
+      if (i === 0) path.moveTo(px, py);
+      else path.lineTo(px, py);
+    }
+  }
+
   drawRoads() {
     const c = this.roads.getContext("2d");
     c.fillStyle = "#11151c";
     c.fillRect(0, 0, this.roads.width, this.roads.height);
+    const [x0, y0, x1, y1] = this.extent;
+    c.save();
+    c.beginPath();
+    c.rect(this.ox, this.oy, (x1 - x0) * this.scale, (y1 - y0) * this.scale);
+    c.clip();
+    c.fillStyle = "#171d26";
+    c.fillRect(0, 0, this.roads.width, this.roads.height);
+
+    for (const area of this.map.parks ?? []) {
+      if (area.closed) {
+        c.fillStyle = area.kind === "water" ? "#213b51" : "#253b31";
+        c.beginPath();
+        for (const ring of area.rings) this.trace(c, ring);
+        c.fill();
+      }
+      if (area.lines?.length) {
+        c.strokeStyle = "#325979";
+        c.lineWidth = 1.5;
+        c.beginPath();
+        for (const line of area.lines) this.trace(c, line);
+        c.stroke();
+      }
+    }
     c.fillStyle = "#1c222c";
     for (const b of this.map.pack.buildings) {
       c.beginPath();
-      b.pts.forEach(([x, y], i) => {
-        const [px, py] = this.toPx(x, y);
-        i ? c.lineTo(px, py) : c.moveTo(px, py);
-      });
+      this.trace(c, b.pts);
       c.fill();
     }
     c.lineCap = "round";
-    for (const e of this.map.edges.values()) {
-      c.strokeStyle = e.cls === "residential" || e.cls === "living_street" ? "#3a4250" : "#586275";
-      c.lineWidth = Math.max(1, e.width * this.scale * 0.8);
+    // Arterials stay visible where minor streets meet them.
+    const minor = (e) => e.cls === "residential" || e.cls === "living_street";
+    for (const isMinor of [true, false]) {
+      c.strokeStyle = isMinor ? "#3a4250" : "#586275";
+      for (const e of this.map.edges.values()) {
+        if (minor(e) !== isMinor) continue;
+        c.lineWidth = Math.max(1, e.width * this.scale * 0.8);
+        c.beginPath();
+        this.trace(c, e.pts);
+        c.stroke();
+      }
+    }
+    if (this.map.rail?.tracks?.length) {
+      c.strokeStyle = "#b29479";
+      c.lineWidth = 1;
+      c.setLineDash([2, 3]);
       c.beginPath();
-      e.pts.forEach(([x, y], i) => {
-        const [px, py] = this.toPx(x, y);
-        i ? c.lineTo(px, py) : c.moveTo(px, py);
-      });
+      for (const track of this.map.rail.tracks) this.trace(c, track.pts);
       c.stroke();
+      c.setLineDash([]);
     }
     for (const inter of this.map.intersections.values()) {
       const [px, py] = this.toPx(inter.x, inter.y);
@@ -75,6 +115,7 @@ export class Minimap {
       c.arc(px, py, 1.6, 0, Math.PI * 2);
       c.fill();
     }
+    c.restore();
   }
 
   drawCompass(c) {
@@ -107,14 +148,24 @@ export class Minimap {
       if (this.clearButton.hidden !== shouldHide) this.clearButton.hidden = shouldHide;
     }
     if (route) {
+      if (this.routePoints !== route.pts) {
+        this.routePoints = route.pts;
+        this.routePath = new Path2D();
+        this.trace(this.routePath, route.pts);
+      }
+      c.save();
+      c.lineCap = "round";
+      c.lineJoin = "round";
+      c.strokeStyle = "#11263b";
+      c.lineWidth = 4;
+      c.stroke(this.routePath);
       c.strokeStyle = "#4cc2ff";
       c.lineWidth = 2;
-      c.beginPath();
-      route.pts.forEach(([x, y], i) => {
-        const [px, py] = this.toPx(x, y);
-        i ? c.lineTo(px, py) : c.moveTo(px, py);
-      });
-      c.stroke();
+      c.stroke(this.routePath);
+      c.restore();
+    } else {
+      this.routePoints = null;
+      this.routePath = null;
     }
     for (const n of npcs) {
       const [px, py] = this.toPx(n.x, n.y);
@@ -150,6 +201,8 @@ export class Minimap {
       c.beginPath();
       c.arc(px, py, 5, 0, Math.PI * 2);
       c.stroke();
+      c.fillStyle = "#57d27f";
+      c.fillRect(px - 1, py - 1, 2, 2);
     }
     if (ego) {
       const [px, py] = this.toPx(ego.x, ego.y);
@@ -162,6 +215,10 @@ export class Minimap {
       c.lineTo(-5, 4);
       c.lineTo(-5, -4);
       c.closePath();
+      c.strokeStyle = "#102530";
+      c.lineWidth = 2;
+      c.lineJoin = "round";
+      c.stroke();
       c.fill();
       c.restore();
     }
