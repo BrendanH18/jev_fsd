@@ -17,7 +17,9 @@
 // not recognised goes under "Other".
 
 import { projectPoint } from "../map/mapdata.js";
-import { FEATURE_METRICS } from "../sim/features/index.js";
+import { FEATURE_METRICS, hooks } from "../sim/features/index.js";
+
+const BEFORE_TRACKS_FAIL = hooks("examinerFail", "beforeTracks");
 import { CATEGORIES } from "./examiner-categories.js";
 import { challengeFailures } from "./practice.js";
 
@@ -461,13 +463,10 @@ export function examine(test, report) {
       reason: "move over",
       incident: incidentOf("no_move_over") || incidentOf("roadside_speeding"),
     });
-  if (report.flagger_stops_run > 0)
-    fails.push({
-      category: "right_of_way",
-      remark: "Went past a flagger's STOP paddle",
-      reason: "flagger",
-      incident: null,
-    });
+  for (const check of BEFORE_TRACKS_FAIL) {
+    const failure = check(report);
+    if (failure) fails.push(failure);
+  }
   if (report.stopped_on_tracks > 0)
     fails.push({
       category: "space",

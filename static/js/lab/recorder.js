@@ -192,9 +192,7 @@ export class DriveRecorder {
     setNightFlash(target.world);
     target.fleet.world = target.world;
     target.world.crowd.world = target.world;
-    target.world.workZones.world = target.world;
     target.world.laneClosures.world = target.world;
-    target.world.outages.world = target.world;
     target.world.stepOuts.world = target.world;
     for (const restore of CHECKPOINT) restore(target.world, target.fleet);
     target.world.npcs = target.fleet.vehicles;

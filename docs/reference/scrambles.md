@@ -24,6 +24,10 @@ CROSSING · ALL WALK · EVERY LIGHT RED" and, at its red turning right, "SCRAMBL
 RED". With scrambles off every signal runs and every pedestrian walks exactly as before; the seeded
 benchmark and the other challenges have it off.
 
+The feature record owns the World option, red-turn ban, decision wording, HUD notice and replay
+restore. The signal module still computes the all-walk plan and pedestrian phase.
+See [the feature interface](../feature-interface.md#a-record).
+
 ## Agent rules
 
 The project rule for this feature, moved here verbatim from `AGENTS.md`, which states the

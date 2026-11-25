@@ -7,9 +7,7 @@
 // whether the school buses run. Returns the `World` options and the `NpcFleet` options apart from the
 // seed, weather, vehicle and traffic count, which each caller sets itself.
 
-import { WORK_ZONE_COUNT } from "./work-zone.js";
 import { LANE_CLOSURE_COUNT } from "./lane-closure.js";
-import { OUTAGE_COUNT } from "./outage.js";
 import { PLOW_COUNT } from "./snow-plow.js";
 import { STEP_OUT_COUNT } from "./hidden-hazards.js";
 import { FEATURES } from "./features/index.js";
@@ -25,10 +23,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     pedestrians: hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined,
     // buses run their routes (`?buses=0`)
     buses,
-    // work zones with a flagger at each end (`?workzones=0`)
-    workZones: on("workzones") ? WORK_ZONE_COUNT : 0,
-    // power cuts that turn a signal's lights off for a while (`?outages=0`)
-    outages: on("outages") ? OUTAGE_COUNT : 0,
     // the autopilot parks at the destination, where there is a space (`?park=0` stops it in its lane)
     park: on("park"),
     hazards,
@@ -38,8 +32,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     // on two-way streets with one lane each way, everyone passes a cyclist riding in the lane through
     // the oncoming lane once it is clear (`?cyclistpass=0`: everyone stays behind)
     passCyclists: on("cyclistpass"),
-    // scramble crossings run their all-walk phase, with no right turn on red (`?scramble=0`)
-    scrambles: on("scramble"),
     nightFlash: on("nightflash"),
     busLanes: on("buslanes"),
     leftOnRed: on("leftonred"),
@@ -58,8 +50,8 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     plows: on("plows") ? PLOW_COUNT : 0,
   };
   // Each registered option is enabled unless its lowercase query flag is 0.
-  for (const { key, defaultCount, buildFleet } of FEATURES) {
-    const enabled = on(key.toLowerCase());
+  for (const { key, flag = key.toLowerCase(), defaultCount, buildFleet } of FEATURES) {
+    const enabled = on(flag);
     const options = buildFleet ? fleet : world;
     options[key] = defaultCount === undefined ? enabled : enabled ? defaultCount : 0;
   }

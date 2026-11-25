@@ -15,6 +15,8 @@ within 40 m, and the next goes dark 60 to 180 s later (`?outages=0` turns them o
 honest: until it can see the junction it reports an unseen signal, and once it can, an all-way stop
 (`intersection.control` is `stop`, `all_way` true, with `dark` and its place in the order). Rules needs
 nothing new. Decision models and LLMs get `intersection.lights_out`, a situation line and a prompt line.
-The audit counts going through without a full stop as a missed stop, and going out of turn as a failure
+The feature record plugs the visible stop control, traffic release, audit annotations and
+coaching into [the feature interface](../feature-interface.md#a-record). The outage simulation
+still owns scheduling and the per-approach stop objects. The audit counts going through without a full stop as a missed stop, and going out of turn as a failure
 to yield (both events with `dark`), with a coaching tip. The HUD says "LIGHTS OUT · ALL-WAY STOP · STOP AT
 THE LINE", "· WAIT YOUR TURN" or "· YOUR TURN". The seeded benchmark and the other challenges have none.

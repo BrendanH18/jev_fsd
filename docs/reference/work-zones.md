@@ -29,4 +29,6 @@ audit counts a missed stop once each time a paddle turns to STOP if the car, owi
 past the line at more than 1 m/s while it still shows STOP; the coaching score counts going through
 faster than the zone's limit, with tips for both. The HUD says "WORK ZONE · FLAGGER SHOWS STOP · WAIT AT
 THE LINE" or "WORK ZONE · SLOW · 30 · ONE LANE" (with "· GO ROUND IT" where the car's lane is closed), and
-AI eyes outline the closed stretch in amber. The seeded benchmark and the other challenges have none.
+AI eyes outline the closed stretch in amber. The [feature record](../../static/js/sim/features/work-zones.js) owns the corridor and
+the ego's detour, candidate, audit and model instructions. The simulator still owns job sites,
+closed obstacles and paddle scheduling. The seeded benchmark and the other challenges have none.

@@ -6,8 +6,10 @@
 // runs is refused.
 // node --experimental-default-type=module scripts/test_feature_registry.mjs
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 globalThis.document = { querySelector: () => null };
 const R = await import("../static/js/sim/features/index.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
@@ -69,6 +71,9 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "roadside",
       "followingDistance",
       "redTurnSigns",
+      "scrambles",
+      "workZones",
+      "outages",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -88,11 +93,21 @@ test("every record is whole, its option and flags its own, and every hook at a s
 
 test("the core runs every slot, and names no registered feature", () => {
   const core = CORE.map(source).join("\n");
+  const coach = source("sim/drive-score.js");
+  for (const field of ["flaggerStops", "workZoneSpeeding", "world.workZones", "scrambleReds", "darkSignals"]) {
+    assert.ok(!coach.includes(field), `the coaching core no longer owns ${field}`);
+  }
   const dispatches = {
     perceptionLine: source("render/perception.js"),
     perceptionFocus: source("render/perception.js"),
     controlDirection: source("sim/features/index.js"),
     junctionPlan: source("sim/features/index.js"),
+    controlReplace: source("sim/features/index.js"),
+    alternateSignal: source("sim/features/index.js"),
+    phaseBansRedTurns: source("sim/features/index.js"),
+    detour: [core, source("sim/features/index.js")].join("\n"),
+    coachCorridor: source("sim/feature-coach.js"),
+    coachCorridorFrame: source("sim/feature-coach.js"),
     checkpoint: source("lab/recorder.js"),
     checkpointShare: source("lab/recorder.js"),
     checkpointRestore: source("lab/recorder.js"),
@@ -156,6 +171,8 @@ test("the core runs every slot, and names no registered feature", () => {
       'turn-restrictions.js"',
       'high-beams.js"',
       'red-turn-signs.js"',
+      'work-zone.js"',
+      'outage.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -278,6 +295,19 @@ test("the core runs every slot, and names no registered feature", () => {
       "world.redTurnSigns",
       "this.redTurnSigns",
       "no_turn_on_red",
+      "world.scrambles",
+      "this.scrambles",
+      "i.scramble",
+      "isScramble(",
+      "scrambleState(",
+      "world.outages",
+      "this.outages",
+      "darkControl(",
+      "world.workZones",
+      "this.workZones",
+      "snap.work_zone",
+      "flagger_stops_run",
+      '"stop_for_flagger"',
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -347,15 +377,22 @@ test("the World builds each feature from its option, with its seen flag and its 
     tailgaters: true,
     roadClosures: true,
     vans: 2,
+    scrambles: true,
+    workZones: 1,
+    outages: 1,
   });
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;
     if (!f.buildFleet) {
       const offState = off[property],
         onState = on[property];
-      assert.equal(typeof offState === "boolean" ? offState : offState?.enabled, false, `${f.key} off by default`);
       assert.equal(
-        typeof onState === "boolean" ? onState : onState?.enabled,
+        typeof offState === "boolean" ? offState : (offState?.enabled ?? offState?.count > 0),
+        false,
+        `${f.key} off by default`,
+      );
+      assert.equal(
+        typeof onState === "boolean" ? onState : (onState?.enabled ?? onState?.count > 0),
         f.key === "geese" ? !!map.parkSpans?.length : !["pxo", "roadside"].includes(f.key),
         `${f.key} on with its option`,
       );
@@ -534,6 +571,199 @@ test("a record at a slot the core never runs is refused", () => {
   assert.throws(() => R.hooks("sense", "nowhere"), /no slot/);
 });
 
+test("feature records reject malformed configuration with the field that needs fixing", () => {
+  const valid = { key: "example", build: () => false };
+  const metric = { at: "late", name: "audit_count", label: "Audit count", failure: "audit failure" };
+  const notice = { at: "end", read: () => null, order: 0, duration: 1000, style: "" };
+  const coachReport = { at: "end", order: 0, read: () => ({}) };
+  const coachTip = { at: "afterSpeed", order: 0, when: () => true, text: "Tip" };
+  const postDeduction = { at: "post", order: 0, counter: "stops", weight: 4, category: "legality" };
+  const bad = [
+    [{ key: "broken-key!" }, /valid key/],
+    [{ key: "constructor" }, /valid key/],
+    [{ property: "world.field" }, /property must/],
+    [{ calls: " " }, /calls must/],
+    [{ flag: "badFlag" }, /lowercase query/],
+    [{ defaultCount: 1.5 }, /positive integer/],
+    [{ defaultCount: 0 }, /positive integer/],
+    [{ build: false }, /no build/],
+    [{ buildAt: "duringSpawn" }, /unknown build position/],
+    [{ buildFleet: true }, /buildFleet must/],
+    [{ motion: true }, /motion must/],
+    [{ parkingTraffic: true }, /parkingTraffic must/],
+    [{ day: 1 }, /day must/],
+    [{ utcOffset: "true" }, /utcOffset must/],
+    [{ priority: "stop" }, /priority must/],
+    [{ priority: [""] }, /priority must/],
+    [{ snapshot: [] }, /snapshot must/],
+    [{ snapshot: { entry: undefined } }, /snapshot has an invalid value/],
+    [{ snapshot: { "wrong field": null } }, /snapshot has an invalid key/],
+    [{ flagText: { unsafe: "" } }, /flagText has an invalid value/],
+    [{ perceptionRejections: { unsafe: () => "" } }, /perceptionRejections has an invalid value/],
+    [{ eventBadges: { unsafe: false } }, /eventBadges has an invalid value/],
+    [{ obstacle: {} }, /obstacle needs a test/],
+    ...["traffic", "fixed", "likePedestrian", "long"].map((field) => [
+      { obstacle: { test: () => true, [field]: 0 } },
+      new RegExp(`obstacle\\.${field} must be a boolean`),
+    ]),
+    ...["predict", "visible", "oncoming", "parkedClearance", "noParking"].map((field) => [
+      { obstacle: { test: () => true, [field]: 0 } },
+      new RegExp(`obstacle\\.${field} must be a function`),
+    ]),
+    [{ obstacle: { test: () => true, label: " " } }, /obstacle.label must be nonempty/],
+    [{ toString: () => null }, /unknown hook/],
+    [{ sense: { at: "end" } }, /needs a run function/],
+    [{ sense: { at: "", run() {} } }, /core never runs/],
+    [{ sense: false }, /needs a run function/],
+    [{ prompt: () => "" }, /prompt must be an object/],
+    [{ notice: () => "" }, /notice must be an object/],
+    [{ seen: "met", metric: () => "" }, /metric must be an object/],
+    [{ prompt: { at: "headlights", text: "" } }, /prompt needs text/],
+    [{ prompt: { at: "headlights", text: "Guidance", inline: 1 } }, /prompt.inline must/],
+    [{ seen: "met", metric: { ...metric, name: "two keys" } }, /metric has an invalid name/],
+    [{ seen: "met", metric: { ...metric, decimals: 16 } }, /metric.decimals/],
+    [{ seen: "met", metric: { ...metric, threshold: -1 } }, /metric.threshold/],
+    [{ seen: "met", metric: { ...metric, traceType: false } }, /metric.traceType/],
+    [{ seen: "met", metric: { ...metric, eventType: 42 } }, /metric.eventType/],
+    [{ notice: { ...notice, read: "line" } }, /notice needs a read/],
+    [{ notice: { ...notice, order: 0.5 } }, /notice.order/],
+    [{ notice: { ...notice, duration: 0 } }, /notice.duration/],
+    [{ notice: { ...notice, style: 1 } }, /notice.style/],
+    [{ notice: { ...notice, hold: "true" } }, /notice.hold/],
+    [{ coach: [] }, /coach must be an object/],
+    [{ coach: { init: {} } }, /coach.init must be a function/],
+    [{ coach: { observe: 1 } }, /coach.observe must be a function/],
+    [{ coach: { frame: 1 } }, /coach.frame must be a function/],
+    [{ coach: { directionExempt: 1 } }, /coach.directionExempt must be a function/],
+    [{ coach: { seen: "scoreSeen" } }, /coach.seen requires a World seen flag/],
+    [{ coach: { cap: " " } }, /coach.cap must be a counter/],
+    [{ coach: { events: { stop_sign: "count a stop" } } }, /coach.events has an invalid value/],
+    [{ coach: { tips: {} } }, /coach.tips must be an array/],
+    [{ coach: { reports: [null] } }, /coach.reports entries must be objects/],
+    [{ coach: { reports: [{ ...coachReport, at: "nowhere" }] } }, /coach.reports has an unknown slot/],
+    [{ coach: { reports: [{ ...coachReport, order: "0" }] } }, /coach.reports order must be an integer/],
+    [{ coach: { reports: [{ ...coachReport, read: null }] } }, /coach.reports needs a read function/],
+    [{ coach: { guidance: [{ at: "afterSample", order: 0 }] } }, /coach.guidance needs a read function/],
+    [{ coach: { tips: [{ ...coachTip, when: true }] } }, /coach.tips needs a when function/],
+    [{ coach: { tips: [{ ...coachTip, text: "" }] } }, /coach.tips needs tip text/],
+    [{ coach: { deductions: [{ ...postDeduction, counter: "" }] } }, /coach.deductions needs a counter name/],
+    [{ coach: { deductions: [{ ...postDeduction, weight: -1 }] } }, /coach.deductions weight/],
+    [{ coach: { deductions: [{ ...postDeduction, category: "speed" }] } }, /coach.deductions needs a score category/],
+    [{ coach: { typo() {} } }, /unknown coach field/],
+  ];
+  for (const [fields, error] of bad) assert.match(R.recordProblem({ ...valid, ...fields }), error);
+  assert.match(R.recordProblem(null), /must be an object/);
+  assert.equal(R.recordProblem({ ...valid, notice, coach: { reports: [coachReport], tips: [coachTip] } }), null);
+  assert.equal(
+    R.recordProblem({ ...valid, coach: { deductions: [{ ...postDeduction, category: "control" }] } }),
+    null,
+  );
+  assert.throws(() => R.hooks("constructor"), /no slot/);
+});
+
+test("feature records cannot overwrite another owner's exported data or World state", () => {
+  const first = { key: "first", build: () => false };
+  const second = { ...first, key: "second" };
+  const metric = { at: "late", name: "count", label: "Count", failure: "failure" };
+  const notice = { at: "end", order: 0, duration: 2500, read: () => null, style: "safety" };
+  assert.equal(R.registryProblem([first, second]), null);
+  assert.match(R.registryProblem([first, { ...second, key: first.key }]), /option "first" already belongs/);
+  assert.match(R.registryProblem([first, { ...second, flag: "first" }]), /query flag "first" already belongs/);
+  assert.match(R.registryProblem([first, { ...second, property: "first" }]), /World field "first" already belongs/);
+  assert.match(
+    R.registryProblem([
+      { ...first, seen: "met" },
+      { ...second, calls: "met" },
+    ]),
+    /World field "met"/,
+  );
+  assert.match(R.registryProblem([{ ...first, property: "met", seen: "met" }]), /World field "met"/);
+  assert.match(
+    R.registryProblem([
+      { ...first, seen: "seenA", metric },
+      { ...second, seen: "seenB", metric },
+    ]),
+    /metric "count" already belongs/,
+  );
+  assert.match(
+    R.registryProblem([
+      { ...first, notice },
+      { ...second, notice },
+    ]),
+    /notice order "end\/0"/,
+  );
+  assert.equal(
+    R.registryProblem([
+      { ...first, notice },
+      { ...second, notice: { ...notice, at: "beforeZone" } },
+    ]),
+    null,
+  );
+  for (const [field, value] of [
+    ["snapshot", null],
+    ["flagText", "An unsafe move"],
+    ["perceptionRejections", "Unsafe"],
+    ["eventBadges", () => "UNSAFE"],
+  ]) {
+    const claim = { [field]: { shared: value } };
+    assert.match(
+      R.registryProblem([
+        { ...first, ...claim },
+        { ...second, ...claim },
+      ]),
+      new RegExp(`${field} "shared"`),
+    );
+  }
+});
+
+test("feature examiner failures can identify a flagger stop independently of generic missed stops", () => {
+  const [check] = R.hooks("examinerFail", "beforeTracks");
+  assert.equal(check({ stop_signs: 1, flagger_stops_run: 0 }), null);
+  assert.deepEqual(check({ flagger_stops_run: 1 }), {
+    category: "right_of_way",
+    remark: "Went past a flagger's STOP paddle",
+    reason: "flagger",
+    incident: null,
+  });
+});
+
+test("the registry comparison requires both complete captures and flags non-timing changes", () => {
+  const root = fs.mkdtempSync(join(tmpdir(), "registry-parity-"));
+  try {
+    const before = join(root, "before"),
+      after = join(root, "after");
+    fs.mkdirSync(before);
+    fs.mkdirSync(after);
+    const compare = () =>
+      spawnSync(process.execPath, ["scripts/registry_parity.mjs", "compare", before, after], {
+        encoding: "utf8",
+      });
+    const write = (dir, file, value) => fs.writeFileSync(join(dir, file), JSON.stringify(value));
+    let check = compare();
+    assert.equal(check.status, 1);
+    assert.match(check.stderr, /Missing a required baseline capture/);
+    for (const file of ["bare-dry.json", "city-dry.json", "arena-rules.json", "arena-cautious.json", "system-prompt.json"]) {
+      write(before, file, { results: [{ time_s: 2, latency_ms: 30, events: [{ type: "stop" }] }] });
+      write(after, file, { results: [{ time_s: 2, latency_ms: 10, events: [{ type: "stop" }] }] });
+    }
+    check = compare();
+    assert.equal(check.status, 0, check.stderr);
+    assert.match(check.stdout, /arena-rules.json: identical/);
+    write(after, "city-snow.json", {});
+    check = compare();
+    assert.equal(check.status, 1);
+    assert.match(check.stderr, /Run sets differ/);
+    fs.unlinkSync(join(after, "city-snow.json"));
+    write(after, "arena-rules.json", { results: [{ time_s: 3, events: [{ type: "go" }] }] });
+    check = compare();
+    assert.equal(check.status, 1);
+    assert.match(check.stderr, /results.0.events.0.type: expected "stop", actual "go"/);
+    assert.match(check.stderr, /results.0.time_s: expected 2, actual 3/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("every record loads in a fresh process, through the registry as the core loads it", () => {
   const dir = new URL("../static/js/sim/features/", import.meta.url);
   for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "index.js")) {
@@ -555,10 +785,13 @@ test("every record loads in a fresh process, through the registry as the core lo
   }
 });
 
-test("the van and collection simulations can load before the registry", () => {
+test("standalone feature simulations can load before the registry", () => {
   for (const [module, className] of [
     ["double-parked", "DoubleParked"],
     ["collection-truck", "CollectionTrucks"],
+    ["outage", "Outages"],
+    ["work-zone", "WorkZones"],
+    ["signals", "setScrambles"],
   ]) {
     const entry = new URL(`../static/js/sim/${module}.js`, import.meta.url);
     const code = `globalThis.document = { querySelector: () => null };
