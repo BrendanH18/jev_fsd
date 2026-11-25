@@ -399,17 +399,33 @@ export function runRenderTests() {
       "mirror pass unbinds its attached reflection texture",
       reflectionSampler === null && reflection.texture.value === mirror.rt.texture,
     );
+    const publishedMatrix = reflection.matrix.value.clone();
+    const render = fakeRenderer.render;
     fakeRenderer.render = () => {
       throw new Error("test reflection failure");
     };
+    camera.position.x += 1;
+    let renderFailed = false;
     try {
       mirror.render();
-    } catch {
-      /* verify state restoration below */
+    } catch (error) {
+      renderFailed = error.message === "test reflection failure";
     }
     check(
-      "reflection errors restore target, strength and sampler",
-      target === null && reflection.strength.value === 1 && reflection.texture.value === mirror.rt.texture,
+      "reflection errors restore the target and withhold the incomplete reflection",
+      renderFailed &&
+        target === null &&
+        reflection.strength.value === 0 &&
+        reflection.texture.value === null &&
+        reflection.matrix.value.equals(publishedMatrix),
+    );
+    fakeRenderer.render = render;
+    check(
+      "the next successful reflection publishes its texture and projection",
+      mirror.render() &&
+        reflection.strength.value === 1 &&
+        reflection.texture.value === mirror.rt.texture &&
+        !reflection.matrix.value.equals(publishedMatrix),
     );
   } finally {
     mirror.dispose();
