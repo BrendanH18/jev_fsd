@@ -758,9 +758,10 @@ function streetCarStyle(id, styleIndex) {
 // Keep the same instance buffers and draw count. A style batch only needs spokes while
 // one of its cars is close enough to see them. Photo mode keeps the original near detail.
 class ParkedCarLOD extends THREE.LOD {
-  constructor(cars, wheels, detailed, simple) {
+  constructor(cars, instances, wheels, detailed, simple) {
     super();
     this.cars = cars;
+    this.instances = instances;
     this.wheels = wheels;
     this.detailed = detailed;
     this.simple = simple;
@@ -774,7 +775,8 @@ class ParkedCarLOD extends THREE.LOD {
     const close =
       photoMode ||
       this.cars.some(
-        (car) => !hiddenParked.has(car.instances) && (car.x - x) ** 2 + (car.y + z) ** 2 + y * y < radius * radius,
+        (car) =>
+          !hiddenParked.has(this.instances.get(car)) && (car.x - x) ** 2 + (car.y + z) ** 2 + y * y < radius * radius,
       );
     this.wheels.geometry = close ? this.detailed : this.simple;
   }
@@ -782,6 +784,7 @@ class ParkedCarLOD extends THREE.LOD {
 
 export function buildParkedCars(cars) {
   const group = new THREE.Group();
+  const instances = (group.userData.instances = new WeakMap());
   if (!cars.length) {
     group.userData.count = 0;
     return group;
@@ -821,14 +824,14 @@ export function buildParkedCars(cars) {
         one,
       ),
     );
-    for (const c of list) c.instances = [];
+    for (const c of list) instances.set(c, []);
     const emit = (level, geometry, material, matrices, colors = null, shadow = false) => {
       const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
       const per = matrices.length / list.length; // 1, or 4 for the wheels
       matrices.forEach((m, i) => {
         mesh.setMatrixAt(i, m);
         if (colors) mesh.setColorAt(i, colors[i]);
-        list[Math.floor(i / per)].instances.push({ mesh, i, matrix: m.clone() });
+        instances.get(list[Math.floor(i / per)]).push({ mesh, i, matrix: m.clone() });
       });
       mesh.castShadow = shadow;
       mesh.receiveShadow = true;
@@ -856,7 +859,7 @@ export function buildParkedCars(cars) {
     emit(far, distant.glass, shared.glass, mats, null, true);
     emit(far, distant.trim, shared.trim, mats);
     emit(far, distant.wheels, [shared.tire, shared.rim], wheels);
-    group.add(chunkLOD(near, far, 100, new ParkedCarLOD(list, nearWheels, detailed, distant.wheels)));
+    group.add(chunkLOD(near, far, 100, new ParkedCarLOD(list, instances, nearWheels, detailed, distant.wheels)));
   }
   group.userData.count = cars.length;
   return group;
@@ -865,17 +868,17 @@ export function buildParkedCars(cars) {
 // A parked car has pulled out: collapse its instances (it is drawn as traffic from now on).
 const hiddenParked = new WeakSet();
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
-export function hideParkedCar(car) {
-  if (car.instances) hiddenParked.add(car.instances);
-  for (const { mesh, i } of car.instances || []) {
+export function hideParkedCar(instances) {
+  hiddenParked.add(instances);
+  for (const { mesh, i } of instances) {
     mesh.setMatrixAt(i, HIDDEN);
     mesh.instanceMatrix.needsUpdate = true;
   }
 }
 
-export function restoreParkedCar(car) {
-  if (car.instances) hiddenParked.delete(car.instances);
-  for (const { mesh, i, matrix } of car.instances || []) {
+export function restoreParkedCar(instances) {
+  hiddenParked.delete(instances);
+  for (const { mesh, i, matrix } of instances) {
     mesh.setMatrixAt(i, matrix);
     mesh.instanceMatrix.needsUpdate = true;
   }

@@ -140,7 +140,10 @@ test("the same style survives parking and an open door uses the obstacle panel's
   const moving = createCarMesh(car.color, car.id, car.style);
   const parked = buildParkedCars([car]);
   assert.equal(moving.userData.style, "pickup");
-  assert.equal(car.instances[0].mesh.geometry === moving.getObjectByName("bodywork").geometry, true);
+  assert.equal(
+    parked.userData.instances.get(car)[0].mesh.geometry === moving.getObjectByName("bodywork").geometry,
+    true,
+  );
   const door = createDoorMesh(car, { spec: { length: 1.35, width: 0.1 } });
   const panel = door.userData.swing.children[0];
   assert.equal(panel.geometry.parameters.width, 1.35);
@@ -154,15 +157,17 @@ test("parked wheel LOD ignores a hidden nearby body but includes it when restore
   const camera = new THREE.PerspectiveCamera();
   const close = { ...vehicle, style: 1, color: 0xaaaaff };
   const remote = { ...close, id: "remote", x: 60 };
-  const lod = buildParkedCars([close, remote]).children[0];
+  const parked = buildParkedCars([close, remote]);
+  const lod = parked.children[0];
+  const instances = parked.userData.instances.get(close);
   lod.updateMatrixWorld(true);
   camera.updateMatrixWorld(true);
   lod.update(camera);
   assert.equal(lod.wheels.geometry === lod.detailed, true);
-  hideParkedCar(close);
+  hideParkedCar(instances);
   lod.update(camera);
   assert.equal(lod.wheels.geometry === lod.simple, true);
-  restoreParkedCar({ ...close });
+  restoreParkedCar(instances);
   lod.update(camera);
   assert.equal(lod.wheels.geometry === lod.detailed, true);
 });

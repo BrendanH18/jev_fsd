@@ -270,9 +270,11 @@ test("checkpoint motion preserves lights, door latches, and other discrete state
 
 test("moving, parking again and reinstating an earlier bay preserve one drawing", () => {
   const { view, world, fleet } = sample();
-  const actors = mountActorViews(view, world, fleet);
   const original = world.parked.list[0];
-  const { mesh, i } = original.instances[0];
+  Object.freeze(original);
+  const actors = mountActorViews(view, world, fleet);
+  assert.equal(world.parked.added.length, world.parked.list.length);
+  const { mesh, i } = view.scene.children.find((node) => node.userData.instances).userData.instances.get(original)[0];
   const m = new THREE.Matrix4();
   mesh.getMatrixAt(i, m);
   assert.equal(m.elements[12], original.x);
@@ -284,6 +286,8 @@ test("moving, parking again and reinstating an earlier bay preserve one drawing"
   actors.sync();
   mesh.getMatrixAt(i, m);
   assert.equal(m.elements[0], 0);
+  assert.equal(world.parked.added.at(-1) === sameIdElsewhere, true);
+  assert.equal(world.parked.removed.length, 1);
   const at = () => view.scene.children.filter((node) => node.userData.style && node.position.x === 65);
   assert.equal(at().length, 1);
 
@@ -299,6 +303,8 @@ test("moving, parking again and reinstating an earlier bay preserve one drawing"
   assert.equal(m.elements[12], original.x);
   assert.equal(at().length, 0);
   assert.equal(retired, 1);
+  assert.equal(world.parked.added.at(-1) === sameIdElsewhere, true);
+  assert.equal(world.parked.removed.length, 2);
 });
 
 test("retired traffic frees its resources and a reused ID can show a new vehicle kind", () => {

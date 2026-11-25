@@ -193,17 +193,18 @@ export function runRenderTests() {
           triangles(chunk.levels[1].object) < triangles(chunk.levels[0].object) / 2,
       ),
   );
-  hideParkedCar(car);
+  const { instances } = parked.userData;
+  hideParkedCar(instances.get(car));
   check(
     "pull-out removes every near and far instance",
-    car.instances.every(({ mesh, i }) => {
+    instances.get(car).every(({ mesh, i }) => {
       mesh.getMatrixAt(i, matrix);
       return matrix.elements[0] === 0 && matrix.elements[5] === 0 && matrix.elements[10] === 0;
     }),
   );
   check(
     "pull-out leaves neighboring parked instances intact",
-    neighbor.instances.every(({ mesh, i }) => {
+    instances.get(neighbor).every(({ mesh, i }) => {
       mesh.getMatrixAt(i, matrix);
       return Math.abs(matrix.determinant() - 1) < 1e-5;
     }),
