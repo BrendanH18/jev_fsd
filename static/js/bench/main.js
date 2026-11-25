@@ -301,7 +301,14 @@ async function runFromForm() {
     track: $("#track").value,
   };
   validateRunInputs(options, Object.keys(WEATHER), { form: true });
-  return run(options);
+  return run({ ...options, confirmReplace: replaceOldestRuns });
+}
+
+// Asked only for a run started from the form, when the demo's browser storage is full.
+function replaceOldestRuns() {
+  return window.confirm(
+    "Browser storage is full. Remove the oldest saved runs to make room for this benchmark? Cancel keeps them, and this run's results stay available to download.",
+  );
 }
 
 // heldout: the map's held-out routes (bench/heldout.js) instead of count and seed; never debug against
@@ -354,6 +361,7 @@ async function runBenchmark({
   save = true,
   record = false,
   replay = null,
+  confirmReplace = null,
 } = {}) {
   for (const [name, value] of Object.entries({ heldout, diagnostics, save, record }))
     if (typeof value !== "boolean") throw new Error(`${name} must be true or false.`);
@@ -499,14 +507,22 @@ async function runBenchmark({
   }
   if (save && state.results.length) {
     try {
-      saved = await api("/api/bench/save", {
+      const body = {
         suite_version: state.suite_version,
         config: { ...config, completed: state.results.length, ...(state.stopped ? { stopped: true } : {}) },
         summary: state.summary,
         results: state.results,
-      });
+      };
+      try {
+        saved = await api("/api/bench/save", body);
+      } catch (err) {
+        // (the demo keeps its saved runs when browser storage is full unless the user agrees to remove them)
+        if (err?.code !== "storage_full" || (await confirmReplace?.()) !== true) throw err;
+        saved = await api("/api/bench/save", { ...body, replace_oldest: true });
+      }
+      const removed = saved.removed?.length ? `. Removed older runs to make room: ${saved.removed.join(", ")}` : "";
       setStatus(
-        `${state.stopped ? "Stopped. " : ""}Saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `. Could not save the recording: ${recordingError}` : ""}`,
+        `${state.stopped ? "Stopped. " : ""}Saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${removed}${recordingError ? `. Could not save the recording: ${recordingError}` : ""}`,
       );
     } catch (err) {
       setStatus(

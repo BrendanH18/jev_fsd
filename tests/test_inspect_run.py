@@ -450,6 +450,23 @@ class InspectRunTests(unittest.TestCase):
             self.assertEqual(missing.returncode, 3)
             self.assertEqual(json.loads(missing.stdout)["regression"]["coverage"]["collision_count_pairs"], 0)
 
+            # Reports that both stopped before the same later scenario cannot vouch for it.
+            stop = "stopped before s1-2: $0.10 of the budget left"
+            for path in (a, b):
+                path.write_text(json.dumps({"config": {**cfg, "count": 2}, "results": [row], "stopped": stop}))
+            stopped = subprocess.run(
+                [sys.executable, CLI, a, "--compare", b, "suite-verdicts", "--fail-on-regression"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(stopped.returncode, 3)
+            payload = json.loads(stopped.stdout)
+            self.assertEqual(payload["routes"]["matched"], ["s1-1"])
+            coverage = payload["regression"]["coverage"]
+            self.assertTrue(coverage["incomplete"])
+            self.assertEqual(coverage["stopped"], {"baseline": stop, "comparison": stop})
+            self.assertIn(stop, stopped.stderr)
+
         # --fail-on-regression without --compare fails cleanly.
         bad = subprocess.run([sys.executable, CLI, SAMPLE, "--fail-on-regression"], capture_output=True)
         self.assertEqual(bad.returncode, 2)

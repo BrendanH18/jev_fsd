@@ -121,15 +121,34 @@ try {
   storage.set(key, "{}");
   assert.equal((await demoApi("/api/bench/runs")).runs.length, 0);
   storage.set(key, JSON.stringify(recorded));
+  // A full storage below the ten-run cap keeps the saved runs unless the user agrees to remove them.
   capacity = 2;
-  const third = await demoApi("/api/bench/save", savedRun);
+  const full = storage.get(key);
+  await assert.rejects(
+    demoApi("/api/bench/save", savedRun),
+    (error) => error.code === "storage_full" && /2 saved runs were kept/.test(error.message),
+  );
+  assert.equal(storage.get(key), full);
+  const third = await demoApi("/api/bench/save", { ...savedRun, replace_oldest: true });
+  assert.deepEqual(third.removed, [first.name]);
   assert.deepEqual(
     (await demoApi("/api/bench/runs")).runs.map((r) => r.name),
     [third.name, second.name],
   );
+  assert.equal((await demoApi(`/api/bench/runs?name=${third.name}`)).replace_oldest, undefined);
+  // (at the ten-run cap, the run past the cap is named with those removed for room)
+  const ten = Array.from({ length: 10 }, (_, i) => ({ ...savedRun, name: `old-${i}`, saved_at: "x" }));
+  storage.set(key, JSON.stringify(ten));
+  capacity = 9;
+  const eleventh = await demoApi("/api/bench/save", { ...savedRun, replace_oldest: true });
+  assert.deepEqual(eleventh.removed, ["old-8", "old-9"]);
   capacity = 0;
   const snapshot = storage.get(key);
-  await assert.rejects(demoApi("/api/bench/save", savedRun), /exceeds available demo storage/);
+  await assert.rejects(demoApi("/api/bench/save", savedRun), /storage is full/);
+  await assert.rejects(
+    demoApi("/api/bench/save", { ...savedRun, replace_oldest: true }),
+    /exceeds available demo storage/,
+  );
   assert.equal(storage.get(key), snapshot);
 } finally {
   Date.now = originalDate;
@@ -166,6 +185,8 @@ assert.match(source, /cover:.*valueAsNumber/);
 assert.match(source, /"id", "pass", "failures", "simulation_error"/);
 assert.match(source, /\["flagged_choices", "flagged choices"/);
 assert.match(source, /loadRuns.*[\s\S]*?bench\/runs\?summary=1/);
+assert.match(source, /storage_full[\s\S]*?\(await confirmReplace\?\.\(\)\) !== true[\s\S]*?replace_oldest: true/);
+assert.match(source, /run\(\{ \.\.\.options, confirmReplace: replaceOldestRuns \}\)/);
 console.log("Benchmark view options and demo run history passed.");
 
 // Exercise the page controller with real scenario planning and a small DOM substitute.

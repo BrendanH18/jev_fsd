@@ -848,7 +848,9 @@ def main(argv=None):
                 routes, _, left_matched, right_matched = comparison.match_routes(
                     args.run.name, config, rows, args.compare.name, other_config, other_rows
                 )
-                regression = comparison.assess_regression(left_matched, right_matched, routes)
+                regression = comparison.assess_regression(
+                    left_matched, right_matched, routes, comparison.stop_markers(config, other_config)
+                )
         else:
             rows = _filter_rows(rows, **filters)
         if args.require_selection and not rows and args.compare is None:
@@ -906,6 +908,8 @@ def main(argv=None):
         output["regression"] = regression
         if regression["coverage"]["incomplete"]:
             print("Regression coverage is incomplete. See coverage details in the report.", file=sys.stderr)
+            for side, reason in regression["coverage"]["stopped"].items():
+                print(f"The {side} report stopped early: {reason}", file=sys.stderr)
     try:
         print(
             format_output(output, args.format or "json", is_summary=args.summary, is_compare=args.compare is not None)

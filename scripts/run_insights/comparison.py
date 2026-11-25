@@ -160,8 +160,23 @@ def route_changes(left, right):
     return changes
 
 
-def assess_regression(left, right, routes=None):
-    """Compare observed verdicts, audit labels and counters over matched rows."""
+def stop_markers(left_config, right_config):
+    """Stop markers of saved reports that ended before their whole selection, by side."""
+    markers = {}
+    for side, config in (("baseline", left_config), ("comparison", right_config)):
+        stopped = (config or {}).get("stopped")
+        if stopped:
+            markers[side] = stopped if isinstance(stopped, str) else "stopped before the whole selection"
+    return markers
+
+
+def assess_regression(left, right, routes=None, stopped=None):
+    """Compare observed verdicts, audit labels and counters over matched rows.
+
+    A report that stopped early leaves the coverage incomplete even where both stopped at the same
+    route, because the unrun scenarios are missing from both sides.
+    """
+    stopped = dict(stopped or {})
     passed_delta = collision_delta = violation_delta = 0
     verdict_pairs = label_pairs = collision_pairs = traffic_counter_pairs = 0
     missing_traffic_counts = {}
@@ -228,10 +243,12 @@ def assess_regression(left, right, routes=None):
             "comparable_traffic_counters": traffic_counter_pairs,
             "missing_traffic_counts": missing_traffic_counts,
             **skipped,
+            "stopped": stopped,
             "incomplete": not left
             or min(verdict_pairs, label_pairs, collision_pairs) < len(left)
             or bool(missing_traffic_counts)
-            or any(skipped.values()),
+            or any(skipped.values())
+            or bool(stopped),
         },
     }
 

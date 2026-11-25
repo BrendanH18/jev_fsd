@@ -321,6 +321,9 @@ const finished = (tx) =>
 const sameSummary = (a, b) =>
   a.created_at === b.created_at && a.status === b.status && a.count === b.count && a.bytes === b.bytes;
 const summary = (run, bytes) => ({ created_at: run.created_at, status: run.status, count: run.results.length, bytes });
+// Where an index entry sits in the history: the `order` a migration gave it (ids are never reused, so
+// they cannot place a moved run among older saved ones), or else its id. Orders stay below later ids.
+const position = (entry) => (Number.isFinite(entry.order) ? entry.order : entry.id);
 
 function openDatabase(indexedDB) {
   return new Promise((resolve, reject) => {
@@ -398,7 +401,9 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
   let started = 0,
     rendered = 0;
   const sorted = (index) =>
-    index.filter((entry) => Number.isSafeInteger(entry?.id) && entry.id > 0).sort((a, b) => b.id - a.id);
+    index
+      .filter((entry) => Number.isSafeInteger(entry?.id) && entry.id > 0)
+      .sort((a, b) => position(b) - position(a) || b.id - a.id);
 
   async function list() {
     const sequence = ++started;
@@ -468,7 +473,7 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
           const old = sorted(stored);
           // (never an id used before, even after the newest run is deleted: another tab may still map the
           // old id to the run it named, and would delete the new one in its place)
-          const id = Math.max(old[0]?.id ?? 0, count(lastId) ? lastId : 0) + 1;
+          const id = old.reduce((max, i) => Math.max(max, i.id), count(lastId) ? lastId : 0) + 1;
           if (!Number.isSafeInteger(id)) throw new Error("Evaluation history has exhausted its record IDs.");
           const drop = new Set();
           const droppable = () =>
@@ -527,8 +532,10 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
   };
 }
 
-// Moves the localStorage history into the database, oldest first so the newest keeps the highest id,
-// leaving out runs already there (a move interrupted before the key was removed), then removes the key.
+// Moves the localStorage history into the database, leaving out runs already there (a move interrupted
+// before the key was removed), then removes the key. The fallback runs and the saved ones are put in the
+// order they were created, so the limits drop the oldest runs, not the moved ones. Each kept run's
+// `order` records its place, leaving every saved run's id as it is; later saves take higher ids.
 async function migrate(db, storage, { maxRuns, maxBytes }) {
   let raw;
   try {
@@ -573,10 +580,8 @@ async function migrate(db, storage, { maxRuns, maxBytes }) {
           if (Array.isArray(pair) && text(pair[0]) && count(pair[1]))
             copies.set(pair[0], Math.max(copies.get(pair[0]) ?? 0, pair[1]));
       const previous = old.reduce((max, i) => Math.max(max, i.id), count(lastId) ? lastId : 0);
-      let id = previous;
       const occurrences = new Map();
-      const incoming = new Map();
-      const combined = old.sort((a, b) => a.id - b.id);
+      const moving = [];
       for (const { run, key, entry } of pending) {
         occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
         const count = copies.get(key) ?? 0;
@@ -584,26 +589,41 @@ async function migrate(db, storage, { maxRuns, maxBytes }) {
           copies.set(key, count - 1);
           continue;
         }
-        id++;
-        if (!Number.isSafeInteger(id)) throw new Error("Evaluation history has exhausted its record IDs.");
-        incoming.set(id, run);
-        combined.push({ id, ...entry });
+        moving.push({ run, entry });
       }
-      let bytes = combined.reduce((total, entry) => total + entry.bytes, 0);
+      // Oldest first by creation time (a tie keeps the saved runs' order, then the fallback runs' order).
+      const created = (item) => {
+        const time = Date.parse((item.saved ?? item.entry).created_at);
+        return Number.isFinite(time) ? time : -Infinity;
+      };
+      const saved = old.sort((a, b) => position(a) - position(b) || a.id - b.id);
+      const combined = [...saved.map((entry) => ({ saved: entry })), ...moving].sort(
+        (a, b) => created(a) - created(b) || 0,
+      );
+      let bytes = combined.reduce((total, item) => total + (item.saved ?? item.entry).bytes, 0);
       let first = 0;
       while (first < combined.length && (combined.length - first > maxRuns || bytes > maxBytes)) {
-        const entry = combined[first++];
-        bytes -= entry.bytes;
-        if (!incoming.delete(entry.id)) {
-          store.delete(entry.id);
-          index.delete(entry.id);
+        const item = combined[first++];
+        bytes -= (item.saved ?? item.entry).bytes;
+        if (item.saved) {
+          store.delete(item.saved.id);
+          index.delete(item.saved.id);
         }
       }
-      for (const entry of combined.slice(first)) {
-        if (!incoming.has(entry.id)) continue;
-        store.put(incoming.get(entry.id), entry.id);
-        index.put(entry);
-      }
+      const kept = combined.slice(first);
+      // (each kept run's rank is its position, so repeated moves never need fractions)
+      let id = previous;
+      kept.forEach((item, rank) => {
+        const order = rank + 1;
+        if (item.saved) {
+          if (position(item.saved) !== order) index.put({ ...item.saved, order });
+          return;
+        }
+        id++;
+        if (!Number.isSafeInteger(id)) throw new Error("Evaluation history has exhausted its record IDs.");
+        store.put(item.run, id);
+        index.put({ id, ...item.entry, order });
+      });
       if (id > previous) metadata.put(id, LAST_ID);
       metadata.put([...occurrences], MIGRATED);
       await done;

@@ -218,7 +218,9 @@ uv run python scripts/inspect_run.py baseline.json --compare candidate.json --pa
 lists in the output. JSON is the default. The regression check reports evidence coverage and
 exits 2 for fewer passes, more measured collisions, an increased violation counter, or a new
 audit failure. It exits 3 when selected routes or measurements could not be compared and
-the matched evidence showed no regression.
+the matched evidence showed no regression. A report saved with a stop marker (a run stopped
+before its whole selection, such as a budget stop) counts as incomplete coverage even when both
+reports stopped at the same route; the coverage's `stopped` field gives each stop reason.
 
 ### Hard city slice
 

@@ -388,6 +388,71 @@ await test("migration retains the newest runs within both IndexedDB limits", asy
   }
 });
 
+await test("migration keeps the newest runs by creation time, not by when they moved", async () => {
+  // (a fallback tab saved T1 before another tab saved T2 and T3 into IndexedDB)
+  const older = new FakeIndexedDB();
+  const tab = await openEvaluationHistory({ indexedDB: older, storage: local() });
+  await tab.save(at(2));
+  await tab.save(at(3));
+  const fallback = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(1)])]]);
+  const merged = await openEvaluationHistory({ indexedDB: older, storage: fallback, maxRuns: 2 });
+  assert.deepEqual(times(await merged.list()), minutes(3, 2));
+  assert.equal(fallback.getItem(EVALUATION_HISTORY_KEY), null);
+  // (an interleaved fallback run survives in its place, and the order holds after reopening and saving)
+  for (const [maxRuns, expected] of [
+    [2, [3, 2]],
+    [3, [3, 2, 1]],
+  ]) {
+    const idb = new FakeIndexedDB();
+    const before = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+    await before.save(at(1));
+    await before.save(at(3));
+    const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2)])]]);
+    const after = await openEvaluationHistory({ indexedDB: idb, storage, maxRuns });
+    assert.deepEqual(times(await after.list()), minutes(...expected));
+    const reopened = await openEvaluationHistory({ indexedDB: idb, storage: local(), maxRuns });
+    assert.deepEqual(times(await reopened.list()), minutes(...expected));
+    assert.deepEqual(times(await reopened.save(at(4))), minutes(4, ...expected).slice(0, maxRuns));
+    const listed = await reopened.list();
+    assert.deepEqual(times(await reopened.remove(listed[1])), times([listed[0], ...listed.slice(2)]));
+  }
+  // (an older run imported into IndexedDB after a newer one is placed by when it was created)
+  const imported = new FakeIndexedDB();
+  const importing = await openEvaluationHistory({ indexedDB: imported, storage: local() });
+  await importing.save(at(3));
+  await importing.save(at(1));
+  const moved = await openEvaluationHistory({
+    indexedDB: imported,
+    storage: local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2)])]]),
+    maxRuns: 2,
+  });
+  assert.deepEqual(times(await moved.list()), minutes(3, 2));
+  // (repeated moves into the same gap keep the order)
+  const gap = new FakeIndexedDB();
+  const tabs = await openEvaluationHistory({ indexedDB: gap, storage: local() });
+  await tabs.save(at(1));
+  await tabs.save(at(5));
+  for (const m of [2, 4, 3])
+    await openEvaluationHistory({
+      indexedDB: gap,
+      storage: local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(m)])]]),
+    });
+  assert.deepEqual(times(await tabs.list()), minutes(5, 4, 3, 2, 1));
+  assert.deepEqual(times(await tabs.save(at(0))), minutes(0, 5, 4, 3, 2, 1));
+  // (saved runs keep their ids, so a tab open before the move still deletes the run it named)
+  const idb = new FakeIndexedDB();
+  const open = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await open.save(at(1));
+  const [newest] = await open.save(at(3));
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2)])]]);
+  assert.deepEqual(times(await (await openEvaluationHistory({ indexedDB: idb, storage })).list()), minutes(3, 2, 1));
+  await open.remove(newest);
+  assert.deepEqual(
+    times(await (await openEvaluationHistory({ indexedDB: idb, storage: local() })).list()),
+    minutes(2, 1),
+  );
+});
+
 await test("migration waits for a fallback tab that has read but has not yet saved history", async () => {
   const idb = new FakeIndexedDB(),
     storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(1)])]]);
@@ -588,6 +653,34 @@ await test("a version 1 IndexedDB history still prevents stale deletions after u
   await a.remove(first);
   await a.save(at(2));
   assert.deepEqual(times(await b.remove(stale)), minutes(2));
+});
+
+await test("a save after a migration reorders a version 1 history takes an unused id", async () => {
+  // (id 2 holds an older run imported after id 1; the fallback's only run is already there)
+  const entry = (id, m) => [
+    id,
+    { id, created_at: at(m).created_at, status: "complete", count: 1, bytes: new Blob([JSON.stringify(at(m))]).size },
+  ];
+  const idb = new FakeIndexedDB();
+  idb.dbs.set(EVALUATION_DB, {
+    version: 1,
+    stores: new Map([
+      [
+        "evaluations",
+        {
+          records: new Map([
+            [1, at(3)],
+            [2, at(1)],
+          ]),
+        },
+      ],
+      ["evaluation-index", { keyPath: "id", records: new Map([entry(1, 3), entry(2, 1)]) }],
+    ]),
+  });
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(1)])]]);
+  const history = await openEvaluationHistory({ indexedDB: idb, storage });
+  assert.deepEqual(times(await history.list()), minutes(3, 1));
+  assert.deepEqual(times(await history.save(at(4))), minutes(4, 3, 1));
 });
 
 await test("a damaged record is left out, and runs saved in another tab are picked up", async () => {
