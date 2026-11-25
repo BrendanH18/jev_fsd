@@ -29,7 +29,9 @@ export class GroundReflection {
     });
     this.mirror = new THREE.PerspectiveCamera();
     this.enabled = true;
+    this.disposed = false;
     this.resolutionScale = 0.25;
+    this._textureMatrix = new THREE.Matrix4();
     this._v = new THREE.Vector3();
     this._position = new THREE.Vector3();
     this._target = new THREE.Vector3();
@@ -43,28 +45,32 @@ export class GroundReflection {
   // whenever the main target is multisampled, and on a single-sample target their partly transparent
   // edge texels would be drawn opaque. Three resolves the samples before building the mip chain.
   setSamples(samples) {
-    if (this.rt.samples === samples) return;
+    if (this.disposed || this.rt.samples === samples) return;
+    this.clearSampler();
     this.rt.samples = samples;
     this.rt.dispose(); // reallocated with the new sample count on next use
   }
 
   setSize(w, h) {
-    this.rt.setSize(Math.max(2, Math.ceil(w * this.resolutionScale)), Math.max(2, Math.ceil(h * this.resolutionScale)));
+    if (this.disposed || !Number.isFinite(w) || !Number.isFinite(h)) return;
+    const width = Math.max(2, Math.ceil(w * this.resolutionScale));
+    const height = Math.max(2, Math.ceil(h * this.resolutionScale));
+    if (width === this.rt.width && height === this.rt.height) return;
+    this.clearSampler();
+    this.rt.setSize(width, height);
   }
 
   render() {
+    if (this.disposed) return false;
     const strength = this.enabled ? lighting.wet.value : 0;
-    reflection.strength.value = strength;
-    if (strength <= 0) return false;
+    reflection.strength.value = 0;
+    if (!(strength > 0)) return false;
     const cam = this.camera,
       m = this.mirror;
     cam.updateWorldMatrix(true, false); // include a moved parent (a chase rig) before reading the position
     // mirror the camera's position, view target, and up vector in the plane y = 0
     const pos = this._position.setFromMatrixPosition(cam.matrixWorld);
-    if (pos.y <= 0.001) {
-      reflection.strength.value = 0;
-      return false;
-    }
+    if (!(pos.y > 0.001)) return false;
     const dir = cam.getWorldDirection(this._v);
     const target = this._target.copy(pos).add(dir);
     const up = this._up.setFromMatrixColumn(cam.matrixWorld, 1).normalize();
@@ -78,9 +84,9 @@ export class GroundReflection {
     m.aspect = cam.aspect;
     m.near = cam.near;
     m.far = cam.far;
-    m.updateProjectionMatrix();
+    m.projectionMatrix.copy(cam.projectionMatrix);
     m.updateMatrixWorld();
-    reflection.matrix.value
+    this._textureMatrix
       .set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
       .multiply(m.projectionMatrix)
       .multiply(m.matrixWorldInverse);
@@ -100,7 +106,9 @@ export class GroundReflection {
       -1,
       (1 + projection[10]) / projection[14],
     );
-    clip.multiplyScalar(2 / clip.dot(q));
+    const denominator = clip.dot(q);
+    if (!Number.isFinite(denominator) || Math.abs(denominator) < 1e-8) return false;
+    clip.multiplyScalar(2 / denominator);
     projection[2] = clip.x;
     projection[6] = clip.y;
     projection[10] = clip.z + 1;
@@ -108,30 +116,35 @@ export class GroundReflection {
     m.projectionMatrixInverse.copy(m.projectionMatrix).invert();
     const r = this.renderer;
     const prevTarget = r.getRenderTarget(),
-      prevTexture = reflection.texture.value;
-    reflection.strength.value = 0; // the road does not reflect itself
+      prevFace = r.getActiveCubeFace?.(),
+      prevMip = r.getActiveMipmapLevel?.();
     // A zero-strength shader branch still leaves its sampler bound. WebGL rejects drawing into
     // an attached texture that is also bound as input, so unbind it for the entire mirror pass.
     reflection.texture.value = null;
-    let rendered = false;
     try {
       r.setRenderTarget(this.rt);
       r.clear();
       r.render(this.scene, m);
-      rendered = true;
     } finally {
-      reflection.strength.value = strength;
-      reflection.texture.value = rendered ? this.rt.texture : prevTexture;
-      r.setRenderTarget(prevTarget);
+      r.setRenderTarget(prevTarget, prevFace, prevMip);
     }
+    reflection.matrix.value.copy(this._textureMatrix);
+    reflection.texture.value = this.rt.texture;
+    reflection.strength.value = strength;
     return true;
   }
 
-  dispose() {
+  clearSampler() {
     if (reflection.texture.value === this.rt.texture) {
       reflection.texture.value = null;
       reflection.strength.value = 0;
     }
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.clearSampler();
     this.rt.dispose();
   }
 }
@@ -140,8 +153,9 @@ export class GroundReflection {
 // less than asphalt, concrete much less).
 export function wetReflective(material, gloss = 1) {
   const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey();
   material.onBeforeCompile = (shader, renderer) => {
-    if (prev) prev(shader, renderer);
+    prev.call(material, shader, renderer);
     shader.uniforms.tReflect = reflection.texture;
     shader.uniforms.reflMatrix = reflection.matrix;
     shader.uniforms.reflStrength = reflection.strength;
@@ -190,7 +204,7 @@ export function wetReflective(material, gloss = 1) {
         #include <opaque_fragment>`,
       );
   };
-  const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey.bind(material) : () => "";
-  material.customProgramCacheKey = () => `wet-${gloss}-${prevKey()}`;
+  material.customProgramCacheKey = () => `wet-${gloss}-${prevKey}`;
+  material.needsUpdate = true;
   return material;
 }

@@ -65,15 +65,17 @@ export class PostFX {
     this.camera = camera;
     const { x: w, y: h } = renderer.getDrawingBufferSize(new THREE.Vector2());
     this.samples = Math.min(4, renderer.capabilities?.maxSamples ?? 4);
+    this.disposed = false;
+    this.clearColor = new THREE.Color();
     this.sceneRT = this.sceneTarget(w, h, ao);
     this.blendRT = null;
-    this.ldrRT = new THREE.WebGLRenderTarget(w, h);
+    this.ldrRT = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
     this.ao = null;
     this.setAO(ao);
 
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.45, 1.0);
     this.output = new OutputPass();
-    this.gradeRT = new THREE.WebGLRenderTarget(w, h);
+    this.gradeRT = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
     this.grade = new THREE.ShaderMaterial({
       ...GradeShader,
       uniforms: THREE.UniformsUtils.clone(GradeShader.uniforms),
@@ -81,6 +83,8 @@ export class PostFX {
     this.grade.uniforms.aspect.value = w / Math.max(1, h);
     this.gradeQuad = new FullScreenQuad(this.grade);
     this.smaa = new SMAAPass();
+    this.smaa._edgesRT.depthBuffer = false;
+    this.smaa._weightsRT.depthBuffer = false;
     this.smaa.setSize(w, h);
     this.smaa.renderToScreen = true;
   }
@@ -93,18 +97,18 @@ export class PostFX {
     const depthTexture = new THREE.DepthTexture(w, h);
     depthTexture.format = THREE.DepthStencilFormat;
     depthTexture.type = THREE.UnsignedInt248Type;
-    return new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthTexture });
+    return new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthTexture, stencilBuffer: true });
   }
 
   setAO(enabled) {
-    if (!!this.ao === enabled && !!this.sceneRT.depthTexture === enabled) return;
+    if (this.disposed || (!!this.ao === enabled && !!this.sceneRT.depthTexture === enabled)) return;
     if (!!this.sceneRT.depthTexture !== enabled) {
       const { width, height } = this.sceneRT;
       this.sceneRT.dispose();
       this.sceneRT = this.sceneTarget(width, height, enabled);
     }
     if (!enabled) {
-      this.ao?.dispose();
+      this.disposeAO();
       this.blendRT?.dispose();
       this.ao = null;
       this.blendRT = null;
@@ -112,7 +116,7 @@ export class PostFX {
     }
     if (this.ao) return;
     const { width: w, height: h, depthTexture } = this.sceneRT;
-    this.blendRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
+    this.blendRT = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, depthBuffer: false });
 
     // AO at half resolution, in world units: a meter or so of reach darkens the ground under cars,
     // the foot of every wall, and the corners of eaves and window reveals.
@@ -139,6 +143,10 @@ export class PostFX {
   }
 
   setSize(w, h) {
+    if (this.disposed || !Number.isFinite(w) || !Number.isFinite(h)) return;
+    w = Math.max(1, Math.floor(w));
+    h = Math.max(1, Math.floor(h));
+    if (w === this.sceneRT.width && h === this.sceneRT.height) return;
     this.sceneRT.setSize(w, h);
     this.blendRT?.setSize(w, h);
     this.ldrRT.setSize(w, h);
@@ -164,7 +172,25 @@ export class PostFX {
   }
 
   render() {
+    if (this.disposed) return;
     const r = this.renderer;
+    const target = r.getRenderTarget(),
+      face = r.getActiveCubeFace(),
+      mip = r.getActiveMipmapLevel(),
+      autoClear = r.autoClear,
+      alpha = r.getClearAlpha();
+    r.getClearColor(this.clearColor);
+    try {
+      this.renderPasses(r);
+    } catch (error) {
+      r.setRenderTarget(target, face, mip);
+      r.setClearColor(this.clearColor, alpha);
+      r.autoClear = autoClear;
+      throw error;
+    }
+  }
+
+  renderPasses(r) {
     r.setRenderTarget(this.sceneRT);
     r.clear();
     r.render(this.scene, this.camera);
@@ -182,7 +208,18 @@ export class PostFX {
     this.smaa.render(r, null, this.gradeRT); // antialias to the screen
   }
 
+  disposeAO() {
+    if (!this.ao) return;
+    // The vendored GTAOPass omits these shader materials from its own dispose().
+    this.ao.gtaoMaterial.dispose();
+    this.ao.blendMaterial.dispose();
+    this.ao.dispose();
+    this.ao = null;
+  }
+
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     this.sceneRT.dispose();
     this.blendRT?.dispose();
     this.ldrRT.dispose();
@@ -190,7 +227,7 @@ export class PostFX {
     this.grade.dispose();
     this.gradeQuad.dispose();
     this.smaa.dispose();
-    this.ao?.dispose();
+    this.disposeAO();
     this.bloom.dispose();
     this.output.dispose();
   }

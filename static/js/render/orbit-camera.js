@@ -14,8 +14,8 @@ export class OrbitCamera {
   }
 
   rotate(dx, dy) {
-    this.azimuth = wrap(this.azimuth - dx * 0.007);
-    this.elevation = clamp(this.elevation - dy * 0.005, 0.12, 1.36);
+    if (Number.isFinite(dx)) this.azimuth = wrap(this.azimuth - dx * 0.007);
+    if (Number.isFinite(dy)) this.elevation = clamp(this.elevation - dy * 0.005, 0.12, 1.36);
   }
 
   zoom(delta, spec) {
@@ -25,7 +25,8 @@ export class OrbitCamera {
   setDistance(distance, spec) {
     // Leave clearance around the longest vehicle, even at the lowest camera angle.
     if (!Number.isFinite(distance)) return;
-    const min = Math.max(4.2, (spec?.length ?? 4.5) * 0.9);
+    const length = Number.isFinite(spec?.length) && spec.length > 0 ? spec.length : 4.5;
+    const min = Math.max(4.2, length * 0.9);
     this.distance = clamp(distance, min, Math.max(35, min));
   }
 
@@ -34,7 +35,7 @@ export class OrbitCamera {
     const center = (ego.spec?.length ?? 4.5) / 2 - (ego.spec?.rearOverhang ?? 0.9);
     const cx = ego.x + Math.cos(ego.psi) * center,
       cy = ego.y + Math.sin(ego.psi) * center;
-    const z = height * 0.55,
+    const z = (Number.isFinite(height) && height > 0 ? height : 1.45) * 0.55,
       angle = ego.psi + this.azimuth;
     const radius = this.distance * Math.cos(this.elevation);
     return {

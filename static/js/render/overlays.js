@@ -17,6 +17,7 @@ const overlayMat = (color, opacity) =>
     depthWrite: false,
     toneMapped: false,
     side: THREE.DoubleSide,
+    forceSinglePass: true,
   });
 
 function overlayMesh(b, material, order) {
@@ -85,19 +86,23 @@ export class Overlays {
       this.scene.add(this.routeMesh);
     }
     const end = route.endPoint();
-    this.marker.position.set(end[0], 0, -end[1]);
-    this.marker.visible = true;
+    this.marker.visible = Number.isFinite(end?.[0]) && Number.isFinite(end?.[1]);
+    if (this.marker.visible) this.marker.position.set(end[0], 0, -end[1]);
   }
 
   setCandidates(candidates, chosenId) {
+    const shown = this.showCandidates ? (candidates ?? null) : null;
+    if (this.candidates === shown && this.chosenId === chosenId) return;
+    this.candidates = shown;
+    this.chosenId = chosenId;
     for (const m of this.candidateMeshes) {
       this.group.remove(m);
       m.geometry.dispose();
     }
     this.candidateMeshes = [];
-    if (!this.showCandidates || !candidates) return;
+    if (!shown) return;
     const batches = new Map();
-    for (const c of candidates) {
+    for (const c of shown) {
       if (!c.trace || c.trace.length < 2) continue;
       const status = c.id === chosenId ? "chosen" : c.flagged ? "flagged" : c.eligible ? "eligible" : "rejected";
       if (!batches.has(status)) batches.set(status, new GeoBuilder());
@@ -113,6 +118,6 @@ export class Overlays {
   }
 
   tick(t) {
-    if (this.marker.visible) this.ring.scale.setScalar(1 + 0.12 * Math.sin(t * 4));
+    if (this.marker.visible && Number.isFinite(t)) this.ring.scale.setScalar(1 + 0.12 * Math.sin(t * 4));
   }
 }

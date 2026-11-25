@@ -33,25 +33,26 @@ const WET = {
   paint: { color: 0.85, roughness: 0.35, env: 1.3 },
 };
 
+const snowUniforms = new WeakMap();
+
 // Make a material able to show snow on its upward faces; the amount is a uniform set later.
 export function snowable(material, surface) {
   material.userData.surface = surface;
+  if (snowUniforms.has(material)) return material;
   const uniform = { value: 0 };
+  snowUniforms.set(material, uniform);
   material.userData.snow = uniform;
   const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey();
   material.onBeforeCompile = (shader, renderer) => {
-    if (prev) prev(shader, renderer);
+    prev.call(material, shader, renderer);
     shader.uniforms.uSnow = uniform;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vUp;")
       .replace(
-        "#include <beginnormal_vertex>",
-        `#include <beginnormal_vertex>
-        vec3 upN = objectNormal;
-        #ifdef USE_INSTANCING
-          upN = mat3(instanceMatrix) * upN;
-        #endif
-        vUp = normalize(mat3(modelMatrix) * upN).y;`,
+        "#include <defaultnormal_vertex>",
+        `#include <defaultnormal_vertex>
+        vUp = normalize(transpose(mat3(viewMatrix)) * transformedNormal).y;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vUp;\nuniform float uSnow;")
@@ -61,8 +62,7 @@ export function snowable(material, surface) {
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.98), uSnow * smoothstep(0.35, 0.85, vUp));`,
       );
   };
-  const prevKey = Object.hasOwn(material, "customProgramCacheKey") ? material.customProgramCacheKey : null;
-  material.customProgramCacheKey = () => `snow-${surface}-${prevKey ? prevKey() : ""}`;
+  material.customProgramCacheKey = () => `snow-${prevKey}`;
   material.needsUpdate = true;
   return material;
 }
@@ -73,6 +73,7 @@ export class WeatherView {
     this.name = "dry";
     this.rain = null;
     this.snow = null;
+    this.cameraPosition = new THREE.Vector3();
   }
 
   apply(name) {
@@ -83,18 +84,20 @@ export class WeatherView {
     v.scene.traverse((o) => {
       const mats = !o.material ? [] : Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
-        const surface = m.userData.surface;
-        if (!surface || updated.has(m)) continue;
+        const surface = m?.userData.surface;
+        if (!surface || !m.color || updated.has(m)) continue;
         updated.add(m);
         if (!m.userData.base)
-          m.userData.base = { color: m.color.clone(), roughness: m.roughness, env: m.envMapIntensity ?? 1 };
+          m.userData.base = { color: m.color.clone(), roughness: m.roughness, env: m.envMapIntensity };
         const base = m.userData.base,
-          wet = (P.wet || 0) * (WET[surface] ? 1 : 0),
+          wet = Object.hasOwn(WET, surface) ? (P.wet ?? 0) : 0,
           w = WET[surface];
         m.color.copy(base.color).multiplyScalar(wet ? 1 - (1 - w.color) * wet : 1);
-        m.roughness = wet ? base.roughness + (w.roughness - base.roughness) * wet : base.roughness;
-        m.envMapIntensity = wet ? base.env + (w.env - base.env) * wet : base.env;
-        if (m.userData.snow) m.userData.snow.value = (P.snow || 0) * (SNOW_COVER[surface] || 0);
+        if (base.roughness !== undefined)
+          m.roughness = wet ? base.roughness + (w.roughness - base.roughness) * wet : base.roughness;
+        if (base.env !== undefined) m.envMapIntensity = wet ? base.env + (w.env - base.env) * wet : base.env;
+        if (m.userData.snow)
+          m.userData.snow.value = Object.hasOwn(SNOW_COVER, surface) ? (P.snow ?? 0) * SNOW_COVER[surface] : 0;
       }
     });
     this.setParticles(P.particles || null);
@@ -115,13 +118,14 @@ export class WeatherView {
     if (kind === "snow") this.snow = makeSnow();
     const effect = this.rain ?? this.snow;
     if (effect) {
-      effect.update(0, this.view.camera.position);
+      effect.update(0, this.view.camera.getWorldPosition(this.cameraPosition));
       this.view.scene.add(effect.mesh);
     }
   }
 
   update(dt) {
-    (this.rain ?? this.snow)?.update(dt, this.view.camera.position);
+    const step = Number.isFinite(dt) && dt > 0 ? dt : 0;
+    (this.rain ?? this.snow)?.update(step, this.view.camera.getWorldPosition(this.cameraPosition));
   }
 }
 
@@ -141,9 +145,12 @@ function makeRain(count = 5000) {
   );
   mesh.frustumCulled = false;
   let t = 0;
+  const lastCamera = new THREE.Vector3(Infinity, Infinity, Infinity);
   return {
     mesh,
     update(dt, cam) {
+      if (dt === 0 && cam.equals(lastCamera)) return;
+      lastCamera.copy(cam);
       t += dt;
       const bottom = Math.max(0, cam.y - BOX.h / 2);
       for (let i = 0; i < count; i++) {
@@ -193,9 +200,12 @@ function makeSnow(count = 6000) {
   const mesh = new THREE.Points(geo, material);
   mesh.frustumCulled = false;
   let t = 0;
+  const lastCamera = new THREE.Vector3(Infinity, Infinity, Infinity);
   return {
     mesh,
     update(dt, cam) {
+      if (dt === 0 && cam.equals(lastCamera)) return;
+      lastCamera.copy(cam);
       t += dt;
       const bottom = Math.max(0, cam.y - BOX.h / 2);
       for (let i = 0; i < count; i++) {
