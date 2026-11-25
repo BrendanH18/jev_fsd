@@ -174,7 +174,8 @@ export function curveProfileSpeed(route, s) {
   if (typeof route?.curveSpeedAt !== "function" || !Number.isFinite(route.length) || route.length < 0)
     throw new TypeError("Curve profile requires route geometry with a finite length");
   const { lat, decel } = comfort();
-  let best = { v: Infinity, at: 0 };
+  let bestSpeed = Infinity,
+    bestAt = 0;
   for (let d = 0; d <= CURVE_HORIZON_M && s + d < route.length; d += 3) {
     const vc = route.curveSpeedAt(s, d, lat);
     if (!Number.isFinite(vc) || vc < 0) continue;
@@ -182,9 +183,12 @@ export function curveProfileSpeed(route, s) {
     const squared = vc * vc + braking;
     const v =
       squared === Infinity ? Math.hypot(vc, Math.sqrt(braking)) : squared === 0 && vc > 0 ? vc : Math.sqrt(squared);
-    if (v < best.v) best = { v, at: d };
+    if (v < bestSpeed) {
+      bestSpeed = v;
+      bestAt = d;
+    }
   }
-  return best;
+  return { v: bestSpeed, at: bestAt };
 }
 
 // The "law" a candidate or the autopilot executes between decisions. A lane law's vTarget is a
