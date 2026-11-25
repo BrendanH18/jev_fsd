@@ -52,22 +52,25 @@ export const leadsEmergency = (ev, o) => holdsUp(ev, o, EV_STUCK_S) && Math.abs(
 // audit supplies `ready`: the car has pulled over or was constrained from doing so. Sensing
 // reads this same latch, so rebuilding a stop plan cannot grant or lose the instruction.
 export function emergencyLead(world, ev, ready = false) {
-  const rec = world.evCalls.get(ev.id);
-  if (rec && ready && leadsEmergency(ev, world.ego)) rec.lead = true;
+  const rec = ev && world.evCalls?.get(ev.id);
+  if (rec && ready && isEmergency(ev) && leadsEmergency(ev, world.ego)) rec.lead = true;
   return rec?.lead === true;
 }
 // Whether `o` is one of what has held emergency vehicle `ev` up, standing, for more than `s` seconds.
-export const holdsUp = (ev, o, s) => !!ev.blockedBy?.includes(o) && ev.blockedFor > s;
+export const holdsUp = (ev, o, s) =>
+  Array.isArray(ev?.blockedBy) && ev.blockedBy.includes(o) && Number.isFinite(ev.blockedFor) && ev.blockedFor > s;
 
 // Where an emergency vehicle drives across its lane, in metres right of the lane's centre: on a
 // two-way street, astride the centre line; on a one-way street, along the left of the leftmost lane,
 // half its width plus 0.2 m in from that lane's left edge.
 export function evOffset(edge, laneIdx, spec) {
-  if (!edge) return 0;
+  if (!edge?.lane_offsets?.length) return 0;
   const centre = edge.lane_offsets[laneIdx] ?? 0;
   if (!edge.oneway) return -centre;
+  if (!(spec?.width > 0) || !Number.isFinite(spec.width) || !(edge.lane_width > 0)) return 0;
   const left = edge.lane_offsets[0] - edge.lane_width / 2 + spec.width / 2 + 0.2;
-  return Math.min(0, left - centre);
+  const offset = left - centre;
+  return Number.isFinite(offset) ? Math.min(0, offset) : 0;
 }
 
 // Where across the road an emergency vehicle drives to get past what is ahead of it: the point
@@ -76,6 +79,12 @@ export function evOffset(edge, laneIdx, spec) {
 // EV_SQUEEZE_M, between the left edge of the asphalt and the right edge of the traffic lanes. Null
 // when there is none.
 export function threadGap(edge, laneIdx, spec, preferred, spans) {
+  if (!edge?.asphalt || !edge.lane_offsets || !(spec?.width > 0) || !Number.isFinite(preferred)) return null;
+  if (
+    !Array.isArray(spans) ||
+    spans.some((span) => !Number.isFinite(span?.[0]) || !Number.isFinite(span[1]) || span[0] > span[1])
+  )
+    return null;
   const half = spec.width / 2 + EV_SQUEEZE_M,
     centre = edge.lane_offsets[laneIdx] ?? 0;
   // (as far left as the asphalt goes, and right only as far as the traffic lanes: the curb side is
@@ -83,29 +92,43 @@ export function threadGap(edge, laneIdx, spec, preferred, spans) {
   const lo = edge.asphalt[0] - centre + spec.width / 2 + 0.2,
     hi = edge.lane_offsets[edge.lanes - 1] + edge.lane_width / 2 - centre - spec.width / 2;
   const fits = (c) => c >= lo - 1e-9 && c <= hi + 1e-9 && spans.every(([a, b]) => c + half <= a || c - half >= b);
-  const options = [preferred, ...spans.flatMap(([a, b]) => [a - half, b + half])].filter(fits);
-  if (!options.length) return null;
-  return options.reduce((best, c) => (Math.abs(c - preferred) < Math.abs(best - preferred) ? c : best));
+  if (fits(preferred)) return preferred;
+  let best = null;
+  let distance = Infinity;
+  for (const [left, right] of spans)
+    for (const candidate of [left - half, right + half]) {
+      const delta = Math.abs(candidate - preferred);
+      if (delta < distance && fits(candidate)) {
+        best = candidate;
+        distance = delta;
+      }
+    }
+  return best;
 }
 
 // How far right of its lane's centre a vehicle of width `width` pulls over: into the street's
 // parking lane when it is in the curb lane and `parkingFree` (nothing parked there where it stops),
 // else to the right-hand edge of its lane.
 export function pullOverOffset(edge, laneIdx, width, parkingFree) {
-  if (!edge) return 0;
+  if (!edge || !Number.isFinite(edge.lane_width) || !Number.isFinite(width) || width <= 0) return 0;
   const edgeOfLane = Math.max(0, (edge.lane_width - width) / 2 - LANE_EDGE_MARGIN_M);
   if (laneIdx !== edge.lanes - 1 || !parkingFree || edge.ring) return edgeOfLane;
-  const room = edge.asphalt[1] - (edge.lane_offsets[laneIdx] + width / 2) - 0.3;
-  return Math.max(edgeOfLane, Math.min(PULL_INTO_PARKING_M, room));
+  const room = edge.asphalt?.[1] - (edge.lane_offsets?.[laneIdx] + width / 2) - 0.3;
+  return Number.isFinite(room) ? Math.max(edgeOfLane, Math.min(PULL_INTO_PARKING_M, room)) : edgeOfLane;
 }
 
 // The cars standing at the kerb within `r` of (x, y): those parked, and those waiting there to pull
 // out (sim/npc.js `pull`), which have left `world.parked` but not yet their space. Pulling over into
 // such a space stops the car nose to its tail, angled at the kerb, where neither can move off.
 export function kerbCars(world, x, y, r) {
-  const out = world.parked?.near(x, y, r) || [];
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(r) || r < 0) return [];
+  const parked = world.parked?.near(x, y, r) || [];
+  let out = parked;
   for (const n of world.npcs || [])
-    if (n.pull && !n.pull.moving && (n.x - x) ** 2 + (n.y - y) ** 2 <= r * r) out.push(n);
+    if (n?.pull && !n.pull.moving && (n.x - x) ** 2 + (n.y - y) ** 2 <= r * r && !out.includes(n)) {
+      if (out === parked) out = [...parked];
+      out.push(n);
+    }
   return out;
 }
 
@@ -117,11 +140,13 @@ export function kerbCars(world, x, y, r) {
 export const PARKED_CLEAR_M = 0.3;
 // (`ahead` metres more of kerb ahead of it count too: the stretch it is pulling over into)
 export function parkedRoom(world, x, y, h, spec = CAR, ahead = 0) {
+  if (!Number.isFinite(h) || !Number.isFinite(ahead) || ahead < 0) return Infinity;
   const c = Math.cos(h),
     sn = Math.sin(h),
     reach = spec.length / 2 + 3;
   let room = Infinity;
   for (const car of kerbCars(world, x, y, reach + ahead + 6)) {
+    if (typeof car?.obb !== "function") continue;
     const o = car.obb(),
       oc = Math.cos(o.heading),
       os = Math.sin(o.heading);
@@ -148,9 +173,9 @@ export function parkedRoom(world, x, y, h, spec = CAR, ahead = 0) {
 // passed it). Returns { relation: "behind" | "ahead" | "left" | "right", along_m (how far ahead of
 // `ev`'s rear axle along its path `o` is), eta_s, distance_m } or null.
 export function emergencyCall(o, ev, points = null) {
-  if (!isEmergency(ev) || o === ev || !ev.path?.pts) return null;
+  if (!isEmergency(ev) || !o || o === ev || !ev.path?.pts || !ev.spec) return null;
   const distance = Math.hypot(o.x - ev.x, o.y - ev.y);
-  if (distance > CALL_M) return null;
+  if (!(distance <= CALL_M) || !Number.isFinite(o.psi - ev.psi) || !Number.isFinite(ev.v)) return null;
   const path = ev.path,
     s0 = path.s,
     s1 = Math.min(path.length, s0 + CALL_PATH_M);
@@ -160,15 +185,18 @@ export function emergencyCall(o, ev, points = null) {
   const pts = points || AHEAD_POINTS_M.map((d) => [here[0] + Math.cos(o.psi) * d, here[1] + Math.sin(o.psi) * d]);
   // passed: its rear is beyond the middle of `o`, along its path (or `o` follows it)
   const passedAt = -(ev.spec.rearOverhang + oSpec.length / 2 + 0.5);
-  const now = closestOnPath(path, pts[0][0], pts[0][1], s0 - 60, s1);
+  if (!pts.length) return null;
+  const first = pts[0];
+  const now = first && closestOnPath(path, first[0], first[1], s0 - 60, s1);
   if (now && now.distance <= IN_WAY_M && now.s < s0 + passedAt) return null;
   let hit = null;
   for (let k = 0; k < pts.length; k++) {
     // (where `o` will be counts only ahead of the front of `ev`: not beside or behind it)
     const from = s0 + (k === 0 ? passedAt : ev.spec.length - ev.spec.rearOverhang);
+    if (!pts[k]) continue;
     const p = closestOnPath(path, pts[k][0], pts[k][1], from, s1);
     if (!p || p.distance > IN_WAY_M || (k > 0 && p.s <= from + 1e-6)) continue;
-    hit = { s: p.s, k };
+    hit = p;
     break;
   }
   if (!hit) return null;
@@ -189,9 +217,11 @@ export function emergencyCall(o, ev, points = null) {
 export function nearestCall(o, vehicles, points = null) {
   let best = null;
   for (const ev of vehicles) {
-    if (!isEmergency(ev)) continue;
     const c = emergencyCall(o, ev, points);
-    if (c && (!best || c.eta_s < best.eta_s)) best = { ev, ...c };
+    if (c && (!best || c.eta_s < best.eta_s)) {
+      best = { ev, ...c };
+      if (best.eta_s === 0) break;
+    }
   }
   return best;
 }
@@ -207,13 +237,16 @@ export function isJunction(map, nodeId) {
   if (!junctionCache.has(map)) junctionCache.set(map, new Map());
   const cache = junctionCache.get(map);
   if (!cache.has(nodeId)) {
-    const ids = [...(map.inn.get(nodeId) || []), ...(map.out.get(nodeId) || [])];
-    const neighbours = new Set(
-      ids.map((id) => {
+    const neighbours = new Set();
+    for (const ids of [map.inn.get(nodeId) || [], map.out.get(nodeId) || []]) {
+      for (const id of ids) {
         const e = map.edges.get(id);
-        return e.from === nodeId ? e.to : e.from;
-      }),
-    );
+        if (!e) continue;
+        if (e.from === nodeId && e.to !== nodeId) neighbours.add(e.to);
+        else if (e.to === nodeId && e.from !== nodeId) neighbours.add(e.from);
+      }
+      if (neighbours.size >= 3) break;
+    }
     cache.set(nodeId, neighbours.size >= 3);
   }
   return cache.get(nodeId);
@@ -225,15 +258,19 @@ export function isJunction(map, nodeId) {
 // ahead from a side street. Each starts about `back` metres away along the streets. Null when the
 // streets do not allow it.
 export function planBehind(map, x, y, psi, back = 140) {
+  if (!Number.isFinite(back) || back < 0) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(psi)) return null;
   const near = map.nearestLane(x, y, psi, 12);
-  if (!near) return null;
+  if (!near?.lane?.edgeRef || !Number.isFinite(near.s)) return null;
   let cur = near.lane.edgeRef,
     need = back - near.s;
   const chain = [cur.id];
   while (need > 0) {
     const preds = (map.inn.get(cur.from) || [])
       .map((id) => map.edges.get(id))
-      .filter((p) => !p.ring && Math.abs(map.turnAngle(p.id, cur.id)) < (35 * Math.PI) / 180 && !chain.includes(p.id));
+      .filter(
+        (p) => p && !p.ring && Math.abs(map.turnAngle(p.id, cur.id)) < (35 * Math.PI) / 180 && !chain.includes(p.id),
+      );
     if (!preds.length) break;
     preds.sort((a, b) => Math.abs(map.turnAngle(a.id, cur.id)) - Math.abs(map.turnAngle(b.id, cur.id)));
     cur = preds[0];
@@ -247,10 +284,12 @@ export function planBehind(map, x, y, psi, back = 140) {
 }
 
 export function planOncoming(map, x, y, psi, ahead = 140) {
+  if (!Number.isFinite(ahead) || ahead < 0) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(psi)) return null;
   const near = map.nearestLane(x, y, psi, 12);
-  if (!near) return null;
+  if (!near?.lane?.edgeRef || !Number.isFinite(near.s)) return null;
   const reverse = (e) =>
-    (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((r) => r.to === e.from && !r.ring);
+    (map.out.get(e.to) || []).map((id) => map.edges.get(id)).find((r) => r?.to === e.from && !r.ring);
   let cur = near.lane.edgeRef,
     along = cur.length - near.s;
   const forward = [cur];
@@ -258,7 +297,9 @@ export function planOncoming(map, x, y, psi, ahead = 140) {
     const next = map
       .successors(cur.id)
       .map((id) => map.edges.get(id))
-      .filter((n) => !n.ring && Math.abs(map.turnAngle(cur.id, n.id)) < (35 * Math.PI) / 180 && !forward.includes(n));
+      .filter(
+        (n) => n && !n.ring && Math.abs(map.turnAngle(cur.id, n.id)) < (35 * Math.PI) / 180 && !forward.includes(n),
+      );
     if (!next.length) break;
     next.sort((a, b) => Math.abs(map.turnAngle(cur.id, a.id)) - Math.abs(map.turnAngle(cur.id, b.id)));
     cur = next[0];
@@ -283,17 +324,21 @@ export function planOncoming(map, x, y, psi, ahead = 140) {
 }
 
 export function planCrossing(map, x, y, psi, back = 110) {
+  if (!Number.isFinite(back) || back < 0) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(psi)) return null;
   const near = map.nearestLane(x, y, psi, 12);
-  if (!near) return null;
+  if (!near?.lane?.edgeRef || !Number.isFinite(near.s)) return null;
   const e = near.lane.edgeRef;
   if (!isJunction(map, e.to) || e.length - near.s < 25) return null;
   const options = [];
   for (const id of map.inn.get(e.to) || []) {
     const c = map.edges.get(id);
-    if (c.id === e.id || c.from === e.to || c.ring) continue;
+    if (!c || c.id === e.id || c.from === e.to || c.ring) continue;
     const angle = Math.abs(wrap(map.headingIn(c.id) - map.headingIn(e.id)));
     if (angle < (50 * Math.PI) / 180 || angle > (130 * Math.PI) / 180) continue;
-    const across = map.successors(c.id).find((o) => map.classifyTurn(map.turnAngle(c.id, o)) === "straight");
+    const across = map
+      .successors(c.id)
+      .find((o) => map.edges.has(o) && map.classifyTurn(map.turnAngle(c.id, o)) === "straight");
     if (across) options.push({ c, across });
   }
   if (!options.length) return null;
@@ -306,7 +351,7 @@ export function planCrossing(map, x, y, psi, back = 110) {
     const preds = (map.inn.get(start.from) || [])
       .map((id) => map.edges.get(id))
       .filter(
-        (p) => !p.ring && map.classifyTurn(map.turnAngle(p.id, start.id)) === "straight" && !chain.includes(p.id),
+        (p) => p && !p.ring && map.classifyTurn(map.turnAngle(p.id, start.id)) === "straight" && !chain.includes(p.id),
       );
     if (!preds.length) break;
     start = preds[0];
@@ -326,15 +371,17 @@ export function planCrossing(map, x, y, psi, back = 110) {
 // The closest point to (x, y) on a path between arc lengths s0 and s1: its arc length, distance and
 // signed lateral offset (right of travel positive).
 export function closestOnPath(path, x, y, s0, s1) {
-  const { pts, cum } = path;
+  const { pts, cum } = path || {};
+  if (!pts || pts.length !== cum?.length || !Number.isFinite(x) || !Number.isFinite(y) || !(s0 <= s1)) return null;
   let best = null;
   for (let i = 0; i < pts.length - 1; i++) {
-    if (cum[i + 1] < s0 || cum[i] > s1) continue;
+    if (cum[i] > s1) break;
+    if (cum[i + 1] < s0 || !Number.isFinite(cum[i]) || !Number.isFinite(cum[i + 1]) || !pts[i] || !pts[i + 1]) continue;
     const [ax, ay] = pts[i],
       dx = pts[i + 1][0] - ax,
       dy = pts[i + 1][1] - ay,
       len = Math.hypot(dx, dy);
-    if (len < 1e-9) continue;
+    if (!Number.isFinite(len) || len < 1e-9) continue;
     const t = Math.max(
       (s0 - cum[i]) / len,
       0,
@@ -350,6 +397,8 @@ export function closestOnPath(path, x, y, s0, s1) {
 }
 
 function wrap(a) {
+  if (!Number.isFinite(a)) return NaN;
+  a %= 2 * Math.PI;
   while (a > Math.PI) a -= 2 * Math.PI;
   while (a <= -Math.PI) a += 2 * Math.PI;
   return a;

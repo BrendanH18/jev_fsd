@@ -73,14 +73,21 @@ export function railIndex(map) {
   const tracks = new Map(),
     crossings = [];
   for (const t of map.rail?.tracks || []) {
-    let pts = t.pts.map((p) => [p[0], p[1]]);
-    const shift = t.ends[0] === "edge" ? EXTEND_M : 0;
+    if (!t?.pts || t.pts.length < 2 || !t.pts.every((p) => Number.isFinite(p?.[0]) && Number.isFinite(p[1]))) continue;
+    const pts = t.pts.map((p) => [p[0], p[1]]);
+    const firstDifferent = pts.findIndex((p) => p[0] !== pts[0][0] || p[1] !== pts[0][1]);
+    if (firstDifferent === -1) continue;
+    const shift = t.ends?.[0] === "edge" ? EXTEND_M : 0;
     const out = (a, b) => {
       const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1;
       return [a[0] + ((a[0] - b[0]) / d) * EXTEND_M, a[1] + ((a[1] - b[1]) / d) * EXTEND_M];
     };
-    if (t.ends[0] === "edge") pts = [out(pts[0], pts[1]), ...pts];
-    if (t.ends[1] === "edge") pts = [...pts, out(pts.at(-1), pts.at(-2))];
+    if (t.ends?.[1] === "edge") {
+      const last = pts.at(-1);
+      const before = pts.findLast((p) => p[0] !== last[0] || p[1] !== last[1]);
+      pts.push(out(last, before));
+    }
+    if (shift) pts.unshift(out(pts[0], pts[firstDifferent]));
     const cum = cumulative(pts);
     tracks.set(t.id, {
       ...t,
@@ -88,23 +95,28 @@ export function railIndex(map) {
       cum,
       length: cum.at(-1),
       shift,
-      stops: t.stops.map((st) => ({ ...st, s: st.s + shift })),
+      ends: t.ends ?? ["terminus", "terminus"],
+      stops: (t.stops || []).filter((st) => Number.isFinite(st?.s)).map((st) => ({ ...st, s: st.s + shift })),
       crossings: [],
     });
   }
   for (const c of map.rail?.crossings || []) {
+    if (!Number.isFinite(c?.s) || !Number.isFinite(c.x) || !Number.isFinite(c.y)) continue;
     const track = tracks.get(c.track);
     if (!track) continue;
     const s = c.s + track.shift,
-      edges = c.edges.filter((on) => map.edges.has(on.edge));
+      edges = (c.edges || []).filter(
+        (on) => map.edges.has(on?.edge) && Number.isFinite(on.angle_deg) && on.angle_deg >= 0 && on.angle_deg <= 90,
+      );
+    if (s < 0 || s > track.length + 0.1) continue;
     if (!edges.length) continue;
-    const half = Math.max(
-      ...edges.map((on) => {
-        const e = map.edges.get(on.edge),
-          a = Math.max(0.35, (on.angle_deg * Math.PI) / 180);
-        return (e.width || 8) / 2 / Math.sin(a) + HERITAGE_STREETCAR.width / 2 / Math.tan(a);
-      }),
-    );
+    let half = 0;
+    for (const on of edges) {
+      const e = map.edges.get(on.edge),
+        a = Math.max(0.35, (on.angle_deg * Math.PI) / 180);
+      half = Math.max(half, (e.width || 8) / 2 / Math.sin(a) + HERITAGE_STREETCAR.width / 2 / Math.tan(a));
+    }
+    if (!Number.isFinite(half) || half <= 0) continue;
     const lo = Math.max(0, s - NEAR_M),
       hi = Math.min(track.length, s + NEAR_M);
     const near = [
@@ -129,7 +141,8 @@ export const alongStreet = (half, angle, w) => half / Math.sin(angle) + w / 2 / 
 // Where the polyline `pts`/`cum` crosses crossing `c`'s track, between `from` and `to` metres along
 // it: { s (along the polyline), angle (rad, between it and the track, up to 90 deg) }, or null.
 export function crossingOnPath(pts, cum, c, from = 0, to = Infinity) {
-  const near = c.near;
+  const near = c?.near;
+  if (!near || !pts || pts.length !== cum?.length || !(from <= to)) return null;
   for (let i = 0; i < pts.length - 1; i++) {
     if (cum[i + 1] < from) continue;
     if (cum[i] > to) break;
@@ -150,14 +163,14 @@ export function crossingOnPath(pts, cum, c, from = 0, to = Infinity) {
         sx = q[0] - p[0],
         sy = q[1] - p[1];
       const den = rx * sy - ry * sx;
-      if (Math.abs(den) < 1e-9) continue;
+      if (!Number.isFinite(den) || Math.abs(den) < 1e-9) continue;
       const wx = p[0] - a[0],
         wy = p[1] - a[1];
       const t = (wx * sy - wy * sx) / den,
         u = (wx * ry - wy * rx) / den;
-      if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+      if (!(t >= 0 && t <= 1 && u >= 0 && u <= 1)) continue;
       const s = cum[i] + t * (cum[i + 1] - cum[i]);
-      if (s < from || s > to) continue;
+      if (!Number.isFinite(s) || s < from || s > to) continue;
       let angle = Math.abs(wrap(Math.atan2(ry, rx) - Math.atan2(sy, sx)));
       if (angle > Math.PI / 2) angle = Math.PI - angle;
       return { s, angle: Math.max(0.35, angle) };
@@ -177,12 +190,14 @@ export function trainSpan(n) {
 // (ringing, on its way to it), gap_m (its front to the road, along the track: 0 on it), eta_s }, or
 // null.
 export function approach(n, c) {
-  if (!isTrain(n) || !n.rail || n.rail.track !== c.track || n.rail.gone) return null;
+  if (!isTrain(n) || !n.rail || !c || n.rail.track !== c.track || n.rail.gone || !n.spec) return null;
+  if (n.rail.dir !== 1 && n.rail.dir !== -1) return null;
+  if (!(c.half_m > 0) || !Number.isFinite(c.half_m)) return null;
   const { front, rear, dir } = trainSpan(n);
   const gap = dir * (c.s - front) - c.half_m,
     past = dir * (rear - c.s) - c.half_m;
   if (gap < 0 && past < 0) return { on: true, coming: false, gap_m: 0, eta_s: 0 };
-  if (gap >= 0 && gap <= GONG_M && n.v > MOVING_MPS)
+  if (gap >= 0 && gap <= GONG_M && Number.isFinite(n.v) && n.v > MOVING_MPS)
     return { on: false, coming: true, gap_m: gap, eta_s: gap / Math.max(0.5, n.v) };
   return null;
 }
@@ -200,7 +215,7 @@ export function trainAt(trains, c) {
 }
 
 // Whether a driver at `v` can stop within `room` metres braking at no more than OWED_DECEL.
-export const canStopFor = (v, room) => room >= Math.max(0, v) ** 2 / (2 * OWED_DECEL);
+export const canStopFor = (v, room) => Number.isFinite(v) && room >= Math.max(0, v) ** 2 / (2 * OWED_DECEL);
 
 // Whether a driver at `v` still waits at crossing `x` (from crossingsAhead), for a train or for room
 // past the tracks (see the top): short of where it stops, or past it but barely moving and short of
@@ -215,7 +230,8 @@ export const waitsAt = (x, v) => !x.fouling && (x.stop_m > -1 || (x.entry_m > 0.
 export function crossingsAhead(map, pts, cum, front, spec, look = 80) {
   const index = railIndex(map),
     out = [];
-  if (!index.crossings.length) return out;
+  if (!index.crossings.length || !pts || pts.length < 2 || pts.length !== cum?.length) return out;
+  if (!Number.isFinite(front) || !(look >= 0) || !(spec?.length > 0) || !(spec.width > 0)) return out;
   const p = pointAt(pts, cum, Math.max(0, front)),
     from = front - spec.length - 12;
   for (const c of index.crossings) {
@@ -224,7 +240,8 @@ export function crossingsAhead(map, pts, cum, front, spec, look = 80) {
     if (!hit) continue;
     const rail = alongStreet(RAIL_HALF_M, hit.angle, spec.width),
       env = alongStreet(ENVELOPE_M, hit.angle, spec.width);
-    const exit = hit.s + env + spec.length - front;
+    const entry = hit.s - env - front,
+      exit = hit.s + env + spec.length - front;
     if (exit < 0) continue;
     out.push({
       c,
@@ -232,9 +249,9 @@ export function crossingsAhead(map, pts, cum, front, spec, look = 80) {
       angle: hit.angle,
       stop_m: hit.s - rail - STOP_M - front,
       hold_m: hit.s - rail - HOLD_M - front,
-      entry_m: hit.s - env - front,
+      entry_m: entry,
       exit_m: exit,
-      fouling: hit.s - env - front < 0 && exit > 0,
+      fouling: entry < 0 && exit > 0,
     });
   }
   return out.sort((a, b) => a.s - b.s);
@@ -251,13 +268,15 @@ export function roomBlocker(pts, cum, front, spec, x, vehicles, self = null) {
     near = front + x.entry_m;
   let best = null;
   for (const o of vehicles) {
-    if (o === self || isTrain(o) || o.kind === "pedestrian" || o.parked || Math.abs(o.v) >= QUEUE_MPS) continue;
+    if (!o || o === self || isTrain(o) || o.kind === "pedestrian" || o.parked || Math.abs(o.v) >= QUEUE_MPS) continue;
     if (Math.abs(o.x - x.c.x) > 60 || Math.abs(o.y - x.c.y) > 60) continue;
+    if (!Number.isFinite(o.x) || !Number.isFinite(o.y) || !Number.isFinite(o.psi) || !Number.isFinite(o.v)) continue;
     const os = o.spec || o;
     const rearX = o.x - Math.cos(o.psi) * (os.rearOverhang || 0),
       rearY = o.y - Math.sin(o.psi) * (os.rearOverhang || 0);
     const q = projectPoint(pts, cum, [rearX, rearY], null);
-    if (Math.abs(q.lateral) > STAY_M + (os.width || 1.9) / 2 || q.s < near - (os.length || 4.5) || q.s > need) continue;
+    if (!q || Math.abs(q.lateral) > STAY_M + (os.width || 1.9) / 2 || q.s < near - (os.length || 4.5) || q.s > need)
+      continue;
     const across = Math.abs(wrap(o.psi - (q.heading ?? 0))) > SAME_WAY;
     if (across && !(q.s > near - (os.length || 4.5) && q.s < far)) continue;
     if (!best || q.s < best.s) best = { vehicle: o, s: q.s };
@@ -270,7 +289,15 @@ export function roomBlocker(pts, cum, front, spec, x, vehicles, self = null) {
 // vehicles trains are found among; `vehicles`: those that can leave no room past the tracks;
 // `owes(x, at)`: whether it owes the stop for the train `at` at crossing `x` (by default, whether it
 // can stop now).
-export function crossingHold(map, pts, cum, front, spec, v, { trains, vehicles, self = null, owes = null }) {
+export function crossingHold(
+  map,
+  pts,
+  cum,
+  front,
+  spec,
+  v,
+  { trains = [], vehicles = [], self = null, owes = null } = {},
+) {
   for (const x of crossingsAhead(map, pts, cum, front, spec)) {
     if (!waitsAt(x, v)) continue;
     const at = trainAt(trains, x.c);
@@ -328,6 +355,7 @@ export function stepTrain(n, track, dt, others, sees, random) {
   const r = n.rail,
     sp = n.spec;
   if (r.gone) return;
+  if (!Number.isFinite(dt) || dt < 0) throw new RangeError("Train step duration must be finite and nonnegative.");
   const between = (span) => span[0] + random() * (span[1] - span[0]);
   if (r.phase === "dwell") {
     n.v = 0;
@@ -372,7 +400,14 @@ export function stepTrain(n, track, dt, others, sees, random) {
     stopping = null;
   }
   const vWant = Math.min(LINE_MPS, Math.sqrt(2 * SERVICE_DECEL * Math.max(0, to)));
-  const a = vWant > n.v ? Math.min(ACCEL, (vWant - n.v) / dt) : Math.max(-EMERGENCY_DECEL, (vWant - n.v) / dt);
+  // A zero-duration spawn step places the train and updates the gong. At
+  // equilibrium it has no acceleration demand, including on its spawn step.
+  const a =
+    dt === 0 && vWant === n.v
+      ? 0
+      : vWant > n.v
+        ? Math.min(ACCEL, (vWant - n.v) / dt)
+        : Math.max(-EMERGENCY_DECEL, (vWant - n.v) / dt);
   n.a = a;
   n.v = Math.max(0, n.v + a * dt);
   r.s += dir * n.v * dt;
@@ -441,11 +476,12 @@ export function trainState(track, front, dir, v = 0) {
 // Whether the driver `o` (heading as it is) is fouling crossing `c`'s track: some of its body within
 // the train's envelope (sensing-free: the audit and the score).
 export function fouling(o, c, map) {
-  const track = railIndex(map).tracks.get(c.track),
-    box = o.obb();
+  const track = railIndex(map).tracks.get(c?.track);
+  if (!track || typeof o?.obb !== "function") return false;
+  const box = o.obb();
   if (Math.abs(box.center[0] - c.x) > 25 || Math.abs(box.center[1] - c.y) > 25) return false;
   const q = projectPoint(track.pts, track.cum, box.center, null);
-  if (Math.abs(q.s - c.s) > NEAR_M) return false;
+  if (!q || Math.abs(q.s - c.s) > NEAR_M) return false;
   const rel = o.psi - q.heading;
   return (
     Math.abs(q.lateral) - (box.halfLength * Math.abs(Math.sin(rel)) + box.halfWidth * Math.abs(Math.cos(rel))) <
