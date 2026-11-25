@@ -117,8 +117,8 @@ function parkedCell(car) {
   return `${Math.floor(cx / CELL)},${Math.floor(cy / CELL)}`;
 }
 
-// The newest arrivals and departures, for code that drains them (driveway reversers drain `removed`
-// every step). Nothing has to drain them, so keep only the newest: a long drive must not hold every
+// The newest arrivals and departures, for code that reads them (driveway reversers clear `removed`
+// when they set up). Nothing has to drain them, so keep only the newest: a long drive must not hold every
 // car that ever parked, nor copy them into each replay checkpoint.
 const CHANGE_LOG = 256;
 function noteChange(list, car) {
