@@ -72,22 +72,36 @@ function serializeRun(body) {
   return normalized;
 }
 
+// A full browser storage keeps the saved runs: the save fails with code "storage_full" unless the
+// request sets replace_oldest, the user's choice to remove the oldest runs until the new one fits
+// (they are listed in `removed`).
 function saveRun(body, storage, now = Date.now()) {
   const record = serializeRun(body);
   if (!storage) throw new Error("Benchmark storage is unavailable in this browser.");
+  const replaceOldest = isObject(body) && body.replace_oldest === true;
   const runs = readRuns(storage);
   const base = `demo-${now}`;
   let name = base;
   for (let suffix = 2; runs.some((run) => run.name === name); suffix++) name = `${base}-${suffix}`;
   const next = [{ ...record, name, saved_at: new Date(now).toISOString() }, ...runs].slice(0, RUNS_LIMIT);
+  const removed = [];
   while (next.length) {
     try {
       storage.setItem(RUNS_KEY, JSON.stringify(next));
-      return { saved: name, name };
+      return removed.length ? { saved: name, name, removed } : { saved: name, name };
     } catch (error) {
       if (error?.name === "SecurityError")
         throw new Error("The browser has blocked access to benchmark storage.", { cause: error });
       if (error?.name !== "QuotaExceededError") throw error;
+      if (!replaceOldest && next.length > 1) {
+        const full = new Error(
+          `Browser storage is full, so the ${runs.length} saved run${runs.length === 1 ? " was" : "s were"} kept`,
+          { cause: error },
+        );
+        full.code = "storage_full";
+        throw full;
+      }
+      if (next.length > 1) removed.push(next.at(-1).name);
       next.pop();
     }
   }

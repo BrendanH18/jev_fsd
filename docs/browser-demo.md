@@ -72,15 +72,18 @@ domain root. [Driver adapter guide](agents.md)
 | Browser data | Where it lives | How to keep a copy |
 |---|---|---|
 | Drive reports and practice progress | Local storage on the current origin | Export the drive report before clearing site data |
-| Demo benchmark runs | Up to ten recent runs in local storage, with fewer if the browser reaches its quota | Use the saved-run selector to revisit them |
+| Demo benchmark runs | Up to ten recent runs in local storage | Use the saved-run selector to revisit them; download a run's JSON to keep it |
 | Arena runs and selected baseline | IndexedDB, with a smaller local-storage fallback when IndexedDB is unavailable | Export JSON and use **Import JSON** in the destination browser |
 | Active drive rewind and incident frames | Memory for the current drive | Review before leaving the active drive |
 | Published leaderboard and curated replays | Static files served with the site | Use the published result sources to obtain the associated run data |
 
 A different hostname, scheme or port has separate storage. For example, a run saved at
 `127.0.0.1:8323` will not appear at `localhost:8323`. Changing only the project path on the same
-origin leaves origin-scoped history shared. A quota error can evict older runs before a new
-benchmark fits. A browser that blocks storage can still run a benchmark with **Save run** off.
+origin leaves origin-scoped history shared. When browser storage is full, saving a benchmark keeps
+the earlier runs: the page asks before removing the oldest ones to make room and names any it
+removed. Cancel to keep them and download the new run instead. A scripted run
+(`window.__bench.run`) keeps them unless it passes a `confirmReplace` callback that returns true. A browser that blocks storage can still run a benchmark
+with **Save run** off.
 
 ## Verify what will be uploaded
 
