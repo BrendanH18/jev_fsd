@@ -48,6 +48,13 @@ const shard = (index, total) => ({
   runs: hardCityTasks(index, total).map(evidence),
 });
 const whole = shard(0, 1);
+// More shards than legs: leaving out a shard that has none still makes the set incomplete.
+const empty = [...Array(7).keys()].find((index) => hardCityTasks(index, 7).length === 0);
+const withoutEmpty = hardCityReport([...Array(7).keys()].filter((index) => index !== empty).map((i) => shard(i, 7)));
+assert.equal(withoutEmpty.counts.pass, 5);
+assert.equal(withoutEmpty.complete, false);
+assert.equal(withoutEmpty.passed, false);
+assert.equal(hardCityReport([...Array(7).keys()].map((i) => shard(i, 7))).passed, true);
 const complete = hardCityReport([shard(1, 2), shard(0, 2)]);
 assert.equal(complete.shards_received.join(), "0,1");
 assert.equal(complete.shards_expected, 2);

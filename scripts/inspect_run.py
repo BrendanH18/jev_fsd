@@ -535,12 +535,16 @@ def _build_sections(data, *, is_summary=False, is_compare=False, is_repeat=False
     return sections
 
 
-def format_output(data, fmt, *, is_summary=False, is_compare=False, is_repeat=False):
+def format_output(data, fmt, *, is_summary=False, is_compare=False, is_repeat=False, is_catalog=False):
     # Validate finite numbers for all formats just as JSON mode does.
     serialized = json.dumps(data, indent=2, allow_nan=False)
     if fmt == "json":
         return serialized
-    sections = _build_sections(data, is_summary=is_summary, is_compare=is_compare, is_repeat=is_repeat)
+    sections = (
+        [_dict_rows_section("catalog", data["catalog"])]
+        if is_catalog
+        else _build_sections(data, is_summary=is_summary, is_compare=is_compare, is_repeat=is_repeat)
+    )
     if fmt == "table":
         blocks = []
         for title, headers, rows in sections:
@@ -733,7 +737,7 @@ def main(argv=None):
             }
         if args.format and args.format != "table":
             output = {"catalog": [{"id": key, "description": entry[0]} for key, entry in sorted(listed.items())]}
-            print(format_output(output, args.format))
+            print(format_output(output, args.format, is_catalog=True))
             return 0
         width = fixed_width if fixed_width is not None else max((len(k) for k in listed), default=0)
         for key, (description, _) in sorted(listed.items()):

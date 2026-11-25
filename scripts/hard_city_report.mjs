@@ -165,8 +165,9 @@ export function hardCityReport(reports) {
     route_sha: hardCity.route_sha,
     shards_received: [...shards].sort((a, b) => a - b),
     shards_expected: shardCount ?? null,
-    complete: counts.skipped === 0 && counts.missing === 0,
-    passed: counts.pass === legs.length,
+    // (every declared shard must report, even one with no legs: a missing artifact is not a pass)
+    complete: counts.skipped === 0 && counts.missing === 0 && shards.size === shardCount,
+    passed: counts.pass === legs.length && shards.size === shardCount,
     counts,
     legs,
   };

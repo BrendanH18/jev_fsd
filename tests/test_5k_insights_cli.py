@@ -87,6 +87,14 @@ class InspectorCLITests(unittest.TestCase):
         self.assertIn({"id": "time_s", "description": "seconds"}, fields)
         headings = self.cli("--list-cohorts", "--format", "markdown")
         self.assertIn("## catalog", headings)
+        self.assertIn("| id | description |", headings)
+        listed = json.loads(self.cli("--list-cohorts", "--format", "json"))["catalog"]
+        self.assertGreater(len(listed), 1)
+        rows = list(csv.DictReader(io.StringIO(self.cli("--list-cohorts", "--format", "csv"))))
+        self.assertEqual(
+            [(row["id"], row["description"]) for row in rows], [(e["id"], e["description"]) for e in listed]
+        )
+        self.assertEqual(headings.count("\n|") - 2, len(listed))
         csv_text = self.cli("--list-changes", "--filter", "simulated seconds", "--format", "csv")
         self.assertEqual(
             list(csv.DictReader(io.StringIO(csv_text))),
