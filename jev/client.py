@@ -379,14 +379,23 @@ def score(instructions: Any, levels: list) -> dict:
     return {"type": "score", "instructions": instructions, "criteria": levels}
 
 
+def _probability(value):
+    """A probability as a float, or None when the provider sent none or an unusable number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
 def chosen(answer: dict) -> tuple:
     """(value, probability of that value) for a Choice answer."""
     value = answer["choice"]
-    return value, float(answer.get("probabilities", {}).get(value, answer.get("confidence", 0.0)))
+    p = _probability((answer.get("probabilities") or {}).get(value))
+    if p is None:
+        p = _probability(answer.get("confidence"))
+    return value, 0.0 if p is None else p
 
 
 def ranked(answer: dict, limit: int = 3) -> list:
-    probs = answer.get("probabilities", {})
-    return [
-        {"value": k, "prob": float(v)} for k, v in sorted(probs.items(), key=lambda kv: kv[1], reverse=True)[:limit]
-    ]
+    probs = [(k, _probability(v)) for k, v in (answer.get("probabilities") or {}).items()]
+    probs = [(k, p) for k, p in probs if p is not None]
+    return [{"value": k, "prob": p} for k, p in sorted(probs, key=lambda kv: kv[1], reverse=True)[:limit]]
