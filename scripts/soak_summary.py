@@ -344,6 +344,7 @@ def leg_failures(data: dict) -> tuple[int, list[str]]:
     total, failed = 0, []
     runs = artifact_runs(data)
     for run in runs:
+        is_soak = "runs" in data or "schema" in data or bool(CATEGORIES.keys() & run.keys())
         prefix = f"{run['id']} " if "id" in run else ""
         if run.get("harness_error"):
             failed.append(f"{prefix}harness error: {run['harness_error']}")
@@ -354,7 +355,7 @@ def leg_failures(data: dict) -> tuple[int, list[str]]:
             total += 1
             labels = failure_labels(r)
             labels.extend(label for label in inferred_labels(r) if label not in labels)
-            if not r.get("pass", False) or labels:
+            if not r.get("pass", False) or (is_soak and labels):
                 failing[r["id"]] = labels
         for key in CATEGORIES:
             for rid, labels in classified_routes(run, key).items():
