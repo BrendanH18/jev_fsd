@@ -698,10 +698,10 @@ def check_startup_recovery(page, url):
 
 def check_startup_preferences(page, url):
     base = url.rstrip("/")
-    page.add_init_script("""() => {
+    page.add_init_script("""
       localStorage.setItem('jev-fsd-quality', 'low');
       localStorage.removeItem('jev-fsd-replay');
-    }""")
+    """)
     page.goto(base + "/?drive=manual&quality=unknown&time=11:12", wait_until="domcontentloaded")
     page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
     ok = report(
