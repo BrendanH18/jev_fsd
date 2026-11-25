@@ -12,31 +12,39 @@
 
 import { FEATURE_FLAG_TEXT } from "../sim/features/index.js";
 
-export const TRACKS = ["guarded", "open"];
+export const TRACKS = Object.freeze(["guarded", "open"]);
 export const DEFAULT_TRACK = "guarded";
 export const isTrack = (t) => TRACKS.includes(t);
-
-// The rejections the open track still enforces.
-const ENFORCED = new Set(["collision"]);
 
 // The open track's candidates: those the filter rejected for anything but a predicted collision become
 // eligible, flagged. A manoeuvre whose forward sim collides stays removed whatever check rejected it
 // first (a road closure's barricade, say, is checked before collisions). Returns the same shape as
 // simulateAll; `rejected` counts only what stays removed.
 export function openTrack(candidates, sim) {
+  const eligible = [];
+  const rejected = new Map();
   for (const c of candidates) {
-    if (c.sim?.collision) {
+    let check = typeof c.reject === "string" && c.reject && c.reject === c.reject.trim() ? c.reject : null;
+    if (c.sim?.collision || check === "collision") {
       c.eligible = false;
-      c.reject ||= "collision";
+      check ??= "collision";
+      c.reject = check;
       delete c.flagged;
-    } else if (c.reject && !ENFORCED.has(c.reject)) {
+    } else if (check) {
       c.eligible = true;
       c.flagged = true;
-    } else delete c.flagged;
+    } else {
+      // A malformed rejection cannot become an advisory and bypass the filter.
+      if (c.reject != null && c.reject !== "") c.eligible = false;
+      delete c.flagged;
+    }
+    if (c.eligible === true) eligible.push(c);
+    else {
+      const reason = c.reject == null ? String(c.reject) : (check ?? "unknown");
+      rejected.set(reason, (rejected.get(reason) ?? 0) + 1);
+    }
   }
-  const rejected = {};
-  for (const c of candidates) if (!c.eligible) rejected[c.reject] = (rejected[c.reject] || 0) + 1;
-  return { ...sim, eligible: candidates.filter((c) => c.eligible), rejected };
+  return { ...sim, eligible, rejected: Object.fromEntries(rejected) };
 }
 
 // Those of `eligible` that passed every check: what Rules and the built-in agents choose among.
@@ -91,6 +99,6 @@ export const FLAG_TEXT = {
   ...FEATURE_FLAG_TEXT,
 };
 export const flagText = (reject) => {
-  if (typeof reject !== "string" || !reject) return "unknown road-rule check";
+  if (typeof reject !== "string" || !reject.trim()) return "unknown road-rule check";
   return Object.hasOwn(FLAG_TEXT, reject) ? FLAG_TEXT[reject] : reject.replaceAll("_", " ");
 };

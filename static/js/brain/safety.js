@@ -16,21 +16,29 @@ export const DESTINATION_ZONE_M = 10;
 // Turning round is slow on purpose; standing still this long in the middle of it is not.
 const TURN_ROUND_IDLE_S = 5;
 
+// Extend an obstacle sweep from the bumper without mutating the vehicle's box.
+function sweptBox(ego, distance) {
+  const box = ego.obb();
+  return {
+    ...box,
+    center: [box.center[0] + (Math.cos(ego.psi) * distance) / 2, box.center[1] + (Math.sin(ego.psi) * distance) / 2],
+    halfLength: box.halfLength + Math.abs(distance) / 2,
+  };
+}
+
 export function safetyBrake(world, snap, executing) {
   const ego = world.ego;
   const FRONT = ego.spec.length - ego.spec.rearOverhang;
+  const law = executing?.law;
   // A three-point turn moves at walking pace up to kerbs and parked cars on purpose, keeping clear
   // of them itself (sim/turnaround.js), so here only what is closer counts.
-  const turning = executing?.law.kind === "turnaround" && world.turnaround === executing.law;
+  const turning = law?.kind === "turnaround" && world.turnaround === law;
   // Parking, or pulling out of a space, likewise, closer still: up to sim/parallel-park.js CLEAR_M.
-  const parking = executing?.law.kind === "park" && world.parking === executing.law && executing.law.phase !== "done";
-  if (ego.v < -0.05 || (turning && executing.law.phase === "reverse") || (parking && reversing(executing.law))) {
+  const parking = law?.kind === "park" && world.parking === law && law.phase !== "done";
+  if (ego.v < -0.05 || (turning && law.phase === "reverse") || (parking && reversing(law))) {
     // reversing: never back into something right behind (not counted while barely moving). A leg
     // of a turnaround ends further out on its own, so this only catches what it did not.
-    const box = ego.obb(),
-      reach = Math.max(0.25, -ego.v * 0.5);
-    box.center = [box.center[0] - (Math.cos(ego.psi) * reach) / 2, box.center[1] - (Math.sin(ego.psi) * reach) / 2];
-    box.halfLength += reach / 2;
+    const box = sweptBox(ego, -Math.max(0.25, -ego.v * 0.5));
     for (const n of world.visibleObstaclesNear(ego.x, ego.y, 12)) {
       if (obbOverlap(box, n.obb(), 0.1)) return ego.v < -0.3 ? { reason: "behind" } : { reason: "blocked", hold: true };
     }
@@ -55,18 +63,18 @@ export function safetyBrake(world, snap, executing) {
   if (snap?.following) {
     const gap = snap.following.gap_m,
       closing = snap.following.closing_mps;
-    const ttc = closing > 0.1 ? gap / closing : Infinity;
-    // too close and not pulling apart, or about to hit
-    if ((gap < 2.0 && closing > -0.3) || ttc < 1.2) return { reason: "following", ttc, gap };
+    if (Number.isFinite(gap) && Number.isFinite(closing)) {
+      const ttc = closing > 0.1 ? gap / closing : Infinity;
+      // too close and not pulling apart, or about to hit
+      if ((gap < 2.0 && closing > -0.3) || ttc < 1.2) return { reason: "following", ttc, gap };
+    }
   }
   // anything directly ahead in the ego frame, regardless of route
+  let doorSweep;
   for (const n of world.visibleObstaclesNear(ego.x, ego.y, 26)) {
     if (n.kind === "door") {
-      const box = ego.obb();
-      const reach = Math.max(2, ego.v * 1.2);
-      box.center = [box.center[0] + (Math.cos(ego.psi) * reach) / 2, box.center[1] + (Math.sin(ego.psi) * reach) / 2];
-      box.halfLength += reach / 2;
-      if (obbOverlap(box, n.obb(), 0.3)) return { reason: "open door" };
+      doorSweep ??= sweptBox(ego, Math.max(2, ego.v * 1.2));
+      if (obbOverlap(doorSweep, n.obb(), 0.3)) return { reason: "open door" };
     }
     const local = ego.toLocal(n.x, n.y);
     if (local.ahead < 0 || local.ahead > 20 || Math.abs(local.right) > ego.spec.width / 2 + 0.45) continue;
@@ -77,7 +85,8 @@ export function safetyBrake(world, snap, executing) {
     const closing = ego.v - n.v * Math.cos(n.psi - ego.psi);
     if (gap < gapMoving || (closing > 0.1 && gap / closing < ttcMoving)) return { reason: "ahead", gap, closing };
   }
-  if (executing?.hazard && executing.hazard.in_s < 1.0) return { reason: "predicted", hazard: executing.hazard };
+  const hazard = executing?.hazard;
+  if (Number.isFinite(hazard?.in_s) && hazard.in_s < 1.0) return { reason: "predicted", hazard };
   return null;
 }
 
@@ -86,6 +95,8 @@ export class DeadlockDetector {
     this.stoppedFor = 0;
   }
   update(world, snap, dt) {
+    if (!Number.isFinite(dt) || dt < 0)
+      throw new RangeError("Deadlock detection needs a finite, non-negative timestep.");
     const ego = world.ego;
     const legit =
       (snap?.intersection &&

@@ -1,6 +1,9 @@
 import { observeAmber } from "../sim/amber.js";
 import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
+import { snapshotIssues } from "./snapshot-validation.js";
+
+export { snapshotIssues } from "./snapshot-validation.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
 
@@ -377,7 +380,8 @@ export function drivenMetricSnapshot(world) {
   const { ego, route } = world;
   if (!route) return null;
   const p = route.project(ego.x, ego.y, route.hint);
-  if (p.distance >= 25 || Math.abs(wrap(ego.psi - p.heading)) >= (Math.PI * 100) / 180) return null;
+  if (!p || !Number.isFinite(ego.psi - p.heading) || !Number.isFinite(p.distance) || !Number.isFinite(p.s)) return null;
+  if (!onRoute(p.distance, wrap(ego.psi - p.heading))) return null;
   const lane = laneState(route, p);
   const vehicles = world
     .visibleObstaclesNear(ego.x, ego.y, TRAFFIC_RADIUS_M)
@@ -389,6 +393,10 @@ export function drivenMetricSnapshot(world) {
     // Measure following from the car's actual lateral position and body width.
     following: followingInLane(ego, route, p, lane, vehicles, (s) => route.frameMove(p.s, s), null),
   };
+}
+
+function onRoute(distance, headingError) {
+  return distance < 25 && Math.abs(headingError) < (Math.PI * 100) / 180;
 }
 
 function crossingTraffic(world, control, entry, junction, bumperToLine, visibleNpcs) {
@@ -593,10 +601,11 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
   }
 }
 
-function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
+function senseRoute(world, snap, executing, visible, visibleNpcs, seen, FRONT) {
   const { ego, route } = world;
   const { road } = snap;
   const p = route.project(ego.x, ego.y);
+  if (!p || !Number.isFinite(p.heading)) throw new TypeError("Route projection needs a finite heading.");
   const headingErr = wrap(ego.psi - p.heading);
   snap.routeProj = { s: p.s, lateral: p.lateral, headingErr, distance: p.distance, point: p.point, index: p.index };
   let clearPath = Math.min(world.visibility.range, route.length - p.s);
@@ -609,10 +618,10 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
   snap.visibility.clear_path_m = clearPath;
   // At a blind corner retain a walking pace so the car can expose the sight line gradually.
   snap.visibility.safe_speed_mps = visibilitySpeed(Math.max(12, clearPath), FRONT);
-  snap.onRoute = p.distance < 25 && Math.abs(headingErr) < (Math.PI * 100) / 180;
+  snap.onRoute = onRoute(p.distance, headingErr);
   const remaining = route.remaining(p.s);
   const turns = route.turnsAfter(p.s);
-  const dest = ego.toLocal(route.endPoint()[0], route.endPoint()[1]);
+  const dest = ego.toLocal(...route.endPoint());
   snap.nav = {
     next_turn: turns.length ? turns[0].dir : "none",
     exit: turns.length && turns[0].exit ? turns[0].exit : null,
@@ -628,13 +637,13 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
     snap.nav.turn_round_in_m = turnaroundStopS(route, turns[0]) - p.s;
   const frontS = p.s + FRONT;
   senseRouteControls(world, snap, p, frontS, visible, visibleNpcs);
-  const cw = crosswalkConflict(route.pts, route.cum, p.s + FRONT - 3, p.s + FRONT + PED_LOOK_M, {
-    list: world.crowd.list.filter((p) => visible.includes(p)),
+  const cw = crosswalkConflict(route.pts, route.cum, frontS - 3, frontS + PED_LOOK_M, {
+    list: world.crowd.list.filter((p) => seen.has(p)),
   });
   if (cw)
     snap.pedestrian = {
       id: cw.ped.id,
-      bumper_to_crosswalk_m: cw.s - (p.s + FRONT),
+      bumper_to_crosswalk_m: cw.s - frontS,
       s_route: cw.s,
       to_path_m: cw.toPath,
       speed: cw.ped.v,
@@ -778,11 +787,14 @@ function senseSurroundings(snap, ego, visible, visibleNpcs) {
   snap.traffic = snap.traffic.slice(0, 8);
 }
 
-export function buildSnapshot(world, executing = null) {
+// Enable validation when diagnosing a snapshot producer or testing a new map.
+export function buildSnapshot(world, executing = null, { validate = false } = {}) {
   const { ego, route } = world;
+  if (!Number.isFinite(ego.psi)) throw new TypeError("Snapshot needs a finite ego heading.");
   const FRONT = ego.spec.length - ego.spec.rearOverhang;
   const visible = world.visibleObstaclesNear(ego.x, ego.y, TRAFFIC_RADIUS_M);
-  const visibleNpcs = world.npcs.filter((n) => visible.includes(n));
+  const seen = new Set(visible);
+  const visibleNpcs = world.npcs.filter((n) => seen.has(n));
   const road = world._road || world.roadInfo();
   const snap = {
     t: world.t,
@@ -827,7 +839,7 @@ export function buildSnapshot(world, executing = null) {
     },
     roadside: [],
   };
-  if (route) senseRoute(world, snap, executing, visible, visibleNpcs, FRONT);
+  if (route) senseRoute(world, snap, executing, visible, visibleNpcs, seen, FRONT);
   senseSurroundings(snap, ego, visible, visibleNpcs);
   if (executing?.hazard) snap.current_path_hazard = executing.hazard;
   snap.speed_zone = speedZone(world, snap, FRONT);
@@ -855,6 +867,10 @@ export function buildSnapshot(world, executing = null) {
   if (snap.lane) laneOptions(snap, world);
   for (const finish of FINISH_LANES) finish(snap);
   for (const sense of SENSE.end) sense(world, snap);
+  if (validate) {
+    const issues = snapshotIssues(snap);
+    if (issues.length) throw new TypeError(issues.join("\n"));
+  }
   return snap;
 }
 
@@ -1215,6 +1231,10 @@ function rightHook(world, p, frontS, lane) {
 function emergencyYield(world, p, frontS, lane, visible, intersection = null, executing = null) {
   const { ego, route, map } = world;
   const evs = world.npcs.filter(isEmergency);
+  if (!evs.length) {
+    world.evYield = null;
+    return null;
+  }
   // where the car is and will be over the next 20 m, along its route
   const mid = ego.spec.length / 2 - ego.spec.rearOverhang;
   const pts = [0, 10, 20].map((d) => route.offsetPointAt(Math.min(route.length, p.s + mid + d), lane.center));
@@ -1222,7 +1242,7 @@ function emergencyYield(world, p, frontS, lane, visible, intersection = null, ex
   // Keep the obligation while the physical approach still leads into the siren's path.
   // A rounded route corner can already turn away while the car has not begun turning.
   for (const d of [10, 20]) pts.push([pts[0][0] + Math.cos(ego.psi) * d, pts[0][1] + Math.sin(ego.psi) * d]);
-  const call = evs.length ? nearestCall(ego, evs, pts) : null;
+  const call = nearestCall(ego, evs, pts);
   if (!call) {
     world.evYield = null;
     return null;
@@ -2042,7 +2062,8 @@ function etaOf(world, n, distance, starting = false) {
 function turnOnRed(world, c, inter, frontS, visible, held = false) {
   const { ego, route, map } = world;
   // traffic from the left is looked for as far as the car can see, beyond TRAFFIC_RADIUS_M
-  const visibleNpcs = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M).filter((o) => world.npcs.includes(o));
+  const traffic = new Set(world.npcs);
+  const visibleNpcs = world.visibleObstaclesNear(ego.x, ego.y, DAYLIGHT_RANGE_M).filter((o) => traffic.has(o));
   const entered = frontS > c.sRoute;
   const out = {
     stop_completed: world.egoStop.controlId === c.control.id && world.egoStop.completed,
@@ -2603,7 +2624,7 @@ export function desiredSpeed(snap) {
   }
   if (snap.right_hook) {
     const room = snap.right_hook.bumper_to_yield_m;
-    const vh = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    const vh = holdSpeed(room, decel);
     if (vh < v) {
       v = vh;
       reasons.push("cyclist on the right");
@@ -2615,7 +2636,7 @@ export function desiredSpeed(snap) {
   for (const target of TARGET.beforeEmergency) v = target(snap, v, reasons, targetCtx);
   if (snap.bus) {
     const room = snap.bus.bumper_to_stop_m;
-    const vb = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    const vb = holdSpeed(room, decel);
     if (vb < v) {
       v = vb;
       reasons.push("bus pulling out");
@@ -2658,7 +2679,7 @@ export function desiredSpeed(snap) {
   }
   if (snap.crosswalk_stop) {
     const room = snap.crosswalk_stop.bumper_to_stop_m;
-    const vc = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    const vc = holdSpeed(room, decel);
     if (vc < v) {
       v = vc;
       reasons.push("car stopped at a crosswalk");
@@ -2698,7 +2719,7 @@ export function desiredSpeed(snap) {
   const lx = snap.level_crossing;
   if (lx?.wait) {
     const room = lx.bumper_to_stop_m;
-    const vl = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    const vl = holdSpeed(room, decel);
     if (vl < v) {
       v = vl;
       reasons.push(lx.wait === "train" ? "train coming at the level crossing" : "no room past the tracks");
@@ -2710,7 +2731,7 @@ export function desiredSpeed(snap) {
   const lz = snap.lane_closure;
   if (lz?.stop_s_route != null) {
     const room = lz.bumper_to_stop_m;
-    const vz = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    const vz = holdSpeed(room, decel);
     if (vz < v) {
       v = vz;
       reasons.push(lz.wait ? "lane closed: wait your turn at the merge" : "lane closure: letting a car in");
@@ -2722,7 +2743,7 @@ export function desiredSpeed(snap) {
   const jb = snap.junction_box;
   if (jb) {
     const room = jb.bumper_to_stop_m;
-    const vj = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+    const vj = holdSpeed(room, decel);
     if (vj < v) {
       v = vj;
       reasons.push("no room past the junction");
@@ -2791,6 +2812,10 @@ function visibilitySpeed(range, FRONT = CAR.length - CAR.rearOverhang) {
 
 function stopSpeedFor(distance, decel) {
   return distance <= 0 ? 0 : Math.sqrt(2 * decel * distance);
+}
+
+function holdSpeed(room, decel) {
+  return room < 1 ? 0 : stopSpeedFor(room - 0.5, decel);
 }
 
 // Hazard flags decide the decision interval.
