@@ -7,7 +7,16 @@ import { aggregate } from "../static/js/bench/metrics.js";
 import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording, sameResult } from "../static/js/brain/recording.js";
 import { checkFiles } from "./cli_tools.mjs";
-import { artifactBytes, isCommit, isDateTime, isId, isRecord, MAX_RECORDING_BYTES, readArtifactJson, readRecordingJson } from "./recording_artifacts.mjs";
+import {
+  artifactBytes,
+  isCommit,
+  isDateTime,
+  isId,
+  isRecord,
+  MAX_RECORDING_BYTES,
+  readArtifactJson,
+  readRecordingJson,
+} from "./recording_artifacts.mjs";
 import { benchRouteFingerprint, benchRunName, runCost } from "./run_manifest.mjs";
 import { benchSuiteVersion } from "./canonical_suite.mjs";
 
