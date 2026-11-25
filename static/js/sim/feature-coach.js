@@ -77,7 +77,9 @@ export function finishFeatureCoachCategories(score, categories) {
 }
 
 export function featureCoachCap(score) {
-  return COACH.some(({ coach }) => (coach.cap && score[coach.cap]) || (coach.capDelta && score.counterDelta(coach.capDelta)));
+  return COACH.some(
+    ({ coach }) => (coach.cap && score[coach.cap]) || (coach.capDelta && score.counterDelta(coach.capDelta)),
+  );
 }
 
 export function featureCoachTips(at, score, tips) {

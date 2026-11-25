@@ -14,7 +14,16 @@ export const COACH_SLOTS = {
   ],
   reports: ["afterSpeed", "afterFlagger", "afterBrakes", "beforeFeatureSummary", "end"],
   guidance: ["afterDirection", "afterBlind", "beforeSample", "afterSample"],
-  deductions: ["safety", "firstLegality", "beforeLegality", "beforeTrafficLegality", "afterSpeed", "legality", "comfort", "post"],
+  deductions: [
+    "safety",
+    "firstLegality",
+    "beforeLegality",
+    "beforeTrafficLegality",
+    "afterSpeed",
+    "legality",
+    "comfort",
+    "post",
+  ],
 };
 
 const WORLD_FIELDS = ["property", "seen", "calls"];

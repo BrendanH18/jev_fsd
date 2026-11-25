@@ -4,7 +4,14 @@
 import { desiredSpeed, waitsItsTurn } from "./sensors.js";
 import { comfort } from "../sim/vehicle.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
-import { featureDecisionFields, signalDecision, stopAtLineDrive, redTurnAllowed, hooks, junctionPlan } from "../sim/features/index.js";
+import {
+  featureDecisionFields,
+  signalDecision,
+  stopAtLineDrive,
+  redTurnAllowed,
+  hooks,
+  junctionPlan,
+} from "../sim/features/index.js";
 
 const BEFORE_SPEED_COST = hooks("rulesCost", "beforeSpeedCost");
 const BEFORE_SIGNAL_STOP_COST = hooks("rulesCost", "beforeSignalStop");
@@ -146,10 +153,7 @@ export class RulesBrain {
     }
     // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
     const motion =
-      stop &&
-      !stopAtLineDrive(snap, best?.c) &&
-      best?.c.law.kind !== "turnaround" &&
-      best?.c.law.kind !== "park"
+      stop && !stopAtLineDrive(snap, best?.c) && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park"
         ? "stop"
         : "drive";
     return {

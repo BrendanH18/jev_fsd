@@ -25,7 +25,8 @@ const AUDITS = [
   ...Object.entries(CORE_AUDITS),
   ...countersAt("beforeRunner"),
   ...COUNTER_AUDITS.filter(
-    ({ at }) => !["afterRedLights", "beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
+    ({ at }) =>
+      !["afterRedLights", "beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
   ).map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;

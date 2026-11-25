@@ -27,7 +27,15 @@ export default {
     const shows = approachPhase(inter, edge.id, world.t);
     const arrow = shows === "arrow_yellow";
     const signal = movementSignal(shows, arrow ? "left" : rc?.turn || "straight");
-    const choice = observeAmber(world.ego, `${key(edge.id, control)}${arrow ? ":arrow" : ""}`, signal, -past, inter, shows, world.t);
+    const choice = observeAmber(
+      world.ego,
+      `${key(edge.id, control)}${arrow ? ":arrow" : ""}`,
+      signal,
+      -past,
+      inter,
+      shows,
+      world.t,
+    );
     if (!choice) return null;
     if (!crossed) world.amberLightsSeen = true;
     if (signal !== "yellow") return null;
@@ -105,7 +113,15 @@ export default {
   trafficSignalDecision(world, vehicle, edge, control, signal, distance) {
     if (!world.amberLights) return null;
     const inter = world.map.intersections.get(control.id);
-    return observeAmber(vehicle, key(edge.id, control), signal, distance, inter, approachPhase(inter, edge.id, world.t), world.t);
+    return observeAmber(
+      vehicle,
+      key(edge.id, control),
+      signal,
+      distance,
+      inter,
+      approachPhase(inter, edge.id, world.t),
+      world.t,
+    );
   },
   trafficSpeed: {
     at: "clearing",
@@ -117,7 +133,8 @@ export default {
       for (const edge of path.edges) {
         const choice = edge.control && vehicle.amberChoices?.get(key(edge.id, edge.control));
         if (!choice || choice.stop || world.t >= choice.stop_until) continue;
-        const line = edge.sStart + (edge.control.s_line / Math.max(1, map.edges.get(edge.id).length)) * (edge.sEnd - edge.sStart);
+        const line =
+          edge.sStart + (edge.control.s_line / Math.max(1, map.edges.get(edge.id).length)) * (edge.sEnd - edge.sStart);
         if (front >= line && path.s - vehicle.spec.rearOverhang <= edge.sEnd + map.crossingHalfWidth(edge.id))
           cap = Math.min(cap, choice.speed_mps);
       }
@@ -180,16 +197,20 @@ export default {
       },
     },
     deductions: [{ at: "firstLegality", order: 0, counter, weight: 25, delta: true }],
-    tips: [{
-      at: "beforeGeneralJunction",
-      order: 0,
-      when: (score) => score.counterDelta(counter),
-      text: "When the light turns amber, stop if you can do so safely. If you are too close to stop safely, continue carefully without speeding up; keep yielding to people and traffic, and never enter on red.",
-    }],
-    reports: [{
-      at: "beforeFeatureSummary",
-      order: 1,
-      read: (score) => (score.amberLightsSeen ? { [counter]: score.counterDelta(counter) } : null),
-    }],
+    tips: [
+      {
+        at: "beforeGeneralJunction",
+        order: 0,
+        when: (score) => score.counterDelta(counter),
+        text: "When the light turns amber, stop if you can do so safely. If you are too close to stop safely, continue carefully without speeding up; keep yielding to people and traffic, and never enter on red.",
+      },
+    ],
+    reports: [
+      {
+        at: "beforeFeatureSummary",
+        order: 1,
+        read: (score) => (score.amberLightsSeen ? { [counter]: score.counterDelta(counter) } : null),
+      },
+    ],
   },
 };

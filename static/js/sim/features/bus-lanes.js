@@ -7,7 +7,16 @@ const inEffect = (snap) => snap.bus_lane?.in_effect && !snap.bus_lane.entering_a
 const leaving = (snap, c) => c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx);
 const inReservedLane = (snap) => inEffect(snap) && snap.bus_lane.lanes.includes(snap.lane?.index);
 const busLaneForPath = (path, edge, index) =>
-  legalBusLane(path.map, edge, index, path.busLanePolicy.clock, "straight", Infinity, false, path.bike ? "bicycle" : "car");
+  legalBusLane(
+    path.map,
+    edge,
+    index,
+    path.busLanePolicy.clock,
+    "straight",
+    Infinity,
+    false,
+    path.bike ? "bicycle" : "car",
+  );
 
 export default {
   key: "busLanes",
@@ -82,7 +91,9 @@ export default {
     return legal.length ? legal : pool;
   },
   trafficSpawnLaneBlocked(world, lane, kind) {
-    return world.busLanes && !legalBusLane(world.map, lane.edge, lane.idx, world.clock, "straight", Infinity, false, kind);
+    return (
+      world.busLanes && !legalBusLane(world.map, lane.edge, lane.idx, world.clock, "straight", Infinity, false, kind)
+    );
   },
   busSpawnLane(world, edge) {
     return world.busLanes ? { index: busTravelLane(world.map, edge, world.clock) } : null;
@@ -130,17 +141,21 @@ export default {
     init: () => ({ busLanesSeen: false }),
     seen: "busLanesSeen",
     deductions: [{ at: "beforeTrafficLegality", order: 0, counter, weight: 0.5, delta: true }],
-    tips: [{
-      at: "afterFollowing",
-      order: 100,
-      when: (score) => score.counterDelta(counter) > 1,
-      text: "Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.",
-    }],
-    reports: [{
-      at: "beforeFeatureSummary",
-      order: 0,
-      read: (score) => (score.busLanesSeen ? { [counter]: score.counterDelta(counter) } : null),
-    }],
+    tips: [
+      {
+        at: "afterFollowing",
+        order: 100,
+        when: (score) => score.counterDelta(counter) > 1,
+        text: "Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.",
+      },
+    ],
+    reports: [
+      {
+        at: "beforeFeatureSummary",
+        order: 0,
+        read: (score) => (score.busLanesSeen ? { [counter]: score.counterDelta(counter) } : null),
+      },
+    ],
   },
 };
 

@@ -669,11 +669,12 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
       const turn = extraRedTurn(i);
       const move = turn?.move || i.right_on_red;
       if (move) out.push(turnOnRedClause(move, m, atLine, turn?.direction));
-      else out.push(
-        atLine
-          ? "The car is at the line and the signal is red: hold still until it turns green."
-          : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`,
-      );
+      else
+        out.push(
+          atLine
+            ? "The car is at the line and the signal is red: hold still until it turns green."
+            : `The signal ${m} m ahead is red: keep rolling toward the line and stop just before it${i.entered ? ", unless the car has already entered the intersection" : ""}.`,
+        );
     } else if (i.signal === "yellow")
       out.push(
         firstOf(YELLOW_SIGNAL_CLAUSES, snap, m) ??
@@ -1190,8 +1191,8 @@ export function buildQuestions(snap, eligible, meta = {}) {
       junctionPlan(snap.intersection)?.motionCriterion ??
       extraRedTurn(snap.intersection)?.motionCriterion ??
       (snap.intersection?.right_on_red?.go
-          ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)"
-          : "");
+        ? " (but not at a red signal where `intersection.right_on_red.stop_completed` and `clear` are both true: the car may turn right on red)"
+        : "");
     // Likewise waiting its turn at an all-way stop.
     const turnWait = waitsItsTurn(snap.intersection)
       ? ", when the car has stopped at an all-way stop and it is not its turn (`intersection.priority.your_turn` is false)"

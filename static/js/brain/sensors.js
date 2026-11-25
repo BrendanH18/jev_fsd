@@ -495,19 +495,14 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
       ? entered || directive.direction === "go"
       : control.type === "stop"
         ? entered || (stopCompleted && !(priority?.arrived && !priority.go))
-        : control.type === "uncontrolled" ||
-          entered ||
-          signal === "green" ||
-          signal === "yellow" ||
-          policy?.allowsTurn;
+        : control.type === "uncontrolled" || entered || signal === "green" || signal === "yellow" || policy?.allowsTurn;
     // Amber gives way only to traffic already crossing; red reuses two-way-stop gap and sight checks.
-    const giveWay =
-      policy?.yieldControl
-        ? giveWayAt(world, { ...c, control: policy.yieldControl }, frontS)
-        : (control.type === "uncontrolled" && control.rule !== "major") ||
-            (control.type === "stop" && !control.all_way && stopCompleted)
-          ? giveWayAt(world, { ...c, control }, frontS)
-          : null;
+    const giveWay = policy?.yieldControl
+      ? giveWayAt(world, { ...c, control: policy.yieldControl }, frontS)
+      : (control.type === "uncontrolled" && control.rule !== "major") ||
+          (control.type === "stop" && !control.all_way && stopCompleted)
+        ? giveWayAt(world, { ...c, control }, frontS)
+        : null;
     // (a left turn under an advance green is protected: oncoming traffic is held on its red; and
     // inside the junction once the light has changed, the car clears it as soon as the traffic it can
     // see allows, without waiting to see along the oncoming lanes)
@@ -2390,8 +2385,7 @@ function laneOptions(snap, world) {
         inJunction,
         junctionMargin: PASS_JUNCTION_M,
       });
-    if (LANE_OFFER_BLOCKED.some((blocked) => blocked(world, route, s, lane.route_index + delta)))
-      side.offer = null;
+    if (LANE_OFFER_BLOCKED.some((blocked) => blocked(world, route, s, lane.route_index + delta))) side.offer = null;
     lane.sides[dir] = side;
   }
 }

@@ -1,5 +1,12 @@
 import { roadRank } from "../../map/mapdata.js";
-import { flashControl, flashing, flashState, NIGHT_CAUTION_MPS, nightFlashNotice, setNightFlash } from "../night-flash.js";
+import {
+  flashControl,
+  flashing,
+  flashState,
+  NIGHT_CAUTION_MPS,
+  nightFlashNotice,
+  setNightFlash,
+} from "../night-flash.js";
 import { approachTo } from "../priority.js";
 
 const FLASHING_AMBER = "flashing_amber";
