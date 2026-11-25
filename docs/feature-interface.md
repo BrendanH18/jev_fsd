@@ -295,6 +295,32 @@ both trees. Full arena results, reports, decision traces and events matched. The
 open system prompts matched byte for byte. The stub model recording replayed on both trees,
 the Jev fixtures stayed current and all 39 offline Jev requests validated.
 
+**Overnight flashing, left turns on red, steady amber, and bus lanes** each had a
+separate comparison against their preceding tree in Boat with Node 22.23.5. The city
+route and the named arena drives matched for each move. Each arena comparison ran Rules
+and the cautious agent.
+
+| Move | Rules city comparison at seed 1 | Arena comparison |
+|---|---|---|
+| Overnight flashing | Halifax, dry at 23:30, `s1-1` | After midnight |
+| Left turns on red | Calgary, dry, `s1-1` | Left on red |
+| Steady amber | Kitsilano, rain `s1-4` and snow `s1-6` | Room to stop and Keep going safely |
+| Bus lanes | Mount Pleasant, dry at 08:00, `s1-3`, on a route using an active reserved edge | Buses only |
+
+The whole batch matched an archive of `0583591` with separate loopback servers and
+`PYTHONHASHSEED=0`. The comparison covered 47 Rules routes at seed 1, including all
+12 routes each on Kitsilano dry bare, dry city and dry city at 23:30. It also covered
+two rainy and one snowy Kitsilano city routes, two Halifax city routes at 23:30, two
+dry city routes each in Calgary and Toronto, and two dry Mount Pleasant city routes
+at 08:00. Both trees passed 45 routes. Mount Pleasant `s1-3` logged 4.51 m of
+reserved-lane driving, and `s1-4` got stuck and failed to yield on both trees.
+
+Rules and the cautious agent each passed all 62 authored drives, including both road
+tests. The full arena results, coaching reports, decision traces and events matched.
+The comparisons excluded timing and run provenance fields. The guarded and open LLM
+prompts matched byte for byte, the committed stub recording replayed exactly and all
+39 offline Jev requests validated.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
