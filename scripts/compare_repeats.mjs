@@ -15,6 +15,7 @@ import {
   isId,
   isRecord,
   readArtifactJson,
+  readRecordingJson,
 } from "./recording_artifacts.mjs";
 import { authoredDrive } from "./canonical_suite.mjs";
 import { runCost } from "./run_manifest.mjs";
@@ -193,7 +194,7 @@ function requirePlan(runs, groups, plan) {
 function readRepeat(path) {
   let recording;
   try {
-    recording = ModelRecording.parse(readArtifactJson(path));
+    recording = ModelRecording.parse(readRecordingJson(path));
   } catch (error) {
     throw new Error(`${path}: ${error.message}`);
   }

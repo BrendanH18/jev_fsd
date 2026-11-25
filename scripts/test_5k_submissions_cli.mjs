@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { publishedDrives } from "./driver_comparison.mjs";
-import { readArtifactJson } from "./recording_artifacts.mjs";
+import { readRecordingJson } from "./recording_artifacts.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "jev-outside-driver-"));
 const run = (script, ...args) => {
@@ -121,7 +121,7 @@ try {
   );
   for (const name of ["jev-arena-2026-11-11.json.gz", "jev-open-2026-11-20.json.gz"]) {
     const file = fileURLToPath(new URL(`../data/recordings/${name}`, import.meta.url));
-    assert.equal(readArtifactJson(file).header.driver, "jev");
+    assert.equal(readRecordingJson(file).header.driver, "jev");
   }
 } finally {
   rmSync(dir, { recursive: true, force: true });

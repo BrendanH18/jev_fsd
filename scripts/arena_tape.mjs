@@ -35,6 +35,8 @@ export function parseArenaTape(value) {
 
 export function tapeCounts(tape) {
   const output = { drives: 0, requests: 0, answers: 0, responses: 0, timeouts: 0, cancellations: 0, errors: 0 };
+  const local = tape.format === LOCAL_RECORDING_FORMAT;
+  if (local) output.driver_failures = 0;
   for (const answers of Object.values(tape.drives)) {
     output.drives++;
     for (const queue of Object.values(answers)) {
@@ -44,6 +46,7 @@ export function tapeCounts(tape) {
         if (result.timeout) output.timeouts++;
         else if (result.cancelled) output.cancellations++;
         else if (result.error) output.errors++;
+        else if (local && result.response?.failure) output.driver_failures++;
         else output.responses++;
       }
     }

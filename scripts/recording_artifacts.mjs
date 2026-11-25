@@ -15,6 +15,9 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import { writeArtifact } from "./cli_tools.mjs";
 
 export const MAX_ARTIFACT_BYTES = 128 * 1024 * 1024;
+// Some published model tapes predate prompt compaction and expand to more than 128 MiB.
+export const MAX_RECORDING_BYTES = 512 * 1024 * 1024;
+
 export const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 export const isId = (value) => typeof value === "string" && value.trim().length > 0 && value === value.trim();
 export const isCommit = (value) => typeof value === "string" && /^[0-9a-f]{40}$/.test(value);
@@ -58,12 +61,14 @@ export function parseArtifactJson(path, bytes, max = MAX_ARTIFACT_BYTES) {
   }
 }
 
-export const readArtifactJson = (path) => parseArtifactJson(path, readArtifactBytes(path));
+export const readArtifactJson = (path, max = MAX_ARTIFACT_BYTES) =>
+  parseArtifactJson(path, readArtifactBytes(path, max), max);
+export const readRecordingJson = (path) => readArtifactJson(path, MAX_RECORDING_BYTES);
 
-export function artifactBytes(path, text) {
-  if (Buffer.byteLength(text) > MAX_ARTIFACT_BYTES) throw new Error(`${path} exceeds 128 MiB before compression.`);
+export function artifactBytes(path, text, max = MAX_ARTIFACT_BYTES) {
+  if (Buffer.byteLength(text) > max) throw new Error(`${path} exceeds ${max / (1024 * 1024)} MiB before compression.`);
   const bytes = path.endsWith(".gz") ? gzipSync(text, { level: 9 }) : Buffer.from(text);
-  if (bytes.length > MAX_ARTIFACT_BYTES) throw new Error(`${path} exceeds 128 MiB after compression.`);
+  if (bytes.length > max) throw new Error(`${path} exceeds ${max / (1024 * 1024)} MiB after compression.`);
   return bytes;
 }
 
@@ -80,4 +85,4 @@ export function writeNewJson(path, value, indent) {
   return bytes;
 }
 
-export const writeJsonArtifact = (path, text) => writeArtifact(path, artifactBytes(path, text));
+export const writeJsonArtifact = (path, text, max) => writeArtifact(path, artifactBytes(path, text, max));

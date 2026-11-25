@@ -31,7 +31,7 @@ import {
   wholeNumber,
 } from "./cli_tools.mjs";
 
-import { readArtifactJson, writeJsonArtifact, writeNewJson } from "./recording_artifacts.mjs";
+import { MAX_RECORDING_BYTES, readRecordingJson, writeJsonArtifact, writeNewJson } from "./recording_artifacts.mjs";
 
 const OPTIONS = [
   "brain",
@@ -175,7 +175,7 @@ if (args["tape-info"]) {
     fail("--tape-info uses only --replay.");
   try {
     const { parseArenaTape, tapeCounts } = await import("./arena_tape.mjs");
-    const tape = parseArenaTape(readArtifactJson(args.replay));
+    const tape = parseArenaTape(readRecordingJson(args.replay));
     console.log(
       JSON.stringify({
         driver: tape.header.driver,
@@ -216,7 +216,7 @@ if (args.agent && !statSync(args.agent, { throwIfNoEntry: false })?.isFile())
 let replayJson = null;
 if (args.replay) {
   try {
-    replayJson = readArtifactJson(args.replay);
+    replayJson = readRecordingJson(args.replay);
   } catch (error) {
     fail(`Cannot read the recording ${args.replay}: ${error.message}`);
   }
@@ -510,7 +510,7 @@ for (const [index, challenge] of drives.entries()) {
     recording.results[challenge.id] = { ...trimmed(r), result_sha: resultSha(r) };
     manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
     setRecordingSuiteVersion(recording, partial ? CUSTOM_SUITE : arenaSuiteVersion({ ...suite, maps: shas }, results));
-    writeJsonArtifact(args.record, recording.serialize());
+    writeJsonArtifact(args.record, recording.serialize(), MAX_RECORDING_BYTES);
   }
   if (replayJson) {
     const actualSha = resultSha(r);

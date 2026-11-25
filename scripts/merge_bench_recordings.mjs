@@ -7,7 +7,7 @@ import { aggregate } from "../static/js/bench/metrics.js";
 import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording, sameResult } from "../static/js/brain/recording.js";
 import { checkFiles } from "./cli_tools.mjs";
-import { artifactBytes, isCommit, isDateTime, isId, isRecord, readArtifactJson } from "./recording_artifacts.mjs";
+import { artifactBytes, isCommit, isDateTime, isId, isRecord, MAX_RECORDING_BYTES, readArtifactJson, readRecordingJson } from "./recording_artifacts.mjs";
 import { benchRouteFingerprint, benchRunName, runCost } from "./run_manifest.mjs";
 import { benchSuiteVersion } from "./canonical_suite.mjs";
 
@@ -24,7 +24,7 @@ function readPart(path) {
     throw mismatched(path, `cannot read report: ${error.message}`);
   }
   try {
-    tape = ModelRecording.parse(readArtifactJson(tapePath));
+    tape = ModelRecording.parse(readRecordingJson(tapePath));
   } catch (error) {
     throw mismatched(tapePath, `cannot read recording: ${error.message}`);
   }
@@ -206,7 +206,7 @@ function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
     return;
   }
   writePair([
-    [recordingPath, artifactBytes(recordingPath, merged.serialize())],
+    [recordingPath, artifactBytes(recordingPath, merged.serialize(), MAX_RECORDING_BYTES)],
     [reportPath, artifactBytes(reportPath, `${JSON.stringify(output, null, 1)}\n`)],
   ]);
   console.log(`Merged ${ids.length} drives from ${parts.length} parts.`);

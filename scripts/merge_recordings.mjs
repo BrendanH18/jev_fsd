@@ -18,7 +18,8 @@ import {
   isId,
   isRecord,
   isTrack,
-  readArtifactJson,
+  MAX_RECORDING_BYTES,
+  readRecordingJson,
   writeJsonArtifact,
 } from "./recording_artifacts.mjs";
 import { runCost } from "./run_manifest.mjs";
@@ -69,7 +70,7 @@ const read = (file) => {
     const identity = `${source.dev}:${source.ino}`;
     if (sources.has(identity)) fail(`List each input recording once: ${file}.`);
     sources.add(identity);
-    return ModelRecording.parse(readArtifactJson(file));
+    return ModelRecording.parse(readRecordingJson(file));
   } catch (error) {
     fail(`Cannot read the recording ${file}: ${error.message}`);
   }
@@ -204,7 +205,7 @@ if (values["dry-run"]) {
   );
 } else {
   try {
-    writeJsonArtifact(out, merged.serialize());
+    writeJsonArtifact(out, merged.serialize(), MAX_RECORDING_BYTES);
   } catch (error) {
     fail(error.message);
   }

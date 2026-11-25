@@ -10,6 +10,7 @@ import {
   parseArtifactJson,
   readArtifactBytes,
   readArtifactJson,
+  readRecordingJson,
   writeJsonArtifact,
   writeNewJson,
 } from "./recording_artifacts.mjs";
@@ -312,6 +313,8 @@ const localRecord = local.tape("broken", "record").brainFor(autopilot, "custom-d
 });
 await assert.rejects(localRecord.decide({}, [], request, undefined), { message: "circular", name: "Error" });
 const savedLocal = LocalRecording.parse(JSON.parse(local.serialize()));
+assert.equal(tapeCounts(savedLocal).driver_failures, 1);
+assert.equal(tapeCounts(savedLocal).responses, 1);
 const localReplay = savedLocal.tape("broken", "replay").brainFor(autopilot, "custom-driver");
 await assert.rejects(localReplay.decide({}, [], request, undefined), { message: "circular", name: "Error" });
 
@@ -363,7 +366,7 @@ assert.equal(sameResult({ pass: true }, { pass: false }), false);
 const savedTapes = new URL("../data/recordings/", import.meta.url);
 for (const name of readdirSync(savedTapes)) {
   if (!/\.json(?:\.gz)?$/.test(name)) continue;
-  const artifact = readArtifactJson(new URL(name, savedTapes).pathname);
+  const artifact = readRecordingJson(new URL(name, savedTapes).pathname);
   const tape = artifact.header.arena ? parseArenaTape(artifact) : ModelRecording.parse(artifact);
   assert.ok(Object.keys(tape.results).length > 0, name);
 }
