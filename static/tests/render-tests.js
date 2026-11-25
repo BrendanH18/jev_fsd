@@ -330,10 +330,12 @@ export function runRenderTests() {
 
   const calls = [],
     renderer = { shadowMap: { autoUpdate: true } };
+  const registration = { scene: new THREE.Scene(), sceneryLODs: new Set(), applyCoverage() {} };
+  SceneView.prototype.addScenery.call(registration, parked);
   const view = {
+    ...registration,
     renderer,
     camera,
-    sceneryLODs: [lod],
     sky: { material: { uniforms: { cloudTime: { value: 0 } } } },
     reflection: {
       render: () => {
@@ -357,12 +359,7 @@ export function runRenderTests() {
     /* verify state restoration below */
   }
   check("render errors restore shadow updates", renderer.shadowMap.autoUpdate);
-  const registration = { scene: new THREE.Scene(), sceneryLODs: [], applyCoverage() {} };
-  SceneView.prototype.addScenery.call(registration, parked);
-  check(
-    "reflection camera cannot independently select detail",
-    registration.sceneryLODs.includes(lod) && !lod.autoUpdate,
-  );
+  check("reflection camera cannot independently select detail", registration.sceneryLODs.has(lod) && !lod.autoUpdate);
 
   const savedReflection = {
     texture: reflection.texture.value,
