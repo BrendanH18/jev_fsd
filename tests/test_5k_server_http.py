@@ -337,7 +337,7 @@ class HttpTests(unittest.TestCase):
 
     def test_unprintable_mime_types_fall_back_to_binary(self):
         for ctype in ("text/é", "text/plain\x00"):
-            with self.subTest(ctype=ctype), patch.object(server.mimetypes, "guess_type", return_value=(ctype, None)):
+            with self.subTest(ctype=ctype), patch.dict(server.mimetypes.types_map, {".js": ctype}):
                 status, headers, _ = self.request("GET", "/js/common.js")
             self.assertEqual(status, 200)
             self.assertEqual(headers["Content-Type"], "application/octet-stream")

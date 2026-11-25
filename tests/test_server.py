@@ -117,7 +117,7 @@ class StaticServerTests(unittest.TestCase):
         for line_break in ("\r", "\n", "\r\n"):
             with self.subTest(line_break=repr(line_break)):
                 mime_type = "text/plain" + line_break + "X-Injected: yes"
-                with patch.object(server.mimetypes, "guess_type", return_value=(mime_type, None)):
+                with patch.dict(server.mimetypes.types_map, {".js": mime_type}):
                     status, headers, body = self.get("/nested/app.js")
                 self.assertEqual(status, 200)
                 self.assertEqual(headers["Content-Type"], "application/octet-stream")

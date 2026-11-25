@@ -67,6 +67,7 @@ from jev.maps import catalog, map_identity
 from jev.drives import suggested_drives
 
 STATIC = PROJECT_ROOT / "static"
+mimetypes.init()  # the system table too, as guess_type would load it (_send_asset)
 PAGES = {
     "/": "index.html",
     "/tests": "tests/run.html",
@@ -1241,17 +1242,16 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _static_file(relative):
-        root = STATIC.resolve()
-        try:
-            path = (root / relative).resolve(strict=True)
-            if path.is_relative_to(root) and path.is_file():
-                return path
-        except (FileNotFoundError, NotADirectoryError, RuntimeError):
-            pass
-        return None
+        root = os.path.realpath(STATIC)
+        file = os.path.realpath(os.path.join(root, relative))
+        # Include the separator so sibling directories such as static-private cannot pass.
+        if not file.startswith(root + os.sep) or not os.path.isfile(file):
+            return None
+        return Path(file)
 
     def _send_asset(self, file):
-        ctype = mimetypes.guess_type(str(file))[0] or "application/octet-stream"
+        # Look the type up by suffix in the fixed table, so no part of the request reaches the header.
+        ctype = mimetypes.types_map.get(file.suffix.lower()) or "application/octet-stream"
         if ctype.startswith("text/") or ctype.endswith("javascript"):
             ctype += "; charset=utf-8"
         try:
