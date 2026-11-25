@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import math
 import re
 import threading
 import time
@@ -34,7 +35,20 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import envfile
 from .config import Settings
-from .endpoints import _OPENER, _Watchdog, check_common, headers_for, is_local_host, public_url, scrub
+from .endpoints import (
+    MAX_CONFIG_BYTES,
+    MAX_PRICE_PER_MTOK,
+    _OPENER,
+    _Watchdog,
+    check_common,
+    headers_for,
+    is_local_host,
+    public_url,
+    read_config,
+    read_error,
+    read_reply,
+    scrub,
+)
 from .llm import EndpointConfig, LlmRegistry
 
 MODELS_TIMEOUT_S = 8.0
@@ -98,6 +112,11 @@ PROVIDERS = (
         "base_url": "https://api.openai.com/v1",
         "key_env": "OPENAI_API_KEY",
         "key_url": "https://platform.openai.com/api-keys",
+        "token_field": "max_completion_tokens",
+        "system_role": "developer",
+        "system_role_models": re.compile(r"^(?:gpt-[5-9](?:[.-]|$)|o[1-9](?:-|$))"),
+        "temperature": None,
+        "temperature_models": re.compile(r"^(?:gpt-[5-9](?:[.-]|$)|o[1-9](?:-|$))"),
         "hint": "Prices are not listed by OpenAI's API; add them to count spend against the budget.",
     },
     {
@@ -111,6 +130,7 @@ PROVIDERS = (
         # leaves room in case thinking counts toward it (Google's compatibility docs do not say).
         "max_tokens": 2048,
         "extra_body": {"reasoning_effort": "low"},
+        "extra_body_models": re.compile(r"^gemini-(?:2\.5|[3-9])(?:[.-]|$)"),
         "hint": "Gemini through Google's OpenAI-compatible endpoint (in beta). Add prices to count spend "
         "against the budget.",
     },
@@ -124,6 +144,7 @@ PROVIDERS = (
         # Grok's reasoning cannot be turned off and defaults to high; low keeps a decision quick. A model
         # without reasoning may refuse the setting: remove extra_body from its entry.
         "extra_body": {"reasoning_effort": "low"},
+        "extra_body_models": re.compile(r"^grok-(?:3-mini|4\.[3-9])(?:-|$)"),
         "hint": "Grok models. Add prices to count spend against the budget.",
     },
     {
@@ -142,6 +163,7 @@ PROVIDERS = (
         "key_env": "GROQ_API_KEY",
         "key_url": "https://console.groq.com/keys",
         "response_format": "json_object",
+        "token_field": "max_completion_tokens",
         "hint": "Fast hosted open models.",
     },
     {
@@ -171,6 +193,10 @@ _lock = threading.Lock()
 
 
 class SetupError(ValueError):
+    pass
+
+
+class SetupAuthError(SetupError):
     pass
 
 
@@ -246,7 +272,7 @@ LLM = Pillar(
     key_prefix=CUSTOM_KEY_PREFIX,
     preset_fields=("api", "response_format", "timeout_s", "rpm"),
     reserved=_reserved_llm_name,
-    default_fields=("max_tokens", "extra_body"),
+    default_fields=("max_tokens", "extra_body", "token_field", "system_role", "temperature"),
 )
 
 
@@ -273,10 +299,13 @@ def custom_key_env(name: str) -> str:
 def _free_name(entries: list, name: str, model: str, base_url: str) -> str:
     """A name derived from the model id must not take over a different saved model: lab/gpt-4o-mini and
     gpt-4o.mini both slug to gpt-4o-mini. The same model on the same server keeps its name (an update)."""
-    taken = {e["name"]: e for e in entries if isinstance(e, dict) and isinstance(e.get("name"), str)}
+    taken = {}
+    for entry in entries:
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+            taken.setdefault(entry["name"], entry)
     candidate, n = name, 2
     while candidate in taken and (
-        taken[candidate].get("model") != model or str(taken[candidate].get("base_url") or "").rstrip("/") != base_url
+        taken[candidate].get("model") != model or not _same_server(taken[candidate], base_url)
     ):
         suffix = "-%d" % n
         candidate, n = name[: 32 - len(suffix)].rstrip("-_") + suffix, n + 1
@@ -287,8 +316,12 @@ def text(body: dict, field: str, limit: int = 300) -> str:
     value = body.get(field)
     if value is None:
         return ""
-    if not isinstance(value, str) or len(value) > limit:
+    if not isinstance(value, str):
         raise SetupError("%s must be text" % field)
+    if len(value) > limit:
+        raise SetupError("%s must be at most %d characters" % (field, limit))
+    if not all(ch.isprintable() for ch in value.strip()):
+        raise SetupError("%s must contain printable text" % field)
     return value.strip()
 
 
@@ -302,13 +335,15 @@ def _price(body: dict, field: str) -> Optional[float]:
         number = float(value)
     except (TypeError, ValueError, OverflowError):
         raise SetupError("%s must be a number of USD per million tokens" % field)
+    if not math.isfinite(number) or not 0 <= number <= MAX_PRICE_PER_MTOK:
+        raise SetupError("%s must be between 0 and %d USD per million tokens" % (field, MAX_PRICE_PER_MTOK))
     return number
 
 
 def _read_file(pillar: Pillar, settings: Settings) -> dict:
     path = pillar.path(settings)
     try:
-        data = json.loads(path.read_text())
+        data = read_config(path)
     except FileNotFoundError:
         return {
             "_comment": "Written by the app's Connect a model dialog; edit freely. Keys live in .env, "
@@ -324,11 +359,21 @@ def _read_file(pillar: Pillar, settings: Settings) -> dict:
     return data
 
 
+def _restore_file(path, before: Optional[str]) -> None:
+    if before is None:
+        path.unlink(missing_ok=True)
+    else:
+        envfile._atomic_write(path, before)
+
+
 def _write_file(pillar: Pillar, settings: Settings, data: dict) -> None:
     path = pillar.path(settings)
     try:
+        encoded = json.dumps(data, indent=2) + "\n"
+        if len(encoded.encode("utf-8")) > MAX_CONFIG_BYTES:
+            raise ValueError("endpoints file would exceed %d bytes" % MAX_CONFIG_BYTES)
         path.parent.mkdir(parents=True, exist_ok=True)
-        envfile._atomic_write(path, json.dumps(data, indent=2) + "\n")
+        envfile._atomic_write(path, encoded)
     except (OSError, ValueError) as err:
         raise SetupError(
             "Could not save %s: %s" % (path.name, err.strerror if isinstance(err, OSError) else err)
@@ -370,6 +415,18 @@ def base_url_for(p: dict, body: dict) -> str:
     return p["base_url"] or text(body, "base_url", 500).rstrip("/")
 
 
+def _same_server(entry: dict, base_url: str) -> bool:
+    return str(entry.get("base_url") or "").strip().rstrip("/") == base_url
+
+
+def catalog_key(settings: Settings, provider: dict, body: dict) -> Optional[str]:
+    key_env = provider.get("key_env")
+    key = text(body, "api_key", 512) or (settings.get(key_env) if key_env else None)
+    if key_env and not key and provider["id"] not in ("openrouter", "typesafe"):
+        raise SetupAuthError("Paste your %s API key to list its models." % provider["label"])
+    return key
+
+
 def _error_message(body: str) -> str:
     """The message in a JSON error reply: OpenAI-style error.message, Google's, xAI's "error" string,
     Mistral's "detail", or a top-level "message". Empty when there is none."""
@@ -390,31 +447,39 @@ def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float, api: 
     """GET a model list for the dialog, with one total deadline: a socket timeout bounds each read, so
     a server that trickles its reply could otherwise hold this request open indefinitely. Costs nothing."""
     where = public_url(url)
-    req = urllib.request.Request(url, headers=headers_for(key, api=api))
+    try:
+        req = urllib.request.Request(url, headers=headers_for(key, api=api))
+    except ValueError as err:
+        raise SetupError(str(err)) from err
     req.watchdog = watchdog = _Watchdog(time.monotonic() + timeout_s)
     late = SetupError("%s did not send its model list within %g s." % (where, timeout_s))
     try:
         with _OPENER.open(req, timeout=timeout_s) as resp:
-            raw = resp.read(MAX_MODELS_BYTES + 1)
+            raw = read_reply(resp, MAX_MODELS_BYTES)
             expired = watchdog.cancel()  # stop it before closing: a slow close is not a late list
         if expired:  # the socket was shut mid-reply, so the list may be cut short
             raise late
     except urllib.error.HTTPError as err:
-        try:  # read the error body while the watchdog still guards the socket
-            body = err.read(4096).decode("utf-8", errors="replace") if err.fp else ""
-        except (OSError, http.client.HTTPException):
-            body = ""
-        finally:
-            err.close()
+        body = read_error(err)
         if watchdog.cancel():
             raise late
         if err.code in (401, 403):
-            raise SetupError("%s rejected the key (HTTP %d). Check it and try again." % (label, err.code))
+            raise SetupAuthError("%s rejected the key (HTTP %d). Check it and try again." % (label, err.code))
+        if err.code == 429:
+            raise SetupError("%s limited model list requests (HTTP 429). Wait and try again." % label)
+        if err.code in (404, 405):
+            raise SetupError(
+                "%s does not offer model listing here (HTTP %d). Enter the model id manually." % (where, err.code)
+            )
         # (Google and xAI answer a wrong key with 400, so their own words say what went wrong)
         # (scrubbed before it is shortened, so a key cut in two cannot leave its first half behind)
         said = scrub(_error_message(body), key)[:200] or err.reason
         raise SetupError(scrub("%s answered HTTP %d: %s" % (where, err.code, said), key))
-    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as err:
+    except ValueError as err:
+        if watchdog.cancel():
+            raise late
+        raise SetupError("Could not read the model list from %s: %s" % (where, err)) from err
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as err:
         if watchdog.cancel():
             raise late
         reason = getattr(err, "reason", err)
@@ -422,32 +487,44 @@ def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float, api: 
         raise SetupError(scrub("Could not reach %s: %s.%s" % (where, reason, local), key))
     finally:
         watchdog.cancel()
-    if len(raw) > MAX_MODELS_BYTES:
-        raise SetupError("The model list from %s is too large." % where)
     try:
-        return json.loads(raw.decode("utf-8"))
+        return json.loads(raw.decode("utf-8-sig"))
     except (ValueError, RecursionError):
         raise SetupError("%s did not return a JSON model list." % where)
 
 
-def parse_models(data: Any, prices_by_id: bool = False, secret: Optional[str] = None) -> List[dict]:
+def parse_models(
+    data: Any, prices_by_id: bool = False, secret: Optional[str] = None, modality: Optional[str] = None
+) -> List[dict]:
     """{data: [...]} or a bare list -> [{id, name?, price_per_mtok_input?, price_per_mtok_output?,
     context_length?}], sorted by id. OpenRouter's per-token prices become USD per million tokens.
     Anthropic's list has no prices, so with `prices_by_id` they come from CLAUDE_PRICES."""
-    items = data.get("data", data.get("models")) if isinstance(data, dict) else data
+    items = data.get("data") if isinstance(data, dict) else data
+    if isinstance(data, dict) and not isinstance(items, list):
+        items = data.get("models")
+    if not isinstance(items, list):
+        raise SetupError("Provider reply has no model list. Enter the model id manually.")
     models = []
     seen = set()
-    for item in items if isinstance(items, list) else []:
+    for item in items:
         if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not 0 < len(item["id"]) <= 200:
             continue
         model_id = item["id"]
         if not model_id.strip() or model_id in seen:
             continue
+        if not model_id.isprintable() or model_id != model_id.strip():
+            continue
+        architecture = item.get("architecture")
+        outputs = architecture.get("output_modalities") if isinstance(architecture, dict) else None
+        if modality is not None and isinstance(outputs, list) and modality not in outputs:
+            continue
         seen.add(model_id)
         model: Dict[str, Any] = {"id": scrub(model_id, secret)}
-        name = item.get("name", item.get("display_name"))  # (display_name: Anthropic's Models API)
-        if isinstance(name, str):
-            model["name"] = scrub(name, secret)[:120]
+        for field in ("name", "display_name"):
+            name = item.get(field)
+            if isinstance(name, str) and name.strip() and name.strip().isprintable():
+                model["name"] = scrub(name.strip(), secret)[:120]
+                break
         pricing = item.get("pricing")
         if isinstance(pricing, dict):  # OpenRouter: USD per token, as strings
             try:
@@ -462,13 +539,15 @@ def parse_models(data: Any, prices_by_id: bool = False, secret: Optional[str] = 
         listed = CLAUDE_PRICES.get(item["id"]) if prices_by_id else None
         if listed:
             model["price_per_mtok_input"], model["price_per_mtok_output"] = listed
-        context = item.get("context_length", item.get("max_input_tokens"))
-        if isinstance(context, int) and not isinstance(context, bool) and context > 0:
-            model["context_length"] = context
+        for field in ("context_length", "max_input_tokens"):
+            context = item.get(field)
+            if type(context) is int and 0 < context <= 1_000_000_000:
+                model["context_length"] = context
+                break
         models.append(model)
         if len(models) >= MAX_MODELS:
             break
-    models.sort(key=lambda m: m["id"].lower())
+    models.sort(key=lambda m: (m["id"].lower(), m["id"]))
     return models
 
 
@@ -477,18 +556,18 @@ def list_models(settings: Settings, body: dict) -> dict:
 
     Uses the key typed into the dialog, else the provider's saved key. Costs nothing."""
     p = LLM.provider(body.get("provider"))
-    key = text(body, "api_key", 512) or (settings.get(p["key_env"]) if p.get("key_env") else None)
+    key = catalog_key(settings, p, body)
     base_url = probe_url(base_url_for(p, body), keyed=bool(key))
     api = p.get("api", "openai")
-    if api == "anthropic" and not key:
-        raise SetupError("Paste your %s API key to list its models." % p["label"])
     # (Anthropic's list is paged, 20 to a page by default; one page of 1000 holds every model)
     url = base_url + ("/models?limit=1000" if api == "anthropic" else "/models")
     data = fetch_json(url, key, p["label"], MODELS_TIMEOUT_S, api)
     return {
         "provider": p["id"],
         "endpoint": public_url(base_url),
-        "models": parse_models(data, prices_by_id=api == "anthropic", secret=key),
+        "models": parse_models(
+            data, prices_by_id=api == "anthropic", secret=key, modality="text" if p["id"] == "openrouter" else None
+        ),
     }
 
 
@@ -499,8 +578,8 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
     if not model:
         raise SetupError("Choose a model.")
     explicit = text(body, "name", 40).lower()
-    base_url = base_url_for(p, body)
     key = text(body, "api_key", 512)
+    base_url = probe_url(base_url_for(p, body), keyed=bool(key or p.get("key_env")))
     with _lock:
         data = _read_file(pillar, settings)
         entries = data["endpoints"]
@@ -523,12 +602,18 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
                 ):
                     raise SetupError("%s is already used by another endpoint; choose another name." % key_env)
             elif isinstance(kept, str) and kept.startswith(pillar.key_prefix) and settings.get(kept):
-                if str(existing.get("base_url") or "").rstrip("/") != base_url:
+                if not _same_server(existing, base_url):
                     raise SetupError("This endpoint's saved key is not sent to a new URL. Paste the key again.")
                 key_env = kept
+        same_server = existing is not None and _same_server(existing, base_url)
+        same_model = same_server and existing.get("model") == model
         raw: Dict[str, Any] = {
             "name": name,
-            "label": text(body, "label", 60) or "%s (%s)" % (model.rsplit("/", 1)[-1], p["label"]),
+            "label": (
+                text(body, "label", 60)
+                or (existing.get("label") if same_model else None)
+                or "%s (%s)" % (model.rsplit("/", 1)[-1], p["label"])
+            ),
             "base_url": base_url,
             "model": model,
         }
@@ -536,35 +621,52 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
             raw["api_key_env"] = key_env
         for field in pillar.preset_fields:
             if field in p:
+                if same_server and field in ("timeout_s", "rpm", "response_format") and field in existing:
+                    continue
                 raw[field] = p[field]
         for field in ("price_per_mtok_input", "price_per_mtok_output"):
             price = _price(body, field)
             if price is not None:
                 raw[field] = price
-        if existing and str(existing.get("base_url") or "").rstrip("/") == base_url:
+        if same_server:
             # Same server: keep hand-edited options the dialog does not show (extra_body, max_tokens, ...).
             # A different server starts fresh, so one provider's rpm or timeout never carries over.
             raw = {**{k: v for k, v in existing.items() if k not in ("api_key_env",)}, **raw}
             for field in ("price_per_mtok_input", "price_per_mtok_output"):
-                if body.get(field) in (None, ""):
+                if body.get(field) in (None, "") and (field in body or not same_model):
                     raw.pop(field, None)
         for field in pillar.default_fields:
             if field not in p:
                 continue
-            if model in p.get(field + "_models", (model,)):
+            supported = p.get(field + "_models", (model,))
+            fits = bool(supported.match(model)) if isinstance(supported, re.Pattern) else model in supported
+            if fits:
                 raw.setdefault(field, p[field])
-            elif raw.get(field) == p[field]:
+            elif field in raw and raw[field] == p[field]:
                 # the preset's default, kept from a model that took it, would break this one
                 del raw[field]
         problems: List[str] = []
         if not pillar.validate(raw, "endpoint %r" % name, problems).ok or problems:
             raise SetupError(problems[0])
-        notes = write_key(settings, key_env, key) if key else []
         if existing:
+            # Setup edits the same first definition the registry uses.
             entries[entries.index(existing)] = raw
         else:
             entries.append(raw)
+        path = pillar.path(settings)
+        try:
+            before = path.read_text(encoding="utf-8") if key and path.exists() else None
+        except (OSError, UnicodeError) as err:
+            raise SetupError("Could not back up %s before saving the key." % path.name) from err
         _write_file(pillar, settings, data)
+        try:
+            notes = write_key(settings, key_env, key) if key else []
+        except SetupError:
+            try:
+                _restore_file(path, before)
+            except OSError as err:
+                raise SetupError("The key could not be saved and %s could not be restored." % path.name) from err
+            raise
         registry.reload()
     return {"saved": name, "id": pillar.prefix + name, "notes": notes}
 
@@ -573,6 +675,8 @@ def remove_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) ->
     """Delete an endpoint from the endpoints file. A custom endpoint's private key goes too; a
     provider key stays in .env, since other endpoints or tools may use it."""
     name = text(body, "name", 40)
+    if not name:
+        raise SetupError("Choose an endpoint to remove.")
     with _lock:
         data = _read_file(pillar, settings)
         entries = data["endpoints"]
@@ -581,13 +685,18 @@ def remove_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) ->
             raise SetupError(
                 "%r is not in %s; only models saved there can be removed here." % (name, pillar.path(settings).name)
             )
-        entries.remove(existing)
+        # Removing the endpoint should also remove any definitions shadowed by the first entry.
+        entries[:] = [entry for entry in entries if not isinstance(entry, dict) or entry.get("name") != name]
         _write_file(pillar, settings, data)
         key_env = str(existing.get("api_key_env") or "")
         if key_env.startswith(pillar.key_prefix) and not any(
             isinstance(e, dict) and e.get("api_key_env") == key_env for e in entries
         ):
-            envfile.forget_key(settings.env_file.parent, settings.env_file.name, var=key_env)
+            try:
+                envfile.forget_key(settings.env_file.parent, settings.env_file.name, var=key_env)
+            except (OSError, UnicodeError) as err:
+                registry.reload()
+                raise SetupError("Endpoint removed, but its private key could not be removed from .env.") from err
         registry.reload()
     return {"removed": name}
 

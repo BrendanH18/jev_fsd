@@ -11,6 +11,7 @@ Around the call sit two things a demo that spends real money should have:
 
 from __future__ import annotations
 
+import http.client
 import json
 import math
 import random
@@ -19,6 +20,8 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, Optional
 
 from . import VERSION
@@ -53,16 +56,34 @@ class JevError(Exception):
 
 
 MAX_USAGE_TOKENS = 10**9
+MAX_MODEL_BYTES = 2 * 1024 * 1024
+MAX_REPLY_DEPTH = 64
 
 
 def tokens(value: Any) -> int:
     """A token count from a provider usage block, or zero for invalid counts."""
-    if isinstance(value, bool):
-        return 0
+    return token_count(value) or 0
+
+
+def token_count(value: Any) -> Optional[int]:
+    """Distinguish zero from absent or malformed counts for providers with usage aliases."""
+    if isinstance(value, bool) or not isinstance(value, (int, str, float)):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
     try:
-        return min(MAX_USAGE_TOKENS, max(0, int(value or 0)))
+        count = int(value)
     except (TypeError, ValueError, OverflowError):
-        return 0
+        return None
+    return min(MAX_USAGE_TOKENS, count) if count >= 0 else None
+
+
+def usage_tokens(usage: dict, *fields: str) -> int:
+    for field in fields:
+        count = token_count(usage.get(field))
+        if count is not None:
+            return count
+    return 0
 
 
 class JevResult:
@@ -77,17 +98,18 @@ class JevResult:
         self.backend = backend
         answers = response.get("answers")
         self.answers: Dict[str, dict] = answers if isinstance(answers, dict) else {}
-        self.model: str = response.get("model", request.get("model", ""))
+        model = response.get("model")
+        self.model = (model if isinstance(model, str) and model.strip() else request.get("model", ""))[:200]
         usage = response.get("usage")
         self.usage: dict = usage if isinstance(usage, dict) else {}
 
     @property
     def input_tokens(self) -> int:
-        return tokens(self.usage.get("input_tokens"))
+        return usage_tokens(self.usage, "input_tokens", "prompt_tokens")
 
     @property
     def output_tokens(self) -> int:
-        return tokens(self.usage.get("output_tokens"))
+        return usage_tokens(self.usage, "output_tokens", "completion_tokens")
 
     @property
     def cost_usd(self) -> float:
@@ -108,14 +130,16 @@ class JevResult:
         return {"request": self.request, "response": self.response, "meta": self.meta()}
 
 
-def _json_safe(value):
+def _json_safe(value, depth=0):
     """Copy a provider payload with non-finite numbers replaced by null, so traces always serialize."""
     if isinstance(value, float) and not math.isfinite(value):
         return None
+    if depth >= MAX_REPLY_DEPTH and isinstance(value, (dict, list)):
+        return "(nested provider data omitted)"
     if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
+        return {key: _json_safe(item, depth + 1) for key, item in value.items()}
     if isinstance(value, list):
-        return [_json_safe(item) for item in value]
+        return [_json_safe(item, depth + 1) for item in value]
     return value
 
 
@@ -149,16 +173,19 @@ class SpendGuard:
             while self._times and self._times[0] <= now - 60:
                 self._times.popleft()
             if len(self._times) >= self.rpm:
+                wait = max(1, math.ceil(self._times[0] + 60 - now))
                 raise JevError(
-                    "Local rate limit: more than %d live calls in the last minute. Wait a moment." % self.rpm,
+                    "Local rate limit: %d live calls in the last minute. Try again in %d s." % (self.rpm, wait),
                     status=429,
                 )
             self._times.append(now)
 
     def record(self, result) -> None:
-        input_tokens = result.input_tokens
+        input_tokens = tokens(result.input_tokens)
         output_tokens = tokens(getattr(result, "output_tokens", 0))
         cost_usd = result.cost_usd
+        if type(cost_usd) not in (int, float) or not 0 <= cost_usd <= 1e100:
+            raise ValueError("result cost must be finite and non-negative")
         with self._lock:
             self.live_calls += 1
             self.input_tokens += input_tokens
@@ -186,8 +213,10 @@ class JevClient:
         timeout: float = 30.0,
     ):
         self.settings = settings or Settings()
+        if isinstance(timeout, bool) or not 0 < timeout < float("inf"):
+            raise ValueError("TypeSafe timeout must be a positive finite number")
         self.timeout = timeout
-        self._memory_key = api_key
+        self._memory_key = (api_key or "").strip() or None
         self.guard = guard or SpendGuard(self.settings.budget_usd, self.settings.rpm)
         self._sdk = None
         self._sdk_config: Optional[tuple] = None
@@ -226,125 +255,211 @@ class JevClient:
             self._memory_key = (key or "").strip() or None
 
     def reload_settings(self) -> None:
-        self.settings.reload_file()
+        with self._lock:
+            self.settings.reload_file()
+
+    def _connection_config(self) -> tuple:
+        with self._lock:
+            return self.api_key, self.model, self.base_url, self.timeout
 
     # Calls
 
     def system_one(self, state: Any, questions: Dict[str, dict]) -> JevResult:
-        payload = {"state": state, "model": self.model, "questions": questions}
-        if not self.api_key:
+        from .endpoints import headers_for, scrub
+
+        config = self._connection_config()
+        key, model, _, _ = config
+        payload = {"state": state, "model": model, "questions": questions}
+        if not key:
             raise JevError(
                 "No TypeSafe API key yet. Paste one in the app (Decision ▾ > Connect a decision "
                 "model > TypeSafe), or add TYPESAFE_API_KEY to .env.",
                 status=401,
             )
+        try:
+            headers_for(key)
+        except ValueError as err:
+            raise JevError(str(err), status=401) from err
         self.guard.check()
         started = time.perf_counter()
-        response = self._post_system_one(payload)
+        try:
+            response = self._post_system_one(payload, config=config)
+        except JevError as err:
+            raise JevError(scrub(str(err), key), status=err.status, body=scrub(err.body, key)) from None
         if not isinstance(response, dict):
             raise JevError("TypeSafe did not return a JSON object")
         latency_ms = (time.perf_counter() - started) * 1000
-        result = JevResult(payload, response, latency_ms, backend=self.backend)
+        result = JevResult(scrub(payload, key), scrub(response, key), latency_ms, backend=self.backend)
         self.guard.record(result)
         return result
 
     def models(self) -> dict:
-        if not self.api_key:
+        from .endpoints import headers_for, scrub
+
+        config = self._connection_config()
+        key = config[0]
+        if not key:
             raise JevError("No TypeSafe API key configured.", status=401)
+        try:
+            headers_for(key)
+            response = self._models(config)
+        except ValueError as err:
+            raise JevError(str(err), status=401) from err
+        except JevError as err:
+            raise JevError(scrub(str(err), key), status=err.status, body=scrub(err.body, key)) from None
+        if not isinstance(response, dict):
+            raise JevError("TypeSafe model list was not a JSON object")
+        return scrub(_json_safe(response), key)
+
+    def _models(self, config: tuple) -> dict:
         if TypeSafeClient is not None:
             try:
-                return self._sdk_client().models.list().raw_http_response.json()
+                return self._sdk_client(config).models.list().raw_http_response.json()
             except TypeSafeAPIError as err:
-                raise JevError(_error_message(err.status, err.body), status=err.status, body=err.body) from err
+                raise JevError(
+                    _error_message(err.status, err.body, config[0]), status=err.status, body=err.body
+                ) from err
             except TypeSafeAPIConnectionError as err:
                 raise JevError("Could not reach TypeSafe: %s" % err) from err
             except TypeSafeError as err:
                 raise JevError(str(err)) from err
             except (ValueError, RecursionError) as err:
                 raise JevError("TypeSafe did not return readable JSON") from err
-        response, _ = self._stdlib_request("GET", "/v1/models", None, max_attempts=2)
+        response, _ = self._stdlib_request("GET", "/v1/models", None, max_attempts=2, config=config)
         return response
 
     # Transports
 
-    def _sdk_client(self):
+    def _sdk_client(self, config=None):
+        config = self._connection_config() if config is None else config
         with self._lock:
-            key = self.api_key
-            model, base_url, timeout = self.model, self.base_url, self.timeout
-            config = (key, model, base_url, timeout)
+            key, model, base_url, timeout = config
             if self._sdk is None or self._sdk_config != config:
                 self._sdk = TypeSafeClient(
                     api_key=key,
                     model=model,
                     base_url=base_url,
                     timeout=timeout,
-                    retry=RetryPolicy(max_retries=3, timeout=timeout),
+                    retry=RetryPolicy(max_retries=0, timeout=timeout),
                 )
                 self._sdk_config = config
             return self._sdk
 
-    def _post_system_one(self, payload: dict) -> dict:
+    def _post_system_one(self, payload: dict, *, config: tuple) -> dict:
+        key, _, base_url, timeout = config
         if TypeSafeClient is not None:
             try:
-                response = self._sdk_client().system_one(payload["state"], payload["questions"], model=payload["model"])
+                response = self._sdk_client(config).system_one(
+                    payload["state"], payload["questions"], model=payload["model"]
+                )
                 return response.raw_http_response.json()
             except TypeSafeAPIError as err:
-                raise JevError(_error_message(err.status, err.body), status=err.status, body=err.body) from err
+                raise JevError(_error_message(err.status, err.body, key), status=err.status, body=err.body) from err
             except TypeSafeAPIConnectionError as err:
                 raise JevError("Could not reach TypeSafe: %s" % err) from err
             except TypeSafeError as err:
                 raise JevError(str(err)) from err
             except (ValueError, RecursionError) as err:
                 raise JevError("TypeSafe did not return readable JSON") from err
-        response, _ = self._stdlib_request("POST", "/v1/systemone", payload)
-        return response
+        from .endpoints import error_body, post_json
 
-    def _stdlib_request(self, method: str, path: str, body: Optional[dict], max_attempts: int = 4):
-        data = json.dumps(body).encode() if body is not None else None
+        try:
+            reply, _ = post_json(base_url + "/v1/systemone", payload, key, time.monotonic() + timeout)
+            return reply if reply is not None else {"note": "TypeSafe reply nested too deeply to parse"}
+        except urllib.error.HTTPError as err:
+            body = error_body(err)
+            raise JevError(_error_message(err.code, body, key), status=err.code, body=body) from err
+        except TimeoutError as err:
+            raise JevError("TypeSafe did not reply within %g s" % timeout, status=504) from err
+        except urllib.error.URLError as err:
+            if isinstance(err.reason, TimeoutError):
+                raise JevError("TypeSafe did not reply within %g s" % timeout, status=504) from err
+            raise JevError("Could not reach TypeSafe: %s" % err.reason) from err
+        except (ValueError, OSError, http.client.HTTPException) as err:
+            raise JevError("Could not read the TypeSafe reply: %s" % err) from err
+
+    def _stdlib_request(self, method: str, path: str, body: Optional[dict], max_attempts: int = 4, *, config=None):
+        from .endpoints import _OPENER, _Watchdog, read_error, read_reply
+
+        data = json.dumps(body, allow_nan=False).encode() if body is not None else None
+        key, _, base_url, timeout = self._connection_config() if config is None else config
         attempt = 0
         while True:
             attempt += 1
             req = urllib.request.Request(
-                self.base_url + path,
+                base_url + path,
                 data=data,
                 method=method,
                 headers={
-                    "Authorization": "Bearer " + (self.api_key or ""),
+                    "Authorization": "Bearer " + (key or ""),
                     "Content-Type": "application/json",
                     "User-Agent": "jev-fsd/%s (stdlib)" % VERSION,
                 },
             )
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    return json.loads(resp.read().decode()), attempt
+                req.watchdog = watchdog = _Watchdog(time.monotonic() + timeout)
+                try:
+                    with _OPENER.open(req, timeout=timeout) as resp:
+                        raw = read_reply(resp, MAX_MODEL_BYTES)
+                        late = watchdog.cancel()
+                    if late:
+                        raise TimeoutError()
+                except urllib.error.HTTPError as err:
+                    err.body_text = read_error(err)
+                    if watchdog.cancel():
+                        raise TimeoutError() from err
+                    raise
+                finally:
+                    watchdog.cancel()
+                return json.loads(raw.decode("utf-8-sig")), attempt
             except urllib.error.HTTPError as err:
-                with err:
-                    raw = err.read(4096).decode(errors="replace")
+                raw = err.body_text
                 try:
                     parsed = json.loads(raw)
                 except (ValueError, RecursionError):
                     parsed = raw
                 if err.code in RETRYABLE_STATUSES and attempt < max_attempts:
-                    retry_after = err.headers.get("retry-after")
-                    try:
-                        delay = float(retry_after or "nan")
-                    except ValueError:
-                        delay = float("nan")
-                    if not math.isfinite(delay) or delay < 0:
+                    delay = retry_delay(err.headers.get("retry-after") if err.headers else None)
+                    if delay is None:
                         delay = (0.4 * 2 ** (attempt - 1)) + random.random() * 0.2
-                    time.sleep(min(delay, self.timeout))
+                    time.sleep(min(delay, timeout))
                     continue
-                raise JevError(_error_message(err.code, parsed), status=err.code, body=parsed) from err
+                raise JevError(_error_message(err.code, parsed, key), status=err.code, body=parsed) from err
             except urllib.error.URLError as err:
                 if attempt < max_attempts:
-                    time.sleep(0.4 * 2 ** (attempt - 1))
+                    time.sleep(min(timeout, 0.4 * 2 ** (attempt - 1)))
                     continue
                 raise JevError("Could not reach TypeSafe: %s" % err.reason) from err
             except (ValueError, RecursionError) as err:
+                if isinstance(err, ValueError) and str(err).startswith("reply larger"):
+                    raise JevError("TypeSafe model list is too large") from err
                 raise JevError("TypeSafe did not return readable JSON") from err
+            except TimeoutError as err:
+                raise JevError("TypeSafe did not list its models within %g s" % timeout, status=504) from err
+            except (OSError, http.client.HTTPException) as err:
+                raise JevError("Could not read the TypeSafe model list: %s" % err) from err
 
 
-def _error_message(status: int, body: Any) -> str:
+def retry_delay(value: Optional[str]) -> Optional[float]:
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            parsed = parsedate_to_datetime(value)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            seconds = max(0, parsed.timestamp() - time.time())
+        except (TypeError, ValueError, OverflowError, OSError):
+            return None
+    return seconds if math.isfinite(seconds) and seconds >= 0 else None
+
+
+def _error_message(status: int, body: Any, key: Optional[str] = None) -> str:
+    from .endpoints import scrub
+
+    body = scrub(_json_safe(body), key)
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, dict) and detail.get("message"):
         text = str(detail["message"])[:400]
@@ -358,6 +473,10 @@ def _error_message(status: int, body: Any) -> str:
         return "TypeSafe could not validate the request (422): %s" % text
     if status == 429:
         return "TypeSafe rate limit (429): %s" % text
+    if status == 402:
+        return "TypeSafe account is out of credits (402): %s" % text
+    if status == 529:
+        return "TypeSafe is overloaded (529): %s" % text
     return "TypeSafe error %s: %s" % (status, text)
 
 
@@ -383,19 +502,23 @@ def _probability(value):
     """A probability as a float, or None when the provider sent none or an unusable number."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value)
+    return float(value) if 0 <= value <= 1 else None
 
 
 def chosen(answer: dict) -> tuple:
     """(value, probability of that value) for a Choice answer."""
     value = answer["choice"]
-    p = _probability((answer.get("probabilities") or {}).get(value))
+    probabilities = answer.get("probabilities")
+    p = _probability(probabilities.get(value)) if isinstance(probabilities, dict) and isinstance(value, str) else None
     if p is None:
         p = _probability(answer.get("confidence"))
     return value, 0.0 if p is None else p
 
 
 def ranked(answer: dict, limit: int = 3) -> list:
-    probs = [(k, _probability(v)) for k, v in (answer.get("probabilities") or {}).items()]
+    probabilities = answer.get("probabilities")
+    if not isinstance(probabilities, dict) or limit <= 0:
+        return []
+    probs = [(k, _probability(v)) for k, v in probabilities.items()]
     probs = [(k, p) for k, p in probs if p is not None]
     return [{"value": k, "prob": p} for k, p in sorted(probs, key=lambda kv: kv[1], reverse=True)[:limit]]

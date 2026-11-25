@@ -823,7 +823,7 @@ class JevClientTests(unittest.TestCase):
 
     def test_stdlib_bad_json(self):
         """Report malformed TypeSafe response JSON from the fallback transport as a provider error."""
-        with patch.object(client.urllib.request, "urlopen", return_value=io.BytesIO(b"{")):
+        with patch.object(endpoints._OPENER, "open", return_value=io.BytesIO(b"{")):
             with self.assertRaisesRegex(client.JevError, "readable JSON"):
                 self.client._stdlib_request("GET", "/v1/models", None)
 
@@ -833,7 +833,7 @@ class JevClientTests(unittest.TestCase):
             "https://example.invalid", 429, "rate limited", {"retry-after": "3600"}, io.BytesIO(b"{}")
         )
         with (
-            patch.object(client.urllib.request, "urlopen", side_effect=[retry, io.BytesIO(b"{}")]),
+            patch.object(endpoints._OPENER, "open", side_effect=[retry, io.BytesIO(b"{}")]),
             patch.object(client.time, "sleep") as sleep,
         ):
             _, attempts = self.client._stdlib_request("GET", "/v1/models", None)

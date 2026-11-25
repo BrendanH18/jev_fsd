@@ -28,13 +28,14 @@ TYPESAFE_DEFAULT_MODEL, so replays, fixtures and saved benchmark runs keep meani
 Calls share Jev's SpendGuard. Cost is the provider's `usage.cost` when it reports one (OpenRouter
 does), else input and output tokens at the configured prices, else unknown ($0). There are no retries:
 a decision that misses its deadline is already stale. Standard library only, no SDK.
+Optional per-endpoint limits include max_parallel, max_request_bytes, check_timeout_s, check_ttl_s,
+and retry_after_max_s. A retry hint pauses new calls to that endpoint without retrying any drive.
 """
 
 from __future__ import annotations
 
 import http.client
 import json
-import re
 import socket
 import time
 import urllib.error
@@ -42,27 +43,29 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import decide
+from .client import _probability, usage_tokens
 from .config import Settings
 from .endpoints import (
     MAX_TRACE_DEPTH,
     Endpoint,
     EndpointError,
     EndpointRegistry,
+    api_path,
+    billed_cost,
+    bounded_integer,
     check_common,
     deeper_than,
+    endpoint_limits,
     error_body,
     load_entries,
     number,
     post_json,
     price,
     public_url,
-    reported_cost,
     scrub,
-    tokens,
     unique,
 )
 
-PATH_RE = re.compile(r"^/[A-Za-z0-9._~/-]{0,200}$")
 DEFAULT_PATH = "/v1/systemone"
 DEFAULT_CHECK_PATH = "/v1/models"
 
@@ -78,13 +81,6 @@ class InvalidDecisionRequest(ValueError):
 # Configuration
 
 
-def _path(value: Any, default: str) -> Optional[str]:
-    path = default if value is None else value
-    if not isinstance(path, str) or not PATH_RE.fullmatch(path) or "/../" in path + "/" or "//" in path:
-        return None
-    return path
-
-
 class DecisionConfig:
     """One validated entry from the decision endpoints file."""
 
@@ -94,20 +90,24 @@ class DecisionConfig:
         if common is None:
             return
         where = common["where"]
-        path = _path(raw.get("path"), DEFAULT_PATH)
-        check_path = _path(raw.get("check_path"), DEFAULT_CHECK_PATH)
+        path = api_path(raw.get("path"), DEFAULT_PATH)
+        check_path = api_path(raw.get("check_path"), DEFAULT_CHECK_PATH)
         if path is None or check_path is None:
             problems.append("%s: path and check_path must be URL paths such as /v1/systemone" % where)
             return
         try:
             timeout_s = float(number(raw.get("timeout_s", 5)))  # float(None) raises: timeout_s cannot be null
-            rpm = number(raw.get("rpm"), integer=True)
-            rpm = None if rpm is None else max(0, rpm)
+            rpm = bounded_integer(raw, "rpm", 1_000_000, minimum=0)
         except (TypeError, ValueError, OverflowError):
             problems.append("%s: timeout_s and rpm must be finite numbers (rpm may be null)" % where)
             return
+        try:
+            self.__dict__.update(endpoint_limits(raw))
+        except ValueError as err:
+            problems.append("%s: %s" % (where, err))
+            return
         self.name = common["name"]
-        self.label = str(raw.get("label") or self.name)[:60]
+        self.label = common["label"]
         self.base_url = common["base_url"]
         self.path = path
         self.check_path = check_path
@@ -133,23 +133,17 @@ def load_configs(settings: Settings) -> Tuple[List[DecisionConfig], List[str]]:
 # Replies
 
 
-def _probability(value: Any) -> Optional[float]:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value) if 0 <= value <= 1 else None
-
-
 def _choice_answer(answer: Any, options: List[str], qid: str) -> Tuple[Optional[dict], Optional[str]]:
     """A clean choice answer, or (None, why it cannot be used)."""
     if not isinstance(answer, dict):
         return None, "no answer for %s" % qid
     if answer.get("type", "choice") != "choice":
-        return None, "the answer for %s is a %s, not a choice" % (qid, str(answer.get("type"))[:20])
+        return None, "the answer for %s has an invalid type; expected choice" % qid
     choice = answer.get("choice")
     if not isinstance(choice, str) or choice not in options:
         return None, "the answer for %s, %s, is not one of the options" % (
             qid,
-            json.dumps(choice)[:60] if choice is not None else "nothing",
+            json.dumps(choice)[:60] if isinstance(choice, str) else "no choice id",
         )
     probabilities = answer.get("probabilities")
     clean = (
@@ -182,8 +176,9 @@ def check_answers(response: Optional[dict], questions: Dict[str, dict]) -> Tuple
     return answers, None
 
 
-def _error_text(body: Any) -> str:
+def _error_text(body: Any, key: Optional[str]) -> str:
     """TypeSafe says {"detail": ...}; OpenRouter says {"error": {"code", "message"}}."""
+    body = scrub(body, key)
     if isinstance(body, dict):
         detail = body.get("detail", body.get("error", body))
         if isinstance(detail, dict):
@@ -205,19 +200,11 @@ class DecisionResult:
         self.unparsed = response is None
         response = {} if response is None else response
         usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
-        self.input_tokens = tokens(usage.get("input_tokens", usage.get("prompt_tokens")))
-        self.output_tokens = tokens(usage.get("output_tokens", usage.get("completion_tokens")))
+        self.input_tokens = usage_tokens(usage, "input_tokens", "prompt_tokens")
+        self.output_tokens = usage_tokens(usage, "output_tokens", "completion_tokens")
         config = endpoint.config
-        reported = reported_cost(usage)
-        if reported is not None:
-            self.cost_usd, self.cost_source = reported, "provider"
-        elif config.priced:
-            self.cost_usd = (
-                self.input_tokens * (config.price_in or 0) + self.output_tokens * (config.price_out or 0)
-            ) / 1_000_000
-            self.cost_source = "price"
-        else:
-            self.cost_usd, self.cost_source = 0.0, None
+        self.cost_usd, self.cost_source = billed_cost(usage, config, self.input_tokens, self.output_tokens)
+        self.answers = response.get("answers")
         if self.unparsed:
             self.response = {"note": "reply nested too deeply to parse; not shown"}
         elif deeper_than(response, MAX_TRACE_DEPTH):
@@ -228,8 +215,10 @@ class DecisionResult:
         else:
             self.response = response
         model, provider = response.get("model"), response.get("provider")
-        self.model = (model if isinstance(model, str) and model else str(request.get("model") or ""))[:200]
-        self.provider = provider[:80] if isinstance(provider, str) else None
+        self.model = ("".join(ch for ch in model if ch.isprintable()).strip() if isinstance(model, str) else "")[
+            :200
+        ] or request["model"]
+        self.provider = scrub(provider, endpoint.api_key).strip()[:80] if isinstance(provider, str) else None
 
     def meta(self) -> dict:
         config = self.endpoint.config
@@ -264,26 +253,31 @@ class DecisionEndpoint(Endpoint):
     def decide(self, state: dict, questions: Dict[str, dict]) -> DecisionResult:
         if self.key_state == "missing":
             raise self.no_key()
-        self.limit()
         payload = {"model": self.config.model, "state": state, "questions": questions}
         deadline = time.monotonic() + self.config.timeout_s
         try:
-            response, latency_ms = post_json(self.config.base_url + self.config.path, payload, self.api_key, deadline)
+            self.check_request_size(payload)
+            with self.attempt():
+                response, latency_ms = post_json(
+                    self.config.base_url + self.config.path, payload, self.api_key, deadline
+                )
+                result = DecisionResult(self, payload, response, latency_ms)
+                self.record(result)
         except urllib.error.HTTPError as err:
             body = error_body(err)
+            detail = _error_text(body, self.api_key)
             if 300 <= err.code < 400:
                 raise self.fail(str(err.reason), 502)
             if err.code in (401, 403):
-                raise self.fail(
-                    "the endpoint rejected the API key (%d): %s" % (err.code, _error_text(body)), err.code, body
-                )
+                raise self.fail("the endpoint rejected the API key (%d): %s" % (err.code, detail), err.code, body)
             if err.code == 402:
-                raise self.fail(
-                    "the provider says this account is out of credits (402): %s" % _error_text(body), 402, body
-                )
+                raise self.fail("the provider says this account is out of credits (402): %s" % detail, 402, body)
             if err.code in (429, 529):
-                raise self.fail("rate limited or overloaded (%d): %s" % (err.code, _error_text(body)), 429, body)
-            raise self.fail("HTTP %d: %s" % (err.code, _error_text(body)), 502, body)
+                self.defer(err)
+                raise self.fail("rate limited or overloaded (%d): %s" % (err.code, detail), 429, body)
+            if err.code == 404:
+                raise self.fail("HTTP 404: check the model id and path: %s" % detail, 502, body)
+            raise self.fail("HTTP %d: %s" % (err.code, detail), 502, body)
         except (socket.timeout, TimeoutError):
             raise self.fail("no reply within %g s (timeout_s)" % self.config.timeout_s, 504)
         except urllib.error.URLError as err:
@@ -292,15 +286,7 @@ class DecisionEndpoint(Endpoint):
             raise self.fail("could not reach %s: %s" % (public_url(self.config.base_url), err.reason), 502)
         except (ValueError, OSError, http.client.HTTPException) as err:
             raise self.fail(str(err) or type(err).__name__, 502)
-        result = DecisionResult(self, payload, response, latency_ms)
-        self.record(result)
         return result
-
-    def invalid(self, reason: str) -> None:
-        """A call that happened but whose answers could not be used: counted as an error for the UI."""
-        with self._lock:
-            self.errors += 1
-            self.last_error = scrub("%s %r: %s" % (self.kind, self.config.name, reason), self.api_key)
 
 
 class DecisionRegistry(EndpointRegistry):
@@ -331,7 +317,7 @@ def decision_decide(registry: DecisionRegistry, body: dict) -> dict:
         answers, invalid = {}, "reply nested too deeply to parse"
     else:
         try:
-            answers, invalid = check_answers(result.response, req["questions"])
+            answers, invalid = check_answers(scrub({"answers": result.answers}, endpoint.api_key), req["questions"])
         except Exception as err:  # e.g. RecursionError from an absurd reply
             answers, invalid = {}, "could not read the reply (%s)" % type(err).__name__
     meta = dict(result.meta(), source="decision:" + endpoint.config.name)
