@@ -74,3 +74,8 @@ The project rule for this feature, moved here verbatim from `AGENTS.md`, which s
 pattern every opt-in feature shares ([AGENTS.md](../../AGENTS.md#opt-in-features)).
 
 - **Passing cyclists is opt-in.** `World` option `passCyclists` (free drives, unless `?cyclistpass=0`; challenges with `passCyclists: true`) has traffic and the driven car pass a cyclist riding in the lane of a two-way street with one lane each way through the oncoming lane, once it is clear, with the minimum passing distance (`sim/cyclist-pass.js`, `cyclist_pass` in sensing, `pass_cyclist`/`follow_cyclist`). With it off nothing is computed, candidates keep the 1 m `CYCLIST_CLEARANCE_M` rejection (`passes_cyclist_too_close`), and the audit's `close_passes` never reaches the metrics, so the seeded benchmark and the other challenges play out and report exactly as before; keep it that way.
+
+The [cyclist-passing feature record](../../static/js/sim/features/cyclist-pass.js) owns sensing,
+passing candidates, traffic's pass, the oncoming-traffic check, model wording and the audit. Its
+`close_passes` metric applies as soon as the option is enabled. The shared clearance geometry and
+pass planning remain in [`sim/cyclist-pass.js`](../../static/js/sim/cyclist-pass.js).

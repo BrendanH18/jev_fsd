@@ -3,10 +3,20 @@ import { pointAt, projectPoint, headingAt } from "../../map/mapdata.js";
 import { comfort } from "../vehicle.js";
 import { detourAt, lookahead } from "../controller.js";
 import {
-  EGO_ID, AHEAD_M as LC_AHEAD_M, HEAD_M as LC_HEAD_M, LC_LIMIT_MPS, LET_IN_DECEL,
-  OWED_DECEL as LC_OWED_DECEL, THROUGH_M, THROUGH_M as LC_THROUGH_M,
-  canStop as canStopForMerge, detourOf as closureDetour,
-  LANE_CLOSURE_COUNT, LaneClosures, isLaneClosure, laneClosureNotice,
+  EGO_ID,
+  AHEAD_M as LC_AHEAD_M,
+  HEAD_M as LC_HEAD_M,
+  LC_LIMIT_MPS,
+  LET_IN_DECEL,
+  OWED_DECEL as LC_OWED_DECEL,
+  THROUGH_M,
+  THROUGH_M as LC_THROUGH_M,
+  canStop as canStopForMerge,
+  detourOf as closureDetour,
+  LANE_CLOSURE_COUNT,
+  LaneClosures,
+  isLaneClosure,
+  laneClosureNotice,
 } from "../lane-closure.js";
 
 const ZONE_DECEL = 1.5;
@@ -50,8 +60,7 @@ function auditClosures(world) {
   const rec = world.mergeCall;
   if (here.side === "closed" && here.front < z.m + THROUGH_M) {
     rec.owed =
-      z.grant !== me &&
-      (rec.owed || (z.head === me && canStopForMerge(ego.v, z.m - 0.5 - here.front, LC_OWED_DECEL)));
+      z.grant !== me && (rec.owed || (z.head === me && canStopForMerge(ego.v, z.m - 0.5 - here.front, LC_OWED_DECEL)));
   } else if (here.side === "closed" && !rec.crossed) {
     rec.crossed = true;
     if (rec.owed) {
@@ -81,20 +90,13 @@ function auditClosures(world) {
     if (!owing) rec.letIn = false;
     else if (!rec.letIn && here.front < line + 0.5 && lc.firstInOpen(z, me))
       rec.letIn = canStopForMerge(ego.v, line - here.front, LET_IN_DECEL);
-    if (
-      rec.letIn &&
-      owing &&
-      !rec.took &&
-      here.front > line + AUDIT_LET_IN_PAST_M &&
-      ego.v > AUDIT_MERGE_MOVING_MPS
-    ) {
+    if (rec.letIn && owing && !rec.took && here.front > line + AUDIT_LET_IN_PAST_M && ego.v > AUDIT_MERGE_MOVING_MPS) {
       rec.took = true;
       world.events.push({ type: "took_merge_turn", zone: z.id, from: z.head });
     }
   }
   rec.lane = here.lane;
 }
-
 
 // A lane closure on the car's route ahead (sim/lane-closure.js), from when the car can see it (or is 30 m
 // short of its merge point) until its front is out of it. `side` is "closed" when the car is in the lane
@@ -285,7 +287,6 @@ function mergeHold(world, n, lz, path, front) {
   return hold;
 }
 
-
 // A lane closed ahead by a road crew, where the two lanes zipper merge (sim/lane-closure.js).
 function closureClause(l) {
   const kmh = Math.round(l.limit_mps * 3.6),
@@ -331,14 +332,17 @@ export default {
   stepBeforeTraffic: { at: "afterParked", run: (world, _fleet, dt) => world.laneClosures.step(dt) },
   audit: { at: "afterRoadsideVehicles", run: auditClosures },
   metric: {
-    at: "vehiclePassing", name: "merge_cut_ins",
-    failure: "merged out of turn", label: "Merged out of turn at a lane closure",
-    category: "right_of_way", eventType: "merged_out_of_turn",
+    at: "vehiclePassing",
+    name: "merge_cut_ins",
+    failure: "merged out of turn",
+    label: "Merged out of turn at a lane closure",
+    category: "right_of_way",
+    eventType: "merged_out_of_turn",
   },
   snapshot: { lane_closure: null },
   trafficSpawnBlocked: (world, x, y) => world.laneClosures?.covers(x, y),
   obstacle: { test: isLaneClosure, traffic: true },
-  standingVehicleLabel: (vehicle) => isLaneClosure(vehicle) ? "lane closure" : null,
+  standingVehicleLabel: (vehicle) => (isLaneClosure(vehicle) ? "lane closure" : null),
   trafficLaneControl(world, vehicle, path, front) {
     if (!world.laneClosures?.zones.length) return null;
     const zone = closureAhead(world, path, front);
@@ -352,139 +356,172 @@ export default {
       stop: () => mergeHold(world, vehicle, zone, path, front),
     };
   },
-  sense: { at: "beforeParking", run(world, snap, { p, frontS, road, lane }) {
-    snap.lane_closure = laneClosure(world, p, frontS, road, lane);
-  } },
+  sense: {
+    at: "beforeParking",
+    run(world, snap, { p, frontS, road, lane }) {
+      snap.lane_closure = laneClosure(world, p, frontS, road, lane);
+    },
+  },
   hazard: { at: "parkingApproach", run: (snap) => snap.lane_closure && "lane closure" },
-  limit: { at: "beforeParking", run(snap) {
-    if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
-  } },
-  target: { at: "beforeParking", run(snap, v, reasons, { decel, stopSpeedFor }) {
-  // a lane closure: in the closed lane, wait at the merge point for its turn; in the open lane, let the
-  // one whose turn it is in
-  const lz = snap.lane_closure;
-  if (lz?.stop_s_route != null) {
-    const room = lz.bumper_to_stop_m;
-    const vz = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
-    if (vz < v) {
-      v = vz;
-      reasons.push(lz.wait ? "lane closed: wait your turn at the merge" : "lane closure: letting a car in");
-    }
-  } else if (lz && closureSpeed(lz) <= v + 0.05)
-    reasons.push(lz.side === "closed" ? "lane closed: merge in turn" : "lane closure: take turns at the merge");
-    return v;
-  } },
+  limit: {
+    at: "beforeParking",
+    run(snap) {
+      if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
+    },
+  },
+  target: {
+    at: "beforeParking",
+    run(snap, v, reasons, { decel, stopSpeedFor }) {
+      // a lane closure: in the closed lane, wait at the merge point for its turn; in the open lane, let the
+      // one whose turn it is in
+      const lz = snap.lane_closure;
+      if (lz?.stop_s_route != null) {
+        const room = lz.bumper_to_stop_m;
+        const vz = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
+        if (vz < v) {
+          v = vz;
+          reasons.push(lz.wait ? "lane closed: wait your turn at the merge" : "lane closure: letting a car in");
+        }
+      } else if (lz && closureSpeed(lz) <= v + 0.05)
+        reasons.push(lz.side === "closed" ? "lane closed: merge in turn" : "lane closure: take turns at the merge");
+      return v;
+    },
+  },
   detour: { at: "laneControl", run: (snap) => snap.lane_closure?.detour },
-  candidates: { at: "beforeParking", run({ snap, FRONT, laneUntil, inLane, approach, stopAt }, out) {
-    // A lane closed ahead (sim/lane-closure.js): in the closed lane, wait at the merge point for the car's
-    // turn; in the open lane, stop short of it to let in the one whose turn it is.
-    const lz = snap.lane_closure;
-    if (lz?.stop_s_route != null && lz.bumper_to_stop_m > 0.3) {
-      // (a metre short of the merge point, and half a metre short of where it lets one in, as a stop
-      // overshoots)
-      out.push(
-        lz.wait
-          ? {
-              id: "wait_to_merge",
-              laneUntil,
-              law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 1) }),
-              steer: "hold lane",
-              speed: "stop at the merge point and wait for the car's turn",
-            }
-          : {
-              id: "let_merge_in",
-              laneUntil,
-              law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 0.5) }),
-              steer: "hold lane",
-              speed: "stop short of the merge point and let the car in the closed lane go first",
-            },
-      );
-    }
-  } },
-  sim: { at: "merge", run(_world, snap) {
-  // at a lane closure: where the car waits for its turn at the merge point, or stops to let one in; and
-  // the lane changes the zipper rules out (sim/lane-closure.js)
-  const lz = snap.lane_closure;
-  const mergeStop = lz?.wait ? lz.stop_s_route : null,
-    letInStop = lz?.let_in_for ? lz.stop_s_route : null;
-  const zipper = lz ? lz.side : null;
-    if (!lz) return null;
-    let passesMerge, passesLetIn;
-    return {
-      start() { passesMerge = false; passesLetIn = false; },
-      along(s, FRONT) {
-        // (and here: a metre past the merge point has not gone through it, sim/lane-closure.js THROUGH_M; 1.5 m past
-        // where it lets one in is still behind it)
-        if (mergeStop !== null && s + FRONT > mergeStop + 1) passesMerge = true;
-        if (letInStop !== null && s + FRONT > letInStop + 1.5) passesLetIn = true;
-      },
-      reject(c) {
-        if (passesMerge && c.law.kind !== "hard_brake") return "merges_out_of_turn";
-        if (passesLetIn && c.law.kind !== "hard_brake") return "takes_merge_turn";
-        if (zipper === "closed" && c.change) return lz.merged ? "into_closed_lane" : "merges_early";
-        if (zipper === "open" && c.change && c.change.dir === lz.closed_lane) return "into_closed_lane";
-        return null;
-      },
-    };
-  } },
+  candidates: {
+    at: "beforeParking",
+    run({ snap, FRONT, laneUntil, inLane, approach, stopAt }, out) {
+      // A lane closed ahead (sim/lane-closure.js): in the closed lane, wait at the merge point for the car's
+      // turn; in the open lane, stop short of it to let in the one whose turn it is.
+      const lz = snap.lane_closure;
+      if (lz?.stop_s_route != null && lz.bumper_to_stop_m > 0.3) {
+        // (a metre short of the merge point, and half a metre short of where it lets one in, as a stop
+        // overshoots)
+        out.push(
+          lz.wait
+            ? {
+                id: "wait_to_merge",
+                laneUntil,
+                law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 1) }),
+                steer: "hold lane",
+                speed: "stop at the merge point and wait for the car's turn",
+              }
+            : {
+                id: "let_merge_in",
+                laneUntil,
+                law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 0.5) }),
+                steer: "hold lane",
+                speed: "stop short of the merge point and let the car in the closed lane go first",
+              },
+        );
+      }
+    },
+  },
+  sim: {
+    at: "merge",
+    run(_world, snap) {
+      // at a lane closure: where the car waits for its turn at the merge point, or stops to let one in; and
+      // the lane changes the zipper rules out (sim/lane-closure.js)
+      const lz = snap.lane_closure;
+      const mergeStop = lz?.wait ? lz.stop_s_route : null,
+        letInStop = lz?.let_in_for ? lz.stop_s_route : null;
+      const zipper = lz ? lz.side : null;
+      if (!lz) return null;
+      let passesMerge, passesLetIn;
+      return {
+        start() {
+          passesMerge = false;
+          passesLetIn = false;
+        },
+        along(s, FRONT) {
+          // (and here: a metre past the merge point has not gone through it, sim/lane-closure.js THROUGH_M; 1.5 m past
+          // where it lets one in is still behind it)
+          if (mergeStop !== null && s + FRONT > mergeStop + 1) passesMerge = true;
+          if (letInStop !== null && s + FRONT > letInStop + 1.5) passesLetIn = true;
+        },
+        reject(c) {
+          if (passesMerge && c.law.kind !== "hard_brake") return "merges_out_of_turn";
+          if (passesLetIn && c.law.kind !== "hard_brake") return "takes_merge_turn";
+          if (zipper === "closed" && c.change) return lz.merged ? "into_closed_lane" : "merges_early";
+          if (zipper === "open" && c.change && c.change.dir === lz.closed_lane) return "into_closed_lane";
+          return null;
+        },
+      };
+    },
+  },
   flagText: {
-  merges_out_of_turn: "it merges at the lane closure out of turn",
-  takes_merge_turn: "it takes the turn of the car merging at the lane closure",
-  into_closed_lane: "it moves into a closed lane",
-  merges_early: "it leaves the closed lane before the merge point",
+    merges_out_of_turn: "it merges at the lane closure out of turn",
+    takes_merge_turn: "it takes the turn of the car merging at the lane closure",
+    into_closed_lane: "it moves into a closed lane",
+    merges_early: "it leaves the closed lane before the merge point",
   },
   rulesStop: (snap) => mustStop(snap, 1.5),
-  rulesCost: { at: "stops", run: (c) => c.id === "wait_to_merge" || c.id === "let_merge_in" ? -6 : 0 },
+  rulesCost: { at: "stops", run: (c) => (c.id === "wait_to_merge" || c.id === "let_merge_in" ? -6 : 0) },
   legitimateStop: (snap) => mustStop(snap, 8),
   motion: (snap) => snap.lane_closure?.stop_s_route != null,
-  state: { at: "beforeParking", run(snap, state) {
-  if (snap.lane_closure) {
-    const l = snap.lane_closure,
-      closed = l.side === "closed";
-    state.lane_closure = {
-      id: l.id,
-      closed_lane: l.closed_lane,
-      lane: closed
-        ? l.merged
-          ? "closed: across into the open lane, past the merge point"
-          : "closed: merge into the open lane at the merge point, in turn"
-        : "open",
-      ...(l.merged ? { merge_point: "car is past it" } : { merge_point_m: r1(Math.max(0, l.bumper_to_merge_m)) }),
-      turn: `${l.turn} lane`,
-      ...(closed && !l.merged ? { at_merge: l.at_merge, your_turn: l.let_in } : {}),
-      pass_at: r1(l.limit_mps),
-      ...(l.wait
-        ? {
-            stop: true,
-            wait_in_m: r1(Math.max(0, l.bumper_to_stop_m)),
-            ...(l.wait_for ? { goes_first: l.wait_for } : {}),
-          }
-        : {}),
-      ...(l.let_in_for ? { let_in: l.let_in_for, stop: true, wait_in_m: r1(Math.max(0, l.bumper_to_stop_m)) } : {}),
-    };
-  }
-  } },
-  outcome: { at: "ids", run(c, snap) {
-  if (c.id === "wait_to_merge" && snap.lane_closure)
-    return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of the merge point, to wait for the car's turn`;
-  if (c.id === "let_merge_in" && snap.lane_closure)
-    return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of where it lets \`${snap.lane_closure.let_in_for}\` in`;
-    return null;
-  } },
-  passBlockReason: (why) => why === "lane_closure" ? "a lane is closed on the street" : null,
+  state: {
+    at: "beforeParking",
+    run(snap, state) {
+      if (snap.lane_closure) {
+        const l = snap.lane_closure,
+          closed = l.side === "closed";
+        state.lane_closure = {
+          id: l.id,
+          closed_lane: l.closed_lane,
+          lane: closed
+            ? l.merged
+              ? "closed: across into the open lane, past the merge point"
+              : "closed: merge into the open lane at the merge point, in turn"
+            : "open",
+          ...(l.merged ? { merge_point: "car is past it" } : { merge_point_m: r1(Math.max(0, l.bumper_to_merge_m)) }),
+          turn: `${l.turn} lane`,
+          ...(closed && !l.merged ? { at_merge: l.at_merge, your_turn: l.let_in } : {}),
+          pass_at: r1(l.limit_mps),
+          ...(l.wait
+            ? {
+                stop: true,
+                wait_in_m: r1(Math.max(0, l.bumper_to_stop_m)),
+                ...(l.wait_for ? { goes_first: l.wait_for } : {}),
+              }
+            : {}),
+          ...(l.let_in_for ? { let_in: l.let_in_for, stop: true, wait_in_m: r1(Math.max(0, l.bumper_to_stop_m)) } : {}),
+        };
+      }
+    },
+  },
+  outcome: {
+    at: "ids",
+    run(c, snap) {
+      if (c.id === "wait_to_merge" && snap.lane_closure)
+        return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of the merge point, to wait for the car's turn`;
+      if (c.id === "let_merge_in" && snap.lane_closure)
+        return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of where it lets \`${snap.lane_closure.let_in_for}\` in`;
+      return null;
+    },
+  },
+  passBlockReason: (why) => (why === "lane_closure" ? "a lane is closed on the street" : null),
   clause: { at: "beforeParking", run: (snap) => snap.lane_closure && closureClause(snap.lane_closure) },
-  holdStill: { at: "beforeParking", run(snap) {
-    // And waiting at a lane closure's merge point for the car's turn, or letting one in there.
-    return snap.lane_closure?.wait
-      ? ", when a lane closure's merge point is ahead in the car's lane, it is not the car's turn and it has stopped there (`lane_closure.wait_in_m` under 2)"
-      : snap.lane_closure?.let_in_for
-        ? ", when the car is letting a car at a lane closure's merge point in and has stopped for it (`lane_closure.wait_in_m` under 2)"
-        : "";
-  } },
-  prompt: { at: "beforeParking", text: `- At a lane closure (\`lane_closure\`), zipper merge: stay in the car's lane right up to the merge point, never changing lanes before it, then take turns, one from each lane. In the closed lane, choose \`wait_to_merge\` when \`situation\` says it is not the car's turn, and keep the car at the merge point until \`lane_closure.your_turn\` is true; then its candidates already take it across. In the open lane, choose \`let_merge_in\` when \`situation\` says to let the car at the merge in, and go once it is across in front.` },
+  holdStill: {
+    at: "beforeParking",
+    run(snap) {
+      // And waiting at a lane closure's merge point for the car's turn, or letting one in there.
+      return snap.lane_closure?.wait
+        ? ", when a lane closure's merge point is ahead in the car's lane, it is not the car's turn and it has stopped there (`lane_closure.wait_in_m` under 2)"
+        : snap.lane_closure?.let_in_for
+          ? ", when the car is letting a car at a lane closure's merge point in and has stopped for it (`lane_closure.wait_in_m` under 2)"
+          : "";
+    },
+  },
+  prompt: {
+    at: "beforeParking",
+    text: `- At a lane closure (\`lane_closure\`), zipper merge: stay in the car's lane right up to the merge point, never changing lanes before it, then take turns, one from each lane. In the closed lane, choose \`wait_to_merge\` when \`situation\` says it is not the car's turn, and keep the car at the merge point until \`lane_closure.your_turn\` is true; then its candidates already take it across. In the open lane, choose \`let_merge_in\` when \`situation\` says to let the car at the merge in, and go once it is across in front.`,
+  },
   notice: {
-    at: "beforeMerge", order: 100, duration: 2500,
-    read: laneClosureNotice, style: (line) => line.stop ? "safety" : "",
+    at: "beforeMerge",
+    order: 100,
+    duration: 2500,
+    read: laneClosureNotice,
+    style: (line) => (line.stop ? "safety" : ""),
   },
   coachCorridor: (world, limit) => world.laneClosures?.passing(limit),
   coach: {
@@ -494,12 +531,15 @@ export default {
       merged_out_of_turn(score, ev) {
         score.mergeCutIns++;
         score.incident("merge_cut_in", "Merged out of turn: forced in ahead of the car whose turn it was", {
-          zone: ev.zone, cut: ev.cut,
+          zone: ev.zone,
+          cut: ev.cut,
         });
       },
       took_merge_turn(score, ev) {
         score.mergeTurnsTaken++;
-        score.incident("merge_turn_taken", "Didn’t let the car in the closed lane take its turn at the merge", { zone: ev.zone });
+        score.incident("merge_turn_taken", "Didn’t let the car in the closed lane take its turn at the merge", {
+          zone: ev.zone,
+        });
       },
       merged_early(score, ev) {
         score.earlyMerges++;
@@ -511,13 +551,32 @@ export default {
       { at: "followingRules", order: 3, counter: "mergeTurnsTaken", weight: 10 },
     ],
     tips: [
-      { at: "beforeMerge", order: 2, when: (score) => score.mergeCutIns || score.mergeTurnsTaken,
-        text: "Where a lane is closed, zipper merge: use both lanes right up to the merge point, then take turns, one vehicle from each lane. Don't force your way in out of turn, and don't close the gap on someone whose turn it is." },
-      { at: "beforeMerge", order: 3, when: (score) => score.earlyMerges,
-        text: "In slow traffic, don't merge early into the open lane. Stay in your lane to the merge point and take your turn there: using both lanes keeps the queue shorter, and everyone gets through sooner." },
+      {
+        at: "beforeMerge",
+        order: 2,
+        when: (score) => score.mergeCutIns || score.mergeTurnsTaken,
+        text: "Where a lane is closed, zipper merge: use both lanes right up to the merge point, then take turns, one vehicle from each lane. Don't force your way in out of turn, and don't close the gap on someone whose turn it is.",
+      },
+      {
+        at: "beforeMerge",
+        order: 3,
+        when: (score) => score.earlyMerges,
+        text: "In slow traffic, don't merge early into the open lane. Stay in your lane to the merge point and take your turn there: using both lanes keeps the queue shorter, and everyone gets through sooner.",
+      },
     ],
-    reports: [{ at: "beforeMerge", order: 1, read: (score) => score.closures ? {
-      merge_cut_ins: score.mergeCutIns, merge_turns_taken: score.mergeTurnsTaken, early_merges: score.earlyMerges,
-    } : {} }],
+    reports: [
+      {
+        at: "beforeMerge",
+        order: 1,
+        read: (score) =>
+          score.closures
+            ? {
+                merge_cut_ins: score.mergeCutIns,
+                merge_turns_taken: score.mergeTurnsTaken,
+                early_merges: score.earlyMerges,
+              }
+            : {},
+      },
+    ],
   },
 };

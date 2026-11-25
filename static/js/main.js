@@ -36,7 +36,6 @@ import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
 import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
 import { hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
-import { cyclistNotice } from "./sim/cyclist-pass.js";
 import { isTruck } from "./sim/collection-truck.js";
 import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
 import { buildBusLanes } from "./render/bus-lanes.js";
@@ -1428,7 +1427,6 @@ export async function boot() {
     announcedPark = null,
     announcedHazard = null,
     announcedTraffic = null,
-    announcedCyclist = null,
     announcedLeftRed = null;
   let lastConditions = "",
     skyAt = world.t;
@@ -1788,14 +1786,7 @@ export async function boot() {
       hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500);
     }
     if (!trafficLine) announcedTraffic = null;
-    // a cyclist riding in the lane ahead, on a street with one lane each way: stay behind, and why, or
-    // the way is clear to pass with the minimum passing distance (said again as that changes)
-    const cyclistLine = cyclistNotice(world);
-    if (cyclistLine && cyclistLine.key !== announcedCyclist) {
-      announcedCyclist = cyclistLine.key;
-      hud.badge(cyclistLine.text, cyclistLine.wait ? "safety" : "", 2500);
-    }
-    if (!cyclistLine) announcedCyclist = null;
+    announceFeatureNotices("afterTraffic", world, autopilot, featureViews, announcedFeatures, hud);
     // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
     announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud);
     // a scramble crossing ahead: every light red while people cross every way; no right turn on red

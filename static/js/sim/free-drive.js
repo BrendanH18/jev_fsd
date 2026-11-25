@@ -25,9 +25,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     park: on("park"),
     hazards,
     stepOuts: hazards ? STEP_OUT_COUNT : 0,
-    // on two-way streets with one lane each way, everyone passes a cyclist riding in the lane through
-    // the oncoming lane once it is clear (`?cyclistpass=0`: everyone stays behind)
-    passCyclists: on("cyclistpass"),
     nightFlash: on("nightflash"),
     busLanes: on("buslanes"),
     leftOnRed: on("leftonred"),

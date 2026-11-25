@@ -76,6 +76,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "outages",
       "plows",
       "closures",
+      "passCyclists",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -115,6 +116,7 @@ test("the core runs every slot, and names no registered feature", () => {
     checkpointShare: source("lab/recorder.js"),
     checkpointRestore: source("lab/recorder.js"),
     decisionFields: source("sim/features/index.js"),
+    passBlockReason: source("sim/features/cyclist-pass.js"),
     routeOptions: source("sim/features/index.js"),
     requestReroute: source("brain/brain.js"),
   };
@@ -393,6 +395,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     scrambles: true,
     workZones: 1,
     closures: 1,
+    passCyclists: true,
     outages: 1,
   });
   for (const f of R.FEATURES) {

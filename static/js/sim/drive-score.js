@@ -64,11 +64,6 @@ export class DriveScore {
     // (and with hidden traffic, sim/hidden-traffic.js: failures to yield to a vehicle the car could
     // not see as it pulled out, hidden behind another)
     this.hiddenCutoffs = 0;
-    // (with traffic passing cyclists, sim/cyclist-pass.js: passing one closer than the minimum passing
-    // distance, and into the way of oncoming traffic; reported only for such a drive)
-    this.cyclists = !!world.passCyclists;
-    this.closePasses = 0;
-    this.cyclistCutoffs = 0;
     this.busLanesSeen = false;
     this.closeFollowing = 0;
     this.danger = 0;
@@ -140,15 +135,13 @@ export class DriveScore {
     const speeding = !!road && speed > road.limit + SPEED_GRACE_MPS;
     const offRoad = road?.on_road === false;
     const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
-    const corridor =
-      featureCoachCorridor(world, road?.limit ?? 11.2);
+    const corridor = featureCoachCorridor(world, road?.limit ?? 11.2);
     const wrongWay =
       !!road?.on_road &&
       speed > 2 &&
       Math.cos(headingError) < 0 &&
       corridor?.side !== "closed" &&
-      !featureCoachDirectionExempt(world) &&
-      !(this.cyclists && world.passingCyclist?.());
+      !featureCoachDirectionExempt(world);
     if (speeding) this.speeding += dt;
     const zone = road?.zone;
     if (speeding && zone) {
@@ -204,15 +197,6 @@ export class DriveScore {
           "amber_light",
           ev.reason === "sped_up" ? "Sped up to beat an amber light" : "Passed amber when a safe stop was possible",
         );
-      if (ev.type === "close_pass") {
-        this.closePasses++;
-        this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", {
-          cyclist: ev.with,
-          clearance_m: ev.clearance_m,
-          min_m: ev.min_m,
-        });
-      }
-      if (ev.type === "failed_to_yield" && ev.cyclist_pass) this.cyclistCutoffs++;
       if (ev.type === "failed_to_yield" && ev.unseen) {
         this.hiddenCutoffs++;
         this.incident("hidden_cutoff", "Pulled out in front of a vehicle hidden behind another", { with: ev.with });
@@ -387,12 +371,7 @@ export class DriveScore {
       this,
       afterAmber - delta("bus_lane_driving") * 0.5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2,
     );
-    const legality = featureCoachDeduct(
-      "legality",
-      this,
-      featureCoachDeduct("followingRules", this, afterSpeed) -
-        this.closePasses * 20,
-    );
+    const legality = featureCoachDeduct("legality", this, featureCoachDeduct("followingRules", this, afterSpeed));
     const comfort = featureCoachDeduct("comfort", this, 100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8);
     const categories = {
       safety: Math.round(clamp(safety)),
@@ -444,14 +423,7 @@ export class DriveScore {
       );
     featureCoachTips("beforeMerge", this, tips);
     featureCoachTips("afterMerge", this, tips);
-    if (this.closePasses)
-      tips.push(
-        "Give cyclists room: leave at least 1 m when you pass one where the limit is 50 km/h or less, 1.5 m above. On a street with one lane each way that means moving into the oncoming lane, so stay behind until it is clear.",
-      );
-    if (this.cyclistCutoffs)
-      tips.push(
-        "Passing a cyclist through the oncoming lane, wait behind them until that lane is clear for the whole pass and back. Oncoming traffic has the right of way.",
-      );
+    featureCoachTips("passingCyclists", this, tips);
     featureCoachTips("afterCyclists", this, tips);
     if (this.kerbStrikes)
       tips.push(
@@ -529,7 +501,7 @@ export class DriveScore {
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null,
       resets: this.resets,
       ...featureCoachReport("beforeMerge", this, round),
-      ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
+      ...featureCoachReport("passingCyclists", this, round),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
       ...(this.amberLightsSeen ? { amber_lights_run: delta("amber_lights_run") } : {}),
       ...featureCoachReport("end", this, round),

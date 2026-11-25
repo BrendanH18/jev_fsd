@@ -12,13 +12,11 @@ import { leftOnRedAllowed } from "./left-on-red.js";
 // (sim/rail.js). Nobody enters a signalled junction without room past it (sim/junction-box.js). At a
 // construction site, follow its temporary controls. Where a road crew
 // closes one of two lanes, drivers zipper merge: both lanes up to the merge point, then one from each
-// in turn (sim/lane-closure.js). With `passCyclists` on, on a
-// two-way street with one lane each way a driver behind a cyclist riding in the lane passes it through
-// the oncoming lane, the minimum passing distance clear, once that lane is clear (sim/cyclist-pass.js).
+// in turn.
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, comfort } from "./vehicle.js";
 import { lookahead, purePursuit, speedControl } from "./controller.js";
-import { cumulative, pointAt, headingAt, projectPoint, joinLanes, onStreet } from "../map/mapdata.js";
+import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
 import { rng } from "../common.js";
 import { wrap } from "./world.js";
@@ -89,15 +87,6 @@ import {
 } from "./rail.js";
 import { boxHold } from "./junction-box.js";
 import {
-  DECIDE_M as CP_DECIDE_M,
-  RETURN_M as CP_RETURN_M,
-  passStreet,
-  planPass,
-  queuedBehind,
-  ridingIn,
-  wayClear as cyclistWayClear,
-} from "./cyclist-pass.js";
-import {
   controlAt,
   FLEET_FEATURES,
   featureObstacle,
@@ -163,6 +152,7 @@ import {
   stopRange,
 } from "./school-bus.js";
 
+const TRAFFIC_OVERTAKING = hooks("trafficOvertaking");
 const TRAFFIC_LANE_CONTROL = hooks("trafficLaneControl");
 const TRAFFIC_DISPATCH = hooks("trafficManage", "dispatch");
 const SPECIAL_LEADER = hooks("trafficFollowingLeader");
@@ -178,14 +168,6 @@ function featureTrafficSpeed(world, n, front, speeds = TRAFFIC_SPEED, context) {
   return limit;
 }
 const UNSIGNED_NEAR_M = 15;
-// Passing a cyclist (sim/cyclist-pass.js): a driver moves across at this lateral speed per m/s it
-// drives, between these; one that falls back in behind it waits this long before it looks again; and
-// the cyclist stays the one it follows until it is this much short of the minimum passing distance clear.
-const CP_SIDE_PER_MPS = 0.2,
-  CP_SIDE_MPS = [0.6, 1.4],
-  CP_RETRY_S = 2,
-  CP_LEAD_SLACK_M = 0.15;
-
 // Stopped too close behind the driven car as it waits to reverse into a space, a driver backs up this
 // long after, by as much as it needs (up to this).
 const PARK_BACK_S = 2;
@@ -657,8 +639,6 @@ function curveSpeed(path, s) {
   }
   return best;
 }
-
-
 
 export class NpcFleet {
   constructor(
@@ -1302,20 +1282,16 @@ export class NpcFleet {
       const bypass = firstHookResult(TRAFFIC_BYPASS, world, n, front, all, IDM),
         bypassShift = bypass?.shift ?? 0;
       const controlledShift = laneControl?.shift ?? 0;
-      // a cyclist riding in its lane ahead on a two-way street with one lane each way: round it through
-      // the oncoming lane once that is clear, the minimum passing distance clear of it (sim/cyclist-pass.js)
-      // (one that has started and is now held up by something else eases back in)
-      const passes =
-        world.passCyclists &&
-        n.kind !== "bike" &&
-        !n.transit &&
-        !n.school &&
-        !featureObstacle(n)?.noCyclistPass &&
-        !n.pull;
-      const cyc =
-        passes && (n.cyc || (!yielding && !bypass && !laneControl && !corridor))
-          ? this.cyclistPass(n, edge, all, dt, !!(yielding || bypass || laneControl || corridor))
-          : null;
+      const overtaking = firstHookResult(
+        TRAFFIC_OVERTAKING,
+        world,
+        n,
+        edge,
+        all,
+        dt,
+        !!(yielding || bypass || laneControl || corridor),
+        IDM,
+      );
       let offset =
         (n.kind === "bike" ? n.side : keepRight) +
         n.evShift +
@@ -1325,7 +1301,7 @@ export class NpcFleet {
         corridorShift +
         bypassShift +
         controlledShift;
-      if (cyc) offset += n.cpShift;
+      if (overtaking) offset += overtaking.shift;
       const earlyMoves = [];
       for (const run of BEFORE_LANE_MOVES) {
         const move = run(world, n, front, false, dt, { offset, moves: earlyMoves });
@@ -1336,7 +1312,7 @@ export class NpcFleet {
       // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
       // while changing lanes or going round something), and its speed ceiling for it; each is handed where
       // it keeps in the lane so far and the earlier moves (where each is heading, `aim`, and has got to, `now`)
-      const laneBusy = !!(n.lc || corridorShift || bypassShift || controlledShift || cyc || n.pull),
+      const laneBusy = !!(n.lc || corridorShift || bypassShift || controlledShift || overtaking || n.pull),
         laneMoves = [];
       let featureLimit = Infinity;
       for (const run of TRAFFIC_LANE) {
@@ -1414,7 +1390,7 @@ export class NpcFleet {
         if (o === bypass?.ignore) continue;
         // (a cyclist it is passing, until it is the minimum passing distance clear of it, near enough)
         const os = o.spec || CAR,
-          reach = (spec.width + os.width) / 2 + (cyc && o === cyc.bike ? cyc.min - CP_LEAD_SLACK_M : LEADER_MARGIN_M);
+          reach = (spec.width + os.width) / 2 + (o === overtaking?.vehicle ? overtaking.clearance : LEADER_MARGIN_M);
         // in the way on the current lane, or on the target lane of a lane change: closer to the
         // path than the two half-widths plus a margin
         // The pursuit line moves with the corridor and kerb clearance.
@@ -1434,7 +1410,7 @@ export class NpcFleet {
                 : Math.abs(
                     keepMoves.reduce(
                       (x, m) => x - m.now,
-                      lat - keepRight - (n.nudge || 0) - bypassShift - (cyc ? n.cpShift : 0),
+                      lat - keepRight - (n.nudge || 0) - bypassShift - (overtaking?.shift ?? 0),
                     ),
                   );
           return (
@@ -2697,92 +2673,6 @@ export class NpcFleet {
         return ZONE_LIMIT_MPS;
     }
     return Infinity;
-  }
-
-  // Passing a cyclist riding in the driver's lane ahead, on a two-way street with one lane each way
-  // (sim/cyclist-pass.js). Once its front is within DECIDE_M of the cyclist's rear, with nobody between
-  // them, it starts over if the pass is on, it is where the pass would start easing over, and the way is
-  // clear (as this driver pulls away), and then
-  // eases across to the plan's shift and back in once its rear is RETURN_M past the cyclist's front; the
-  // cyclist stays the one it follows until it is clear of it. Still behind the cyclist, it falls back
-  // in behind it if the way stops being clear, and looks again CP_RETRY_S later. `n.cyc` is the pass
-  // ({ id, phase: "out" | "back", shift, min }), `n.cpShift` how far across it is now. Returns { bike,
-  // min (the minimum passing distance) } while it is passing or easing back, or null.
-  cyclistPass(n, pe, all, dt, held = false) {
-    const world = this.world,
-      map = this.map;
-    if (n.cycWait > 0) n.cycWait -= dt;
-    const e = map.edges.get(pe.id),
-      street = passStreet(map, pe.id),
-      on = street ? onStreet(e, n) : null;
-    const front = on ? on.s + n.spec.length - n.spec.rearOverhang : 0,
-      D = n.driver || IDM;
-    const self = { accel: D.aMax, react: D.react || 0, vmax: n.v0 * weather.speed };
-    let rec = n.cyc,
-      bike = null,
-      bon = null;
-    if (rec) {
-      bike = all.find((v) => v.id === rec.id) || null;
-      if (!bike) {
-        n.cyc = null;
-        n.cpShift = 0;
-        return null;
-      }
-      bon = bike && on?.same ? ridingIn(e, bike) : null;
-    } else {
-      if (!on?.same || n.cycWait > 0 || held) return null;
-      let best = Infinity;
-      for (const b of all) {
-        if (b.kind !== "bike" || Math.abs(b.x - n.x) > CP_DECIDE_M + 10 || Math.abs(b.y - n.y) > CP_DECIDE_M + 10)
-          continue;
-        const q = ridingIn(e, b),
-          g = q ? q.s - (b.spec || BIKE).rearOverhang - front : Infinity;
-        if (g > -0.5 && g < CP_DECIDE_M && g < best) {
-          best = g;
-          bike = b;
-          bon = q;
-        }
-      }
-      if (!bike) return null;
-      const others = all.filter((x) => x !== n),
-        plan = planPass(world, e, { front, v: n.v, spec: n.spec, bike, on: bon, driver: self, others });
-      // (and only once it is where it would start over: no sooner into the oncoming lane than it needs)
-      if (
-        !plan?.possible ||
-        plan.from > front + 2 ||
-        queuedBehind(e, front, plan, n, all) ||
-        !cyclistWayClear(world, plan, others).clear
-      )
-        return null;
-      rec = n.cyc = { id: bike.id, phase: "out", shift: plan.shift, min: plan.min_pass_m };
-      n.cpShift = n.cpShift || 0;
-    }
-    if (rec.phase === "out") {
-      const bs = bike.spec || BIKE,
-        bRear = bon ? bon.s - bs.rearOverhang : 0;
-      if (!bon || (held && front < bRear - 0.5)) rec.phase = "back";
-      else {
-        if (on.s - n.spec.rearOverhang > bRear + bs.length + CP_RETURN_M) rec.phase = "back";
-        else if (front < bRear - 0.5) {
-          // (still behind it: if the way is no longer clear, it falls back in behind)
-          const others = all.filter((x) => x !== n),
-            plan = planPass(world, e, { front, v: n.v, spec: n.spec, bike, on: bon, driver: self, others });
-          if (!plan?.possible || !cyclistWayClear(world, plan, others).clear) {
-            rec.phase = "back";
-            n.cycWait = CP_RETRY_S;
-          } else rec.shift = plan.shift;
-        }
-      }
-    }
-    const target = rec.phase === "out" ? rec.shift : 0;
-    const rate = Math.max(CP_SIDE_MPS[0], Math.min(CP_SIDE_MPS[1], CP_SIDE_PER_MPS * n.v)) * dt;
-    n.cpShift += Math.max(-rate, Math.min(rate, target - n.cpShift));
-    if (rec.phase === "back" && Math.abs(n.cpShift) < 0.02) {
-      n.cyc = null;
-      n.cpShift = 0;
-      return null;
-    }
-    return { bike, min: rec.min };
   }
 
   // A driver yielding to a bus pulling out from its stop (sim/bus.js): where it stops, as metres from

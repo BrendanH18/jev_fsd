@@ -51,8 +51,6 @@ export const FLAG_TEXT = {
   must_return_to_route_lane: "it leaves no room to get back to the route's lane before that lane ends",
   visibility_stopping_distance: "it is too fast to stop within the distance the car can see",
   passes_cyclist_too_close: "it passes a cyclist with less than 1 m of room",
-  passes_cyclist_without_room: "it passes a cyclist with less than the legal passing distance",
-  crosses_into_oncoming_traffic: "it crosses into the oncoming lane into the way of oncoming traffic",
   off_road: "it leaves the road",
   passes_officer_stop: "it goes on past the line while the police officer signals stop",
   runs_red: "it crosses the stop line where the signal requires the car to stop",

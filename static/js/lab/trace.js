@@ -12,7 +12,6 @@ const CORE_AUDITS = {
   stop_signs_run: "Missed stop",
   failed_to_yield: "Failed to yield",
   ...Object.fromEntries(countersAt("vehiclePassing")),
-  close_passes: "Passed a cyclist closer than the minimum passing distance",
   ...Object.fromEntries(countersAt("afterRestrictions")),
   ...Object.fromEntries(countersAt("afterCalming")),
   ...Object.fromEntries(countersAt("guards")),

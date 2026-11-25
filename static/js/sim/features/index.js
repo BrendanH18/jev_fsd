@@ -193,6 +193,7 @@ import workZones from "./work-zones.js";
 import outages from "./outages.js";
 import { flashControl } from "../night-flash.js";
 import scrambles from "./scrambles.js";
+import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
@@ -227,6 +228,7 @@ export const FEATURES = [
   outages,
   plows,
   closures,
+  cyclistPassing,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -236,10 +238,10 @@ export const SLOTS = {
   requestReroute: ["beforeOffRoute", "afterOffRoute"],
   checkpointShare: ["end"],
   rulesStop: ["beforeSignal", "end"],
-  notice: ["beforeMerge", "beforePlow", "beforeLeftOnRed", "end", "beforeZone"],
+  notice: ["beforeMerge", "beforePlow", "afterTraffic", "beforeLeftOnRed", "end", "beforeZone"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
-  rulesCost: ["beforeStops", "stops", "beforePassing", "end"],
+  rulesCost: ["beforeStops", "stops", "afterSpecial", "beforePassing", "end"],
   cautious: ["beforeBusLanes", "afterBusLanes", "afterPassing", "end", "beforeAmber", "afterAmber"],
   cautiousStop: ["end"],
   cautiousDrive: ["end"],
@@ -252,7 +254,9 @@ export const SLOTS = {
     "beforeMerge",
     "afterFlagger",
     "afterCalming",
-    "afterRoadsideVehicles", "beforeDriveways",
+    "beforeReservedLane",
+    "afterRoadsideVehicles",
+    "beforeDriveways",
     "driveways",
     "streetHazards",
     "rearTraffic",
@@ -264,7 +268,8 @@ export const SLOTS = {
     "afterCalming",
     "beforeRunner",
     "afterParking",
-    "beforeParking", "parking",
+    "beforeParking",
+    "parking",
     "driveways",
     "streetHazards",
     "late",
@@ -274,7 +279,16 @@ export const SLOTS = {
     "end",
   ],
   finishLanes: ["end"],
-  limit: ["beforeWorkZone", "beforeRunner", "passing", "driveways", "streetHazards", "beforeParking", "parking"],
+  limit: [
+    "beforeWorkZone",
+    "beforeRunner",
+    "passing",
+    "driveways",
+    "streetHazards",
+    "beforeBlindSpots",
+    "beforeParking",
+    "parking",
+  ],
   target: [
     "beforeMerge",
     "beforeRunner",
@@ -282,18 +296,21 @@ export const SLOTS = {
     "beforeCurve",
     "beforeRoadside",
     "beforeParked",
+    "afterLeader",
     "beforeCrosswalk",
     "afterSchoolBus",
     "driveways",
     "streetHazards",
     "beforeEmergency",
-    "beforeParking", "parking",
+    "beforeParking",
+    "parking",
   ],
   hazard: [
     "beforeWorkZone",
     "beforeRunner",
     "afterParking",
-    "parkingApproach", "parking",
+    "parkingApproach",
+    "parking",
     "driveways",
     "streetHazards",
     "rearTraffic",
@@ -324,26 +341,31 @@ export const SLOTS = {
     "streetHazards",
     "junctions",
     "rearTraffic",
-    "beforeParking", "parking",
+    "beforeParking",
+    "afterParking",
+    "parking",
   ],
   adjust: ["streetHazards", "end"],
   brakeDetour: ["end"],
   sim: [
     "beforeRunner",
     "first",
+    "beforeOffRoad",
     "afterCollision",
     "beforeMerge",
     "driveways",
     "streetHazards",
     "beforeEmergency",
     "parking",
-    "merge", "afterMerge",
+    "merge",
+    "afterMerge",
     "end",
   ],
   state: [
     "beforeMerge",
     "signal",
     "afterFollowing",
+    "afterParking",
     "beforePlow",
     "nearbySpecial",
     "afterPlow",
@@ -354,7 +376,8 @@ export const SLOTS = {
     "streetHazards",
     "junctions",
     "rearTraffic",
-    "beforeParking", "parking",
+    "beforeParking",
+    "parking",
   ],
   greenSignalClause: ["end"],
   outcome: ["ids", "laneChange"],
@@ -374,7 +397,8 @@ export const SLOTS = {
     "streetHazards",
     "ice",
     "rearTraffic",
-    "beforeParking", "parking",
+    "beforeParking",
+    "parking",
   ],
   holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "beforeParking", "parking"],
   prompt: [
@@ -395,7 +419,9 @@ export const SLOTS = {
     "snowbanks",
     "junctions",
     "rearTraffic",
-    "beforeParking", "parking",
+    "beforeParking",
+    "afterParkingAdvice",
+    "parking",
     "afterParking",
   ],
   metric: [
@@ -465,6 +491,13 @@ export const SLOTS = {
   evStop: ["end"],
   followingExclusion: ["end"],
   trafficBypass: ["end"],
+  trafficOvertaking: ["end"],
+  activeManeuver: ["end"],
+  activeOutcome: ["end"],
+  passClearance: ["end"],
+  suppressFollowingClause: ["end"],
+  driveCriterion: ["end"],
+  followingOmitted: ["end"],
   trafficLaneControl: ["end"],
   trafficCorridor: ["end"],
   coachCorridor: ["end"],
@@ -472,7 +505,7 @@ export const SLOTS = {
   examinerFail: ["beforeTracks"],
   passBlockReason: ["end"],
   trafficSpawnBlocked: ["end"],
-  detour: ["beforeMerge", "laneControl", "parking", "end"],
+  detour: ["beforeMerge", "laneControl", "parking", "optional", "end"],
   pullOverDetour: ["end"],
 };
 export const recordProblem = (record) => featureRecordProblem(record, SLOTS);
@@ -527,6 +560,9 @@ export const primaryDetour = (snap) => firstHookResult(PRIMARY_DETOURS, snap);
 
 const LANE_CONTROL_DETOURS = hooks("detour", "laneControl");
 export const laneControlDetour = (snap) => firstHookResult(LANE_CONTROL_DETOURS, snap);
+
+const OPTIONAL_DETOURS = hooks("detour", "optional");
+export const featureOptionalDetour = (snap) => firstHookResult(OPTIONAL_DETOURS, snap);
 
 const CONTROL_REPLACEMENTS = hooks("controlReplace");
 const SIGNAL_OVERRIDES = hooks("alternateSignal");
@@ -594,10 +630,12 @@ export const featureMotion = (snap) => MOTION.some((m) => m(snap));
 export function featureMetrics(world, violations, slot) {
   const out = {};
   for (const {
+    key,
+    property,
     seen,
-    metric: { name, decimals },
+    metric: { name, decimals, reportWhenEnabled },
   } of recordsAt("metric", slot)) {
-    if (!world[seen]) continue;
+    if (!(reportWhenEnabled ? world[property ?? key] : world[seen])) continue;
     const value = violations[name] || 0;
     const scale = 10 ** decimals;
     out[name] = decimals === undefined ? value : Number.isFinite(value) ? Math.round(value * scale) / scale : null;

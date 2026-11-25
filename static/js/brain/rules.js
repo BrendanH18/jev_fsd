@@ -3,7 +3,6 @@
 
 import { desiredSpeed, waitsItsTurn } from "./sensors.js";
 import { comfort } from "../sim/vehicle.js";
-import { isCyclistPass } from "../sim/cyclist-pass.js";
 import { featureDecisionFields, hooks, junctionPlan } from "../sim/features/index.js";
 
 const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
@@ -11,12 +10,8 @@ const FEATURE_STOP = hooks("rulesStop");
 const BEFORE_STOPS_COST = hooks("rulesCost", "beforeStops");
 const STOPS_COST = hooks("rulesCost", "stops");
 const BEFORE_PASSING_COST = hooks("rulesCost", "beforePassing");
+const AFTER_SPECIAL_COST = hooks("rulesCost", "afterSpecial");
 const FEATURE_COST = hooks("rulesCost");
-
-// Passing a cyclist through the oncoming lane (sim/cyclist-pass.js) costs this to start, so the car
-// passes only for a clear gain; and staying behind one it cannot pass yet gains this.
-const PASS_CYCLIST_COST = 1.5,
-  FOLLOW_CYCLIST_GAIN = 1.0;
 
 export class RulesBrain {
   constructor() {
@@ -64,7 +59,6 @@ export class RulesBrain {
     const toward = l?.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
     const vTurnLane = !l?.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
 
-    const cp = snap.cyclist_pass;
     let best = null;
     for (const c of eligible) {
       const s = c.sim;
@@ -133,8 +127,7 @@ export class RulesBrain {
       // pulling up where the car reverses into the space comes before driving on past it.
       if (c.law.kind === "park") cost -= 50;
       if (c.id === "wait_to_park") cost -= 12;
-      if (cp && !cp.going && isCyclistPass(c.law.detour)) cost += PASS_CYCLIST_COST;
-      if (cp && !cp.go && c.id === "follow_cyclist") cost -= FOLLOW_CYCLIST_GAIN;
+      for (const adjust of AFTER_SPECIAL_COST) cost += adjust(c, snap);
       if (c.law.kind === "hard_brake") cost += 3;
       if (c.law.kind === "reverse") cost += 2;
       if (!s.stays_in_lane) cost += 2;

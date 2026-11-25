@@ -26,7 +26,6 @@ import { PEEK_AT_M } from "../sim/priority.js";
 import { planTurnaround } from "../sim/turnaround.js";
 import { TRY_START_M, planParking, planPullOut } from "../sim/parallel-park.js";
 import { isEmergency } from "../sim/emergency.js";
-import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { wheelPoints } from "../sim/potholes.js";
 import {
   firstHookResult,
@@ -34,12 +33,16 @@ import {
   PRIORITY_IDS,
   featureObstacle,
   hooks,
+  featureOptionalDetour,
   laneControlDetour,
   primaryDetour,
 } from "../sim/features/index.js";
 
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
 // feature's own code used to be.
+const ACTIVE_MANEUVER = hooks("activeManeuver");
+const PASS_CLEARANCE = hooks("passClearance");
+
 const LANE_CHANGE = hooks("laneChangeCandidate");
 const LANE_CHANGE_STYLE = hooks("laneChangeStyle");
 const LINE_STOP = hooks("lineStop");
@@ -55,6 +58,7 @@ const CANDIDATES = {
   junctions: hooks("candidates", "junctions"),
   rearTraffic: hooks("candidates", "rearTraffic"),
   beforeParking: hooks("candidates", "beforeParking"),
+  afterParking: hooks("candidates", "afterParking"),
   parking: hooks("candidates", "parking"),
 };
 const PULL_OVER_DETOUR = hooks("pullOverDetour");
@@ -62,6 +66,7 @@ const ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
   ADJUST_LAST = hooks("adjust");
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
+  beforeOffRoad: hooks("sim", "beforeOffRoad"),
   afterCollision: hooks("sim", "afterCollision"),
   beforeMerge: hooks("sim", "beforeMerge"),
   first: hooks("sim", "first"),
@@ -87,12 +92,6 @@ export const HORIZON_S = 3.0;
 export const SIM_DT = 0.1;
 const LANE_TOL = 1.2;
 const CYCLIST_CLEARANCE_M = 1.0;
-// Passing a cyclist through the oncoming lane (sim/cyclist-pass.js): no manoeuvre that goes round one
-// may have the car, its far side across the centre line, meet a vehicle coming the other way in its way
-// closer than this front to front, or this soon at the speed they close at (as the audit counts it).
-const MEET_M = 8,
-  MEET_S = 2,
-  MEET_SIDE_M = 0.5;
 const QUEUE_GAP_M = 2.5;
 const LANE_RETURN_MARGIN_M = 8;
 const MIN_CHANGE_M = 12;
@@ -158,16 +157,14 @@ export function sampleCandidates(snap, world) {
       }
     : {};
   // (round an obstruction through the other lane, whatever else the car does)
-  // (and, in a lane that is closed ahead, across into the open lane at the merge point: see laneClosure)
-  // (round a cyclist, through the oncoming lane, only `pass_cyclist` goes, at the pass speed the way
-  // round was worked out for, and `hard_brake` keeps to it: see cyclistPass)
+  const optionalDetour = featureOptionalDetour(snap);
   const detourPlan =
     primaryDetour(snap) ||
     laneControlDetour(snap) ||
     featurePassingDetour(snap) ||
-    (!snap.cyclist_pass?.detour && featureDetour(snap));
+    (!optionalDetour && featureDetour(snap));
   const detour = detourPlan ? { detour: detourPlan } : {};
-  const passing = snap.cyclist_pass?.detour && !detour.detour ? { detour: snap.cyclist_pass.detour } : {};
+  const passing = optionalDetour && !detour.detour ? { detour: optionalDetour } : {};
   const inLane = (law) => ({
     ...law,
     offset: keep.center + (law.offset || 0),
@@ -533,32 +530,7 @@ export function sampleCandidates(snap, world) {
     for (const add of CANDIDATES.afterFlagger) add(featureCtx, out);
     for (const add of CANDIDATES.beforeParking) add(featureCtx, out);
     for (const add of CANDIDATES.parking) add(featureCtx, out);
-    // A cyclist riding in the lane ahead that the car can pass only through the oncoming lane
-    // (sim/cyclist-pass.js): go round it at the pass speed, once the way is clear (or carry on round it);
-    // or, still behind it, stay behind it at the following gap, in the lane.
-    const cp = snap.cyclist_pass;
-    if (cp?.go) {
-      out.push({
-        id: "pass_cyclist",
-        laneUntil,
-        laneTarget: cp.limit_mps,
-        law: { ...inLane({ kind: "lane", vTarget: cp.limit_mps }), ...passing },
-        steer: cp.going
-          ? "carry on round the cyclist, then back into the lane ahead of it"
-          : `pull out round the cyclist, ${cp.min_pass_m} m clear of it`,
-        speed: speedLabel(cp.limit_mps, v, limit),
-      });
-    }
-    if (cp && !cp.beside) {
-      const behind = inLane({ kind: "lane", vTarget: Math.round(Math.min(limit, cp.follow_mps) * 10) / 10 });
-      out.push({
-        id: "follow_cyclist",
-        laneUntil,
-        law: behind,
-        steer: "hold lane, behind the cyclist",
-        speed: `stay ${cp.follow_gap_m} m behind the cyclist`,
-      });
-    }
+    for (const add of CANDIDATES.afterParking) add(featureCtx, out);
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m > CROSSWALK_STOP_M + 0.3) {
       out.push({
         id: "stop_for_pedestrian",
@@ -674,23 +646,15 @@ export function sampleCandidates(snap, world) {
   // Keep required stopping options when a busy street supplies many lateral alternatives, and lane
   // changes ahead of small nudges.
   const priority = (c) =>
-    c.law.stopAtRoute !== undefined ||
-    c.law.kind === "turnaround" ||
-    c.law.kind === "park" ||
-    c.id === "pass_cyclist" ||
-    c.id === "follow_cyclist" ||
-    PRIORITY_IDS.has(c.id)
+    c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || c.law.kind === "park" || PRIORITY_IDS.has(c.id)
       ? 0
       : c.change
         ? 2
         : (c.law.offset || 0) === (c.law.center || 0)
           ? 1
           : 3;
-  // (once round a cyclist has begun, the car carries on round it at the pass speed or, still behind it,
-  // drops back in behind it: nothing else would get it by in the time the way round was clear for)
-  const going = snap.cyclist_pass?.going
-    ? out.filter((c) => c.id === "pass_cyclist" || c.id === "follow_cyclist")
-    : out;
+  const activeManeuver = firstHookResult(ACTIVE_MANEUVER, snap, passing);
+  const going = activeManeuver ? out.filter((c) => activeManeuver.keep(c)) : out;
   const list = dedupe(going)
     .sort((a, b) => priority(a) - priority(b))
     .slice(0, 15);
@@ -712,19 +676,19 @@ export function sampleCandidates(snap, world) {
   for (const keep of BRAKE_DETOUR) easing ||= keep({ snap, shifting, detour, passing, s });
   // (a detour's own move is already in `lane.lateral`, and inLane keeps the detour: holding the line
   // there would add the move twice)
-  const detouring = !!detour.detour || !!(snap.cyclist_pass?.going && passing.detour);
+  const detouring = !!detour.detour || !!activeManeuver?.brake.detour;
   const brakeLine =
     !easing && !scenery && !shifting && !detouring && lane && Math.abs(lane.lateral) >= HOLD_LINE_M
       ? lineOff(null)
       : scenery
-        ? lineOff(easing?.detour || (snap.cyclist_pass?.going ? passing.detour : null) || detour.detour)
+        ? lineOff(easing?.detour || activeManeuver?.brake.detour || detour.detour)
         : 0;
   list.push({
     id: "hard_brake",
     law: {
       ...inLane({ kind: "hard_brake", offset: brakeLine }),
       ...(easing || {}),
-      ...(snap.cyclist_pass?.going ? passing : {}),
+      ...activeManeuver?.brake,
     },
     steer: "hold lane",
     speed: "brake hard",
@@ -826,13 +790,8 @@ export function simulateAll(candidates, snap, world) {
   const turnAt = snap.nav?.turn_round_in_m > 0.3 ? startS + snap.nav.turn_round_in_m : null;
   // where the car stops to reverse into a space, until it starts (likewise)
   const parkAt = snap.parking?.mode === "in" && !world.parking ? snap.parking.stop_s_route : null;
-  // passing a cyclist leaves at least the minimum passing distance where the option is on (1.5 m above
-  // 50 km/h: sim/cyclist-pass.js), and BC's metre otherwise
-  // (the one the pass is planned for, where there is one: the street's own limit, not a school zone's)
-  const cp = snap.cyclist_pass;
-  const cyclistClearance = world.passCyclists
-    ? (cp?.min_pass_m ?? minPassM(snap.road?.limit ?? snap.limit))
-    : CYCLIST_CLEARANCE_M;
+  const passClearance = firstHookResult(PASS_CLEARANCE, world, snap);
+  const cyclistClearance = passClearance?.metres ?? CYCLIST_CLEARANCE_M;
   // what the registered features check along every forward sim (sim/features/index.js): a checker each, or
   // none, by the place its rejection takes among the others
   const sims = {};
@@ -840,6 +799,7 @@ export function simulateAll(candidates, snap, world) {
     sims[slot] = list.map((prepare) => prepare(world, snap, npcs, { startS, horizon: HORIZON_S })).filter(Boolean);
   const checks = [
     ...sims.first,
+    ...sims.beforeOffRoad,
     ...sims.afterCollision,
     ...sims.beforeRunner,
     ...sims.driveways,
@@ -880,7 +840,6 @@ export function simulateAll(candidates, snap, world) {
       passesHold = false,
       pastHold = false,
       closePass = false,
-      meets = false,
       collision = null,
       followerHit = null,
       staticHit = null,
@@ -1003,21 +962,8 @@ export function simulateAll(candidates, snap, world) {
             side - box.halfWidth - ob.halfWidth < cyclistClearance
           )
             closePass = true;
-          for (const check of nearbyChecks) check.near(car, box, o.n, ob, ahead, side, meeting, k === steps);
-          // going round a cyclist with its far side across the centre line, meeting a vehicle coming the
-          // other way in its way (sim/cyclist-pass.js)
-          if (
-            cp &&
-            isCyclistPass(law.detour) &&
-            lateral - box.halfWidth < cp.centre_line_route &&
-            ahead > 0 &&
-            Math.abs(wrap(o.n.psi - car.psi)) > (Math.PI * 3) / 4 &&
-            side < box.halfWidth + ob.halfWidth + MEET_SIDE_M
-          ) {
-            const gap = ahead - box.halfLength - ob.halfLength,
-              closing = Math.max(0, car.v) + Math.max(0, o.n.v);
-            if (gap < MEET_M || (closing > 0.5 && gap / closing < MEET_S)) meets = true;
-          }
+          for (const check of nearbyChecks)
+            check.near(car, box, o.n, ob, ahead, side, meeting, k === steps, lateral, law);
           // (what a registered feature stands in the road, a closed road's barricade, stands where it is, like
           // scenery: sim/features/index.js)
           const fixed = !!o.feature?.fixed;
@@ -1108,9 +1054,8 @@ export function simulateAll(candidates, snap, world) {
       c.law.kind !== "hard_brake"
     )
       reject = "visibility_stopping_distance";
-    else if (closePass && c.law.kind !== "hard_brake")
-      reject = world.passCyclists ? "passes_cyclist_without_room" : "passes_cyclist_too_close";
-    else if (meets && c.law.kind !== "hard_brake") reject = "crosses_into_oncoming_traffic";
+    else if (closePass && c.law.kind !== "hard_brake") reject = passClearance?.rejection ?? "passes_cyclist_too_close";
+    else if ((reject = rejectBy(sims.beforeOffRoad, c)));
     else if (!staysOnRoad && !currentlyOffRoad && c.law.kind !== "hard_brake") reject = "off_road";
     else if (crosses)
       reject =

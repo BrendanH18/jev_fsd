@@ -145,7 +145,6 @@ export class DriveRecorder {
         "amber_light",
         "stop_sign",
         "failed_to_yield",
-        "close_pass",
         "contraflow_conflict",
         "reversing_conflict",
         "pothole_hit",
