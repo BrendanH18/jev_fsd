@@ -7,6 +7,70 @@ export const RESULTS_FORMAT = "jev-results/1";
 export const WEATHERS = ["dry", "fog", "rain", "snow"];
 export const HOME_MAP = "kitsilano";
 
+const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const text = (value) => typeof value === "string" && value.trim().length > 0;
+const count = (value) => Number.isSafeInteger(value) && value >= 0;
+const measure = (value) => Number.isFinite(value) && value >= 0;
+const optional = (value, valid) => value == null || valid(value);
+const list = (value, valid) => Array.isArray(value) && value.every(valid);
+
+export function repositoryArtifact(path) {
+  return (
+    text(path) && path.split("/").every((part) => part && part !== "." && part !== ".." && !/[\\\p{Cc}]/u.test(part))
+  );
+}
+
+function checkRun(row, index) {
+  const require = (valid, field) => {
+    if (!valid) throw new Error(`Results row ${index + 1} has invalid ${field}.`);
+  };
+  require(record(row), "run data");
+  require(text(row.driver), "driver");
+  require(text(row.label), "label");
+  require(text(row.suite), "suite");
+  require(optional(
+    row.suite_version,
+    (version) => /^(?:legacy|custom|v[1-9]\d*)$/.test(version) && text(version),
+  ), "suite version");
+  require(count(row.total) && count(row.passed) && row.passed <= row.total, "pass counts");
+  require(optional(row.date, (date) => text(date) && Number.isFinite(Date.parse(date))), "date");
+  require(list(row.sources, repositoryArtifact) && row.sources.length > 0, "sources");
+  require(optional(row.recording, repositoryArtifact), "recording path");
+  require(optional(row.model, text), "model");
+  require(optional(row.submitter, text), "submitter");
+  require(optional(row.track, (track) => track === "open" || track === "guarded"), "track");
+  require(optional(row.flagged_choices, count), "flag count");
+  require(optional(row.cost_usd, measure), "cost");
+  require(optional(row.fallbacks, count), "fallback count");
+  require(optional(row.model_share, (share) => measure(share) && share <= 1), "model decision share");
+  if (row.suite === "city") {
+    require(text(row.map), "city map");
+    require(text(row.weather), "city weather");
+  }
+  require(optional(row.failed, (failed) =>
+    list(failed, (f) => record(f) && text(f.id) && list(f.failures, text)),
+  ), "failure details");
+  if (row.suite === "open" || row.suite === "challenges" || row.drives !== undefined) {
+    require(list(row.drives, record), "drive list");
+    const ids = new Set();
+    for (const drive of row.drives) {
+      require(text(drive.id), "drive ID");
+      require(!ids.has(drive.id), `duplicate drive ID "${drive.id}"`);
+      ids.add(drive.id);
+      require(text(drive.map), "drive map");
+      require(typeof drive.pass === "boolean", "drive verdict");
+      require(optional(drive.time_s, measure), "drive duration");
+      require(optional(drive.flagged_choices, count), "drive flag count");
+      require(optional(drive.score_inputs, record), "drive score inputs");
+      require(optional(drive.comparison_score_inputs, record), "comparison score inputs");
+      require(optional(
+        drive.incident_counts,
+        (counts) => record(counts) && Object.values(counts).every(count),
+      ), "incident counts");
+    }
+  }
+}
+
 const sum = (rows, key) => rows.reduce((total, r) => total + (r[key] || 0), 0);
 export const fraction = (rows) => ({ passed: sum(rows, "passed"), total: sum(rows, "total") });
 export const fractionText = (f) => (f ? `${f.passed}/${f.total}` : "not run");
@@ -22,6 +86,13 @@ export function checkResults(data) {
   ) {
     throw new Error(`Not a results file (${RESULTS_FORMAT}).`);
   }
+  if (!optional(data.maps, (maps) => record(maps) && Object.values(maps).every(text)))
+    throw new Error("The results file has an invalid map catalog.");
+  for (const [id, info] of Object.entries(data.drivers)) {
+    if (!record(info) || !optional(info.label, text) || !optional(info.submitter, text))
+      throw new Error(`The results file has invalid driver details for "${id}".`);
+  }
+  data.rows.forEach(checkRun);
   return data;
 }
 
@@ -38,7 +109,9 @@ export const selectedSuite = (versions, requested) =>
 export function matchesCoverage(cells, coverage) {
   if (!coverage) return true;
   const complete = cells.every(Boolean);
-  return coverage === "complete" ? complete : !complete;
+  if (coverage === "complete") return cells.length > 0 && complete;
+  if (coverage === "missing") return !complete;
+  return true;
 }
 
 export function driverDisplayName(data, id) {
@@ -122,7 +195,13 @@ export function challengeMatrix(data, suite = "challenges", version = LEGACY_SUI
 export function compatibleChallengeDrive(data, driver, config) {
   if (!config?.map_sha) return null;
   for (const run of data.rows) {
-    if (run.suite !== "challenges" || run.driver !== driver || suiteVersion(run) === CUSTOM_SUITE) continue;
+    if (
+      run.suite !== "challenges" ||
+      run.driver !== driver ||
+      (run.track ?? "guarded") !== "guarded" ||
+      suiteVersion(run) === CUSTOM_SUITE
+    )
+      continue;
     const drive = run.drives.find(
       (d) =>
         d.id === config.challenge &&
@@ -166,6 +245,8 @@ export function cityGrid(data, version = LEGACY_SUITE) {
 }
 
 // Recorded drives that replay with no key, one command each.
+export const mapDisplayName = (data, id) => (Object.hasOwn(data.maps ?? {}, id) ? data.maps[id] : id);
+
 export function recordings(data) {
   return data.rows
     .filter((r) => r.recording)
@@ -185,11 +266,18 @@ export function recordings(data) {
     });
 }
 
-const shellPath = (path) => (/^[\w./-]+$/.test(path) ? path : `'${path.replaceAll("'", "'\\''")}'`);
+const shellPath = (value) => {
+  const path = value.startsWith("-") ? `./${value}` : value;
+  return /^[\w./-]+$/.test(path) ? path : `'${path.replaceAll("'", "'\\''")}'`;
+};
 
 export function percentText(value) {
   if (!Number.isFinite(value)) return "n/a";
   return `${(value * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
 }
 export const moneyText = (value) =>
-  value ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "$0";
+  !measure(value)
+    ? "n/a"
+    : value
+      ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : "$0";
