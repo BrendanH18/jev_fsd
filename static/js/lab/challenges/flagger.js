@@ -25,9 +25,9 @@ export const challenge = {
   hazard: "work-zone",
   street: "Queen Street",
   description:
-    "A road crew has closed your lane on Queen Street, leaving one lane for both directions. The flagger at your end holds up a STOP paddle while cars come the other way through it.",
+    "A Queen Street work crew has narrowed the road to one shared lane. The flagger holds up a STOP paddle while drivers approach from the other end.",
   lesson:
-    "A flagger's paddle is a traffic sign: on STOP, stop before reaching them and stay stopped; on SLOW, go on with care, at the work zone's speed. Where your lane is closed you go round the work in the other lane, so wait until you're waved through: oncoming traffic has that lane until then. That is Ontario's Highway Traffic Act, and every province has a rule like it.",
+    "Stop before reaching the flagger and hold until given the SLOW signal. Make sure the previous oncoming cars have cleared the shared lane, then follow the work-zone speed.",
 };
 
 const WZ_START_M = 65,

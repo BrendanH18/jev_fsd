@@ -109,8 +109,10 @@ const pickScores = (results) => {
   return Object.fromEntries(SCORE_KEYS.map((k) => [k, s[k]]));
 };
 const compareScores = new Map();
+const compareRequests = new Map();
 let tableSort = { key: "index", direction: 1 };
 let savedRunRequest = 0;
+let runController = null;
 let compareError = null;
 
 async function boot() {
@@ -163,7 +165,16 @@ async function boot() {
   });
   $("#bench-json").addEventListener("click", () => {
     const { config, summary, results, suite_version } = lastRun;
-    downloadJson(benchmarkDownloadName(config, "json"), { config, summary, results, suite_version });
+    const stopped = lastRun.stopped || config.stopped;
+    downloadJson(benchmarkDownloadName(config, "json"), {
+      config,
+      summary,
+      results,
+      suite_version,
+      ...(stopped ? { stopped } : {}),
+      ...(lastRun.complete === false ? { stopped: "exported while running" } : {}),
+      ...(lastRun.manifest ? { manifest: lastRun.manifest } : {}),
+    });
   });
   $("#saved-run").addEventListener("change", async (ev) => {
     const name = ev.target.value;
@@ -172,7 +183,7 @@ async function boot() {
     try {
       const data = await api(`/api/bench/runs?name=${encodeURIComponent(name)}`);
       if (request !== savedRunRequest || running) return;
-      if (!Array.isArray(data.results)) throw new Error("Saved run has no results.");
+      validateSavedRun(data);
       lastRun = { ...data, suite: data.results.map((r) => ({ id: r.id, tags: r.tags || {} })) };
       render(lastRun);
       $("#status").textContent = `Viewing saved run ${name}`;
@@ -184,7 +195,7 @@ async function boot() {
     endpoints = registerLlmAgents(status.llm);
   const count = (n, what) => (n ? ` · ${n} ${what}${n > 1 ? "s" : ""}` : "");
   $("#map-note").textContent =
-    `${status.map.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${agentAvailable("jev") ? "Jev available" : "no TypeSafe key: no Jev"}${count(decisions.length, "decision model")}${count(endpoints.length, "LLM endpoint")}`;
+    `${map.pack.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${agentAvailable("jev") ? "Jev available" : "no TypeSafe key: no Jev"}${count(decisions.length, "decision model")}${count(endpoints.length, "LLM endpoint")}`;
   $("#npcs").value = status.npcs;
   $("#brain").querySelector('option[value="jev"]').disabled = !agentAvailable("jev");
   endpointOptions();
@@ -298,6 +309,7 @@ async function runFromForm() {
 function stop() {
   if (!running) return false;
   stopRequested = true;
+  runController?.abort();
   $("#run").textContent = "Stopping…";
   $("#run").disabled = true;
   return true;
@@ -309,6 +321,7 @@ export async function run(options) {
   running = true;
   savedRunRequest++;
   stopRequested = false;
+  runController = new AbortController();
   const controls = [$("#bench-map"), $("#saved-run")];
   for (const control of controls) control.disabled = true;
   $("#run").textContent = "Stop";
@@ -316,6 +329,7 @@ export async function run(options) {
     return await runBenchmark(options);
   } finally {
     running = false;
+    runController = null;
     for (const control of controls) control.disabled = false;
     $("#run").textContent = "Run";
     $("#run").disabled = false;
@@ -341,10 +355,14 @@ async function runBenchmark({
   record = false,
   replay = null,
 } = {}) {
+  for (const [name, value] of Object.entries({ heldout, diagnostics, save, record }))
+    if (typeof value !== "boolean") throw new Error(`${name} must be true or false.`);
+  if (record && replay) throw new Error("Choose recording or replay for this benchmark.");
   // A replay takes its driver and suite from the recording (a saved name, its JSON, or a ModelRecording).
   const replaying = replay ? await loadRecording(replay) : null;
   if (replaying) {
-    const b = replaying.header.bench || {};
+    const b = replaying.header.bench;
+    if (!b) throw new Error("Choose a benchmark recording for replay.");
     if (b.bbox && b.bbox.join(",") !== map.routingBbox.join(","))
       throw new Error(
         `The recording was made on ${b.map || b.bbox.join(",")}; open /bench?map=${b.map || b.bbox.join(",")} to replay it.`,
@@ -354,7 +372,6 @@ async function runBenchmark({
     ({ features = "bare", park = false, hour, without = [], cover, heldout = false, track = "guarded" } = b);
     brain = replaying.header.driver;
   }
-  if (record && replaying) throw new Error("Choose recording or replay for this benchmark.");
   validateRunInputs({ count, npcs, seed, mode, weather, heldout }, Object.keys(WEATHER));
   if (!replaying && !agentAvailable(brain)) throw new Error(`Benchmark driver "${brain}" is unavailable.`);
   if ((record || replaying) && mode !== "lockstep")
@@ -379,7 +396,7 @@ async function runBenchmark({
     weather,
     ...options,
     ...(plan ? { heldout: true, seeds: plan.seeds } : {}),
-    map: status.map.name,
+    map: map.pack.name ?? status.map.name,
     map_label: status.map.label,
     bbox: map.routingBbox,
     pack: map.pack.pack_version,
@@ -396,7 +413,7 @@ async function runBenchmark({
             driver: brain,
             brain: { endpoint },
             model: brain === "jev" ? status.decision?.jev?.model : null,
-            map: status.map.name,
+            map: map.pack.name ?? status.map.name,
             map_sha: mapFingerprint(map),
             seed,
             preset: features,
@@ -406,13 +423,18 @@ async function runBenchmark({
           }),
         })
       : null);
-  setStatus("building the scenario suite…");
+  setStatus("Building the scenario suite…");
+  const signal = runController.signal;
+  const routing = {
+    ...suiteOptions(features, options),
+    signal,
+    onRoute: ({ id, ready, count: total, attempt }) =>
+      setStatus(`Planning suite · ${ready}/${total} · ${id} found after ${attempt} attempts`),
+  };
   const suite =
     replaying?.suite() ||
-    (plan
-      ? await buildHeldoutSuite(map, status.map.id, suiteOptions(features, options))
-      : await buildSuite(map, { count, seed, ...suiteOptions(features, options) }));
-  if (!suite.length) throw new Error("No routable scenarios were found on this map.");
+    (plan ? await buildHeldoutSuite(map, status.map.id, routing) : await buildSuite(map, { count, seed, ...routing }));
+  if (!suite.length && !stopRequested) throw new Error("No routable scenarios were found on this map.");
   const state = {
     suite_version: CUSTOM_SUITE,
     config,
@@ -431,6 +453,7 @@ async function runBenchmark({
     );
     render(state);
     await yieldNow();
+    if (stopRequested) break;
     const tape = recording ? recording.tape(suite[i].id, replaying ? "replay" : "record") : null;
     const r = await runScenario(map, suite[i], {
       brain,
@@ -438,11 +461,11 @@ async function runBenchmark({
       mode,
       weather,
       ...options,
-      shouldStop: () => stopRequested,
+      signal,
       diagnostics,
       tape,
     });
-    if (stopRequested) break;
+    if (r.stopped) break;
     if (record && !replaying) recording.keepResult(suite[i].id, r, suite[i]);
     if (replaying)
       r.model_recording.same_result = replaying.results[suite[i].id]
@@ -454,13 +477,15 @@ async function runBenchmark({
   }
   state.current = null;
   state.summary = aggregate(state.results);
-  state.stopped = stopRequested;
+  state.stopped = stopRequested && (!suite.length || state.results.length !== suite.length);
   state.complete = true;
   const replayed = replaying
     ? state.results.length === suite.length &&
       state.results.every((r) => r.model_recording.exact && r.model_recording.same_result === true)
     : null;
   for (const result of state.results) result.suite_version = state.suite_version;
+  const counts = `${state.results.length}/${suite.length} planned · ${state.results.filter((r) => r.pass).length} passed`;
+  const planningNote = !state.stopped && suite.length < config.count ? ` · ${config.count} requested` : "";
   let saved = null,
     savedRecording = null,
     recordingError = null;
@@ -476,15 +501,17 @@ async function runBenchmark({
     try {
       saved = await api("/api/bench/save", {
         suite_version: state.suite_version,
-        config: { ...config, completed: state.results.length, ...(stopRequested ? { stopped: true } : {}) },
+        config: { ...config, completed: state.results.length, ...(state.stopped ? { stopped: true } : {}) },
         summary: state.summary,
         results: state.results,
       });
       setStatus(
-        `${stopRequested ? "Stopped. " : ""}Saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `. Could not save the recording: ${recordingError}` : ""}`,
+        `${state.stopped ? "Stopped. " : ""}Saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `. Could not save the recording: ${recordingError}` : ""}`,
       );
     } catch (err) {
-      setStatus(`could not save: ${err.message}`);
+      setStatus(
+        `Could not save benchmark: ${err.message}${savedRecording ? `. Saved recording ${savedRecording.saved}` : ""}${recordingError ? `. Could not save recording: ${recordingError}` : ""}. Results are available to download.`,
+      );
     }
     if (saved) {
       try {
@@ -493,7 +520,7 @@ async function runBenchmark({
         setStatus(`Saved ${saved.saved}. Could not refresh saved runs: ${error.message}`);
       }
     }
-  } else setStatus(stopRequested ? "Stopped" : "Done");
+  } else setStatus(`${state.stopped ? "Stopped" : "Done"} · ${counts}${planningNote}`);
   render(state);
   return {
     suite_version: state.suite_version,
@@ -501,10 +528,17 @@ async function runBenchmark({
     summary: state.summary,
     results: state.results,
     saved,
-    ...(stopRequested ? { stopped: true } : {}),
+    ...(state.stopped ? { stopped: true } : {}),
     ...(recording
       ? {
-          recording: savedRecording || (recordingError ? { error: recordingError, data: recording.toJSON() } : null),
+          recording:
+            savedRecording ||
+            (record && state.results.length
+              ? {
+                  ...(recordingError ? { error: recordingError } : {}),
+                  data: recording.toJSON(),
+                }
+              : null),
           replayed,
         }
       : {}),
@@ -512,19 +546,39 @@ async function runBenchmark({
 }
 
 // The run list carries summaries only, so a compared run's scores come from its results, once.
+function validateSavedRun(saved) {
+  if (!saved?.config || !Array.isArray(saved.results)) throw new Error("Saved run needs a config and drive results.");
+  const ids = new Set();
+  for (const result of saved.results) {
+    if (typeof result?.id !== "string" || !result.id || ids.has(result.id))
+      throw new Error("Saved run contains a missing or repeated route ID.");
+    ids.add(result.id);
+  }
+}
+
 async function loadCompareScores(name) {
   if (!name || compareScores.has(name)) return;
-  const saved = await api(`/api/bench/runs?name=${encodeURIComponent(name)}`);
-  if (!Array.isArray(saved.results)) throw new Error("Saved run has no results.");
-  const { config, suite_version, manifest, results } = saved;
-  compareScores.set(name, {
-    config,
-    suite_version,
-    manifest,
-    results: results.map(({ id, tags }) => ({ id, tags })),
-    scores: pickScores(results),
-  });
-  if (lastRun && $("#compare").value === name) render(lastRun);
+  if (compareRequests.has(name)) return compareRequests.get(name);
+  const request = (async () => {
+    const saved = await api(`/api/bench/runs?name=${encodeURIComponent(name)}`);
+    validateSavedRun(saved);
+    const { config, suite_version, manifest, results, stopped } = saved;
+    compareScores.set(name, {
+      config,
+      suite_version,
+      manifest,
+      stopped,
+      results: results.map(({ id, tags }) => ({ id, tags })),
+      scores: pickScores(results),
+    });
+    if (lastRun && $("#compare").value === name) render(lastRun);
+  })();
+  compareRequests.set(name, request);
+  try {
+    await request;
+  } finally {
+    compareRequests.delete(name);
+  }
 }
 
 function delta(cur, prev, better, f) {
@@ -536,8 +590,9 @@ function delta(cur, prev, better, f) {
 }
 
 function tableRows(state) {
+  const byId = new Map(state.results.map((result) => [result.id, result]));
   const rows = state.suite.map((scenario, index) => {
-    const result = state.results[index];
+    const result = byId.get(scenario.id);
     return { scenario, index, result, scored: result && { ...result, ...driveScores(result) } };
   });
   const { key, direction } = tableSort;
@@ -547,11 +602,11 @@ function tableRows(state) {
     if (key === "pass") return result ? Number(result.pass) : null;
     return scored?.[key];
   };
+  const query = $("#bench-search").value;
+  const failuresOnly = $("#bench-failures").checked;
   return rows
     .filter(
-      ({ scenario, result }) =>
-        (!$("#bench-failures").checked || result?.pass === false) &&
-        routeMatches($("#bench-search").value, scenario, result),
+      ({ scenario, result }) => (!failuresOnly || result?.pass === false) && routeMatches(query, scenario, result),
     )
     .sort((a, b) => {
       const x = value(a),

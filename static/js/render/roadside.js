@@ -1,3 +1,13 @@
+import { syncHeadMaterial } from "./actor-motion.js";
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_AMBER,
+} from "./actor-details.js";
 // Vehicles stopped at the roadside with their lights flashing (sim/roadside.js): a light-duty tow
 // truck, built from boxes at its simulated size (a one-ton cab, a wrecker body with tool boxes, its
 // boom and the wheel-lift folded under the rear), with amber light bars on the cab and the boom; and
@@ -5,6 +15,7 @@
 // forward, +Z is right, rear axle at the origin, as for cars.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { TOW_TRUCK } from "../sim/vehicle.js";
 import { addLightBars, flashLights, shared, wheel } from "./emergency.js";
@@ -20,6 +31,8 @@ const merge = (parts) =>
     false,
   );
 const steel = new THREE.MeshStandardMaterial({ color: 0x3b3f45, metalness: 0.6, roughness: 0.45 });
+
+shareActorResources([steel]);
 
 function towTruck(vehicle) {
   const spec = TOW_TRUCK,
@@ -99,12 +112,13 @@ function towTruck(vehicle) {
     false,
     "trim",
   );
+  const head = shared.head.clone();
   add(
     merge([
       box(0.05, 0.16, 0.3, xf + 0.01, 0.92, -(w / 2 - 0.35)),
       box(0.05, 0.16, 0.3, xf + 0.01, 0.92, w / 2 - 0.35),
     ]),
-    shared.head,
+    head,
     false,
     "headlamps",
   );
@@ -116,6 +130,18 @@ function towTruck(vehicle) {
     ],
     [AMBER, AMBER, 0xffe0a0],
   );
+  addActorDetails(body, "tow-truck", () => [
+    ...sides((side) => [
+      detail("lift-marker-reflectors", REFLECT_RED, 0.026, 0.071, 0.18, xr - 0.484, 0.3, side * (w / 2 - 0.39)),
+      detail("winch-fairlead", STEEL, 0.075, 0.07, 0.19, xr + 0.97, 1.35, side * 0.14),
+      detail("toolbox-door", RUBBER, 0.65, 0.31, 0.038, wb - 2.75, 0.91, side * (w / 2 + 0.018)),
+      detail("toolbox-handle", STEEL, 0.14, 0.05, 0.057, wb - 2.75, 0.97, side * (w / 2 + 0.044)),
+      detail("cab-access-step", STEEL, 0.49, 0.062, 0.17, cabRear + 0.29, 0.53, side * (w / 2 - 0.058)),
+    ]),
+    detail("rear-warning-strip", REFLECT_AMBER, 0.021, 0.092, 0.88, xr - 0.024, 0.84, 0),
+    detail("boom-warning-marker", REFLECT_AMBER, 0.05, 0.28, 0.25, xr + 0.12, 1.77, 0),
+    detail("front-grille", RUBBER, 0.032, 0.22, w * 0.47, xf + 0.01, 0.92, 0),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.6, w + 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(spec.length / 2 - spec.rearOverhang, 0.02, 0);
   blob.renderOrder = 1;
@@ -132,13 +158,13 @@ function towTruck(vehicle) {
     wh.position.set(x, tire, z);
     g.add(wh);
   }
-  return { g, lenses };
+  return { g, lenses, head };
 }
 
 function policeCar(vehicle) {
   const g = createCarMesh(vehicle.color ?? 0xf4f4f0, vehicle.id, 3); // (the traffic's SUV)
   g.name = "roadside-police";
-  const bounds = new THREE.Box3().setFromObject(g);
+  const bounds = new THREE.Box3().setFromObject(g.userData.body);
   const roof = bounds.max.y,
     x = (bounds.min.x + bounds.max.x) / 2 - 0.25;
   const bar = new THREE.Group();
@@ -157,8 +183,8 @@ function policeCar(vehicle) {
 }
 
 export function createRoadsideMesh(vehicle) {
-  const { g, lenses } = vehicle.kind === "police" ? policeCar(vehicle) : towTruck(vehicle);
-  g.userData.roadside = { kind: vehicle.kind, lenses, phase: hash01(vehicle.id, 7) };
+  const { g, lenses, head } = vehicle.kind === "police" ? policeCar(vehicle) : towTruck(vehicle);
+  g.userData.roadside = { kind: vehicle.kind, lenses, head, phase: hash01(vehicle.id, 7) };
   g.position.set(vehicle.x, 0, -vehicle.y);
   g.rotation.y = vehicle.psi;
   return g;
@@ -169,6 +195,7 @@ export function syncRoadside(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   const u = mesh.userData.roadside;
   if (u.kind === "police") syncCar(mesh, vehicle, dt, t, lightsOn);
   else {
+    syncHeadMaterial(u.head, lightsOn);
     mesh.position.set(vehicle.x, 0, -vehicle.y);
     mesh.rotation.y = vehicle.psi;
   }

@@ -31,13 +31,16 @@ try {
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /Usage:/);
   }
-  for (const script of ["bench_node.mjs", "arena_node.mjs"]) {
+  for (const [script, invalidAmount] of [
+    ["bench_node.mjs", /--reserve needs a positive decimal dollar amount/],
+    ["arena_node.mjs", /--reserve needs --record and a positive number of dollars/],
+  ]) {
     const missingRecord = run(script, "--reserve", "1");
     assert.equal(missingRecord.status, 1);
     assert.match(missingRecord.stderr, /--reserve needs --record/);
     const invalidReserve = run(script, "--record", "tape.json", "--reserve", "Infinity");
     assert.equal(invalidReserve.status, 1);
-    assert.match(invalidReserve.stderr, /positive number/);
+    assert.match(invalidReserve.stderr, invalidAmount);
   }
   for (const script of ["bench_node.mjs", "arena_node.mjs", "soak.mjs"]) {
     const missingServer = run(script, "--port=1");
@@ -77,7 +80,7 @@ try {
             timeout: 10_000,
           },
         ),
-        /fetch failed/,
+        { code: 1, stderr: /Could not reach the simulator server/ },
       );
     }
     assert.equal(apiCalls, 2);
@@ -235,7 +238,7 @@ try {
   );
   assert.match(
     run("driver_submission.mjs", "verify", "--bundle", bundle, "--port=1").stderr,
-    /http:\/\/127\.0\.0\.1:1\/bench.*uv run server\.py/,
+    /must name a clean source commit/,
   );
   const bytes = gzipSync(JSON.stringify(recording));
   const published = write("published.json", {
@@ -248,6 +251,26 @@ try {
   const publishedInfo = run("driver_submission.mjs", "inspect", "--bundle", published, "--json");
   assert.equal(publishedInfo.status, 0, publishedInfo.stderr);
   assert.equal(JSON.parse(publishedInfo.stdout).tape_sha256_verified, true);
+  const publishedDigest = createHash("sha256").update(bytes).digest("hex");
+  write("published.json", {
+    format: "jev-published-submission/1",
+    submitter: "example",
+    recording_sha256: publishedDigest.toUpperCase(),
+    report,
+  });
+  assert.equal(run("driver_submission.mjs", "inspect", "--bundle", published).status, 0);
+  for (const [submitter, recording_sha256, diagnostic] of [
+    ["example", 0, /expected a recording SHA-256/],
+    ["@example", publishedDigest, /invalid submitter handle/],
+  ]) {
+    const invalid = write("invalid-published.json", {
+      format: "jev-published-submission/1",
+      submitter,
+      recording_sha256,
+      report,
+    });
+    assert.match(run("driver_submission.mjs", "inspect", "--bundle", invalid).stderr, diagnostic);
+  }
   const forged = write("forged.json", {
     format: "jev-published-submission/1",
     submitter: "example",

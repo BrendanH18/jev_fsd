@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.tapes.outputs.matrix }}
+      count: ${{ steps.tapes.outputs.count }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -21,11 +22,19 @@ jobs:
         id: tapes
         run: |
           matrix=$(python3 scripts/report_replay_drift.py matrix)
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          count=$(jq -er '.include | select(type == "array") | length' <<< "$matrix")
+          {
+            echo "matrix=$matrix"
+            echo "count=$count"
+          } >> "$GITHUB_OUTPUT"
+          if [[ "$count" == 0 ]]; then
+            echo "No published replay tapes were found." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   replay:
     name: ${{ matrix.tape }}
     needs: tapes
+    if: needs.tapes.outputs.count != '0'
     runs-on: ubuntu-24.04
     # (45 min on Namespace's runners; GitHub's standard runner is about twice as slow)
     timeout-minutes: 90
@@ -47,13 +56,17 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Replay on main
+        id: main-replay
         working-directory: report
         run: python3 scripts/report_replay_drift.py run . "$TAPE" "$REPLAY_RUNNER" "$DRIVE_COUNT" main
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: published
+        if: ${{ !cancelled() && (success() || steps.main-replay.outcome == 'failure') }}
         with:
           persist-credentials: false
           path: published
           ref: ${{ matrix.tree }}
       - name: Replay on the published revision
+        if: ${{ !cancelled() && steps.published.outcome == 'success' }}
         working-directory: report
         run: python3 scripts/report_replay_drift.py run ../published "$TAPE" "$REPLAY_RUNNER" "$DRIVE_COUNT" published

@@ -14,7 +14,7 @@ const DEAD_ZONE_KEY = "jev-gamepad-dead-zone";
 let stickDeadZone = STICK_DEAD_ZONE;
 try {
   const saved = globalThis.localStorage?.getItem(DEAD_ZONE_KEY);
-  if (saved != null && Number.isFinite(Number(saved))) stickDeadZone = Math.max(0, Math.min(0.5, Number(saved)));
+  if (saved?.trim() && Number.isFinite(Number(saved))) stickDeadZone = Math.max(0, Math.min(0.5, Number(saved)));
 } catch {
   // Storage can be unavailable in private browsing.
 }
@@ -71,8 +71,9 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v));
 // A centred axis value with its dead zone removed and the rest rescaled to reach ±1, so a small
 // drift reads 0 and full deflection still reads 1.
 export function deadZone(v, zone = STICK_DEAD_ZONE) {
-  const value = Number(v);
-  if (!Number.isFinite(value)) return 0;
+  if (!Number.isFinite(v)) return 0;
+  if (!Number.isFinite(zone) || zone < 0 || zone >= 1) zone = STICK_DEAD_ZONE;
+  const value = v;
   const a = Math.abs(value);
   if (a <= zone) return 0;
   return Math.sign(value) * Math.min(1, (a - zone) / (1 - zone));
@@ -81,14 +82,15 @@ export function deadZone(v, zone = STICK_DEAD_ZONE) {
 // How far a button is pressed, 0 to 1: its analog value, or 1 when a digital button reports only
 // `pressed`. (Very old browsers expose buttons as plain numbers.)
 export function buttonValue(button) {
+  if (typeof button === "boolean") return Number(button);
   if (button == null) return 0;
   if (typeof button === "number") return Number.isFinite(button) ? clamp01(button) : 0;
-  const value = Number(button.value);
+  const value = button.value;
   if (Number.isFinite(value) && value > 0) return clamp01(value);
-  return button.pressed ? 1 : 0;
+  return Number(button.pressed === true);
 }
 
-export const buttonHeld = (button) => buttonValue(button) >= PRESS_THRESHOLD || !!button?.pressed;
+export const buttonHeld = (button) => buttonValue(button) >= PRESS_THRESHOLD || button?.pressed === true;
 
 // A trigger's travel past its rest dead zone, or null when the pad has no such button.
 export function triggerValue(pad, index) {
@@ -130,9 +132,13 @@ export function pressedEdges(previous, buttons) {
 }
 
 // The pad to drive with: the first connected one, preferring the standard layout.
-export function pickPad(pads) {
-  const live = Array.from(pads || []).filter((p) => p && p.connected !== false);
-  return live.find((p) => p.mapping === "standard") || live[0] || null;
+const padId = (pad) => `${pad.index ?? 0}:${pad.id ?? ""}`;
+
+export function pickPad(pads, current = null) {
+  const live = Array.from(pads || []).filter((pad) => pad && pad.connected !== false);
+  const standard = live.filter((pad) => pad.mapping === "standard");
+  const candidates = standard.length ? standard : live;
+  return candidates.find((pad) => padId(pad) === current) || candidates[0] || null;
 }
 
 // Polls the browser's gamepads once a frame (ui/input.js calls poll), keeps the driving state and
@@ -151,19 +157,26 @@ export class GamepadInput {
     this.pad = null; // the id of the pad in use
     this.held = [];
     this.waitForNeutral = false;
+    this.resampleButtons = false;
+  }
+  release() {
+    this.state = { ...IDLE };
+    this.waitForNeutral = true;
+    this.resampleButtons = true;
   }
   poll() {
     let pad = null;
     try {
-      pad = pickPad(this.getPads());
+      pad = pickPad(this.getPads(), this.pad);
     } catch {
       pad = null;
     }
-    const id = pad ? `${pad.index ?? 0}:${pad.id ?? ""}` : null;
+    const id = pad ? padId(pad) : null;
     if (id !== this.pad) {
       const before = this.pad;
       this.pad = id;
-      this.waitForNeutral = this.blocked();
+      this.waitForNeutral ||= this.blocked() || before !== null;
+      this.resampleButtons = false;
       this.held = pad ? pressedEdges([], pad.buttons).held : [];
       if (before && this.onDisconnect) this.onDisconnect(before);
       if (pad && this.onConnect) this.onConnect(pad);
@@ -175,6 +188,8 @@ export class GamepadInput {
       return this.state;
     }
     const { edges, held } = pressedEdges(this.held, pad.buttons);
+    const resample = this.resampleButtons;
+    this.resampleButtons = false;
     this.held = held;
     if (this.blocked()) {
       this.waitForNeutral = true;
@@ -187,9 +202,14 @@ export class GamepadInput {
       if (this.waitForNeutral) return this.state;
     }
     this.state = state;
+    if (resample) return state;
     for (const i of edges) {
       const name = BUTTON_ACTIONS[i];
-      if (name && this.actions[name]) this.actions[name]();
+      if (name && typeof this.actions[name] === "function") this.actions[name]();
+      if (this.blocked()) {
+        this.release();
+        break;
+      }
     }
     return this.state;
   }

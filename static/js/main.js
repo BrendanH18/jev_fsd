@@ -1,70 +1,39 @@
-import { nightFlashNotice } from "./sim/night-flash.js";
-import { npcHighBeam } from "./sim/high-beams.js";
 // Bootstrap: load the map, build the scene, wire the UI, run the loop.
 
 import { api, $, h } from "./common.js";
 import { MapData } from "./map/mapdata.js";
 import { Route } from "./map/route.js";
 import { World } from "./sim/world.js";
+import { actorTime } from "./render/actor-motion.js";
 import { SceneView } from "./render/scene.js";
-import { mountFeatureViews } from "./render/feature-views.js";
-import { announceFeatureNotices, featureEventBadge, featureRouteOptions } from "./sim/features/index.js";
-import { buildRoads, buildScrambleMarkings } from "./render/roads.js";
+import { mountActorViews, mountFeatureViews, mountTransitScenery, replayActorPose } from "./render/feature-views.js";
+import {
+  announceFeatureNotices,
+  featureEventBadge,
+  featureNeedsDay,
+  featureNeedsWeekday,
+  featureRouteOptions,
+} from "./sim/features/index.js";
+import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
-import { createEmergencyMesh, syncEmergency } from "./render/emergency.js";
-import { buildBusStops, createBusMesh, syncBus } from "./render/bus.js";
 import { busYield, isBus } from "./sim/bus.js";
-import { createSchoolBusMesh, syncSchoolBus } from "./render/school-bus.js";
-import { buildTracks, createStreetcarMesh, syncStreetcar } from "./render/streetcar.js";
-import { buildRail, createTrainMesh, syncTrain } from "./render/rail.js";
-import { crossingNotice, isTrain } from "./sim/rail.js";
+import { crossingNotice } from "./sim/rail.js";
 import { boxNotice } from "./sim/junction-box.js";
 import {
   IN_LANE_M as STREETCAR_IN_LANE_M,
   SIDE_M as STREETCAR_SIDE_M,
   doorsOpen,
-  isStreetcar,
   streetcarRelation,
 } from "./sim/streetcar.js";
-import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
-import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
-import { createLaneClosureMesh, syncLaneClosure } from "./render/lane-closure.js";
-import { laneClosureNotice } from "./sim/lane-closure.js";
-import { createVanMesh, syncVan } from "./render/delivery-van.js";
-import { isPlow, plowNotice } from "./sim/snow-plow.js";
-import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
 import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
 import { hazardNotice } from "./sim/hidden-hazards.js";
 import { trafficNotice } from "./sim/hidden-traffic.js";
-import { cyclistNotice } from "./sim/cyclist-pass.js";
-import { isTruck } from "./sim/collection-truck.js";
-import { createTruckMesh, syncTruck } from "./render/collection-truck.js";
-import { buildBusLanes } from "./render/bus-lanes.js";
-import { syncReverseLamps } from "./render/driveway-reversers.js";
-import { potholeJolt } from "./render/potholes.js";
-import { tailgaterFlash } from "./sim/tailgaters.js";
-import { syncTailgaterFlash } from "./render/tailgaters.js";
-import { rideOver } from "./render/traffic-calming.js";
-import { addGuardSign, syncGuardSign } from "./render/crossing-guard.js";
-import { SIDE_M as SCHOOL_SIDE_M, isSchoolBus, redsOn, schoolBusRelation } from "./sim/school-bus.js";
+import { SIDE_M as SCHOOL_SIDE_M, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
-import { isEmergency, isEmergencyVehicle, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
-import {
-  createCarMesh,
-  syncCar,
-  buildParkedCars,
-  createBikeMesh,
-  syncBike,
-  addHeadlights,
-  syncCarLights,
-  hideParkedCar,
-  restoreParkedCar,
-  createDoorMesh,
-  syncDoor,
-} from "./render/cars.js";
-import { createPersonMesh, syncPerson } from "./render/people.js";
+import { isEmergency, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
+import { addHeadlights, createCarMesh, syncCarLights } from "./render/cars.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
 import { Hud } from "./ui/hud.js";
@@ -106,6 +75,9 @@ import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-mod
 import { OrbitControls } from "./ui/orbit-controls.js";
 import { bindMapPicker } from "./ui/map-picker.js";
 import { preference } from "./ui/preferences.js";
+import { describeClock } from "./ui/readouts.js";
+import { readWatchReplay } from "./ui/replay-link.js";
+import { RouteRequest } from "./ui/route-request.js";
 import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
 import { practiceEligible, savePractice } from "./lab/practice.js";
@@ -126,37 +98,58 @@ const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
 
 export async function boot() {
-  loadingText.textContent = "Loading map…";
+  loadingText.textContent = "Checking simulator status…";
   let simulationError = null;
+  let graphicsLost = false;
   const params = new URLSearchParams(location.search);
   const challenge = challengeById(params.get("challenge"));
   if (params.has("challenge") && !challenge)
     throw new Error("Unknown challenge. Open the drive lab to choose an available challenge.");
   if (challenge) for (const [key, value] of Object.entries(challengeConfig(challenge))) params.set(key, String(value));
-  const replay = readReplay();
+  const replay = challenge ? null : readWatchReplay(params);
   const garage = vehicleOptions(replay ? new URLSearchParams() : params);
   const mapQuery = challenge?.map || params.get("bbox") || params.get("map") || replay?.bbox?.join(",") || "";
   const query = mapQuery ? `?bbox=${encodeURIComponent(mapQuery)}` : "";
   const status = await api(`/api/status${query}`);
+  if (!Array.isArray(status?.map?.bbox)) throw new Error("The simulator returned incomplete map settings.");
+  loadingText.textContent = "Loading streets and traffic controls…";
   // The three pillars: Rules, decision models (Jev plus decision:<name>) and LLMs (llm:<name>).
   registerDecisionAgents(status.decision, { demo: !!status.demo });
   registerLlmAgents(status.llm);
   const options = worldOptions(params, status.npcs);
   const pack = await api(`/api/map${query}`);
+  if (!Array.isArray(pack?.edges) || !pack.edges.length) throw new Error("The map contains no drivable streets.");
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
   const map = new MapData(pack);
   const hud = new Hud();
-  $("#current-city").textContent = status.map.synthetic ? "Practice grid" : status.map.label;
-  let savedQuality;
-  try {
-    savedQuality = localStorage.getItem("jev-fsd-quality");
-  } catch {
-    /* preferences are optional */
-  }
-  const quality = params.get("quality") || savedQuality || "high";
+  $("#current-city").textContent = pack.synthetic ? "Practice grid" : status.map.label;
+  const qualitySetting = preference("quality", "high", undefined, {
+    legacy: true,
+    valid: (value) => [...hud.el.quality.options].some((o) => o.value === value),
+  });
+  const requestedQuality = params.get("quality");
+  const quality = [...hud.el.quality.options].some((o) => o.value === requestedQuality)
+    ? requestedQuality
+    : qualitySetting.read();
   let hour = replay?.hour ?? parseHour(params.get("time"));
   const clock = new WorldClock(hour, options.clockRate, challenge ? 0 : Number(params.get("weekday") || 0));
-  const view = new SceneView($("#view"), map.extent, { quality });
+  loadingText.textContent = "Starting 3D graphics…";
+  const canvas = $("#view");
+  let view;
+  try {
+    view = new SceneView(canvas, map.extent, { quality });
+  } catch (error) {
+    throw new Error("3D graphics could not start. Check that WebGL is enabled in your browser.", { cause: error });
+  }
+  loadingText.textContent = "Building the neighbourhood…";
+  const graphicsNotice = h(
+    "div",
+    { class: "simulation-error", role: "alert", hidden: true },
+    h("strong", {}, "3D graphics disconnected"),
+    h("p", {}, "The drive is paused. Reload the page to reconnect to the graphics device."),
+    h("button", { class: "chip-button", onclick: () => location.reload() }, "Reload graphics"),
+  );
+  document.body.append(graphicsNotice);
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
   view.scene.add(roads.group);
@@ -166,9 +159,7 @@ export async function boot() {
   const buildings = buildBuildings(map, { houseColors: cityStyle?.houses });
   view.scene.add(buildings);
   view.addScenery(buildTrees(map));
-  view.addScenery(buildBusStops(map));
-  view.addScenery(buildTracks(map));
-  view.addScenery(buildRail(map));
+  mountTransitScenery(view, map);
   view.scene.add(buildSurroundings(map));
   view.scene.add(buildCityIdentity(map, status.map.id));
   view.backdrop.visible = inVancouver(pack.origin); // the North Shore mountains
@@ -252,129 +243,26 @@ export async function boot() {
     fleet = new NpcFleet(world, { count: options.traffic, seed: options.seed + 6, ...free.fleet });
     autopilot = new Autopilot(world, callbacks);
   }
-  if (world.busLanes) view.scene.add(buildBusLanes(map));
   const featureViews = mountFeatureViews(view, world);
-  // and the diagonal crosswalks of scramble crossings, where the world runs them (sim/signals.js)
-  if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
-  // (those stopped at the roadside with their lights flashing get a mesh each, below, and so does a
-  // work zone's closed stretch)
-  view.addScenery(
-    buildParkedCars(world.parked.list.filter((c) => !c.roadside && !c.workzone && !c.closure && !c.doubleParked)),
-  );
-  const originalParked = world.parked.list.slice();
-  world.parked.added = world.parked.added.filter((c) => c.roadside || c.workzone || c.closure || c.doubleParked);
-  // (a mesh per person, by id: children get off school buses and go home)
-  const pedMeshes = new Map();
-  const pedMesh = (p) => {
-    if (!pedMeshes.has(p.id)) {
-      const m = createPersonMesh(p.look, { child: !!p.child, worker: !!p.worker });
-      if (p.crossingGuard) addGuardSign(m);
-      view.scene.add(m);
-      pedMeshes.set(p.id, m);
-    }
-    return pedMeshes.get(p.id);
-  };
-  world.crowd.list.forEach(pedMesh);
-  const npcMeshes = new Map();
-  const parkedMeshes = new Map();
-  const doorMeshes = new Map();
-  const previousCars = new Map(),
-    previousPeople = new Map(),
-    previousEgo = {};
-  // traffic changes as parked cars pull out and far-off cars leave: keep a mesh per vehicle
-  const syncFleetMeshes = () => {
-    const ids = new Set();
-    // (contraflow cyclists too: sim/contraflow.js)
-    // (and cars backing out of driveways: sim/driveway-reversers.js)
-    for (const n of [...fleet.vehicles, ...world.contraflow.riders, ...world.driveways.cars]) {
-      ids.add(n.id);
-      if (npcMeshes.has(n.id)) continue;
-      const m =
-        n.kind === "bike"
-          ? createBikeMesh(n.color, n.id)
-          : isEmergencyVehicle(n)
-            ? createEmergencyMesh(n.kind, n.id)
-            : isBus(n)
-              ? createBusMesh(n.id, `${n.ref || ""} ${n.headsign || ""}`.trim())
-              : isStreetcar(n)
-                ? createStreetcarMesh(n.id, n.headsign || n.ref || "")
-                : isTrain(n)
-                  ? createTrainMesh(n.id)
-                  : isSchoolBus(n)
-                    ? createSchoolBusMesh(n.id)
-                    : isPlow(n)
-                      ? createPlowMesh(n)
-                      : isTruck(n)
-                        ? createTruckMesh(n)
-                        : n.kind === "delivery_van"
-                          ? createVanMesh(n)
-                          : createCarMesh(n.color, n.id, n.style ?? null);
-      view.scene.add(m);
-      npcMeshes.set(n.id, m);
-    }
-    for (const [id, m] of npcMeshes)
-      if (!ids.has(id)) {
-        view.scene.remove(m);
-        npcMeshes.delete(id);
-        previousCars.delete(id);
-      }
-    for (const car of world.parked.added.splice(0)) {
-      const zone = car.workzone ? world.workZones.zones.find((z) => z.closure === car) : null;
-      const closure = car.closure ? world.laneClosures.zones.find((z) => z.closure === car) : null;
-      const m = car.roadside
-        ? createRoadsideMesh(car)
-        : zone
-          ? createWorkZoneMesh(zone, map)
-          : closure
-            ? createLaneClosureMesh(closure, map)
-            : car.doubleParked
-              ? createVanMesh(car)
-              : createCarMesh(car.color, car.id, car.style ?? null);
-      if (zone) syncWorkZone(m, zone);
-      else if (closure) syncLaneClosure(m, closure);
-      else (car.roadside ? syncRoadside : car.doubleParked ? syncVan : syncCar)(m, car);
-      view.scene.add(m);
-      parkedMeshes.set(car.id, m);
-    }
-    for (const car of world.parked.removed.splice(0)) {
-      hideParkedCar(car);
-      if (parkedMeshes.has(car.id)) {
-        view.scene.remove(parkedMeshes.get(car.id));
-        parkedMeshes.delete(car.id);
-      }
-    }
-    const doors = new Set();
-    for (const door of world.parked.activeDoors) {
-      doors.add(door.id);
-      if (!doorMeshes.has(door.id)) {
-        const m = createDoorMesh(door.owner);
-        view.scene.add(m);
-        doorMeshes.set(door.id, m);
-      }
-      syncDoor(doorMeshes.get(door.id), door);
-    }
-    for (const [id, m] of doorMeshes)
-      if (!doors.has(id)) {
-        view.scene.remove(m);
-        m.traverse((o) => o.geometry?.dispose());
-        doorMeshes.delete(id);
-      }
-  };
-  syncFleetMeshes();
+  const actors = mountActorViews(view, world, fleet);
+  const previousEgo = {};
+  loadingText.textContent = "Preparing the drive…";
   world._road = world.roadInfo();
   if (!agentAvailable(autopilot.brainName)) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
+  overlays.showCandidates = panel.candidateToggle.checked;
   panel.onShowCandidates = (on) => {
-    overlays.showCandidates = on;
-    if (!on) overlays.setCandidates(null);
+    overlays.showCandidates = on || perception.group.visible;
+    const decision = autopilot.lastDecision;
+    overlays.setCandidates(overlays.showCandidates ? decision?.candidates : null, decision?.chosenId);
   };
   const weatherView = new WeatherView(view);
   const applySky = (skyHour = hour, skyWeather = world.weather, preview = false) => {
     // (a sun glare challenge's clock has its date and time zone, and the sky draws that day's sun:
     // sim/sun-glare.js)
     const sunDay =
-      world.sunGlare.enabled && world.clock?.day !== undefined
+      featureNeedsDay(world) && world.clock?.day !== undefined
         ? { day: world.clock.day, utcOffset: world.clock.utc_offset ?? pack.origin.lon / 15 }
         : {};
     const a = atmosphereFor(skyHour, skyWeather, {
@@ -394,7 +282,7 @@ export async function boot() {
   // (and, with sun glare on, so does the sun: a challenge's date and time zone stay; a free drive has the
   // sky's sun, at the city's offset: sim/sun-glare.js)
   const sunClock = () =>
-    !world.sunGlare.enabled
+    !featureNeedsDay(world)
       ? {}
       : world.clock?.day !== undefined
         ? {
@@ -408,7 +296,7 @@ export async function boot() {
     if (!replay)
       world.setClock({
         ...mapClock(hour, map),
-        ...(world.restrictions || world.busLanes || world.redTurnSigns ? { weekday: clock.weekday } : {}),
+        ...(featureNeedsWeekday(world) ? { weekday: clock.weekday } : {}),
         ...sunClock(),
       });
   }
@@ -418,12 +306,12 @@ export async function boot() {
     next.searchParams.set("weather", world.weather);
     next.searchParams.set("time", formatClock(hour));
     next.searchParams.set("clock", String(clock.rate));
-    history.replaceState(null, "", next);
+    history.replaceState(history.state, "", next);
   }
   weatherView.apply(world.weather);
   applySky();
   hud.setWeather(world.weather);
-  hud.setTime(nearestPreset(hour));
+  hud.setTime(describeClock(hour, TIME_PRESETS));
   hud.onWeatherChange((name) => {
     world.weather = setWeather(name).name;
     weatherView.apply(world.weather);
@@ -437,7 +325,7 @@ export async function boot() {
     clock.setHour(parseHour(value), world.t);
     hour = clock.hour;
     applySky();
-    hud.setTime(nearestPreset(hour));
+    hud.setTime(describeClock(hour, TIME_PRESETS));
     autopilot.bumpEpoch();
     rememberConditions();
   }
@@ -505,10 +393,12 @@ export async function boot() {
   hud.onQualityChange((name) => {
     view.setQuality(name);
     hud.setQuality(view.quality);
-    try {
-      localStorage.setItem("jev-fsd-quality", view.quality);
-    } catch {
-      /* preferences are optional */
+    const saved = qualitySetting.write(view.quality);
+    const next = new URL(location.href);
+    if (!saved || next.searchParams.has("quality")) {
+      if (saved) next.searchParams.delete("quality");
+      else next.searchParams.set("quality", view.quality);
+      history.replaceState(history.state, "", next);
     }
     hud.badge(`graphics: ${view.quality}`, "", 800);
   });
@@ -524,7 +414,7 @@ export async function boot() {
   $("#feature-switches").hidden = Boolean(challenge || replay);
   const showMapNote = () =>
     hud.setMapNote(
-      status.map.synthetic
+      pack.synthetic
         ? `Synthetic grid (map fetch failed: ${status.map.error})`
         : `© OpenStreetMap contributors (ODbL) · ${pack.edges.length} roads · ${pack.intersections.length} signals · ${pack.stops.length} stops`,
       agentAvailable("jev") ? "" : "no TypeSafe key, Jev unavailable",
@@ -532,7 +422,7 @@ export async function boot() {
   showMapNote();
 
   function toggleAutopilot() {
-    if (simulationError || photo?.active) return;
+    if (simulationError || graphicsLost || photo?.active) return;
     if (lab?.reviewing) {
       lab.branch("manual");
       return;
@@ -549,14 +439,12 @@ export async function boot() {
   hud.onAutopilotClick(toggleAutopilot);
   // The Decision and LLM buttons each drive with the last model chosen in their pillar (Decision
   // defaults to Jev); their ▾ menus pick another or open the Connect a model dialog.
-  const remembered = { decision: null, llm: null };
+  const modelPreference = {
+    decision: preference("decision", "", undefined, { legacy: true }),
+    llm: preference("llm", "", undefined, { legacy: true }),
+  };
+  const remembered = { decision: modelPreference.decision.read(), llm: modelPreference.llm.read() };
   let pausedBeforeSetup = false;
-  for (const pillar of Object.keys(remembered))
-    try {
-      remembered[pillar] = localStorage.getItem(`jev-fsd-${pillar}`);
-    } catch {
-      /* preferences are optional */
-    }
   const pillarDefault = (pillar) => {
     const current = pillarOf(autopilot.brainName) === pillar ? autopilot.brainName : remembered[pillar];
     return pillar === "decision" ? defaultDecisionId(current) : defaultLlmId(current);
@@ -615,7 +503,7 @@ export async function boot() {
       if (on) {
         pausedBeforeSetup = world.paused;
         world.paused = true;
-        input.keys.clear();
+        input.clear();
       } else world.paused = pausedBeforeSetup;
     },
   });
@@ -644,7 +532,7 @@ export async function boot() {
         return;
       }
     }
-    if (!autopilot.brains[name]) {
+    if (!Object.hasOwn(autopilot.brains, name) || !autopilot.brains[name]) {
       hud.badge("Unknown agent. Choose a driver in Settings.", "safety", 1500);
       return;
     }
@@ -661,11 +549,7 @@ export async function boot() {
     const pillar = pillarOf(name);
     if (pillar in remembered) {
       remembered[pillar] = name;
-      try {
-        localStorage.setItem(`jev-fsd-${pillar}`, name);
-      } catch {
-        /* preferences are optional */
-      }
+      modelPreference[pillar].write(name);
     }
     showPillars();
     if (name === autopilot.brainName) return;
@@ -678,7 +562,7 @@ export async function boot() {
   hud.onBrainChange(selectBrain);
   const audio = new DriveAudio($("#drive-sound"));
   const volume = $("#drive-volume");
-  const volumePreference = preference("volume", 100);
+  const volumePreference = preference("volume", 100, undefined, { valid: (v) => v >= 0 && v <= 100 });
   volume.value = String(volumePreference.read());
   const applyVolume = () => {
     audio.setVolume(Number(volume.value) / 100);
@@ -736,12 +620,27 @@ export async function boot() {
     },
   });
   const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const motionPreference = preference("camera-motion", "");
+  const motionPreference = preference("camera-motion", "", undefined, { valid: (v) => ["", "on", "off"].includes(v) });
+  const resetMotion = h(
+    "button",
+    {
+      type: "button",
+      class: "chip-button",
+      onclick: () => {
+        motionOverride = "";
+        motionPreference.reset();
+        applyMotion();
+      },
+    },
+    "Use system camera motion",
+  );
   const cameraMotion = $("#camera-motion");
+  cameraMotion.closest("label").after(resetMotion);
   let motionOverride = motionPreference.read();
   const applyMotion = () => {
     cameraMotion.checked = motionOverride ? motionOverride === "on" : !motionQuery.matches;
     view.cameraMotion = cameraMotion.checked;
+    resetMotion.hidden = !motionOverride;
   };
   applyMotion();
   motionQuery.addEventListener("change", applyMotion);
@@ -764,7 +663,7 @@ export async function boot() {
   let photoHour, photoWeather;
   const photo = new PhotoMode({
     view,
-    place: status.map.synthetic ? "practice grid" : status.map.label,
+    place: pack.synthetic ? "practice grid" : status.map.label,
     getHour: () => hour,
     setHour: (value) => {
       photoHour = parseHour(value);
@@ -778,6 +677,7 @@ export async function boot() {
       applySky(photoHour, photoWeather, true);
     },
     onEnter: () => {
+      routeRequests.cancel();
       photoHour = hour;
       photoWeather = world.weather;
       pausedBeforePhoto = world.paused;
@@ -797,7 +697,7 @@ export async function boot() {
   $("#photo-mode").addEventListener("click", () => photo.enter());
   let manualSignal = null;
   function togglePause() {
-    if (simulationError || photo?.active) return; // photo mode holds the world still until it closes
+    if (simulationError || graphicsLost || photo?.active) return; // photo mode holds the world still until it closes
     if (lab?.reviewing) {
       lab.togglePlay();
       return;
@@ -805,14 +705,20 @@ export async function boot() {
     world.paused = !world.paused;
     hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700);
   }
-  $("#pause-world").addEventListener("click", togglePause);
+  const pauseButton = $("#pause-world");
+  pauseButton.addEventListener("click", togglePause);
+  const conditionsReadout = $("#world-conditions");
+  const wipers = $("#wipers");
+  const leftIndicator = $("#left-indicator");
+  const rightIndicator = $("#right-indicator");
   function signal(side) {
     if (autopilot.enabled) return;
     world.ego.signal = world.ego.signal === side ? null : side;
     manualSignal = world.ego.signal ? { t: world.t, heading: world.ego.psi } : null;
   }
+  const shortcutSetting = $("#letter-shortcuts");
   const input = new Input({
-    shortcutsEnabled: () => $("#letter-shortcuts").checked,
+    shortcutsEnabled: () => shortcutSetting.checked,
     interceptKey: (key, repeat) => {
       if (photo.active) {
         if ([" ", "h"].includes(key)) {
@@ -862,12 +768,17 @@ export async function boot() {
       else hud.toggleSettings(false);
     },
   });
+  shortcutSetting.addEventListener("change", () => {
+    input.clearKeys();
+    input.refreshShortcutHints();
+  });
+  input.refreshShortcutHints();
   // A gamepad and, on touch screens, the on-screen controls drive through the same input (ui/gamepad.js,
   // ui/touch.js); they change nothing in the simulation.
   input.addSource(
     new GamepadInput({
       actions: input.actions,
-      blocked: () => document.hidden || photo.active || !!document.querySelector("dialog[open]"),
+      blocked: () => input.isBlocked() || photo.active,
       onConnect: (pad) =>
         hud.badge(
           `GAMEPAD CONNECTED · ${String(pad.id || "pad")
@@ -883,14 +794,15 @@ export async function boot() {
   let touch = null;
   const coarsePointer = window.matchMedia?.("(pointer: coarse)");
   const touchSetting = $("#touch-setting");
-  const touchPreference = preference("touch", "auto");
+  const touchPreference = preference("touch", "auto", undefined, {
+    valid: (v) => ["auto", "show", "hide"].includes(v),
+  });
   const touchOverride = params.get("touch");
   touchSetting.value = ["1", "true"].includes(touchOverride)
     ? "show"
     : ["0", "false"].includes(touchOverride)
       ? "hide"
       : touchPreference.read();
-  if (!touchSetting.value) touchSetting.value = "auto";
   touchSetting.addEventListener("change", () => {
     touchPreference.write(touchSetting.value);
     if (new URLSearchParams(location.search).has("touch")) {
@@ -902,8 +814,15 @@ export async function boot() {
   });
   const showTouch = () => {
     const on = touchSetting.value === "auto" ? touchWanted("", coarsePointer?.matches) : touchSetting.value === "show";
-    if (on && !touch) touch = input.addSource(new TouchControls({ actions: input.actions }));
+    if (on && !touch) {
+      touch = input.addSource(new TouchControls({ actions: input.actions }));
+      input.refreshShortcutHints(touch.el);
+    }
     if (touch) {
+      if (!on && touch.el.contains(document.activeElement)) {
+        const focusTarget = touchSetting.getClientRects().length ? touchSetting : $("#settings-toggle");
+        focusTarget.focus({ preventScroll: true });
+      }
       touch.el.hidden = !on;
       if (!on) touch.release();
     }
@@ -1039,7 +958,7 @@ export async function boot() {
 
   let pausedBeforeExplorer = false;
   const explorer = new Explorer({
-    map: status.map,
+    map: { ...status.map, synthetic: pack.synthetic },
     getStart: () => ({ x: world.ego.x, y: world.ego.y, heading: world.ego.psi }),
     onOpen: () => {
       if (lab?.reviewing) lab.live();
@@ -1050,11 +969,13 @@ export async function boot() {
       world.paused = pausedBeforeExplorer;
     },
     onDrive: async (d) => {
-      try {
-        await applyRoute(d.route, d.destination, d.title);
-      } catch (error) {
-        hud.badge(`Could not start the suggested drive: ${error.message}`, "safety", 2500);
-      }
+      const installed = await routeRequests.choose(d.destination, {
+        route: d.route,
+        title: d.title,
+        check: Object.keys(featureRouteOptions(world)).length > 0,
+      });
+      if (!installed && !routeStatus.hidden)
+        hud.badge(`Could not start the suggested drive. ${routeStatus.textContent}`, "safety", 2500);
     },
     onMap: (id) => {
       if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("map changed")));
@@ -1074,20 +995,33 @@ export async function boot() {
     },
   });
 
-  // Apply active routing rules to routes from Explorer and scenic drives. The latest choice wins.
-  let routeGeneration = 0;
-  let routeRequest = null;
   const routeStatus = $("#route-status");
-  function showRouteStatus(message = "") {
-    routeStatus.hidden = !message;
-    routeStatus.textContent = message;
-    $("#minimap").setAttribute("aria-busy", String(message === "Finding route…"));
-  }
-  function cancelRouteRequest() {
-    routeRequest?.abort();
-    routeRequest = null;
-    showRouteStatus();
-  }
+  const mapCanvas = $("#minimap");
+  const routeRequests = new RouteRequest({
+    request: api,
+    payload: (point) => ({
+      bbox: map.routingBbox.join(","),
+      ...(pack.synthetic ? { synthetic: true } : {}),
+      from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+      to: { x: point[0], y: point[1] },
+      k: 1,
+      ...featureRouteOptions(world),
+    }),
+    install: installRoute,
+    show: (message, busy = false) => {
+      routeStatus.hidden = !message;
+      routeStatus.textContent = message;
+      mapCanvas.setAttribute("aria-busy", String(busy));
+    },
+    canInstall: () => !simulationError && !graphicsLost && !lab?.reviewing && !photo.active,
+  });
+  canvas.addEventListener("webglcontextlost", () => {
+    graphicsLost = true;
+    world.paused = true;
+    input.clear();
+    routeRequests.cancel();
+    graphicsNotice.hidden = false;
+  });
   function replaceDriveRoute(route, destination) {
     autopilot.parker.clear(world);
     world.route = route;
@@ -1106,8 +1040,7 @@ export async function boot() {
 
   function clearDestination() {
     if (simulationError || lab?.reviewing) return;
-    routeGeneration++;
-    cancelRouteRequest();
+    routeRequests.cancel();
     replaceDriveRoute(null, null);
     autopilot.setEnabled(false);
     hud.setAutopilot(false);
@@ -1120,33 +1053,13 @@ export async function boot() {
     if (drive) recorder.record({ world, fleet, autopilot, drive, clock }, true);
     hud.badge("Route cleared", "", 1000);
   }
-  async function applyRoute(data, pt, title, checked = false) {
-    if (simulationError) return false;
-    const generation = checked ? routeGeneration : ++routeGeneration;
-    if (!checked) cancelRouteRequest();
-    const routeOptions = featureRouteOptions(world);
-    if (Object.keys(routeOptions).length && !checked) {
-      const res = await api("/api/route", {
-        bbox: status.map.bbox.join(","),
-        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
-        to: { x: pt[0], y: pt[1] },
-        k: 1,
-        ...routeOptions,
-      });
-      if (generation !== routeGeneration || simulationError) return false;
-      if (!res.routes.length) {
-        hud.badge("No legal route to this destination", "safety", 2200);
-        return false;
-      }
-      data = res.routes[0];
-    }
-
+  function installRoute(data, pt, title) {
+    const route = new Route(data, map, world.ego.spec);
     if (challenge) challengeModified = true;
-    replaceDriveRoute(new Route(data, map, world.ego.spec), pt);
+    replaceDriveRoute(route, pt);
     hud.badge(`route: ${world.route.summary}`, "", 2200);
     if (!autopilot.enabled) toggleAutopilot();
     startDrive(title || `Drive to ${map.nearestLane(...pt)?.lane.edgeRef.name || "your destination"}`, world.route);
-    return true;
   }
 
   let pausedBeforeLab = false;
@@ -1160,21 +1073,12 @@ export async function boot() {
     },
   };
   function restoreFrame(index) {
+    routeRequests.cancel();
     recorder.restore(index, replayTarget);
-    input.keys.clear();
+    input.clearKeys();
     arrivalPending = false;
-    previousCars.clear();
-    previousPeople.clear();
     capturePose(world.ego, previousEgo);
-    for (const car of originalParked) hideParkedCar(car);
-    for (const car of world.parked.list) restoreParkedCar(car);
-    world.parked.added = world.parked.list.filter((c) => !c.instances && !parkedMeshes.has(c.id));
-    for (const [id, mesh] of parkedMeshes) mesh.visible = world.parked.list.some((c) => c.id === id);
-    for (const mesh of doorMeshes.values()) {
-      view.scene.remove(mesh);
-      mesh.traverse((o) => o.geometry?.dispose());
-    }
-    doorMeshes.clear();
+    actors.restore(egoMesh, !lab.playing);
     world._road = world.roadInfo();
     panel.set(autopilot.lastDecision);
     hud.setBrain(autopilot.brainName);
@@ -1187,9 +1091,11 @@ export async function boot() {
     weatherView.apply(world.weather);
     applySky();
     hud.setWeather(world.weather);
+    hud.setTime(describeClock(hour, TIME_PRESETS));
+    $("#clock-rate").value = String(clock.rate);
     skyAt = world.t;
     acc = 0;
-    lastConditions = "";
+    lastWeather = null;
     manualSignal = world.ego.signal && !autopilot.enabled ? { t: world.t, heading: world.ego.psi } : null;
     driveReport.lastUpdate = -Infinity;
     driveReport.update(drive);
@@ -1204,25 +1110,43 @@ export async function boot() {
         if (lab?.reviewing) lab.live();
         pausedBeforeLab = world.paused;
         world.paused = true;
-        input.keys.clear();
+        input.clearKeys();
       } else world.paused = pausedBeforeLab;
     },
-    onScenic: async (driver) => {
-      const { drives } = await api("/api/drives", {
-        bbox: status.map.bbox.join(","),
-        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
-      });
-      if (!drives.length) throw new Error("Try another position or city in Explore cities.");
-      setHour("golden");
-      selectBrain("rules");
-      if (!(await applyRoute(drives[0].route, drives[0].destination, drives[0].title))) return;
-      if (driver === "manual") {
-        autopilot.setEnabled(false);
-        hud.setAutopilot(false);
-        drive.driver = "manual";
-      }
-      world.paused = false;
-    },
+    onScenic: (driver) =>
+      routeRequests.lookup(
+        async (signal) => {
+          const { drives } = await api(
+            "/api/drives",
+            {
+              bbox: map.routingBbox.join(","),
+              ...(pack.synthetic ? { synthetic: true } : {}),
+              from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+            },
+            { signal },
+          );
+          if (!drives.length) throw new Error("Try another position or city in Explore cities.");
+          return drives[0];
+        },
+        async (scenic) => {
+          setHour("golden");
+          selectBrain("rules");
+          if (
+            !(await routeRequests.choose(scenic.destination, {
+              route: scenic.route,
+              title: scenic.title,
+              check: Object.keys(featureRouteOptions(world)).length > 0,
+            }))
+          )
+            return;
+          if (driver === "manual") {
+            autopilot.setEnabled(false);
+            hud.setAutopilot(false);
+            drive.driver = "manual";
+          }
+          world.paused = false;
+        },
+      ),
     onSeek: restoreFrame,
     onLive: () => {
       restoreFrame(recorder.frames.length - 1);
@@ -1280,7 +1204,7 @@ export async function boot() {
     },
     onPerception: (on) => {
       perception.setEnabled(on);
-      overlays.showCandidates = on || $("#show-candidates").checked;
+      overlays.showCandidates = on || panel.candidateToggle.checked;
       overlays.setCandidates(autopilot.lastDecision?.candidates, autopilot.lastDecision?.chosenId);
     },
   });
@@ -1288,37 +1212,10 @@ export async function boot() {
   showTouch();
   coarsePointer?.addEventListener?.("change", showTouch);
 
-  async function setDestination(pt) {
+  function setDestination(pt) {
     if (simulationError) return;
     if (lab?.reviewing) lab.live();
-    const generation = ++routeGeneration; // The latest destination wins.
-    cancelRouteRequest();
-    const request = (routeRequest = new AbortController());
-    showRouteStatus("Finding route…");
-    try {
-      const res = await api(
-        "/api/route",
-        {
-          bbox: status.map.bbox.join(","),
-          from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
-          to: { x: pt[0], y: pt[1] },
-          k: 1,
-          ...featureRouteOptions(world),
-        },
-        { signal: request.signal },
-      );
-      if (generation !== routeGeneration) return;
-      if (!res.routes.length) {
-        showRouteStatus("No route here. Choose another street.");
-        return;
-      }
-      await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
-      if (generation === routeGeneration) showRouteStatus();
-    } catch (err) {
-      if (generation === routeGeneration) showRouteStatus(`Routing failed. ${err.message}`);
-    } finally {
-      if (routeRequest === request) routeRequest = null;
-    }
+    return routeRequests.choose(pt);
   }
 
   // Turn-by-turn guidance for manual drivers; the autopilot's own snapshot is used when it drives.
@@ -1349,12 +1246,12 @@ export async function boot() {
     });
   }
 
-  $("#loading").hidden = true;
-  $("#view").inert = false;
-  hud.show();
   if (challenge) {
-    const driver = params.get("drive") || "manual";
+    const requested = params.get("drive") || "manual";
+    const driver = requested === "manual" || agentAvailable(requested) ? requested : "manual";
     selectBrain(driver === "manual" ? "rules" : driver);
+    if (driver !== requested)
+      hud.badge("Requested driver unavailable. The challenge starts in manual mode.", "safety", 3000);
     autopilot.setEnabled(driver !== "manual");
     hud.setAutopilot(autopilot.enabled);
     overlays.setRoute(world.route);
@@ -1408,6 +1305,9 @@ export async function boot() {
     finishDrive,
     setTime: setHour,
   };
+  $("#loading").hidden = true;
+  canvas.inert = false;
+  hud.show();
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();
 
@@ -1425,20 +1325,15 @@ export async function boot() {
     announcedCrossing = null,
     announcedBox = null,
     announcedAdvance = null,
-    announcedClosure = null,
-    announcedNightFlash = null,
-    announcedPlow = null,
     announcedPark = null,
     announcedHazard = null,
-    announcedTraffic = null,
-    announcedCyclist = null,
-    announcedLeftRed = null;
-  let lastConditions = "",
-    skyAt = world.t;
+    announcedTraffic = null;
+  let lastWeather, lastClockLabel, lastSight;
+  let skyAt = world.t;
   function frame(now) {
     // Schedule before stepping: a failed simulation must not permanently stop rendering or controls.
     if (!manual) requestAnimationFrame(frame);
-    if (simulationError) world.paused = true;
+    if (simulationError || graphicsLost) world.paused = true;
     // A pulse queued while driving was suspended never reaches physics, even if this poll resumes it.
     if (simulationError || world.paused || photo.active) input.stepped();
     input.poll();
@@ -1460,11 +1355,7 @@ export async function boot() {
           if (driver !== drive.driver) drive.driver = "mixed";
         }
         capturePose(world.ego, previousEgo);
-        for (const car of fleet.vehicles) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
-        for (const bike of world.contraflow.riders)
-          previousCars.set(bike.id, capturePose(bike, previousCars.get(bike.id)));
-        for (const car of world.driveways.cars) previousCars.set(car.id, capturePose(car, previousCars.get(car.id)));
-        for (const p of world.crowd.list) previousPeople.set(p.id, capturePose(p, previousPeople.get(p.id)));
+        actors.capture();
         let road;
         try {
           road = stepWorld({ world, fleet, autopilot, input }, FIXED_DT, world.t * 1000);
@@ -1475,7 +1366,8 @@ export async function boot() {
           world.paused = true;
           autopilot.setEnabled(false);
           hud.setAutopilot(false);
-          input.keys.clear();
+          input.clear();
+          routeRequests.cancel();
           acc = 0;
           drive?.incident("simulation_error", simulationError);
           document.body.append(
@@ -1557,12 +1449,18 @@ export async function boot() {
       if (clock.rate) applySky();
       skyAt = world.t;
     }
-    const conditions = `${garage.vehicle.name} · ${formatClock(hour)} · ${world.weather[0].toUpperCase() + world.weather.slice(1)} · ${Math.round(world.visibility.range)} m sight`;
-    if (conditions !== lastConditions) {
-      $("#world-conditions").textContent = conditions;
-      lastConditions = conditions;
+    const clockLabel = formatClock(hour);
+    const sight = Math.round(world.visibility.range);
+    if (world.weather !== lastWeather || clockLabel !== lastClockLabel || sight !== lastSight) {
+      lastWeather = world.weather;
+      lastClockLabel = clockLabel;
+      lastSight = sight;
+      const conditions = `${garage.vehicle.name} · ${clockLabel} · ${world.weather[0].toUpperCase() + world.weather.slice(1)} · ${sight} m sight`;
+      conditionsReadout.textContent = conditions;
     }
-    const pauseButton = $("#pause-world");
+    touch?.setPressed("pause", world.paused);
+    touch?.setPressed("signalLeft", world.ego.signal === "left");
+    touch?.setPressed("signalRight", world.ego.signal === "right");
     if (pauseButton.getAttribute("aria-pressed") !== String(world.paused)) {
       pauseButton.setAttribute("aria-pressed", String(world.paused));
       pauseButton.textContent = world.paused ? "Resume" : "Pause";
@@ -1571,7 +1469,7 @@ export async function boot() {
     const replayNext = lab.reviewing ? recorder.frames[Number(lab.slider.value) + 1]?.state : null;
     const replayAlpha = lab.replayAlpha;
     const renderEgo = replayNext
-      ? interpolatePose(replayNext.world.ego, world.ego, replayAlpha)
+      ? replayActorPose(world.ego, replayNext.world.ego, replayAlpha)
       : Number.isFinite(previousEgo.x)
         ? interpolatePose(world.ego, previousEgo, alpha)
         : world.ego;
@@ -1595,7 +1493,7 @@ export async function boot() {
         world.t,
       );
     }
-    syncFleetMeshes();
+    actors.sync();
     if (manualSignal && !autopilot.enabled) {
       const turned =
         Math.abs(
@@ -1606,69 +1504,12 @@ export async function boot() {
         manualSignal = null;
       }
     }
-    const lightsOn = syncCarLights(lighting.night.value, world.weather !== "dry");
-    if (world.highBeams) renderEgo.highBeam = !!world.ego.highBeam;
+    const lightsOn = syncCarLights(lighting.night.value, weatherView.name !== "dry");
+    const actorDt = (world.paused || photo.active) && !lab.playing ? 0 : dt;
     beamIndicator.hidden = !world.highBeams || !world.ego.highBeam;
-    syncCar(egoMesh, renderEgo, dt, world.t, lightsOn);
-    // (riding over speed humps and the like: render/traffic-calming.js)
-    if (world.calming) rideOver(map, egoMesh, renderEgo);
-    // (and jolting over potholes: render/potholes.js)
-    if (world.potholes.enabled) potholeJolt(world, egoMesh, renderEgo, dt, world.calming);
+    actors.updateEgo(egoMesh, renderEgo, actorDt, lightsOn, actorTime(world.t, replayNext?.world.t, replayAlpha));
     featureViews.updateSignals();
-    for (const n of fleet.vehicles) {
-      const next = replayNext?.fleet.vehicles.find((v) => v.id === n.id),
-        pose = {
-          ...(next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha)),
-        };
-      if (world.highBeams) pose.highBeam = npcHighBeam(world, n);
-      (n.kind === "bike"
-        ? syncBike
-        : isEmergencyVehicle(n)
-          ? syncEmergency
-          : isBus(n)
-            ? syncBus
-            : isStreetcar(n)
-              ? syncStreetcar
-              : isTrain(n)
-                ? syncTrain
-                : isSchoolBus(n)
-                  ? syncSchoolBus
-                  : isPlow(n)
-                    ? syncPlow
-                    : isTruck(n)
-                      ? syncTruck
-                      : n.kind === "delivery_van"
-                        ? syncVan
-                        : syncCar)(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
-      if (world.calming && n.kind !== "bike" && !isTrain(n)) rideOver(map, npcMeshes.get(n.id), pose);
-      if (world.potholes.enabled && n.kind !== "bike" && !isTrain(n) && !isStreetcar(n))
-        potholeJolt(world, npcMeshes.get(n.id), pose, dt, world.calming);
-      // (a tailgater flashing its headlights: sim/tailgaters.js, render-only)
-      if (n.tailgate && world.tailgaters?.enabled) syncTailgaterFlash(npcMeshes.get(n.id), tailgaterFlash(world, n));
-      // (a car parallel parking: its reverse lamps lit while it backs in, as for driveway reversers: sim/parkers.js)
-      if (world.parkers?.enabled) syncReverseLamps(npcMeshes.get(n.id), n);
-    }
-    for (const n of world.contraflow.riders) {
-      const next = replayNext?.world.contraflow?.riders.find((v) => v.id === n.id),
-        pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
-      if (npcMeshes.has(n.id)) syncBike(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
-    }
-    for (const n of world.driveways.cars) {
-      const next = replayNext?.world.driveways?.cars.find((v) => v.id === n.id),
-        pose = next ? interpolatePose(next, n, replayAlpha) : interpolatePose(n, previousCars.get(n.id), alpha);
-      if (npcMeshes.has(n.id)) {
-        syncCar(npcMeshes.get(n.id), pose, dt, world.t, lightsOn);
-        syncReverseLamps(npcMeshes.get(n.id), n);
-      }
-    }
-    for (const v of world.roadside.vehicles) syncRoadside(parkedMeshes.get(v.id), v, dt, world.t, lightsOn);
-    // (a police officer's cruiser parked in a bay at the corner, its lights on: sim/traffic-officer.js)
-    for (const o of world.officers?.list || [])
-      if (o.cruiser?.parked) syncRoadside(parkedMeshes.get(o.cruiser.id), o.cruiser.vehicle, dt, world.t, lightsOn);
-    for (const z of world.workZones.zones) syncWorkZone(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
-    for (const z of world.laneClosures.zones) syncLaneClosure(parkedMeshes.get(z.closure.id), z, world.t, view.camera);
-    // (a garbage truck at a stop is in traffic, and drawn there: sim/collection-truck.js)
-    for (const d of world.doubleParked.vans) if (!d.truck) syncVan(parkedMeshes.get(d.van.id), d.van, dt, world.t);
+    actors.updateVehicles(actorDt, lightsOn, alpha, replayNext, replayAlpha);
     // an emergency vehicle calling on the car to give way: say so once, and sound its siren
     const evs = fleet.vehicles.filter(isEmergency);
     const call = evs.length ? nearestCall(world.ego, evs) : null;
@@ -1682,18 +1523,18 @@ export async function boot() {
         2500,
       );
     }
-    const nearestEv = evs.reduce(
-      (best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)),
-      Infinity,
-    );
+    if (!call) announcedEv = null;
+    const nearestEv = audio.enabled
+      ? evs.reduce((best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)), Infinity)
+      : Infinity;
     audio.siren(nearestEv, world.t, world.paused || document.hidden);
     // a bus ahead signalling to pull out from its stop, with the right of way: say so once
     const bus = fleet.buses?.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
     const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
     if (bus && busKey !== announcedBus) {
-      announcedBus = busKey;
       hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500);
     }
+    announcedBus = busKey;
     // a vehicle stopped at a crosswalk ahead in the next lane, that the car must not pass: say so once
     const cw = world.crowd.marked.find((c) => {
       const d = frontTo(c, world.ego);
@@ -1702,9 +1543,9 @@ export async function boot() {
     const stopped = cw && stoppedAt(world, cw, world.ego).find((n) => world.visibility.sees(world.ego, n));
     const cwKey = stopped ? `${cw.id}:${stopped.id}` : null;
     if (stopped && cwKey !== announcedCrosswalk) {
-      announcedCrosswalk = cwKey;
       hud.badge(`${isBus(stopped) ? "BUS" : "CAR"} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500);
     }
+    announcedCrosswalk = cwKey;
     // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
     const school = fleet.schoolBuses?.find((b) => {
       const r = redsOn(b) && schoolBusRelation(world.ego, b);
@@ -1718,9 +1559,9 @@ export async function boot() {
     });
     const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
     if (school && schoolKey !== announcedSchool) {
-      announcedSchool = schoolKey;
       hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500);
     }
+    announcedSchool = schoolKey;
     // a streetcar ahead with its doors open, that the car must stop behind: say so once
     const tram = fleet.streetcars?.find((c) => {
       const r = doorsOpen(c) && streetcarRelation(world.ego, c);
@@ -1735,9 +1576,9 @@ export async function boot() {
     });
     const tramKey = tram ? `${tram.id}:${tram.transit.departures}` : null;
     if (tram && tramKey !== announcedStreetcar) {
-      announcedStreetcar = tramKey;
       hud.badge("STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS", "safety", 2500);
     }
+    announcedStreetcar = tramKey;
     // a level crossing ahead to wait at, for a train coming or for room past the tracks: say so once,
     // and sound the gong of a train ringing nearby
     const crossing = crossingNotice(world);
@@ -1762,28 +1603,7 @@ export async function boot() {
     }
     if (!advance) announcedAdvance = null;
     announceFeatureNotices("beforeMerge", world, autopilot, featureViews, announcedFeatures, hud);
-    // a lane closed ahead: use both lanes to the merge point, then take turns (said again as the turn changes)
-    const closure = laneClosureNotice(world);
-    if (closure && closure.key !== announcedClosure) {
-      announcedClosure = closure.key;
-      hud.badge(closure.text, closure.stop ? "safety" : "", 2500);
-    }
-    if (!closure) announcedClosure = null;
-    // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
-    const nightNotice = nightFlashNotice(world);
-    if (nightNotice && nightNotice.key !== announcedNightFlash) {
-      announcedNightFlash = nightNotice.key;
-      hud.badge(nightNotice.text, "stop", 2500);
-    }
-    if (!nightNotice) announcedNightFlash = null;
     announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
-    // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
-    const plowLine = plowNotice(world);
-    if (plowLine && plowLine.key !== announcedPlow) {
-      announcedPlow = plowLine.key;
-      hud.badge(plowLine.text, plowLine.wait ? "safety" : "", 2500);
-    }
-    if (!plowLine) announcedPlow = null;
     // parking at the destination: the space, checking behind, reversing in, parked
     const parkLine = parkNotice(world);
     if (parkLine && parkLine.key !== announcedPark) {
@@ -1805,78 +1625,39 @@ export async function boot() {
       hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500);
     }
     if (!trafficLine) announcedTraffic = null;
-    // a cyclist riding in the lane ahead, on a street with one lane each way: stay behind, and why, or
-    // the way is clear to pass with the minimum passing distance (said again as that changes)
-    const cyclistLine = cyclistNotice(world);
-    if (cyclistLine && cyclistLine.key !== announcedCyclist) {
-      announcedCyclist = cyclistLine.key;
-      hud.badge(cyclistLine.text, cyclistLine.wait ? "safety" : "", 2500);
-    }
-    if (!cyclistLine) announcedCyclist = null;
+    announceFeatureNotices("afterTraffic", world, autopilot, featureViews, announcedFeatures, hud);
     // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
     announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud);
-    // a scramble crossing ahead: every light red while people cross every way; no right turn on red
-    const leftRed = autopilot.snap?.intersection?.left_on_red;
-    const leftRedKey = leftRed ? `${autopilot.snap.intersection.id}:${leftRed.stop_completed}:${leftRed.clear}` : null;
-    if (leftRedKey && leftRedKey !== announcedLeftRed)
-      hud.badge(
-        leftRed.go
-          ? "LEFT ON RED · CLEAR TO TURN"
-          : !leftRed.stop_completed
-            ? "LEFT ON RED · FULL STOP FIRST"
-            : "LEFT ON RED · YIELD TO PEDESTRIANS AND TRAFFIC",
-        "safety",
-        2500,
-      );
-    announcedLeftRed = leftRedKey;
+    announceFeatureNotices("afterTurnNotice", world, autopilot, featureViews, announcedFeatures, hud);
     announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
-    const ringing = (fleet.trains || [])
-      .filter((n) => n.rail.gong)
-      .map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
-    audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
+    if (audio.enabled) {
+      let ringing = Infinity;
+      for (const train of fleet.trains || [])
+        if (train.rail.gong) ringing = Math.min(ringing, Math.hypot(train.x - world.ego.x, train.y - world.ego.y));
+      audio.gong(ringing, world.t, world.paused || document.hidden);
+    }
     announceFeatureNotices("beforeZone", world, autopilot, featureViews, announcedFeatures, hud);
     // into a school or playground zone in effect: say so once
     const zone = world._road?.zone;
     if (zone && zone.id !== announcedZone)
       hud.badge(`${ZONE_NAMES[zone.kind].toUpperCase()} · ${Math.round(world._road.limit * 3.6)} KM/H`, "", 2500);
     announcedZone = zone?.id ?? null;
-    const here = new Set();
-    for (const p of world.crowd.list) {
-      here.add(p.id);
-      const next = replayNext?.world.crowd.list.find((v) => v.id === p.id);
-      syncPerson(
-        pedMesh(p),
-        next ? interpolatePose(next, p, replayAlpha) : interpolatePose(p, previousPeople.get(p.id), alpha),
-        view.camera,
-        world.weather === "rain",
-      );
-      if (p.crossingGuard) syncGuardSign(pedMesh(p), p);
-    }
-    for (const [id, m] of pedMeshes)
-      if (!here.has(id)) {
-        m.visible = false;
-        if (id.startsWith("kid_") || id.startsWith("rider_") || id.startsWith("stepout_") || id.startsWith("crew_")) {
-          view.scene.remove(m);
-          m.traverse((o) => o.geometry?.dispose());
-          pedMeshes.delete(id);
-          previousPeople.delete(id);
-        }
-      }
+    actors.updatePeople(alpha, replayNext, replayAlpha, weatherView.name);
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision, autopilot.executing));
     weatherView.update(dt);
     roads.streetLights.setOutage?.(!!world.streetLightsOut);
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
-    featureViews.update(fleet, pedMeshes, dt, lightsOn);
-    view.render(dt, photo.active);
-    cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
+    featureViews.update(fleet, actors.people, actorDt, lightsOn);
+    if (!graphicsLost) view.render(dt, photo.active);
+    cockpit.update(view.mode, world.weather, world.t, wipers.checked);
     audio.update(world.ego, world.weather, world.paused, view.mode === "hood");
     const blink = world.ego.signal && world.t % 0.8 < 0.45;
     if (blink && !indicatorLit && !world.paused) audio.tick();
     indicatorLit = blink;
-    $("#left-indicator").classList.toggle("active", !!blink && world.ego.signal === "left");
-    $("#right-indicator").classList.toggle("active", !!blink && world.ego.signal === "right");
+    leftIndicator.classList.toggle("active", !!blink && world.ego.signal === "left");
+    rightIndicator.classList.toggle("active", !!blink && world.ego.signal === "right");
     minimap.draw({
       ego: world.ego,
       npcs: world.contraflow.riders.length ? [...fleet.vehicles, ...world.contraflow.riders] : fleet.vehicles,
@@ -1915,28 +1696,6 @@ export async function boot() {
     }
   };
   requestAnimationFrame(frame);
-}
-
-function nearestPreset(hour) {
-  let best = "afternoon",
-    d = Infinity;
-  for (const [name, h] of Object.entries(TIME_PRESETS)) {
-    const x = Math.abs(h - hour);
-    if (x < d) {
-      d = x;
-      best = name;
-    }
-  }
-  return best;
-}
-
-function readReplay() {
-  if (!new URLSearchParams(location.search).has("replay")) return null;
-  try {
-    return JSON.parse(localStorage.getItem("jev-fsd-replay"));
-  } catch {
-    return null;
-  }
 }
 
 const beamIndicator = document.createElement("div");

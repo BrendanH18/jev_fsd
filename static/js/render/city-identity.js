@@ -40,17 +40,19 @@ export const CITY_STYLES = {
   },
 };
 
+const LOW_SKYLINES = new Set(["terraces", "roofs", "dome", "citadel"]);
+
 // Height of the i-th of 18 background blocks: low roofs for historic towns, mid-rise for the
 // prairie downtowns, towers for the big skylines.
 function blockHeight(skyline, i) {
-  if (["terraces", "roofs", "dome", "citadel"].includes(skyline)) return 15 + ((i * 13) % 25);
+  if (LOW_SKYLINES.has(skyline)) return 15 + ((i * 13) % 25);
   if (skyline === "prairie" || skyline === "bridges") return 18 + ((i * 23) % 55);
   return 30 + ((i * 31) % 100);
 }
 
 // Decorative city silhouettes outside the playable map. Stylized cues, not surveyed landmarks.
 export function buildCityIdentity(map, id) {
-  const profile = CITY_STYLES[id],
+  const profile = Object.hasOwn(CITY_STYLES, id) ? CITY_STYLES[id] : null,
     group = new THREE.Group();
   group.name = "stylized-city-silhouette";
   if (!profile?.skyline) return group;
@@ -125,6 +127,10 @@ export function buildCityIdentity(map, id) {
     const arch = new THREE.TorusGeometry(40, 2.5, 6, 18, Math.PI);
     mesh(new THREE.BoxGeometry(5 * 80 + 20, 3, 12), cx + 120, 22, z + 20, stone);
     for (let k = -2; k <= 2; k++) mesh(arch, cx + 120 + k * 80, -18, z + 20, stone);
+  }
+  for (const child of group.children) {
+    child.updateMatrix();
+    child.matrixAutoUpdate = false;
   }
   group.userData.decorative = true;
   return group;

@@ -28,9 +28,9 @@ export const challenge = {
   geese: true,
   street: "Clemow Avenue",
   description:
-    "Clemow Avenue in the Glebe runs between Central Park and Patterson's Creek Park, where Canada geese graze by the creek. A family of them, goslings and all, is about to walk across the street in front of you.",
+    "A family of Canada geese is headed from one park to another across Clemow Avenue. The goslings follow the adults across the roadway.",
   lesson:
-    "Geese cross slowly in single file and often stop in the road. Stop well short of them and wait until the last one is off the road; never drive through a gap between them.",
+    "Stop far enough back to give the flock room, including a goose that pauses in your lane. Watch for the last gosling to leave the road before moving.",
 };
 
 export const GS_START_M = 98,

@@ -200,12 +200,14 @@ export function buildBuildings(map, { houseColors = HOUSE_COLORS, blockColors = 
   const group = new THREE.Group();
   const chunks = new Map();
   const footprints = [];
+  const wallColors = houseColors?.length ? houseColors : HOUSE_COLORS;
+  const towerColors = blockColors?.length ? blockColors : BLOCK_COLORS;
   buildingShapes(map).forEach(({ pts, i, h, kind, r, pitched, cx, cy, boxes }) => {
     footprints.push(pts);
     const key = `${Math.floor(cx / CHUNK)},${Math.floor(cy / CHUNK)}`;
     if (!chunks.has(key)) chunks.set(key, new Chunk());
     const chunk = chunks.get(key);
-    const wallCol = color(kind === "house" ? houseColors : blockColors, i, 11);
+    const wallCol = color(kind === "house" ? wallColors : towerColors, i, 11);
     const builder = kind === "house" ? chunk.house : chunk.block;
     if (pitched) {
       const wallH = Math.max(2.8, h - Math.min(4.2, r.hw * 0.7));
@@ -243,37 +245,35 @@ export function buildBuildings(map, { houseColors = HOUSE_COLORS, blockColors = 
     }
   });
 
-  const mats = {
-    house: wallMaterial("house"),
-    block: wallMaterial("block"),
-    roof: snowable(
-      new THREE.MeshStandardMaterial({
-        map: shingleTexture(),
-        vertexColors: true,
-        roughness: 0.92,
-        side: THREE.DoubleSide,
-      }),
-      "roof",
-    ),
-    flat: snowable(
-      new THREE.MeshStandardMaterial({ map: flatRoofTexture(), vertexColors: true, roughness: 0.95 }),
-      "roof",
-    ),
-    detail: snowable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), "roof"),
-    hedge: snowable(
-      new THREE.MeshStandardMaterial({ map: grassTexture().clone(), vertexColors: true, roughness: 0.95 }),
-      "leaf",
-    ),
+  const makeMaterial = {
+    house: () => wallMaterial("house"),
+    block: () => wallMaterial("block"),
+    roof: () =>
+      snowable(
+        new THREE.MeshStandardMaterial({
+          map: shingleTexture(),
+          vertexColors: true,
+          roughness: 0.92,
+          side: THREE.DoubleSide,
+        }),
+        "roof",
+      ),
+    flat: () =>
+      snowable(new THREE.MeshStandardMaterial({ map: flatRoofTexture(), vertexColors: true, roughness: 0.95 }), "roof"),
+    detail: () => snowable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), "roof"),
+    hedge: () =>
+      snowable(new THREE.MeshStandardMaterial({ map: grassTexture(), vertexColors: true, roughness: 0.95 }), "leaf"),
   };
-  mats.hedge.map.repeat.set(1, 1);
-  mats.hedge.map.needsUpdate = true;
+  const mats = {};
   for (const chunk of chunks.values()) {
-    for (const name of ["house", "block", "roof", "flat", "detail", "hedge"]) {
+    for (const name of Object.keys(makeMaterial)) {
       const b = chunk[name];
       if (b.empty) continue;
+      mats[name] ??= makeMaterial[name]();
       const mesh = new THREE.Mesh(b.toGeometry(), mats[name]);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.matrixAutoUpdate = false;
       group.add(mesh);
     }
   }
@@ -285,9 +285,10 @@ export function buildBuildings(map, { houseColors = HOUSE_COLORS, blockColors = 
 export class FootprintIndex {
   constructor(polys, cell = 25) {
     this.polys = polys;
-    this.cell = cell;
+    this.cell = Number.isFinite(cell) && cell > 0 ? cell : 25;
     this.grid = new Map();
     polys.forEach((pts, i) => {
+      if (pts.length < 3 || pts.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) return;
       let x0 = Infinity,
         y0 = Infinity,
         x1 = -Infinity,
@@ -298,8 +299,8 @@ export class FootprintIndex {
         x1 = Math.max(x1, x);
         y1 = Math.max(y1, y);
       }
-      for (let gx = Math.floor(x0 / cell); gx <= Math.floor(x1 / cell); gx++)
-        for (let gy = Math.floor(y0 / cell); gy <= Math.floor(y1 / cell); gy++) {
+      for (let gx = Math.floor(x0 / this.cell); gx <= Math.floor(x1 / this.cell); gx++)
+        for (let gy = Math.floor(y0 / this.cell); gy <= Math.floor(y1 / this.cell); gy++) {
           const k = `${gx},${gy}`;
           if (!this.grid.has(k)) this.grid.set(k, []);
           this.grid.get(k).push(i);
@@ -308,15 +309,25 @@ export class FootprintIndex {
   }
 
   near(x, y, margin) {
-    const seen = new Set();
-    const r = Math.ceil(margin / this.cell);
-    const gx = Math.floor(x / this.cell),
-      gy = Math.floor(y / this.cell);
-    for (let i = gx - r; i <= gx + r; i++)
-      for (let j = gy - r; j <= gy + r; j++) {
-        for (const idx of this.grid.get(`${i},${j}`) || []) {
-          if (seen.has(idx)) continue;
-          seen.add(idx);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(margin) || margin < 0) return false;
+    const ix = Math.floor((x - margin) / this.cell),
+      iy = Math.floor((y - margin) / this.cell),
+      ax = Math.floor((x + margin) / this.cell),
+      ay = Math.floor((y + margin) / this.cell);
+    // A very wide query is cheaper to check against occupied cells than to span empty tiles.
+    const candidates = new Set();
+    if (![ix, iy, ax, ay].every(Number.isSafeInteger) || (ax - ix + 1) * (ay - iy + 1) > this.grid.size) {
+      for (const [key, indices] of this.grid) {
+        const [gx, gy] = key.split(",").map(Number);
+        if (ix <= gx && gx <= ax && iy <= gy && gy <= ay) for (const idx of indices) candidates.add(idx);
+      }
+      return [...candidates].some((idx) => insideOrNear(this.polys[idx], x, y, margin));
+    }
+    for (let i = ix; i <= ax; i++)
+      for (let j = iy; j <= ay; j++) {
+        for (const idx of this.grid.get(`${i},${j}`) ?? []) {
+          if (candidates.has(idx)) continue;
+          candidates.add(idx);
           if (insideOrNear(this.polys[idx], x, y, margin)) return true;
         }
       }
@@ -330,11 +341,12 @@ function insideOrNear(pts, x, y, margin) {
     const [xi, yi] = pts[i],
       [xj, yj] = pts[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    if (!(margin > 0)) continue;
     const dx = xj - xi,
       dy = yj - yi,
       l2 = dx * dx + dy * dy;
     const t = l2 ? Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / l2)) : 0;
-    if (Math.hypot(x - xi - dx * t, y - yi - dy * t) < margin) return true;
+    if ((x - xi - dx * t) ** 2 + (y - yi - dy * t) ** 2 < margin ** 2) return true;
   }
   return inside;
 }

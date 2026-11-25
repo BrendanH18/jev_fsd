@@ -105,16 +105,11 @@ export class DriveMetrics {
       collisions: v.collisions,
       at_fault: v.collisions_at_fault,
       red_lights: v.red_lights_run,
-      ...(world.amberLightsSeen ? { amber_lights_run: v.amber_lights_run || 0 } : {}),
+      ...featureMetrics(world, v, "afterRedLights"),
       stop_signs: v.stop_signs_run,
       failed_to_yield: v.failed_to_yield || 0,
-      // (only for a drive a snow plow worked in: sim/snow-plow.js)
-      ...(world.plowsSeen ? { plow_right_passes: v.plow_right_passes || 0 } : {}),
-      // (only for a drive a lane closure stood in: sim/lane-closure.js)
-      ...(world.closuresSeen ? { merge_cut_ins: v.merge_cut_ins || 0 } : {}),
-      // (only for a drive in which traffic passes cyclists: sim/cyclist-pass.js)
-      ...(world.passCyclists ? { close_passes: v.close_passes || 0 } : {}),
-      ...(world.busLanesSeen ? { bus_lane_driving: v.bus_lane_driving || 0 } : {}),
+      ...featureMetrics(world, v, "vehiclePassing"),
+      ...featureMetrics(world, v, "afterPassing"),
       ...featureMetrics(world, v, "headlights"),
       ...featureMetrics(world, v, "afterHeadlights"),
       ...featureMetrics(world, v, "pxo"),
@@ -173,14 +168,11 @@ export function failures(m) {
   else if (!m.arrived) f.push(m.deadlocks ? "stuck" : "timeout");
   if (m.collisions) f.push("collision");
   if (m.red_lights) f.push("red light");
-  if (m.amber_lights_run) f.push("failed to stop safely for amber");
+  f.push(...featureFailures(m, "afterRedLights"));
   if (m.stop_signs) f.push("stop sign");
   if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
-  if (m.plow_right_passes) f.push("passed plow on the right");
-  if (m.merge_cut_ins) f.push("merged out of turn");
-  if (m.close_passes) f.push("passed a cyclist too close");
-  if (m.bus_lane_driving > 1) f.push("drove in a reserved bus lane");
+  f.push(...featureFailures(m, "vehiclePassing"), ...featureFailures(m, "afterPassing"));
   f.push(...featureFailures(m, "headlights"));
   f.push(...featureFailures(m, "afterHeadlights"));
   f.push(...featureFailures(m, "turns"));
@@ -265,7 +257,7 @@ export function aggregate(results) {
   };
   const min = (k) => {
     const xs = results.map((r) => r[k]).filter((x) => x !== null && Number.isFinite(x));
-    return xs.length ? Math.min(...xs) : null;
+    return xs.length ? xs.reduce((a, b) => Math.min(a, b)) : null;
   };
   const km = sum("distance_m") / 1000;
   return {

@@ -1,6 +1,7 @@
 # Amber-light decisions
 
-`sim/amber.js` provides `amberStoppingDistance` and `observeAmber` for opt-in
+The [feature registry](../feature-interface.md) record in `sim/features/amber.js` owns the
+option, decision hooks and auditing. `sim/amber.js` provides `amberStoppingDistance` and `observeAmber` for opt-in
 `World.amberLights`. Free drives enable it unless `?amberlights=0`; only the paired
 **Room to stop** and **Keep going safely** challenges enable it in the lab. Other challenges
 and seeded benchmarks retain their existing amber handling and metric keys.
@@ -8,7 +9,8 @@ and seeded benchmarks retain their existing amber handling and metric keys.
 A safe stop needs 0.5 m plus speed times the 0.4 s decision allowance and the vehicle's
 actuator lag, plus speed squared divided by twice `comfort().decel`. This is a conservative
 simulator model, not a statutory stopping distance. `ego.amberChoices` latches the decision
-per physical approach and displayed signal phase when the lamp first becomes visible.
+per physical approach and displayed signal phase when the lamp first becomes visible. Invalid
+position, speed or clock samples leave any latched decision in place.
 The stop branch uses a response-aware braking profile through amber and the following red;
 the clear branch caps speed at observation speed until the rear clears the crossing street,
 including when red follows the legal entry. A car whose bumper has already crossed

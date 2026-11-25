@@ -1,9 +1,20 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_AMBER,
+} from "./actor-details.js";
+import { rollWheels, flashPhase, syncHeadMaterial, syncBrakeMaterial } from "./actor-motion.js";
 // Emergency vehicles (sim/emergency.js): a box ambulance on a van chassis and a pumper fire truck,
 // built from boxes at their simulated sizes, with light bars that flash red and white (red, white
 // and blue on the ambulance) while the siren is on. Local +X is forward, +Z is right, rear axle at
 // the origin, as for cars.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { AMBULANCE, FIRE_TRUCK } from "../sim/vehicle.js";
 import { blobTexture } from "./textures.js";
@@ -55,6 +66,7 @@ export const shared = {
     opacity: 0.65,
   }),
 };
+shareActorResources(Object.values(shared));
 
 // A light lens: its own material, so each vehicle's bars flash on their own.
 export function lamp(color) {
@@ -191,8 +203,81 @@ export function createEmergencyMesh(kind, id = kind) {
   add(parts.glass, shared.glass, false, "windows");
   add(parts.chrome, shared.chrome, false, "brightwork");
   add(parts.trim, shared.trim, false, "trim");
-  add(parts.head, shared.head, false, "headlamps");
+  const head = shared.head.clone();
+  const brake = lamp(0xd51922);
+  add(parts.head, head, false, "headlamps");
+  add(
+    merge(sides((side) => box(0.035, 0.23, 0.22, -spec.rearOverhang - 0.037, 0.79, side * (spec.width / 2 - 0.15)))),
+    brake,
+    false,
+    "brake-lamps",
+  );
   const lenses = addLightBars(body, parts.bars, parts.colors);
+  const { width, rearOverhang, length, wheelbase } = spec;
+  const rear = -rearOverhang;
+  const front = length - rearOverhang;
+  addActorDetails(body, kind, () =>
+    fire
+      ? [
+          ...sides((side) => [
+            detail("rear-step-grip", STEEL, 0.17, 0.07, 0.62, rear - 0.035, 0.56, side * (width / 2 - 0.37)),
+            detail("cab-entry-tread", STEEL, 0.64, 0.046, 0.21, wheelbase + 0.5, 0.56, side * (width / 2 - 0.04)),
+            detail("pump-panel", RUBBER, 0.78, 0.6, 0.023, wheelbase - 0.8, 1.76, side * (width / 2 + 0.011)),
+            detail("hose-outlet-caps", STEEL, 0.43, 0.1, 0.1, wheelbase - 0.8, 1.62, side * (width / 2 + 0.062)),
+            detail(
+              "roof-clearance-markers",
+              REFLECT_AMBER,
+              0.038,
+              0.085,
+              0.125,
+              front + 0.024,
+              2.91,
+              side * (width / 2 - 0.18),
+            ),
+            detail(
+              "rear-reflector-strips",
+              REFLECT_RED,
+              0.025,
+              0.22,
+              0.31,
+              rear - 0.031,
+              1.26,
+              side * (width / 2 - 0.26),
+            ),
+          ]),
+          detail("bumper-recovery-eye", RUBBER, 0.11, 0.09, 0.23, front + 0.28, 0.43, 0),
+        ]
+      : [
+          ...sides((side) => [
+            detail("patient-door-hinges", STEEL, 0.061, 0.42, 0.045, rear - 0.027, 1.84, side * (width / 2 - 0.22)),
+            detail("rear-door-glass", RUBBER, 0.032, 0.42, 0.54, rear - 0.023, 2.02, side * 0.42),
+            detail(
+              "rear-clearance-markers",
+              REFLECT_RED,
+              0.027,
+              0.092,
+              0.16,
+              rear - 0.017,
+              2.63,
+              side * (width / 2 - 0.17),
+            ),
+            detail(
+              "side-door-grab-handles",
+              STEEL,
+              0.26,
+              0.061,
+              0.061,
+              wheelbase * 0.5,
+              1.33,
+              side * (width / 2 + 0.032),
+            ),
+            detail("cab-mirror-housings", RUBBER, 0.11, 0.19, 0.17, front - 1.1, 1.55, side * (width / 2 + 0.038)),
+          ]),
+          detail("rear-door-divider", RUBBER, 0.03, 1.42, 0.025, rear - 0.027, 1.58, 0),
+          detail("loading-step-grip", STEEL, 0.21, 0.055, width * 0.7, rear - 0.06, 0.53, 0),
+          detail("rear-door-grip", STEEL, 0.056, 0.055, 0.2, rear - 0.035, 1.31, 0.18),
+        ],
+  );
   const blob = new THREE.Mesh(
     new THREE.PlaneGeometry(spec.length + 0.6, spec.width + 0.6).rotateX(-Math.PI / 2),
     shared.blob,
@@ -216,6 +301,10 @@ export function createEmergencyMesh(kind, id = kind) {
     wheels.push({ pivot, wheel: w, steer });
   }
   g.userData = {
+    head,
+    brake,
+    prevV: null,
+    brakeLevel: 0,
     emergency: true,
     kind,
     spec,
@@ -252,7 +341,7 @@ export function addLightBars(body, bars, colors) {
 
 // Left and right halves of the bars in turn, each lens strobing twice per half-cycle, while `on`.
 export function flashLights(lenses, on, t, offset = 0) {
-  const phase = ((t + offset) % FLASH_S) / FLASH_S;
+  const phase = flashPhase(t, FLASH_S, offset);
   const left = phase < 0.5,
     strobe = (phase * 4) % 1 < 0.6;
   for (const [side, list] of Object.entries(lenses)) {
@@ -261,14 +350,12 @@ export function flashLights(lenses, on, t, offset = 0) {
   }
 }
 
-export function syncEmergency(mesh, vehicle, dt = 0, t = 0) {
+export function syncEmergency(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
-  u.spin += (vehicle.v * dt) / u.tire;
-  for (const w of u.wheels) {
-    w.wheel.rotation.z = -u.spin;
-    w.pivot.rotation.y = w.steer ? vehicle.delta : 0;
-  }
+  syncHeadMaterial(u.head, lightsOn);
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn);
+  rollWheels(u, vehicle, dt, u.tire);
   flashLights(u.lenses, !!vehicle.siren, t, u.phase);
 }

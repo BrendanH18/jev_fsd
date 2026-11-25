@@ -1,53 +1,49 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { gunzipSync, gzipSync } from "node:zlib";
 import { driverScores } from "../static/js/bench/scores.js";
-import { canonicalJson, comparableResult } from "../static/js/brain/recording.js";
-import { benchPage } from "./cli_tools.mjs";
-import { readSubmission, SUBMISSION_FORMAT, verifySubmissionReport } from "./submission_bundle.mjs";
+import { comparableResult } from "../static/js/brain/recording.js";
+import { benchPage, loopbackPort } from "./cli_tools.mjs";
+import {
+  isCommit,
+  isSha256,
+  parseArtifactJson,
+  readArtifactBytes,
+  readArtifactJson,
+  writeNewJson,
+} from "./recording_artifacts.mjs";
+import { tapeCounts } from "./arena_tape.mjs";
+import {
+  preflightSubmission,
+  readSubmission,
+  SUBMISSION_FORMAT,
+  verifyPublishedRows,
+  verifySubmissionReport,
+} from "./submission_bundle.mjs";
 
 const PUBLISHED_FORMAT = "jev-published-submission/1";
 const DEFAULT_TIMEOUT_MS = 360_000;
 const usage = [
   "Usage: node --experimental-default-type=module scripts/driver_submission.mjs",
   "  pack --recording tape.json.gz --report report.json --out submission.json.gz",
-  "  inspect --bundle submission.json[.gz] [--json] [--expect-sha256 HASH]",
+  "  inspect --bundle submission.json[.gz] [--json] [--tape-info] [--expect-sha256 HASH]",
   "  verify --bundle submission.json.gz [--checkout path] [--port 8322] [--timeout ms]",
   "  publish --bundle submission.json.gz --submitter handle --out data/submissions/YYYY-MM-DD/name.json [--checkout path] [--port 8322] [--timeout ms]",
 ].join("\n");
-const MAX_BYTES = 128 * 1024 * 1024;
 const commandOptions = {
   pack: { required: ["recording", "report", "out"], optional: [] },
-  inspect: { required: ["bundle"], optional: ["json", "expect-sha256"] },
+  inspect: { required: ["bundle"], optional: ["json", "expect-sha256", "tape-info"] },
   verify: { required: ["bundle"], optional: ["checkout", "port", "timeout"] },
   publish: { required: ["bundle", "submitter", "out"], optional: ["checkout", "port", "timeout"] },
 };
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const readBytes = (path) => {
-  if (statSync(path).size > MAX_BYTES) throw new Error(`${path} exceeds 128 MiB.`);
-  return readFileSync(path);
-};
-const parseBytes = (path, bytes) => {
-  try {
-    const raw = path.endsWith(".gz") ? gunzipSync(bytes, { maxOutputLength: MAX_BYTES }) : bytes;
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
-  } catch (error) {
-    throw new Error(`${path}: ${error.message}`, { cause: error });
-  }
-};
-const read = (path) => parseBytes(path, readBytes(path));
-const write = (path, value, indent) => {
-  const text = `${JSON.stringify(value, null, indent)}\n`;
-  if (Buffer.byteLength(text) > MAX_BYTES) throw new Error(`${path} exceeds 128 MiB before compression.`);
-  const bytes = path.endsWith(".gz") ? gzipSync(text, { level: 9 }) : text;
-  writeFileSync(path, bytes, { flag: "wx" });
-  return bytes;
-};
+const read = readArtifactJson;
+const write = writeNewJson;
+const validHandle = (value) => typeof value === "string" && /^[a-z0-9][a-z0-9_-]{0,38}$/.test(value);
 
 function parseTimeout(value) {
   if (value === undefined) return DEFAULT_TIMEOUT_MS;
@@ -58,23 +54,27 @@ function parseTimeout(value) {
   return ms;
 }
 
-function inspect({ bundle: bundlePath, json, "expect-sha256": expectedSha }) {
-  if (expectedSha !== undefined && !/^[a-f0-9]{64}$/i.test(expectedSha))
+function inspect({ bundle: bundlePath, json, "tape-info": showTape, "expect-sha256": expectedSha }) {
+  if (expectedSha !== undefined && !isSha256(expectedSha))
     throw new Error("--expect-sha256 needs 64 hexadecimal characters.");
-  const rawBytes = readBytes(bundlePath);
+  const rawBytes = readArtifactBytes(bundlePath);
   const fileSha256 = sha256(rawBytes);
   if (expectedSha !== undefined && fileSha256 !== expectedSha.toLowerCase())
     throw new Error(`File SHA-256 mismatch for ${bundlePath}: expected ${expectedSha}, actual ${fileSha256}.`);
-  const parsed = parseBytes(bundlePath, rawBytes);
+  const parsed = parseArtifactJson(bundlePath, rawBytes);
   let format;
   let report;
   let manifest;
+  let bundle;
   let submitter = null;
   let tapeSha256 = null;
   let tapeVerified = null;
   if (parsed?.format === PUBLISHED_FORMAT) {
     format = PUBLISHED_FORMAT;
-    submitter = parsed.submitter ?? null;
+    submitter = parsed.submitter;
+    if (!validHandle(submitter)) throw new Error("Invalid published submission: invalid submitter handle.");
+    if (!isSha256(parsed.recording_sha256))
+      throw new Error("Invalid published submission: expected a recording SHA-256 checksum.");
     report = parsed.report;
     manifest = report?.manifest;
     if (manifest?.format !== "jev-run-manifest/2" || !Array.isArray(report?.results)) {
@@ -83,30 +83,20 @@ function inspect({ bundle: bundlePath, json, "expect-sha256": expectedSha }) {
     const tapePath = `${bundlePath}.gz`;
     const tapeStat = statSync(tapePath, { throwIfNoEntry: false });
     if (!tapeStat) throw new Error(`Published submission tape is missing: ${tapePath}`);
-    const tapeBytes = readBytes(tapePath);
+    const tapeBytes = readArtifactBytes(tapePath);
     const actualTapeSha = sha256(tapeBytes);
     tapeSha256 = actualTapeSha;
-    tapeVerified = actualTapeSha === parsed.recording_sha256;
+    tapeVerified = actualTapeSha === parsed.recording_sha256.toLowerCase();
     if (!tapeVerified) {
       throw new Error(
         `Recording SHA-256 mismatch for ${tapePath}: expected ${parsed.recording_sha256}, actual ${actualTapeSha}.`,
       );
     }
-    const recording = parseBytes(tapePath, tapeBytes);
-    readSubmission({ format: SUBMISSION_FORMAT, recording, report });
-    for (const drive of report.results) {
-      const id = drive.challenge;
-      const recorded = recording.results?.[id];
-      if (!Object.hasOwn(recording.results ?? {}, id) || recorded?.pass !== drive.pass)
-        throw new Error(`The published report verdict for ${id} differs from the recording.`);
-      const saved = comparableResult(recorded);
-      for (const [field, value] of Object.entries(comparableResult(drive))) {
-        if (Object.hasOwn(saved, field) && canonicalJson(saved[field]) !== canonicalJson(value))
-          throw new Error(`The published report field ${id}.${field} differs from the recording.`);
-      }
-    }
+    const recording = parseArtifactJson(tapePath, tapeBytes);
+    bundle = readSubmission({ format: SUBMISSION_FORMAT, recording, report });
+    verifyPublishedRows(report, recording, comparableResult);
   } else {
-    const bundle = readSubmission(parsed);
+    bundle = readSubmission(parsed);
     format = bundle.format;
     report = bundle.report;
     manifest = report.manifest;
@@ -140,6 +130,7 @@ function inspect({ bundle: bundlePath, json, "expect-sha256": expectedSha }) {
     pass_rate: passRate,
     scores,
     cost_usd: manifest.cost_usd,
+    ...(showTape ? { tape: tapeCounts(preflightSubmission(bundle)) } : {}),
     manifest,
   };
   if (json) {
@@ -159,17 +150,31 @@ function inspect({ bundle: bundlePath, json, "expect-sha256": expectedSha }) {
     `Cost: $${Number(info.cost_usd ?? 0).toFixed(6)}`,
     `File SHA-256: ${info.file_sha256}`,
     `Tape SHA-256: ${info.tape_sha256} (${info.tape_sha256_verified ? "verified" : "no stored checksum"})`,
+    ...(info.tape
+      ? [`Tape answers: ${info.tape.answers} across ${info.tape.requests} request keys and ${info.tape.drives} drives`]
+      : []),
     `Manifest: ${manifest.format} (prompt=${manifest.prompt_hash ?? "none"}, maps=${Object.keys(manifest.maps ?? {}).join(",") || "none"})`,
   ];
   console.log(lines.join("\n"));
 }
 
-async function verify({ recording, report }, { checkout, port, timeout }) {
+async function verify(bundle, { checkout, port, timeout }) {
+  const { recording, report } = bundle;
   const timeoutMs = parseTimeout(timeout);
-  const { port: serverPort } = await benchPage(port ?? "8322");
+  const serverPort = loopbackPort(port ?? process.env.PORT ?? "8322");
+  const { manifest } = report;
+  if (!isCommit(manifest.source_commit) || manifest.source_dirty !== false)
+    throw new Error("The recording must name a clean source commit.");
+  if (manifest.engine !== `node ${process.version}` || manifest.engine_version !== process.versions.v8)
+    throw new Error(`Use ${manifest.engine} (V8 ${manifest.engine_version}) to verify this bundle.`);
   const arena = checkout
     ? resolve(checkout, "scripts/arena_node.mjs")
     : fileURLToPath(new URL("./arena_node.mjs", import.meta.url));
+  if (!statSync(arena, { throwIfNoEntry: false })?.isFile())
+    throw new Error(`The replay checkout does not contain an Arena runner: ${arena}`);
+  preflightSubmission(bundle);
+  verifyPublishedRows(report, recording, comparableResult);
+  await benchPage(serverPort);
   const dir = mkdtempSync(join(tmpdir(), "jev-submission-"));
   try {
     const tape = join(dir, "recording.json");
@@ -191,8 +196,16 @@ async function verify({ recording, report }, { checkout, port, timeout }) {
       ],
       { stdio: "inherit", timeout: timeoutMs, killSignal: "SIGKILL" },
     );
+    if (!statSync(replay, { throwIfNoEntry: false })?.isFile())
+      throw new Error("The Arena verifier returned without writing its report.");
     verifySubmissionReport(report, read(replay));
     console.log(`Verified ${report.results.length} drives from ${recording.header.driver}.`);
+  } catch (error) {
+    if (error.code === "ETIMEDOUT") throw new Error(`Replay exceeded --timeout ${timeoutMs} ms.`, { cause: error });
+    if (error.status != null)
+      throw new Error(`Arena replay exited with status ${error.status}. See its diagnostic above.`, { cause: error });
+    if (error.signal) throw new Error(`Arena replay terminated by ${error.signal}.`, { cause: error });
+    throw error;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -200,7 +213,7 @@ async function verify({ recording, report }, { checkout, port, timeout }) {
 
 async function publish({ bundle: bundlePath, submitter, out: requestedPath, checkout, port, timeout }) {
   parseTimeout(timeout);
-  if (!/^[a-z0-9][a-z0-9_-]{0,38}$/.test(submitter))
+  if (!validHandle(submitter))
     throw new Error("Use a submitter handle with 1–39 lowercase letters, digits, hyphens or underscores.");
   const out = resolve(requestedPath);
   const dayDir = dirname(out);
@@ -269,6 +282,7 @@ try {
       timeout: { type: "string" },
       "expect-sha256": { type: "string" },
       json: { type: "boolean" },
+      "tape-info": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });

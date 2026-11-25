@@ -1,3 +1,13 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_WHITE,
+} from "./actor-details.js";
+import { animationTime, flashPhase } from "./actor-motion.js";
 // A work zone with a flagger at each end (sim/work-zone.js): orange cones angled across the closed lane
 // and lining its edge past the work, a crew's dump truck with an amber light bar and a flashing arrow
 // board pointing traffic left, two workers in hi-vis, an orange "flagger ahead" sign before each end,
@@ -5,6 +15,7 @@
 // Everything is placed in world coordinates in one group at the origin.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { pointAt, headingAt } from "../map/mapdata.js";
 import { addLightBars, flashLights, shared, wheel } from "./emergency.js";
@@ -25,6 +36,8 @@ const merge = (parts) =>
 export const coneMaterial = snowable(new THREE.MeshStandardMaterial({ color: ORANGE, roughness: 0.6 }), "car");
 export const bandMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, emissive: 0x30302a, roughness: 0.4 });
 export const postMaterial = new THREE.MeshStandardMaterial({ color: 0x8a8f96, metalness: 0.6, roughness: 0.4 });
+shareActorResources([coneMaterial, bandMaterial, postMaterial]);
+
 const textures = new Map();
 
 // Where a point `lat` metres right of edge `e`'s centre line, `s` along it, is in the scene. (The cones,
@@ -225,6 +238,18 @@ export function crewTruck() {
     wh.position.set(x, 0.5, z);
     g.add(wh);
   }
+  addActorDetails(g, "road-crew-truck", () => [
+    ...sides((side) => [
+      detail("dump-body-rail", STEEL, xf - 2.7 - xr, 0.068, 0.13, (xr + xf - 2.7) / 2, 1.96, side * (w / 2 - 0.035)),
+      detail("tailgate-latch", RUBBER, 0.066, 0.3, 0.12, xr - 0.012, 1.53, side * (w / 2 - 0.16)),
+      detail("rear-low-reflectors", REFLECT_RED, 0.035, 0.098, 0.28, xr - 0.028, 0.81, side * (w / 2 - 0.2)),
+      detail("arrow-board-struts", STEEL, 0.11, 0.55, 0.1, xr - 0.071, 1.72, side * 0.75),
+      detail("folded-traffic-board-housing", RUBBER, 0.65, 0.16, 0.09, xr + 1.02, 1.88, side * (w / 2 + 0.022)),
+    ]),
+    detail("grille", RUBBER, 0.034, 0.25, 0.98, xf + 0.067, 1.1, 0),
+    detail("front-step-bumper", STEEL, 0.27, 0.17, w - 0.061, xf + 0.106, 0.66, 0),
+    detail("rear-plate", REFLECT_WHITE, 0.029, 0.14, 0.32, xr - 0.05, 1.07, 0),
+  ]);
   return { g, lenses, lampMaterial };
 }
 
@@ -316,7 +341,7 @@ export function createWorkZoneMesh(zone, map) {
     );
     g.add(mesh, pole);
     const arm = mesh.userData.arms?.find((a) => a.side > 0);
-    flaggers[side] = { mesh, pole, arm, psi, pose: { x, y, psi, v: 0, phase: 0, frozen: 0 }, turn: 0 };
+    flaggers[side] = { mesh, pole, arm, psi, pose: { x, y, psi, v: 0, phase: 0, frozen: 0 }, turn: null };
   }
   for (const side of ["closed", "open"]) {
     const at = zone.signs[side];
@@ -333,16 +358,20 @@ export function createWorkZoneMesh(zone, map) {
 
 // Turn each flagger's paddle toward what it shows (half a turn in 0.4 s), flash the truck's lights and
 // arrow board, and pose the people (culled by `camera` when given).
-export function syncWorkZone(mesh, zone, t = 0, camera = null) {
+export function syncWorkZone(mesh, zone, t = 0, camera = null, dt = 0) {
   const u = mesh?.userData.workZone;
   if (!u) return;
   flashLights(u.lenses, true, t, 0.17);
-  u.arrow.emissiveIntensity = t % 1 < 0.55 ? 6 : 0;
+  u.arrow.emissiveIntensity = flashPhase(t, 1) < 0.55 ? 6 : 0;
+  const jumped = u.lastT != null && (t < u.lastT || t - u.lastT > 1);
+  u.lastT = t;
   const view = camera || { position: { x: zone.x, z: -zone.y } };
   for (const p of u.people) syncPerson(p.mesh, p.pose, view);
   for (const [side, f] of Object.entries(u.flaggers)) {
     const want = paddle(zone, side) === "slow" ? Math.PI : 0;
-    f.turn += Math.sign(want - f.turn) * Math.min(Math.abs(want - f.turn), Math.PI * 0.04);
+    if (jumped || f.turn == null) f.turn = want;
+    const maxTurn = (Math.PI * animationTime(dt)) / 0.4;
+    f.turn += Math.max(-maxTurn, Math.min(maxTurn, want - f.turn));
     f.pole.rotation.y = f.psi + f.turn;
     syncPerson(f.mesh, f.pose, view);
     // (the arm that holds the pole, bent up to it)

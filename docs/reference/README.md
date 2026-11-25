@@ -14,6 +14,7 @@ Running the app, driving with keyboard, touch controls or a gamepad, choosing a 
 six-car garage, connecting models, replaying recorded drives, and changing looks and maps.
 
 - [Overview and quick start](overview.md)
+- [Build, drive and deploy the browser demo](../browser-demo.md)
 - [Drive coach, HUD and controls](drive-coach-and-hud.md)
 - [Graphics and recent rendering fixes](graphics.md)
 - [Custom maps and configuration](custom-maps.md)

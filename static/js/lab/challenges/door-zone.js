@@ -16,8 +16,9 @@ export const challenge = {
   icon: "↔",
   difficulty: "Anticipation",
   hazard: "door",
-  description: "A cyclist. A parked car. One opening door. Leave room before you need it.",
-  lesson: "Look for curb activity and give the cyclist room.",
+  description: "A cyclist rides alongside parked cars. A door starts to open into the cyclist's path as you approach.",
+  lesson:
+    "Leave room for the rider to move sideways around the door. Hold back if you can't pass with enough room for that movement.",
 };
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);

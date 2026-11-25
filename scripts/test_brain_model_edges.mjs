@@ -27,10 +27,14 @@ const endpoint = {
   timeout_s: 1,
 };
 const choose = (choice) => ({ type: "choice", choice, confidence: 0.8, probabilities: { [choice]: 0.8 } });
-const question = (...ids) => ({ type: "choice", criteria: Object.fromEntries(ids.map((id) => [id, id])) });
+const question = (...ids) => ({
+  type: "choice",
+  instructions: "Choose an option.",
+  criteria: Object.fromEntries(ids.map((id) => [id, id])),
+});
 const request = {
   epoch: 3,
-  state: {},
+  state: { candidates: [{ id: "keep" }, { id: "slow" }] },
   questions: {
     motion: question("drive", "stop"),
     vector: question("keep", "slow"),

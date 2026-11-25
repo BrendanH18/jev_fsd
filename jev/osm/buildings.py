@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import isfinite
 import random
 import re
 from typing import List
@@ -16,16 +17,12 @@ MAX_BUILDINGS = 3000
 
 
 def _height(tags: dict, rng: random.Random) -> float:
-    h = tags.get("height")
-    if h:
-        m = re.match(r"\s*(\d+(?:\.\d+)?)", h)
-        if m:
-            return max(2.5, float(m.group(1)))
-    levels = tags.get("building:levels")
-    if levels:
-        m = re.match(r"\s*(\d+(?:\.\d+)?)", levels)
-        if m:
-            return max(2.5, float(m.group(1)) * LEVEL_HEIGHT_M)
+    for key, scale in (("height", 1.0), ("building:levels", LEVEL_HEIGHT_M)):
+        match = re.match(r"\s*(\d+(?:\.\d+)?)", tags.get(key) or "")
+        if match:
+            height = float(match.group(1)) * scale
+            if isfinite(height):
+                return max(2.5, height)
     return rng.uniform(6.0, 12.0)
 
 

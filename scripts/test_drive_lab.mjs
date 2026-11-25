@@ -557,25 +557,37 @@ try {
 }
 
 const { demoApi } = await import("../static/js/demo/api.js");
+const catalogItem = {
+  id: "kitsilano",
+  bbox: map.bbox,
+  name: "Kitsilano",
+  city: "Vancouver",
+  utc_offset: -8,
+};
+const demoPack = { ...map.pack, routing_bbox: catalogItem.bbox, utc_offset: catalogItem.utc_offset };
+const networkFailure = new Error("Transient catalog network failure");
 let catalogCalls = 0;
 globalThis.fetch = async () => {
-  if (++catalogCalls === 1) throw new Error("Transient catalog network failure");
-  return { ok: true, json: async () => [{ id: "kitsilano" }] };
+  if (++catalogCalls === 1) throw networkFailure;
+  return { ok: true, json: async () => [catalogItem] };
 };
 try {
-  await assert.rejects(demoApi("/api/maps"), /Transient catalog network failure/);
+  await assert.rejects(
+    demoApi("/api/maps"),
+    (error) =>
+      /Could not download bundled demo data catalog\.json/.test(error.message) && error.cause === networkFailure,
+  );
   const catalogs = await Promise.all([demoApi("/api/maps"), demoApi("/api/maps")]);
   test("a failed demo catalog request can retry and share its successful result", () => {
     assert.equal(catalogCalls, 2);
-    assert.deepEqual(catalogs, [{ maps: [{ id: "kitsilano" }] }, { maps: [{ id: "kitsilano" }] }]);
+    assert.deepEqual(catalogs, [{ maps: [catalogItem] }, { maps: [catalogItem] }]);
   });
 } finally {
   globalThis.fetch = originalFetch;
 }
 
 const { demoApi: cancellationApi } = await import("../static/js/demo/api.js?cancellation-regression");
-const sharedRequests = [],
-  catalogItem = { id: "kitsilano", bbox: map.bbox };
+const sharedRequests = [];
 globalThis.fetch = (url, { signal } = {}) =>
   new Promise((resolve, reject) => {
     sharedRequests.push({ url: String(url), resolve });
@@ -605,11 +617,13 @@ try {
   mapCaller.abort();
   const replacementMap = cancellationApi("/api/map?map=kitsilano");
   await new Promise((resolve) => setTimeout(resolve, 0));
-  sharedRequests[1].resolve({ ok: true, json: async () => map.pack });
+  sharedRequests[1].resolve({ ok: true, json: async () => demoPack });
   await cancelledMap;
   const pack = await replacementMap;
   test("aborting one map caller leaves the shared map fetch reusable", () => {
-    assert.equal(pack, map.pack);
+    assert.equal(pack.name, demoPack.name);
+    assert.equal(pack.edges.length, demoPack.edges.length);
+    assert.equal(pack === demoPack, false);
     assert.equal(sharedRequests.length, 2);
   });
 } finally {

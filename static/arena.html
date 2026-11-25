@@ -4,51 +4,54 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agent arena · Jev Drive Lab</title>
   <link rel="stylesheet" href="/css/app.css"><link rel="stylesheet" href="/css/arena.css">
+  <link rel="stylesheet" href="/css/a11y.css">
 </head>
 <body class="arena">
+  <a id="skip-evaluation" class="skip-link" href="#evaluation-controls">Skip to evaluation controls</a>
+  <a id="skip-arena-results" class="skip-link" href="#arena-results-section">Skip to evaluation results</a>
   <main>
-    <header><a class="brand" href="/">JEV / DRIVE LAB</a><nav class="arena-nav"><a href="/results">Results</a><a href="https://github.com/BrendanH18/jev_fsd" target="_blank" rel="noopener">GitHub ↗</a></nav></header>
+    <header><a class="brand" href="/">JEV / DRIVE LAB</a><nav id="arena-navigation" class="arena-nav" aria-label="Arena navigation"><a href="/results">Results</a><a href="https://github.com/BrendanH18/jev_fsd" target="_blank" rel="noopener">GitHub ↗</a></nav></header>
     <p class="eyebrow">REPEATABLE STREETS / MEASURABLE DECISIONS</p>
     <h1>Bring your own driver.</h1>
     <p class="intro">Choose challenges or road tests. Shared physics, sensing and safety checks. Save a run, compare drivers and inspect the decisions around each incident.</p>
-    <section class="arena-controls panel" aria-label="Evaluation controls">
-      <fieldset><legend>Agents to compare</legend><div id="agents"></div><p id="llm-status" class="llm-status"></p></fieldset>
-      <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
-      <label title="Guarded: the safety filter removes every manoeuvre that fails a road-rule check. Open: it flags them instead, and the driver's own judgment decides">Track <select id="arena-track"><option value="guarded">Guarded · the filter removes rule breaks</option><option value="open">Open · the filter flags them, the driver decides</option></select></label>
-      <label><input type="checkbox" id="arena-road-tests"> Include road tests (longer drives)</label>
-      <label>Challenge subset <select id="arena-subset"><option value="">All challenges</option><option value="road-tests">Road tests only</option><option value="custom">Choose individual drives</option></select></label>
-      <label id="arena-custom-wrap" hidden>Drives <select id="arena-custom" multiple size="5"></select></label>
-      <button id="arena-run" class="toggle on">Run evaluation</button><button id="arena-export" class="toggle" disabled>Export results</button>
+    <section id="evaluation-controls" class="arena-controls panel" aria-label="Evaluation controls" tabindex="-1">
+      <fieldset><legend>Agents to compare</legend><div id="agents"></div><p id="llm-status" class="llm-status" role="status"></p></fieldset>
+      <label>Decision clock <select id="arena-mode" aria-describedby="arena-mode-help"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
+      <label title="Guarded: the safety filter removes every manoeuvre that fails a road-rule check. Open: it flags them instead, and the driver's own judgment decides">Track <select id="arena-track" aria-describedby="arena-track-help"><option value="guarded">Guarded · the filter removes rule breaks</option><option value="open">Open · the filter flags them, the driver decides</option></select></label>
+      <label><input type="checkbox" id="arena-road-tests" aria-describedby="arena-road-tests-help"> Include road tests (longer drives)</label>
+      <label>Challenge subset <select id="arena-subset" aria-controls="arena-custom-wrap"><option value="">All challenges</option><option value="road-tests">Road tests only</option><option value="custom">Choose individual drives</option></select></label>
+      <label id="arena-custom-wrap" hidden>Drives <select id="arena-custom" multiple size="5" aria-describedby="arena-custom-help"></select></label>
+      <button id="arena-run" class="toggle on" aria-controls="arena-progress arena-results-section">Run evaluation</button><button id="arena-export" class="toggle" disabled aria-describedby="arena-export-help">Export results</button>
       <p id="arena-status" role="status">Loading the arena…</p>
-      <progress id="arena-progress" aria-label="Evaluation progress" hidden></progress>
-      <details><summary>Add a trusted local agent</summary><label>Module path <input id="agent-module" placeholder="./js/agents/my-agent.js"></label><button id="arena-load" class="toggle">Load agent</button><p>Export a default definition with id, label and create(). JavaScript runs in this browser. See <a href="https://github.com/BrendanH18/jev_fsd/blob/main/docs/agents.md">the adapter guide</a>.</p></details>
+      <progress id="arena-progress" aria-label="Evaluation progress" hidden aria-describedby="arena-status"></progress>
+      <details><summary>Add a trusted local agent</summary><label>Module path <input id="agent-module" placeholder="./js/agents/my-agent.js" aria-describedby="agent-module-help" autocapitalize="none" spellcheck="false" autocomplete="off"></label><button id="arena-load" class="toggle">Load agent</button><p>Export a default definition with id, label and create(). JavaScript runs in this browser. See <a href="https://github.com/BrendanH18/jev_fsd/blob/main/docs/agents.md">the adapter guide</a>.</p></details>
     </section>
     <section class="panel arena-history" aria-labelledby="history-heading">
       <h2 id="history-heading">Saved evaluations</h2>
       <div class="history-controls">
         <label>View <select id="arena-history"><option value="current">Current evaluation</option></select></label>
-        <label class="import-button toggle">Import JSON<input id="arena-import" type="file" accept=".json,application/json"></label>
-        <button id="arena-delete" class="toggle" disabled>Delete saved run</button>
+        <label class="import-button toggle">Import JSON<input id="arena-import" type="file" accept=".json,application/json" aria-describedby="arena-import-help"></label>
+        <button id="arena-delete" class="toggle" disabled aria-describedby="arena-delete-help">Delete saved run</button>
       </div>
       <p id="history-status" role="status">The latest evaluations are saved on this browser. Export a run to keep a permanent copy.</p>
       <div class="history-controls">
-        <label>Compare against <select id="arena-baseline"><option value="">No baseline</option></select></label>
-        <label>Baseline driver <select id="arena-baseline-agent" disabled></select></label>
+        <label>Compare against <select id="arena-baseline" aria-describedby="arena-baseline-help"><option value="">No baseline</option></select></label>
+        <label>Baseline driver <select id="arena-baseline-agent" disabled aria-describedby="arena-baseline-agent-help"></select></label>
       </div>
       <p id="comparison-status" role="status">Choose a saved baseline to compare matching challenge conditions.</p>
       <div id="arena-summary" class="summary-grid"></div>
     </section>
-    <section aria-label="Evaluation results">
+    <section id="arena-results-section" aria-label="Evaluation results" tabindex="-1">
       <div class="arena-table-tools">
         <label>Search <input type="search" id="arena-search" placeholder="Agent, challenge or map"></label>
         <label>Agent <select id="arena-filter-agent"><option value="">All agents</option></select></label>
         <label>Outcome <select id="arena-filter-outcome"><option value="">All outcomes</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="stopped">Stopped</option><option value="error">Simulation error</option></select></label>
         <label>Track <select id="arena-filter-track"><option value="">Both tracks</option><option value="guarded">Guarded</option><option value="open">Open</option></select></label>
-        <span id="arena-match-count" role="status"></span>
-        <button id="arena-clear-filters" class="toggle" disabled>Clear filters</button>
-        <button id="arena-csv" class="toggle" disabled>Export CSV</button>
+        <span id="arena-match-count" role="status" aria-atomic="true"></span>
+        <button id="arena-clear-filters" class="toggle" disabled aria-controls="arena-results-section">Clear filters</button>
+        <button id="arena-csv" class="toggle" disabled aria-describedby="arena-csv-help">Export CSV</button>
       </div>
-      <div class="table-wrap panel"><table><thead id="arena-columns"></thead><tbody id="arena-results"><tr><td colspan="11">Run an evaluation to see measured results.</td></tr></tbody></table></div>
+      <div id="arena-table-wrap" class="table-wrap panel" tabindex="0" role="region" aria-label="Scrollable evaluation table"><table id="arena-result-table" aria-label="Evaluation attempts"><thead id="arena-columns"></thead><tbody id="arena-results"><tr><td colspan="11">Run an evaluation to see measured results.</td></tr></tbody></table></div>
     </section>
     <p class="arena-note">These are local simulator results, not a verified public leaderboard. A pass requires arrival with no collision, red light, missed stop or failed yield, and less than one second off-road. The coaching score is a separate measure. Exported runs include challenge, map-pack and clock versions.</p>
     <section id="arena-details" class="panel run-details" aria-labelledby="details-heading" hidden>
@@ -56,7 +59,18 @@
       <button id="arena-close-details" class="toggle" type="button">Close details</button>
       <div id="details-content"></div>
     </section>
-    <section class="panel manual-attempts"><h2>Your challenge drives</h2><div id="manual-attempts"></div><p>Saved on this browser. Manual attempts use realtime driving; compare them with realtime agent evaluations. Replay branches are labelled.</p></section>
+    <section id="manual-attempts-section" class="panel manual-attempts" aria-labelledby="manual-attempts-heading"><h2 id="manual-attempts-heading">Your challenge drives</h2><div id="manual-attempts"></div><p>Saved on this browser. Manual attempts use realtime driving; compare them with realtime agent evaluations. Replay branches are labelled.</p></section>
   </main>
   <script type="module" src="/js/lab/arena.js"></script>
+  <span id="arena-mode-help" hidden>Lockstep waits for decisions. Realtime includes decision latency in the drive.</span>
+  <span id="arena-track-help" hidden>Guarded removes manoeuvres that fail a road-rule check. Open flags them for the driver. Collision filtering remains active.</span>
+  <span id="arena-road-tests-help" hidden>Adds the longer road tests to the evaluation.</span>
+  <span id="arena-custom-help" hidden>Choose one or more drives using your browser’s multiple-selection keys.</span>
+  <span id="agent-module-help" hidden>Use a local JavaScript module URL such as ./js/agents/my-agent.js. Loading it executes its JavaScript in this browser.</span>
+  <span id="arena-export-help" hidden>Download the displayed evaluation as JSON.</span>
+  <span id="arena-import-help" hidden>Choose an exported Arena evaluation JSON file. Importing displays saved attempts without running the agents.</span>
+  <span id="arena-delete-help" hidden>Deletes the selected saved evaluation from this browser.</span>
+  <span id="arena-baseline-help" hidden>Compares drives with matching challenge conditions from a saved evaluation.</span>
+  <span id="arena-baseline-agent-help" hidden>Choose a driver from the saved baseline above.</span>
+  <span id="arena-csv-help" hidden>Exports the matching rows from the table.</span>
 </body></html>

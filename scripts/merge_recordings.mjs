@@ -7,33 +7,71 @@
 // map they share, and record different drives. The merged recording replays like one made in a single
 // run (`arena_node.mjs --replay`); its header keeps the earliest recording time. Use
 // merge_bench_recordings.mjs for seeded benchmark recordings.
-import fs from "node:fs";
-import { dirname, join } from "node:path";
-import zlib from "node:zlib";
+import { lstatSync, statSync } from "node:fs";
+import { parseArgs } from "node:util";
+import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
+import { canonicalJson, ModelRecording } from "../static/js/brain/recording.js";
+import { sameArenaTrack } from "./arena_tape.mjs";
+import { arenaSuiteVersion } from "./canonical_suite.mjs";
+import {
+  isArenaSet,
+  isDateTime,
+  isId,
+  isRecord,
+  isTrack,
+  MAX_RECORDING_BYTES,
+  readRecordingJson,
+  writeJsonArtifact,
+} from "./recording_artifacts.mjs";
+import { runCost } from "./run_manifest.mjs";
 
-const argv = process.argv.slice(2);
+const usage = "Usage: merge_recordings.mjs [--dry-run] --out merged.json[.gz] part.json[.gz] ...";
 const fail = (message) => {
   console.error(message);
   process.exit(1);
 };
-const outAt = argv.indexOf("--out");
-if (outAt < 0 || !argv[outAt + 1]) fail("Usage: merge_recordings.mjs --out merged.json[.gz] part.json[.gz] ...");
-const out = argv[outAt + 1];
-const parts = argv.filter((_, i) => i !== outAt && i !== outAt + 1);
-if (parts.length < 2) fail("Give at least two recordings to merge.");
-const destination = fs.statSync(out, { throwIfNoEntry: false });
 
-const { ModelRecording, canonicalJson } = await import("../static/js/brain/recording.js");
-const { runCost } = await import("./run_manifest.mjs");
-const { arenaSuiteVersion } = await import("./canonical_suite.mjs");
-const { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } = await import("../static/js/bench/suite-version.js");
+let parsed;
+try {
+  parsed = parseArgs({
+    options: { out: { type: "string" }, help: { type: "boolean", short: "h" }, "dry-run": { type: "boolean" } },
+    allowPositionals: true,
+    tokens: true,
+  });
+} catch (error) {
+  fail(error.message);
+}
+const { positionals: parts, values, tokens } = parsed;
+if (values.help) {
+  console.log(usage);
+  process.exit(0);
+}
+const out = values.out;
+if (!out?.trim()) fail(usage);
+if (!/\.json(?:\.gz)?$/.test(out)) fail("--out must end in .json or .json.gz.");
+if (tokens.filter((token) => token.kind === "option" && token.name === "out").length > 1)
+  fail("Specify --out only once.");
+if (parts.length < 2) fail("Give at least two recordings to merge.");
+
+const sources = new Set();
+let destination;
+try {
+  if (lstatSync(out, { throwIfNoEntry: false })?.isSymbolicLink())
+    fail("The merged output must not be a symbolic link.");
+  destination = statSync(out, { throwIfNoEntry: false });
+  if (destination && !destination.isFile()) fail("The merged output must name a file.");
+} catch (error) {
+  fail(error.message);
+}
 const read = (file) => {
   try {
-    const source = fs.statSync(file);
+    const source = statSync(file);
     if (destination?.dev === source.dev && destination.ino === source.ino)
       fail(`The merged output must differ from its input recordings (${file}).`);
-    const raw = fs.readFileSync(file);
-    return ModelRecording.parse(file.endsWith(".gz") ? zlib.gunzipSync(raw).toString("utf8") : raw.toString("utf8"));
+    const identity = `${source.dev}:${source.ino}`;
+    if (sources.has(identity)) fail(`List each input recording once: ${file}.`);
+    sources.add(identity);
+    return ModelRecording.parse(readRecordingJson(file));
   } catch (error) {
     fail(`Cannot read the recording ${file}: ${error.message}`);
   }
@@ -57,19 +95,39 @@ const identity = (h) =>
     suite_version: h.suite_version,
     manifest: manifestIdentity(h.manifest),
     set: h.arena?.set,
-    track: h.arena?.track ?? null,
+    track: h.arena?.track ?? "guarded",
   });
 recordings.forEach((r, i) => {
   if (!r.header.arena) fail(`${parts[i]} is not an arena recording: only arena recordings merge.`);
+  const { arena, maps, manifest, recorded_at } = r.header;
+  if (!isArenaSet(arena.set)) fail(`${parts[i]} declares an unknown Arena set.`);
+  if (arena.track !== undefined && !isTrack(arena.track)) fail(`${parts[i]} declares an unknown Arena track.`);
+  if (!Array.isArray(arena.ids) || !arena.ids.every(isId) || new Set(arena.ids).size !== arena.ids.length)
+    fail(`${parts[i]} must declare distinct Arena drive IDs.`);
+  if (!isRecord(maps) || !Object.entries(maps).every(([id, sha]) => isId(id) && isId(sha)))
+    fail(`${parts[i]} needs valid Arena map fingerprints.`);
+  if (!isDateTime(recorded_at)) fail(`${parts[i]} needs a valid recorded_at timestamp.`);
+  if (Object.keys(r.scenarios).length) fail(`${parts[i]} contains seeded scenarios in an Arena recording.`);
+  if (
+    manifest &&
+    (manifest.suite?.kind !== "arena" || manifest.suite.set !== arena.set || !isRecord(manifest.suite.drives))
+  )
+    fail(`${parts[i]} has an invalid Arena manifest suite.`);
+  try {
+    if (manifest && manifest.cost_usd !== runCost(Object.values(r.results)))
+      fail(`${parts[i]} has a manifest cost that differs from its drives.`);
+  } catch (error) {
+    fail(`${parts[i]}: ${error.message}`);
+  }
   if (identity(r.header) !== identity(first))
     fail(`${parts[i]} differs from ${parts[0]} in its source, driver, model, endpoint, engine, prompt, set or track.`);
   if (!Object.keys(r.results).length || Object.keys(r.drives).some((id) => !Object.hasOwn(r.results, id)))
     fail(`${parts[i]} must contain finished drives and keep a result for every set of answers.`);
 });
 
-const maps = {},
-  manifestMaps = {},
-  manifestDrives = {},
+const maps = Object.create(null),
+  manifestMaps = Object.create(null),
+  manifestDrives = Object.create(null),
   ids = [],
   merged = new ModelRecording({ header: { ...first }, drives: {}, results: {}, scenarios: {} });
 recordings.forEach((r, i) => {
@@ -89,9 +147,14 @@ recordings.forEach((r, i) => {
   }
   for (const [id, result] of Object.entries(r.results)) {
     if (id in merged.results) fail(`${id} is recorded in more than one part (${parts[i]}).`);
+    if (typeof result.pass !== "boolean") fail(`${parts[i]} has no boolean verdict for ${id}.`);
+    if (result.simulation_error) fail(`${parts[i]} has a simulation error on ${id}.`);
     if (result.stopped) fail(`${parts[i]} has a stopped attempt for ${id}.`);
     // (a finished drive keeps its answers, an empty set for one that asked nothing)
     if (!Object.hasOwn(r.drives, id)) fail(`${parts[i]} has a result for ${id} but no answers for it.`);
+    if (result.map !== undefined && !Object.hasOwn(r.header.maps, result.map))
+      fail(`${parts[i]} has no map fingerprint for drive ${id}.`);
+    if (!sameArenaTrack(result, r.header.arena)) fail(`${parts[i]} has a result on a different track for ${id}.`);
     const authored = r.header.manifest?.suite.drives[id];
     if (
       result.challenge !== id ||
@@ -100,7 +163,9 @@ recordings.forEach((r, i) => {
         (!authored ||
           result.map !== authored.map ||
           result.seed !== authored.seed ||
-          (authored.version !== undefined && result.version !== authored.version)))
+          (authored.version !== undefined && result.version !== authored.version) ||
+          (authored.weather !== undefined && result.weather !== authored.weather) ||
+          (authored.time !== undefined && result.time !== authored.time)))
     )
       fail(`${parts[i]} has a result for ${id} that disagrees with its authored drive.`);
     merged.results[id] = result;
@@ -111,7 +176,7 @@ recordings.forEach((r, i) => {
 });
 merged.header = {
   ...first,
-  recorded_at: recordings.map((r) => r.header.recorded_at).sort()[0],
+  recorded_at: recordings.map((r) => r.header.recorded_at).sort((a, b) => Date.parse(a) - Date.parse(b))[0],
   arena: { ...first.arena, ids },
   maps,
 };
@@ -127,13 +192,22 @@ if (suiteVersion(first) !== LEGACY_SUITE)
     merged,
     arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
   );
-const text = merged.serialize();
-const directory = fs.mkdtempSync(join(dirname(out), ".arena-merge-"));
-const temporary = join(directory, "recording");
-try {
-  fs.writeFileSync(temporary, out.endsWith(".gz") ? zlib.gzipSync(text, { level: 9 }) : text);
-  fs.renameSync(temporary, out);
-} finally {
-  fs.rmSync(directory, { recursive: true, force: true });
+if (values["dry-run"]) {
+  console.log(
+    JSON.stringify({
+      out,
+      parts,
+      ids,
+      maps,
+      suite_version: suiteVersion(merged.header),
+      cost_usd: merged.header.manifest?.cost_usd ?? null,
+    }),
+  );
+} else {
+  try {
+    writeJsonArtifact(out, merged.serialize(), MAX_RECORDING_BYTES);
+  } catch (error) {
+    fail(error.message);
+  }
+  console.log(`merged ${ids.length} drives from ${parts.length} recordings into ${out}`);
 }
-console.log(`merged ${ids.length} drives from ${parts.length} recordings into ${out}`);

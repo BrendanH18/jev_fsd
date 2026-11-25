@@ -89,7 +89,12 @@ function junction({ arms = { w: 180, e: 0, n: 90, s: -90 }, buildings = [] } = {
         y: 0,
         offset_s: 0,
         vertices: ["c"],
-        approaches: Object.keys(arms).map((a) => ({ edge: `${a}_in`, group: groups[a], s_line: LINE })),
+        approaches: Object.entries(arms).map(([a, deg]) => ({
+          edge: `${a}_in`,
+          group: groups[a],
+          s_line: LINE,
+          heading_deg: deg > 0 ? deg - 180 : deg + 180,
+        })),
       },
     ],
     stops: [],

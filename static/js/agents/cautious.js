@@ -1,24 +1,34 @@
-import { featureDecisionFields, firstHookResult, hooks } from "../sim/features/index.js";
+import { decisionContext } from "../brain/decision-trace.js";
+import { featureDecisionFields, stopAtLineDrive, firstHookResult, hooks } from "../sim/features/index.js";
 
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
+const RESERVED_LANE = hooks("cautious", "reservedLane");
 const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
+const PASSING = hooks("cautious", "passing");
 const AFTER_PASSING = hooks("cautious", "afterPassing");
 const CAUTIOUS = hooks("cautious");
 const BEFORE_AMBER = hooks("cautious", "beforeAmber");
+const SIGNAL_STOP = hooks("cautious", "signalStop");
 const AFTER_AMBER = hooks("cautious", "afterAmber");
 const FEATURE_STOP = hooks("cautiousStop");
 const FEATURE_DRIVE = hooks("cautiousDrive");
 
-function bestCandidate(eligible, target) {
+function bestCandidate(eligible, target, scores) {
   let best;
   let lowest = Infinity;
   for (const candidate of eligible) {
     const s = candidate.sim;
-    const cost =
-      Math.abs(s.end_speed - target) * 2 +
-      Math.abs(s.lane_err_end) * 3 +
-      Math.max(0, 5 - s.min_gap_m) * 6 -
-      s.progress_m * 0.3;
+    const speedError = Math.abs(s.end_speed - target) * 2;
+    const lateralError = Math.abs(s.lane_err_end) * 3;
+    const clearance = Math.max(0, 5 - s.min_gap_m) * 6;
+    const progress = s.progress_m * 0.3;
+    const cost = speedError + lateralError + clearance - progress;
+    scores?.push({
+      id: candidate.id,
+      targetSpeed: target,
+      cost,
+      terms: { speed_error: speedError, lateral_error: lateralError, clearance, progress: -progress },
+    });
     if (!best || cost < lowest) {
       best = candidate;
       lowest = cost;
@@ -34,56 +44,86 @@ export class CautiousAgent {
   constructor() {
     this.name = "cautious";
   }
-  decideSync(snap, offered) {
+  explain(snap, offered) {
+    const policy = {};
+    const result = this.decideSync(snap, offered, policy);
+    return { ...policy, candidateId: result.candidateId, motion: result.motion };
+  }
+
+  decideSync(snap, offered, policy) {
     // (the autopilot brakes without asking it when nothing unflagged is left: brain/brain.js)
     const eligible = offered.filter((c) => !c.flagged);
-    const i = snap.intersection;
-    const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.
     // A legal left on red uses the shared target: zero until stopped and clear.
-    const target = FEATURE_STOP.some((shouldStop) => shouldStop(snap))
-      ? 0
-      : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
+    const featureStop = FEATURE_STOP.some((shouldStop) => shouldStop(snap));
+    const target = featureStop ? 0 : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
     // an emergency vehicle is coming: pull over and stop, whatever it costs in lane position
     // parking at the destination, or pulling out of a space, once on offer: carry on with it
     // passing a cyclist through the oncoming lane, once the way is clear: at the pass speed, so as to
     // spend no longer in that lane than the pass was judged clear for
-    // in a bus lane while it is in effect, short of the right-turn approach: out of it, after making way for an emergency vehicle
-    const inBusLane =
-      snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index);
-    const exitBusLane = inBusLane
-      ? eligible.find((c) => c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx))
-      : null;
+    const scores = policy ? [] : null;
+    let selection = null;
+    const picked = (candidate, reason) => {
+      if (candidate) selection = reason;
+      return candidate;
+    };
     const candidate =
-      eligible.find((c) => c.id === "pull_over") ||
-      firstHookResult(BEFORE_BUS_LANES, snap, eligible, target) ||
-      exitBusLane ||
-      firstHookResult(AFTER_BUS_LANES, snap, eligible, target) ||
-      eligible.find((c) => c.id === "park" || c.id === "pull_out") ||
-      eligible.find((c) => c.id === "pass_cyclist") ||
-      firstHookResult(AFTER_PASSING, snap, eligible, target) ||
-      firstHookResult(CAUTIOUS, snap, eligible, target) ||
-      firstHookResult(BEFORE_AMBER, snap, eligible, target) ||
-      (amberStop && eligible.find((c) => c.id === "stop_at_line")) ||
-      firstHookResult(AFTER_AMBER, snap, eligible, target) ||
-      bestCandidate(eligible, target);
-    // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
-    // pulling up to park stops where the car reverses in)
+      picked(
+        eligible.find((c) => c.id === "pull_over"),
+        "pull_over",
+      ) ||
+      picked(firstHookResult(BEFORE_BUS_LANES, snap, eligible, target), "feature_before_bus_lanes") ||
+      picked(firstHookResult(RESERVED_LANE, snap, eligible, target), "feature_reserved_lane") ||
+      picked(firstHookResult(AFTER_BUS_LANES, snap, eligible, target), "feature_after_bus_lanes") ||
+      picked(
+        eligible.find((c) => c.id === "park" || c.id === "pull_out"),
+        "parking",
+      ) ||
+      picked(firstHookResult(PASSING, snap, eligible, target), "feature_passing") ||
+      picked(firstHookResult(AFTER_PASSING, snap, eligible, target), "feature_after_passing") ||
+      picked(firstHookResult(CAUTIOUS, snap, eligible, target), "feature") ||
+      picked(firstHookResult(BEFORE_AMBER, snap, eligible, target), "feature_before_amber") ||
+      picked(firstHookResult(SIGNAL_STOP, snap, eligible, target), "approach_signal") ||
+      picked(firstHookResult(AFTER_AMBER, snap, eligible, target), "feature_after_amber") ||
+      picked(bestCandidate(eligible, target, scores), "score");
+
+    const fields = featureDecisionFields(snap);
+    // A pull-over or parking manoeuvre brings the car to a stop at the planned location.
+    let motionReason = "moving_prediction";
+    if (!candidate) motionReason = "no_candidate";
+    else if (stopAtLineDrive(snap, candidate)) motionReason = "approach_signal";
+    else if (candidate.sim.end_speed < 0.3) {
+      if (["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id)) motionReason = "planned_stop";
+      else if (FEATURE_DRIVE.some((drive) => drive(candidate, snap))) motionReason = "feature_planned_stop";
+      else motionReason = "stationary_prediction";
+    }
+    const motion = motionReason === "stationary_prediction" ? "stop" : "drive";
+    if (policy)
+      Object.assign(policy, {
+        driver: this.name,
+        desiredSpeed: target,
+        targetReason: featureStop
+          ? "feature_stop"
+          : (snap.target?.v ?? snap.limit) <= snap.limit * 0.8
+            ? "sensing_target"
+            : "cautious_speed_cap",
+        flagged: offered.filter((c) => c.flagged).map((c) => c.id),
+        selection,
+        motionReason,
+        scores,
+      });
     return {
-      ...featureDecisionFields(snap),
-      motion:
-        !(amberStop && candidate?.id === "stop_at_line") &&
-        candidate?.sim.end_speed < 0.3 &&
-        !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) &&
-        !FEATURE_DRIVE.some((drive) => drive(candidate, snap))
-          ? "stop"
-          : "drive",
+      ...fields,
+      motion,
       candidateId: candidate?.id ?? null,
       meta: { source: this.name, model: this.name, latency_ms: 0, input_tokens: 0, cost_usd: 0 },
     };
   }
-  async decide(snap, eligible) {
-    return this.decideSync(snap, eligible);
+  async decide(snap, eligible, request) {
+    const policy = decisionContext(request)?.policy;
+    const result = this.decideSync(snap, eligible, policy);
+    if (policy) Object.assign(policy, { candidateId: result.candidateId, motion: result.motion });
+    return result;
   }
 }
 

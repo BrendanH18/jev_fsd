@@ -33,7 +33,7 @@ jobs:
         # tests/test_parity.py runs the JavaScript side under Node; here a missing Node is a failure
         env:
           JEV_REQUIRE_NODE: 1
-        run: uv run --locked python -m unittest discover tests
+        run: uv run --locked python -m unittest discover -s tests
       - name: Offline Jev requests
         run: uv run --locked scripts/verify_jev.py --offline
       - name: Jev fixtures match the current pipeline
@@ -64,29 +64,19 @@ jobs:
       - name: Node checks
         run: |
           files=$(node scripts/ci_shard.mjs --shards 6 --shard ${{ matrix.shard }})
-          if [ -z "$files" ]; then echo "::error::shard ${{ matrix.shard }} has no Node checks"; exit 1; fi
-          failed=()
-          for f in $files; do
-            echo "::group::$f"
-            rc=0
-            timeout --kill-after=10s "${NODE_TEST_TIMEOUT}s" node --experimental-default-type=module "$f" || rc=$?
-            echo "::endgroup::"
-            if [ "$rc" -eq 124 ]; then
-              echo "::error file=$f::$f timed out after ${NODE_TEST_TIMEOUT} s"
-              failed+=("$f")
-            elif [ "$rc" -eq 137 ]; then
-              echo "::error file=$f::$f was killed (timed out and ignored SIGTERM, or ran out of memory)"
-              failed+=("$f")
-            elif [ "$rc" -ne 0 ]; then
-              echo "::error file=$f::$f failed with exit code $rc"
-              failed+=("$f")
-            fi
-          done
-          if [ "${#failed[@]}" -gt 0 ]; then
-            echo "Failed Node checks:"
-            printf '  %s\n' "${failed[@]}"
+          if [[ -z "$files" ]]; then
+            echo "::error::shard ${{ matrix.shard }} has no Node checks"
             exit 1
           fi
+          mapfile -t checks <<< "$files"
+          node scripts/node_checks.mjs --jobs 1 --github --json checks.json \
+            --summary "$GITHUB_STEP_SUMMARY" -- "${checks[@]}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('checks.json') != '' }}
+        with:
+          name: node-checks-${{ matrix.shard }}
+          path: checks.json
+          retention-days: 7
 
   browser:
     name: Browser suite, ${{ matrix.title }}
@@ -124,13 +114,16 @@ jobs:
       - name: Start the local server
         run: |
           uv run --locked server.py > server.log 2>&1 &
-          for i in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8322/ && exit 0; sleep 1; done
-          cat server.log; exit 1
+          bash .github/workflows/wait-for-local-server.sh 8322 / "$!"
       - name: Browser assertions
-        run: uv run --locked --with "$PLAYWRIGHT" python ${{ matrix.script }}
+        env:
+          BROWSER_SCRIPT: ${{ matrix.script }}
+        run: |
+          read -r -a arguments <<< "$BROWSER_SCRIPT"
+          uv run --locked --with "$PLAYWRIGHT" python "${arguments[@]}"
       - name: Server log
-        if: failure()
-        run: cat server.log
+        if: failure() && hashFiles('server.log') != ''
+        run: tail -n 200 server.log
 
   build:
     needs: [python, node, browser]
@@ -154,19 +147,25 @@ jobs:
     name: Demo checks passed
     needs: [python, node, browser, build]
     if: always()
+    permissions: {}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every job passed
         run: |
-          echo "Results: $RESULTS"
-          test "$(echo "$RESULTS" | tr ' ' '\n' | sort -u)" = success
+          set -o pipefail
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<< "$RESULTS")
+          if [[ -n "$failed" ]]; then
+            printf 'Required jobs did not pass:\n%s\n' "$failed"
+            exit 1
+          fi
+          jq -e 'type == "object" and length > 0' <<< "$RESULTS" >/dev/null
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          RESULTS: ${{ toJSON(needs) }}
 
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: demo-passed
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Pages accepts one deployment at a time. A deploy that starts while another

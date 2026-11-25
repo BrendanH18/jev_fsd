@@ -29,7 +29,16 @@ const write = (name, h, drives) => {
     header: h,
     drives: Object.fromEntries(drives.map((id) => [id, { [`k-${id}`]: [{ response: { id } }] }])),
     results: Object.fromEntries(
-      drives.map((id) => [id, { challenge: id, ...h.manifest?.suite.drives[id], pass: true, result_sha: id }]),
+      drives.map((id) => [
+        id,
+        {
+          challenge: id,
+          ...h.manifest?.suite.drives[id],
+          ...(h.arena.track === "open" ? { track: "open" } : {}),
+          pass: true,
+          result_sha: id,
+        },
+      ]),
     ),
   });
   const file = path.join(dir, name);
@@ -261,7 +270,11 @@ const mergeBench = (...files) =>
     ],
     { stdio: "pipe" },
   ).toString();
-assert.throws(() => mergeBench(first, first), /Unexpected or repeated drive s1-1/);
+assert.throws(() => mergeBench(first, first), /need different files/);
+assert.throws(
+  () => mergeBench(first, benchPart("s1-1", false, 42, "duplicate-drive")),
+  /Unexpected or repeated drive s1-1/,
+);
 assert.throws(
   () => mergeBench(first, benchPart("s1-2", true, 43, "shifted")),
   /recorded routes do not match the complete seeded suite/,

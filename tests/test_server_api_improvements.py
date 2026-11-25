@@ -102,14 +102,14 @@ class HttpTests(unittest.TestCase):
     def test_private_error(self):
         """Keep internal exception details out of API error responses."""
         for error in (OSError("private filesystem path"), KeyError("missing internal field")):
-            with self.subTest(error=type(error)), patch.object(server.traceback, "print_exc") as log:
+            with self.subTest(error=type(error)), patch.object(server.traceback, "print_tb") as log:
                 response, _ = self.dispatch(error=error)
                 self.assertEqual(response, (500, {"error": "Internal server error"}))
                 log.assert_called_once()
 
     def test_disconnected_client(self):
         """Stop request handling quietly when a client has disconnected."""
-        with patch.object(server.traceback, "print_exc") as log:
+        with patch.object(server.traceback, "print_tb") as log:
             with patch.dict(server.ROUTES, {("POST", "/api/proof"): Mock(side_effect=BrokenPipeError())}):
                 handler = object.__new__(server.Handler)
                 handler.path = "/api/proof"
@@ -823,7 +823,7 @@ class JevClientTests(unittest.TestCase):
 
     def test_stdlib_bad_json(self):
         """Report malformed TypeSafe response JSON from the fallback transport as a provider error."""
-        with patch.object(client.urllib.request, "urlopen", return_value=io.BytesIO(b"{")):
+        with patch.object(endpoints._OPENER, "open", return_value=io.BytesIO(b"{")):
             with self.assertRaisesRegex(client.JevError, "readable JSON"):
                 self.client._stdlib_request("GET", "/v1/models", None)
 
@@ -833,7 +833,7 @@ class JevClientTests(unittest.TestCase):
             "https://example.invalid", 429, "rate limited", {"retry-after": "3600"}, io.BytesIO(b"{}")
         )
         with (
-            patch.object(client.urllib.request, "urlopen", side_effect=[retry, io.BytesIO(b"{}")]),
+            patch.object(endpoints._OPENER, "open", side_effect=[retry, io.BytesIO(b"{}")]),
             patch.object(client.time, "sleep") as sleep,
         ):
             _, attempts = self.client._stdlib_request("GET", "/v1/models", None)

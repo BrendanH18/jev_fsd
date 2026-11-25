@@ -15,6 +15,8 @@ from .osm.pack import PACK_VERSION, pack_path
 
 _META_CACHE: dict = {}  # str(path) -> (file stamp, metadata or None)
 _META_LOCK = threading.Lock()
+MAX_META_ENTRIES = 64
+MAX_PREVIEW_PACK_BYTES = 16 * 1024 * 1024
 
 MAP_CATALOG = (
     {
@@ -141,8 +143,9 @@ MAP_CATALOG = (
 
 
 def map_identity(bbox: tuple) -> dict:
+    bbox = tuple(bbox)
     for item in MAP_CATALOG:
-        if tuple(bbox) == PRESET_BBOXES[item["id"]]:
+        if bbox == PRESET_BBOXES[item["id"]]:
             return {
                 "id": item["id"],
                 "label": "%s, %s" % (item["name"], item["city"]),
@@ -158,21 +161,28 @@ def _pack_metadata(path: Path) -> Optional[dict]:
         st = path.stat()
     except OSError:
         st = None
-    if st is None or not stat.S_ISREG(st.st_mode):
+    if st is None or not stat.S_ISREG(st.st_mode) or st.st_size > MAX_PREVIEW_PACK_BYTES:
         with _META_LOCK:
             _META_CACHE.pop(key, None)
         return None
     stamp = (st.st_dev, st.st_ino, st.st_ctime_ns, st.st_mtime_ns, st.st_size)
     with _META_LOCK:
-        cached = _META_CACHE.get(key)
+        cached = _META_CACHE.pop(key, None)
         if cached is not None and cached[0] == stamp:
+            _META_CACHE[key] = cached
             return cached[1]
     try:
-        meta = _preview_metadata(json.loads(path.read_text(encoding="utf-8")))
+        with path.open("rb") as handle:
+            data = handle.read(MAX_PREVIEW_PACK_BYTES + 1)
+        if len(data) > MAX_PREVIEW_PACK_BYTES:
+            raise ValueError("pack exceeds the preview size limit")
+        meta = _preview_metadata(json.loads(data.decode("utf-8")))
     except (OSError, ValueError, TypeError, KeyError, RecursionError):
         meta = None
     with _META_LOCK:
         _META_CACHE[key] = (stamp, meta)
+        if len(_META_CACHE) > MAX_META_ENTRIES:
+            del _META_CACHE[next(iter(_META_CACHE))]
     return meta
 
 
@@ -193,19 +203,31 @@ def _preview_metadata(pack: dict) -> dict:
             raise ValueError(f"{field} must be an array")
     if len(pack["extent"]) != 4 or not all(_finite(v) for v in pack["extent"]):
         raise ValueError("extent must have four finite coordinates")
+    x0, y0, x1, y1 = pack["extent"]
+    if x0 >= x1 or y0 >= y1:
+        raise ValueError("extent must have positive width and height")
     preview = []
     seen = set()
     for edge in pack["edges"]:
+        if not isinstance(edge, dict):
+            raise ValueError("each road must be an object")
         start, end = edge["from"], edge["to"]
-        points = tuple(map(tuple, edge["pts"]))
-        if not all(len(pt) == 2 and _finite(pt[0]) and _finite(pt[1]) for pt in points):
-            raise ValueError("edge points must be finite coordinate pairs")
+        if type(start) not in (str, int) or type(start) is not type(end):
+            raise ValueError("road endpoint IDs must use the same type")
+        pts, kind = edge["pts"], edge["cls"]
+        if not isinstance(kind, str):
+            raise ValueError("road class must be text")
+        if not isinstance(pts, list) or len(pts) < 2:
+            raise ValueError("each road must have at least two points")
+        if not all(isinstance(pt, list) and len(pt) == 2 and all(_finite(v) for v in pt) for pt in pts):
+            raise ValueError("road points must be finite coordinate pairs")
+        points = tuple(map(tuple, pts))
         reverse = (end, start, points[::-1])
         edge_key = min((start, end, points), reverse)
         if edge_key in seen:
             continue
         seen.add(edge_key)
-        preview.append({"pts": edge["pts"], "major": edge["cls"] in ("primary", "secondary", "tertiary", "trunk")})
+        preview.append({"pts": pts, "major": kind in ("primary", "secondary", "tertiary", "trunk")})
     return {
         "stats": {
             "roads": len(pack["edges"]),

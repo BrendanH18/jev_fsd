@@ -24,9 +24,9 @@ export const challenge = {
   difficulty: "Judgement",
   hazard: "night-flash",
   nightFlash: true,
-  description: "Late at night, your side street shows flashing red while the main street shows flashing amber.",
+  description: "Your side-street light is flashing red, but the cross street has flashing amber and moving traffic.",
   lesson:
-    "Stop fully at flashing red, then cross only when the main street is clear. Main-street drivers slow and yield to anyone already in the junction; they do not stop in arrival order.",
+    "Stop fully at the line, then wait for a gap in both directions. Traffic on the flashing-amber street may keep moving, so use an actual gap instead of counting which car arrived first.",
 };
 
 // Overnight side-street approaches with a straight crossing and main-street traffic.

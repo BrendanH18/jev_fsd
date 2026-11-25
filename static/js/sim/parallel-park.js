@@ -1,4 +1,4 @@
-import { reserveSlot } from "./parking.js";
+import { releaseSlot, reserveAvailableSlots } from "./parking.js";
 // Parallel parking at the destination. Near the end of a free drive the car looks for an empty, legal
 // space in the parking lane on its right, before the destination, that it can see and that is long
 // enough for it, and parks there the way every province's driver's handbook teaches: signal, pull up
@@ -152,22 +152,29 @@ export function tyres(pose, spec) {
 // KERB_OVER_M over the kerb; a corner already further over may only come back), and it stays clear of
 // scenery and of anything standing still. Moving traffic is left to the prediction and the safety brake.
 export function parkRoom(vehicle, world, steer, d) {
+  if (!Number.isFinite(steer) || !Number.isFinite(d)) return false;
   const spec = vehicle.spec,
     to = poseAfter(vehicle, steer, d),
     map = world.map;
   const off = (p) => map.roadDistance(p[0], p[1]).distance;
+  const goesFartherOffRoad = (from, to, limit) => {
+    const after = off(to);
+    if (!Number.isFinite(after)) return true;
+    if (after <= limit) return false;
+    const before = off(from);
+    return !Number.isFinite(before) || after > before + 0.005;
+  };
   const tNow = tyres(vehicle, spec),
     tTo = tyres(to, spec);
-  for (let k = 0; k < tTo.length; k++) if (off(tTo[k]) > 0.01 && off(tTo[k]) > off(tNow[k]) + 0.005) return false;
+  for (let k = 0; k < tTo.length; k++) if (goesFartherOffRoad(tNow[k], tTo[k], 0.01)) return false;
   const cNow = corners(vehicle, spec),
     cTo = corners(to, spec);
-  for (let k = 0; k < cTo.length; k++)
-    if (off(cTo[k]) > KERB_OVER_M && off(cTo[k]) > off(cNow[k]) + 0.005) return false;
+  for (let k = 0; k < cTo.length; k++) if (goesFartherOffRoad(cNow[k], cTo[k], KERB_OVER_M)) return false;
   if (world.staticObstacles?.sweep({ x: vehicle.x, y: vehicle.y, psi: vehicle.psi }, to, spec, CLEAR_M / 2))
     return false;
   const box = boxAt(to, spec);
   for (const n of world.obstaclesNear(box.center[0], box.center[1], 8)) {
-    if (n === vehicle || n === world.ego || Math.abs(n.v || 0) > 0.5) continue;
+    if (n === vehicle || n === world.ego || Math.abs(n.v || 0) > 0.5 || !n.obb) continue;
     if (obbOverlap(box, n.obb(), CLEAR_M)) return false;
   }
   return true;
@@ -180,6 +187,7 @@ const legalCache = new WeakMap();
 // The stretches of edge `e`'s right kerb where a car may park, as [from, to] along it (its own `s`), or
 // [] where it may not park at all.
 export function legalStretches(map, e) {
+  if (!e) return [];
   if (!legalCache.has(map)) {
     const railed = new Set();
     for (const c of railIndex(map).crossings) for (const on of c.edges) railed.add(on.edge);
@@ -190,31 +198,28 @@ export function legalStretches(map, e) {
   let out = [];
   if (e.parking?.[1] > 0 && !e.ring && !railed.has(e.id)) {
     const L = e.cum[e.cum.length - 1];
-    const legs = (node) =>
-      new Set(
-        [...(map.inn.get(node) || []), ...(map.out.get(node) || [])].map((id) => {
-          const o = map.edges.get(id);
-          return o.from === node ? o.to : o.from;
-        }),
-      ).size;
-    const half = (node) =>
-      Math.max(
-        0,
-        ...[...(map.inn.get(node) || []), ...(map.out.get(node) || [])].map((id) => {
-          const o = map.edges.get(id);
-          return Math.max(Math.abs(o.asphalt[0]), Math.abs(o.asphalt[1]));
-        }),
-      );
     // the junction's crosswalk, from the widest street's asphalt there
-    const reach = (node) => (legs(node) >= 3 ? half(node) + CROSS_BEYOND_CURB_M + CROSSWALK_HALF_M : 0);
-    let lo = reach(e.from),
-      hi = L - (legs(e.to) >= 3 ? reach(e.to) + CROSSWALK_APPROACH_M : 0);
+    const reach = (node) => {
+      let half = 0;
+      const legs = new Set();
+      for (const id of [...(map.inn.get(node) || []), ...(map.out.get(node) || [])]) {
+        const edge = map.edges.get(id);
+        if (!edge) continue;
+        legs.add(edge.from === node ? edge.to : edge.from);
+        half = Math.max(half, Math.abs(edge.asphalt[0]), Math.abs(edge.asphalt[1]));
+      }
+      return legs.size >= 3 ? half + CROSS_BEYOND_CURB_M + CROSSWALK_HALF_M : 0;
+    };
+    const lo = reach(e.from);
+    const endReach = reach(e.to);
+    let hi = L - (endReach ? endReach + CROSSWALK_APPROACH_M : 0);
     if (e.control) hi = Math.min(hi, e.control.s_line - LINE_APPROACH_M);
     const cut = [];
     // marked crosswalks between junctions on this street, either way
     for (const c of map.crosswalks || []) {
       const base = map.edges.get(c.edge);
       if (!base || (c.edge !== e.id && !(base.from === e.to && base.to === e.from))) continue;
+      if (!Number.isFinite(c.x) || !Number.isFinite(c.y)) continue;
       const s = projectPoint(e.pts, e.cum, [c.x, c.y]).s;
       cut.push([s - CROSSWALK_HALF_M - CROSSWALK_APPROACH_M, s + CROSSWALK_HALF_M]);
     }
@@ -227,8 +232,9 @@ export function legalStretches(map, e) {
 
 // [[a, b], ...] less every [c, d] in `cut`.
 function subtract(spans, cut) {
-  let out = spans.filter(([a, b]) => b > a);
+  let out = spans.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a);
   for (const [c, d] of cut) {
+    if (!Number.isFinite(c) || !Number.isFinite(d) || d <= c) continue;
     const next = [];
     for (const [a, b] of out) {
       if (d <= a || c >= b) {
@@ -286,9 +292,13 @@ function taken(world, e, a, b) {
 
 // Whether the edge's kerb is straight from `a` to `b`.
 export function straight(e, a, b) {
-  const L = e.cum[e.cum.length - 1],
-    h0 = headingAt(e.pts, e.cum, Math.max(0, a));
-  for (let s = Math.max(0, a); s <= Math.min(L, b); s += 2)
+  if (!e || !Number.isFinite(a) || !Number.isFinite(b) || a > b) return false;
+  const L = e.cum[e.cum.length - 1];
+  const start = Math.max(0, a);
+  const end = Math.min(L, b);
+  if (start > end || !Number.isFinite(end)) return false;
+  const h0 = headingAt(e.pts, e.cum, start);
+  for (let s = start; s <= end; s += 2)
     if (Math.abs(wrap(headingAt(e.pts, e.cum, s) - h0)) > STRAIGHT_RAD) return false;
   return true;
 }
@@ -296,6 +306,7 @@ export function straight(e, a, b) {
 // The spaces along `route` that the car could park in, with their plans, nearest the destination first:
 // on route edges whose route lane is the one beside the right parking lane, before the destination.
 export function spacesAlong(world, route, spec, { fromS = 0 } = {}) {
+  if (!route?.edges?.length || !Number.isFinite(route.length) || Number.isNaN(fromS)) return [];
   const map = world.map,
     out = [];
   const starts = route.laneEdgeStarts();
@@ -304,12 +315,7 @@ export function spacesAlong(world, route, spec, { fromS = 0 } = {}) {
     const e = map.edges.get(route.edges[i]);
     if (!e || starts[i + 1] < route.length - PARK_NEAR_M - 40) break;
     // (never on the block of a work zone, a lane closure or a double-parked van)
-    if (
-      world.workZones?.zones.some((z) => z.closed === e.id || z.open === e.id) ||
-      world.laneClosures?.zones.some((z) => z.edge === e.id) ||
-      world.doubleParked?.vans.some((d) => d.edge === e.id || d.opposite === e.id)
-    )
-      continue;
+    if (parkingObstructed(world, e.id)) continue;
     const info = route.laneInfo(i);
     if (!e.parking?.[1] || info.idx !== info.lanes - 1) continue;
     // (on the destination's street, a space ends far enough short of the destination for the car to
@@ -330,10 +336,20 @@ export function spacesAlong(world, route, spec, { fromS = 0 } = {}) {
   return out.sort((x, y) => y.goalS - x.goalS);
 }
 
+// Temporary obstructions rule out the whole block for both traffic and destination parking.
+export function parkingObstructed(world, edge) {
+  return (
+    !!world.workZones?.zones.some((z) => z.closed === edge || z.open === edge) ||
+    !!world.laneClosures?.zones.some((z) => z.edge === edge) ||
+    !!world.doubleParked?.vans.some((d) => d.edge === edge || d.opposite === edge)
+  );
+}
+
 // The plan for the space [a, b] along edge `e` (`spans`: what stands in its parking lane), or null where
 // the car could not reverse into it in one go, or would end past the destination or too far before it
 // (`anywhere`: a traffic car's space, on its own path, with no destination to keep to: sim/parkers.js).
 function planSpace(world, route, e, a, b, spec, spans, anywhere = false) {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a || !e?.parking?.[1]) return null;
   const kerb = e.asphalt[1],
     R = turnRadius(spec),
     FRONT = spec.length - spec.rearOverhang;
@@ -350,18 +366,20 @@ function planSpace(world, route, e, a, b, spec, spans, anywhere = false) {
   const side = Math.min(kerb - e.parking[1], front ? front[2] : Infinity);
   const startW = Math.max(laneW, Math.min(laneW + LANE_NUDGE_M, side - START_SIDE_M - spec.width / 2));
   const startU = b + spec.rearOverhang - START_BACK_M;
+  const shift = goalW - startW;
+  if (!Number.isFinite(R) || R <= 0 || !Number.isFinite(shift) || shift <= 0 || shift > 4 * R) return null;
   // Swinging in on the last arc, about a point R left of the rear axle, the car's outer front corner
   // keeps CLEAR_M from the inner rear corner of whatever is in front of the space: the S ends at least
   // `clip` behind it. A longer space ends the S where two arcs alone take it, and the car then drives
   // forward to its goal, FRONT_GAP_M short of the car in front.
   const reach = Math.hypot(FRONT, R + spec.width / 2) + CLEAR_M,
     apart = front ? front[2] - (goalW - R) : Infinity;
-  const clip = apart >= reach ? 0 : Math.sqrt(reach * reach - apart * apart);
-  const s = solveS(R, Infinity, goalW - startW);
+  const clip = Math.abs(apart) >= reach ? 0 : Math.sqrt(reach * reach - apart * apart);
+  const s = solveS(R, Infinity, shift);
   const endU = Math.min(b - clip, startU - s.X);
   // (room for the S behind, CLEAR_M from what is behind the space)
   if (endU - spec.rearOverhang < a + CLEAR_M - 0.05) return null;
-  const S = solveS(R, startU - endU, goalW - startW);
+  const S = solveS(R, startU - endU, shift);
   const frontGap = Math.min(FRONT_GAP_M, (b - a - spec.length) / 2);
   const goalU = Math.max(endU, b - frontGap - FRONT);
   if (!straight(e, a - 2, startU + spec.length)) return null;
@@ -436,9 +454,12 @@ export const planSpaceOn = (world, path, e, a, b, spec, spans) => planSpace(worl
 // (no smaller than MIN_PHI). With `X` Infinity, the least.
 const MIN_PHI = (12 * Math.PI) / 180;
 export function solveS(R, X, D) {
+  if (!Number.isFinite(R) || R <= 0) throw new RangeError("Parking turn radius must be positive and finite");
+  if (!Number.isFinite(D) || D < 0 || D > 4 * R) throw new RangeError("Parking lateral move is outside the arc range");
+  if (!(X >= 0)) throw new RangeError("Parking longitudinal move must be nonnegative");
   const pure = Math.acos(Math.max(-1, 1 - D / (2 * R)));
   const least = 2 * R * Math.sin(pure);
-  if (!Number.isFinite(X) || X <= least + 0.01) return { phi1: pure, X: least, d: 0 };
+  if (!Number.isFinite(X) || X <= least + 0.01 || pure <= MIN_PHI) return { phi1: pure, X: least, d: 0 };
   const along = (p) => 2 * R * Math.sin(p) + (D - 2 * R * (1 - Math.cos(p))) / Math.tan(p);
   let lo = MIN_PHI,
     hi = pure;
@@ -467,10 +488,8 @@ function stillFree(world, plan) {
 }
 
 function reserve(world, plan, on) {
-  for (const slot of plan.slots) {
-    if (on && !slot.reserved && !slot.occupant) reserveSlot(world.map, slot, world.ego);
-    else if (!on && slot.reserved?.owner === world.ego) slot.reserved = null;
-  }
+  if (on) reserveAvailableSlots(world.map, plan.slots, world.ego);
+  else for (const slot of plan.slots) releaseSlot(slot, world.ego);
 }
 
 // Who keeps the car from starting to reverse in: anything standing in the way back (traffic stopped
@@ -543,19 +562,20 @@ export class ParkPlanner {
     // pulling out of the space it is parked in, before anything else
     const spot = world.parkedIn;
     if (spot || law?.mode === "out") {
+      const source = spot || law;
       let plan = world.park;
       if (plan?.mode !== "out")
         plan = world.park = {
           mode: "out",
-          id: `${spot.id}:out`,
+          id: spot ? `${spot.id}:out` : law.id,
           status: "waiting",
           blocked: null,
           route,
-          kerbW: spot.kerbW,
-          laneW: spot.laneW,
+          kerbW: source.kerbW,
+          laneW: source.laneW,
         };
       const going = law?.mode === "out" && law.phase !== "out_back" && law.phase !== "out_wait";
-      plan.blocked = going ? null : blockerOut(world, spot || law);
+      plan.blocked = going ? null : blockerOut(world, source);
       plan.status = going ? "leaving" : "waiting";
       if (law?.mode === "out") law.go = !plan.blocked;
       world.parkHold = 0;
@@ -567,6 +587,10 @@ export class ParkPlanner {
     }
     if (law) {
       const plan = world.park;
+      if (!plan) {
+        this.clear(world);
+        return null;
+      }
       plan.status = law.phase === "parked" ? "parked" : law.phase === "stuck" ? "stuck" : "parking";
       world.parkHold = law.phase === "parked" || law.phase === "stuck" ? 0 : plan.hold;
       return plan;
@@ -578,7 +602,10 @@ export class ParkPlanner {
       return null;
     }
     let plan = world.park;
-    if (plan?.status === "none") return plan;
+    if (plan?.status === "none") {
+      world.parkHold = 0;
+      return plan;
+    }
     if (plan && world.t - this.at >= SEARCH_S) {
       this.at = world.t;
       const toStop = plan.stopS - routeS;
@@ -601,8 +628,9 @@ export class ParkPlanner {
       );
       const options = all.filter((p) => p.goalS - routeS < PARK_LOOK_M && seen(world, p));
       if (options.length) {
-        plan = world.park = { ...options[0], mode: "in", route, status: "approach", waited: 0, blocked: null };
+        plan = { ...options[0], mode: "in", route, status: "approach", waited: 0, blocked: null };
         reserve(world, plan, true);
+        world.park = plan;
       } else if (!all.length && remaining < PARK_NEAR_M) {
         // nowhere left that it could still stop for
         world.park = { status: "none", route };
@@ -672,8 +700,8 @@ export class ParkPlanner {
 // Releases the space the car parked in once it has left it (called every step, World.audit).
 export function leftSpace(world) {
   const spot = world.parkedIn;
-  if (!spot || Math.hypot(world.ego.x - spot.at[0], world.ego.y - spot.at[1]) < LEFT_M) return;
-  for (const slot of spot.slots) if (slot.reserved?.owner === world.ego) slot.reserved = null;
+  if (!spot || !(Math.hypot(world.ego.x - spot.at[0], world.ego.y - spot.at[1]) >= LEFT_M)) return;
+  for (const slot of spot.slots) releaseSlot(slot, world.ego);
   world.parkedIn = null;
 }
 
@@ -843,6 +871,8 @@ function remaining(vehicle, law) {
 
 // One physics step of the manoeuvre. Always returns true (it never hands back to the lane).
 export function stepParking(vehicle, law, world, dt, speedControl) {
+  if (!Number.isFinite(dt) || dt < 0) throw new RangeError("Invalid parking step duration");
+  if (dt === 0) return law.mode !== "out" || law.phase !== "done";
   const spec = vehicle.spec,
     v = Math.abs(vehicle.v);
   law.idle = v < 0.05 ? (law.idle || 0) + dt : 0;
@@ -910,12 +940,13 @@ function stepOut(vehicle, law, world, dt, speedControl, hold) {
     if (law.go && v < 0.03) Object.assign(law, { phase: "out1", dir: 1, steer: 1, travelled: 0 });
     return true;
   }
-  const leg = {
+  const legs = {
     out_back: [-1, 0, f.u - law.endU - 0.05],
     out1: [1, 1, Math.min(law.R * (law.phi1 - a), toArc / Math.max(0.15, 2 * Math.sin(a)))],
     out2: [1, 0, toArc / Math.max(0.05, Math.sin(a))],
     out3: [1, -1, f.phi <= PAR_TOL / 4 ? 0 : law.R * a],
-  }[law.phase];
+  };
+  const leg = Object.hasOwn(legs, law.phase) ? legs[law.phase] : null;
   if (!leg) {
     hold(vehicle.delta);
     return true;
@@ -950,7 +981,7 @@ function stepOut(vehicle, law, world, dt, speedControl, hold) {
 }
 
 // How the car stands once parked (or wherever it is in the space): its right tyres' distance from
-// the kerb (negative: on it), how far from parallel it is (degrees), and the room in front and behind.
+// the kerb (negative: on it), how far from parallel it is (degrees), and whether it meets the tolerances.
 export function parkedPose(vehicle, plan) {
   const spec = vehicle.spec,
     f = frameOf(vehicle, plan);

@@ -80,6 +80,8 @@ const HUG_MPS = 0.4;
 
 export const isContraflowRider = (o) => !!o?.contra;
 const wrap = (a) => {
+  if (!Number.isFinite(a)) return NaN;
+  if (Math.abs(a) > 3 * Math.PI) a %= 2 * Math.PI;
   while (a > Math.PI) a -= 2 * Math.PI;
   while (a <= -Math.PI) a += 2 * Math.PI;
   return a;
@@ -87,7 +89,7 @@ const wrap = (a) => {
 
 // The contraflow record of an edge (jev/osm/contraflow.py: { edge, kind, side }), or null.
 export function contraflowOf(map, edgeId) {
-  return map.contraflow?.get(edgeId) || null;
+  return map?.contraflow?.get(edgeId) || null;
 }
 
 // How far right of an edge's centreline a contraflow rider rides (negative: the left).
@@ -118,7 +120,7 @@ function crossHalf(map, node, skip) {
   let w = 0;
   for (const id of [...(map.inn.get(node) || []), ...(map.out.get(node) || [])]) {
     const o = map.edges.get(id);
-    if (skip.some((e) => (o.from === e.from && o.to === e.to) || (o.from === e.to && o.to === e.from))) continue;
+    if (!o || skip.some((e) => (o.from === e.from && o.to === e.to) || (o.from === e.to && o.to === e.from))) continue;
     w = Math.max(w, Math.abs(o.asphalt[0]), Math.abs(o.asphalt[1]));
   }
   return w;
@@ -134,8 +136,8 @@ export function contraControl(map, e) {
     h = wrap(map.headingOut(e.id) + Math.PI);
   const inn = (map.inn.get(node) || [])
     .map((id) => map.edges.get(id))
-    .filter((o) => o.id !== e.id && !(o.from === e.to && o.to === e.from));
-  const out = (map.out.get(node) || []).map((id) => map.edges.get(id));
+    .filter((o) => o && o.id !== e.id && !(o.from === e.to && o.to === e.from));
+  const out = (map.out.get(node) || []).map((id) => map.edges.get(id)).filter(Boolean);
   const neighbours = new Set([...inn.map((o) => o.from), ...out.map((o) => o.to)]);
   if (neighbours.size < 3) return null;
   const axis = (o) => Math.abs(Math.cos(map.headingIn(o.id) - h));
@@ -144,7 +146,7 @@ export function contraControl(map, e) {
   const setbackOf = (o) => (o?.control ? Math.max(2, o.length - o.control.s_line) : half + 1.5);
   const signals = inn.filter((o) => o.control?.type === "signal");
   if (signals.length) {
-    const ref = signals.slice().sort((a, b) => axis(b) - axis(a))[0];
+    const ref = signals.sort((a, b) => axis(b) - axis(a))[0];
     return {
       type: "signal",
       id: ref.control.id,
@@ -175,13 +177,21 @@ export class RiderPath {
     this.segs = [];
   }
   add(id, line, contra, control, node) {
-    this.pts = joinLanes(this.pts, line);
-    this.cum = cumulative(this.pts);
+    if (!Array.isArray(line) || line.length < 2) return false;
+    if (!line.every((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]))) return false;
+    if (control && (!Number.isFinite(control.setback) || control.setback < 0)) return false;
+    const pts = joinLanes(this.pts, line);
+    const cum = cumulative(pts);
     const sStart = this.segs.length ? this.segs[this.segs.length - 1].sEnd : 0;
-    this.length = this.cum[this.cum.length - 1];
+    const length = cum[cum.length - 1];
+    if (!Number.isFinite(length) || length <= sStart) return false;
+    this.pts = pts;
+    this.cum = cum;
+    this.length = length;
     const seg = { id, contra, sStart, sEnd: this.length, node, control };
     if (control) seg.line = Math.max(sStart + 1, this.length - control.setback);
     this.segs.push(seg);
+    return true;
   }
   pointAt(s) {
     return pointAt(this.pts, this.cum, s);
@@ -215,7 +225,7 @@ export class ContraflowRiders {
     this.enabled = !!enabled && !!world.map.contraflow?.size;
     this.riders = [];
     this.made = 0;
-    this.target = this.enabled ? count : 0;
+    this.target = this.enabled && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
     // (their own stream, drawn from only while they ride)
     this.random = this.enabled ? rng(seed * 122949823 + 47) : null;
     this.next = 0;
@@ -232,7 +242,8 @@ export class ContraflowRiders {
       const prev = (map.inn.get(last.from) || [])
         .map((id) => map.edges.get(id))
         .find(
-          (o) => contraflowOf(map, o.id) && !out.includes(o) && Math.abs(wrap(map.headingIn(o.id) - h)) < Math.PI / 6,
+          (o) =>
+            o && contraflowOf(map, o.id) && !out.includes(o) && Math.abs(wrap(map.headingIn(o.id) - h)) < Math.PI / 6,
         );
       if (!prev) break;
       out.push(prev);
@@ -246,7 +257,7 @@ export class ContraflowRiders {
     const map = this.world.map;
     const outs = (map.out.get(node) || [])
       .map((id) => map.edges.get(id))
-      .filter((o) => !o.ring && !exclude.includes(o.id))
+      .filter((o) => o && !o.ring && !exclude.includes(o.id))
       .map((o) => ({ o, a: wrap(map.headingOut(o.id) - h) }))
       .filter((x) => Math.abs(x.a) < (Math.PI * 130) / 180);
     if (!outs.length) return null;
@@ -259,7 +270,7 @@ export class ContraflowRiders {
   // An ordinary edge's line for a rider: the curb lane, at its right-hand side.
   withLine(e) {
     const lane = this.world.map.lane(e.id, e.lanes - 1) || this.world.map.lane(e.id, 0);
-    return offsetLine(lane.pts, Math.max(0, e.lane_width / 2 - 0.6));
+    return lane ? offsetLine(lane.pts, Math.max(0, e.lane_width / 2 - 0.6)) : null;
   }
 
   // Build a rider's way from contraflow edge e: its blocks, then on across the last junction.
@@ -267,8 +278,11 @@ export class ContraflowRiders {
     const map = this.world.map,
       path = new RiderPath(),
       chain = this.chain(e);
-    for (const c of chain)
-      path.add(c.id, contraLine(c, contraflowOf(map, c.id).side), true, contraControl(map, c), c.from);
+    for (const c of chain) {
+      if (!c.pts?.length) return null;
+      if (!path.add(c.id, contraLine(c, contraflowOf(map, c.id).side), true, contraControl(map, c), c.from))
+        return null;
+    }
     const last = chain[chain.length - 1];
     const exit = this.exitFrom(
       last.from,
@@ -284,11 +298,12 @@ export class ContraflowRiders {
     const map = this.world.map,
       path = n.path,
       last = path.segs[path.segs.length - 1];
-    if (last.contra || n.extended >= 3) return false;
+    if (!last || last.contra || n.extended >= 3) return false;
     const e = map.edges.get(last.id);
+    if (!e) return false;
     const next = this.exitFrom(e.to, map.headingIn(e.id));
     if (!next) return false;
-    path.add(next.id, this.withLine(next), false, withControl(map, next), next.to);
+    if (!path.add(next.id, this.withLine(next), false, withControl(map, next), next.to)) return false;
     n.extended++;
     return true;
   }
@@ -296,10 +311,13 @@ export class ContraflowRiders {
   // A rider on contraflow edge `edgeId`, `at` metres in from its `to` end, at `v` (and keeping to
   // `v0`). Returns it, or null when it cannot be placed.
   place({ edge, at = 10, v = 4, v0 = null, color = null } = {}) {
+    if (!this.enabled || !Number.isFinite(at) || !Number.isFinite(v) || v < 0) return null;
+    if (v0 !== null && (!Number.isFinite(v0) || v0 <= 0)) return null;
     const map = this.world.map,
       e = map.edges.get(edge);
     if (!e || !contraflowOf(map, edge)) return null;
     const path = this.buildPath(e);
+    if (!path) return null;
     const s = Math.max(0, Math.min(path.segs[0].sEnd - 2, at * (path.segs[0].sEnd / Math.max(1, e.length))));
     const p = path.pointAt(s),
       n = new Vehicle(p[0], p[1], path.headingAt(s), v, BIKE);
@@ -328,9 +346,12 @@ export class ContraflowRiders {
 
   // Put one down on a contraflow street START_M from the car, clear of everyone. Returns it or null.
   spawn() {
+    if (!this.enabled) return null;
     const map = this.world.map,
       ego = this.world.ego;
-    const edges = [...map.contraflow.keys()].map((id) => map.edges.get(id)).filter((e) => e && e.length > 20);
+    const edges = [...map.contraflow.keys()]
+      .map((id) => map.edges.get(id))
+      .filter((e) => e && Number.isFinite(e.length) && e.length > 20);
     if (!edges.length) return null;
     const total = edges.reduce((a, e) => a + e.length, 0);
     for (let attempt = 0; attempt < 20; attempt++) {
@@ -357,12 +378,14 @@ export class ContraflowRiders {
   }
 
   near(x, y, r) {
-    if (!this.riders.length) return [];
+    if (!this.riders.length || !Number.isFinite(r) || r < 0) return [];
     return this.riders.filter((n) => Math.abs(n.x - x) < r + 2 && Math.abs(n.y - y) < r + 2);
   }
 
   step(dt) {
     if (!this.enabled) return;
+    if (!Number.isFinite(dt) || dt < 0) throw new RangeError("Invalid contraflow step duration");
+    if (dt === 0) return;
     const world = this.world,
       ego = world.ego;
     // (retire those that rode off, far from the car)
@@ -712,8 +735,11 @@ export function riderConflict(
     back = 0,
   },
 ) {
-  const path = n.path,
-    bs = n.spec || BIKE,
+  const path = n?.path;
+  if (!path || !Number.isFinite(path.s) || !Number.isFinite(path.length)) return null;
+  if (!line?.pts?.length || line.pts.length !== line.cum?.length) return null;
+  if (!Number.isFinite(front) || !Number.isFinite(look) || look < 0 || !Number.isFinite(lat)) return null;
+  const bs = n.spec || BIKE,
     bf = path.s + bs.length - bs.rearOverhang;
   const stopAt = n.stopS !== null && n.stopS !== undefined ? n.stopS : Infinity;
   const vr = Math.max(n.v, 1.5);
@@ -722,11 +748,11 @@ export function riderConflict(
   const meetReach = (spec.width + bs.width) / 2 + clearance,
     crossReach = (spec.width + bs.width) / 2 + CROSS_SIDE_M;
   // (time for the vehicle's front to cover d metres from now, pulling away from v)
+  const v0 = Math.max(0, v),
+    top = Math.max(v0, vMax),
+    dAcc = (top * top - v0 * v0) / (2 * PULL_ACCEL);
   const travel = (d) => {
     if (d <= 0) return 0;
-    const v0 = Math.max(0, v),
-      top = Math.max(v0, vMax),
-      dAcc = (top * top - v0 * v0) / (2 * PULL_ACCEL);
     if (d <= dAcc) return (Math.sqrt(v0 * v0 + 2 * PULL_ACCEL * d) - v0) / PULL_ACCEL;
     return (top - v0) / PULL_ACCEL + (d - dAcc) / top;
   };
@@ -773,10 +799,11 @@ export function riderConflict(
     let close;
     if (meet) {
       // (moving right takes it further from one on its left; nothing helps with one on its right)
-      const sep = side < 0 ? -side + room(r) : side;
+      const rightRoom = side < 0 ? room(r) : 0;
+      const sep = side < 0 ? -side + rightRoom : side;
       close = sep < meetReach;
       if (side < 0 && -side < meetReach && r - front < SHIFT_LOOK_M)
-        meetShift = Math.max(meetShift, Math.min(room(r), meetReach - -side + 0.1));
+        meetShift = Math.max(meetShift, Math.min(rightRoom, meetReach - -side + 0.1));
     } else close = Math.abs(side) < crossReach && bestD < crossReach + 1;
     if (!close) continue;
     const eta = Math.max(0, c - bf) / vr,
@@ -792,7 +819,7 @@ export function riderConflict(
 // How far a vehicle in lane `laneIdx` of edge e can move right of its lane's centre, short of the
 // asphalt's edge (not into a parking lane).
 export function roomRight(e, laneIdx, spec) {
-  if (!e) return 0;
+  if (!e || !Number.isFinite(spec?.width) || spec.width <= 0) return 0;
   const centre = e.lane_offsets?.[laneIdx] ?? 0,
     park = e.parking?.[1] || 0;
   return Math.max(0, e.asphalt[1] - park - (centre + spec.width / 2) - RIGHT_MARGIN_M);
@@ -829,6 +856,7 @@ function entryWait(map, path, en) {
 // The contraflow edges along a vehicle's way that it enters within `look` metres of its front (not
 // the one it is on): [{ id, start }] (start: the arc length where it begins).
 export function entriesAhead(map, edges, front, look = ENTRY_LOOK_M) {
+  if (!Number.isFinite(front) || !Number.isFinite(look) || look <= 0) return [];
   const out = [];
   for (const e of edges)
     if (contraflowOf(map, e.id) && e.sStart > front - 2 && e.sStart < front + look)
@@ -840,9 +868,10 @@ export function entriesAhead(map, edges, front, look = ENTRY_LOOK_M) {
 // ENTRY_LOOK_M of its `from` end, and not stopping short of it: then a driver about to enter that
 // street waits for it.
 export function comingOut(n, edgeId) {
-  const seg = n.path.segs.find((g) => g.id === edgeId && g.contra);
+  const seg = n?.path?.segs?.find((g) => g.id === edgeId && g.contra);
   if (!seg) return false;
-  const front = n.path.s + n.spec.length - n.spec.rearOverhang;
+  const spec = n.spec || BIKE;
+  const front = n.path.s + spec.length - spec.rearOverhang;
   if (front > seg.sEnd + 8 || seg.sEnd - front > ENTRY_LOOK_M) return false;
   if (n.stopS !== null && n.stopS < seg.sStart) return false;
   return n.v > 0.3 || !n.held;

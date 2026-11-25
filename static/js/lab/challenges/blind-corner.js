@@ -21,9 +21,9 @@ export const challenge = {
   difficulty: "Sight lines",
   hazard: "two-way",
   description:
-    "A two-way stop in Mount Pleasant with a building on the corner. The cross street doesn't stop, and you can't see along it from the line.",
+    "A building in Mount Pleasant blocks your view from the stop line. Drivers on the cross street have no stop sign.",
   lesson:
-    "Stop at the line, then creep forward until you can see. Traffic on the through road has the right of way from both sides, so wait until neither side is close.",
+    "Make your full stop at the line first. Then inch forward only as far as you need to see left and right, and wait where you can see until there is time to cross both directions.",
 };
 
 const twoWaySiteCache = new WeakMap();

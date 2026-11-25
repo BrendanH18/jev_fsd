@@ -1,8 +1,8 @@
-// JevBrain: sends the state and questions to /api/decide (the server holds the key) and returns
-// Jev's choices. Invalid answers fall back to the rules brain for that tick. Other decision models
-// (decision.js) get the same state and questions and go through decisionResult too.
+// JevBrain sends the state and questions to the local server, which holds the provider key.
+// Other decision models (decision.js) use the same question and answer formats.
 
 import { api } from "../common.js";
+import { callModel, checkCoordinates, checkJevRequest, isObject, nonblank, own, replyError } from "./model-contract.js";
 
 export class JevBrain {
   constructor() {
@@ -13,47 +13,57 @@ export class JevBrain {
   }
 
   async decide(snap, eligible, request, signal) {
-    const started = performance.now();
-    const res = await this.transport(
-      "/api/decide",
-      { tick: snap.tick, epoch: request.epoch, state: request.state, questions: request.questions },
-      { signal },
-    );
-    return decisionResult(res, request, eligible, {
-      ...res?.meta,
-      source: "jev",
-      round_trip_ms: Math.round(performance.now() - started),
-    });
+    signal?.throwIfAborted();
+    const body = { tick: snap.tick, epoch: request.epoch, state: request.state, questions: request.questions };
+    checkCoordinates(body);
+    checkJevRequest(body);
+    const { response, meta } = await callModel(this, "/api/decide", body, signal);
+    return decisionResult(response, request, eligible, meta);
   }
 }
 
-// System One answers as an autopilot decision. Questions resolved locally (one eligible candidate,
-// no motion question) keep their local answers; a vector outside the eligible set becomes null, which
-// the autopilot replaces with the Rules choice and reports as a fallback.
+const probability = (value) => Number.isFinite(value) && value >= 0 && value <= 1;
+
+function choiceAnswer(answer, criteria) {
+  if (!isObject(answer)) return null;
+  const type = own(answer, "type");
+  const choice = own(answer, "choice");
+  if ((type !== undefined && type !== "choice") || !nonblank(choice) || !Object.hasOwn(criteria, choice)) return null;
+
+  // Choice controls the car. Confidence and probabilities are optional diagnostics.
+  const clean = { ...answer };
+  if (Object.hasOwn(clean, "confidence") && !probability(clean.confidence)) clean.confidence = null;
+  if (Object.hasOwn(clean, "probabilities")) {
+    clean.probabilities = Object.fromEntries(
+      isObject(clean.probabilities)
+        ? Object.entries(clean.probabilities).filter(([id, value]) => Object.hasOwn(criteria, id) && probability(value))
+        : [],
+    );
+  }
+  return clean;
+}
+
+// Local decisions take precedence. An unusable vector becomes null so the autopilot can keep a
+// valid motion answer and substitute the Rules manoeuvre. Route and headlights can default.
 export function decisionResult(res, request, eligible, meta) {
-  const raw = res?.answers;
+  const raw = own(res, "answers");
+  const trace = own(res, "trace");
   const fail = (message) => {
-    throw Object.assign(new Error(`invalid answer: ${message}`), {
-      meta: { ...meta, live_call: true },
-      trace: res?.trace,
-    });
+    throw Object.assign(new Error(`invalid answer: ${message}`), { meta: { ...meta, live_call: true }, trace });
   };
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("missing answers object");
+  if (!isObject(raw)) fail(replyError(res) ?? "missing answers object");
+
   const { questions = {}, local = {} } = request;
   const answers = { ...local };
   for (const id of ["motion", "vector", "route", "headlights"]) {
-    const criteria = questions[id]?.criteria;
-    const answer = raw[id];
-    if (
-      criteria &&
-      typeof answer?.choice === "string" &&
-      Object.hasOwn(criteria, answer.choice) &&
-      !Object.hasOwn(local, id)
-    )
-      answers[id] = answer;
+    const criteria = own(own(questions, id), "criteria");
+    if (!isObject(criteria) || Object.hasOwn(answers, id)) continue;
+    const accepted = choiceAnswer(own(raw, id), criteria);
+    if (accepted) answers[id] = accepted;
   }
-  if (questions.motion && !answers.motion) fail("missing or invalid motion");
+  if (own(questions, "motion") && !answers.motion) fail("missing or invalid motion");
   const motion = answers.motion?.choice ?? "drive";
+  if (motion !== "drive" && motion !== "stop") fail("motion must be drive or stop");
   const candidateId = eligible.find((c) => c.id === answers.vector?.choice)?.id ?? null;
-  return { motion, candidateId, routeId: answers.route?.choice ?? null, answers, meta, trace: res.trace };
+  return { motion, candidateId, routeId: answers.route?.choice ?? null, answers, meta, trace };
 }

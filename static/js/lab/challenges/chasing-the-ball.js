@@ -31,9 +31,9 @@ export const challenge = {
   hidden: true,
   street: "West 7th Avenue",
   description:
-    "A sunny afternoon on West 7th Avenue in Kitsilano, a residential street lined with parked cars, the limit 50 km/h. Ahead, a ball bounces out from between the parked cars on your right and rolls across the street.",
+    "A ball rolls out of a gap between parked cars on West 7th Avenue. The cars hide the sidewalk it came from.",
   lesson:
-    "A ball rolling into the street means a child may be right behind it, hidden by the parked cars. Slow right down, to a speed you can stop from short of where it came out, and stay ready to stop until the child has come and gone back to the curb. Driver's handbooks across Canada say the same.",
+    "Treat the gap the ball came from as the likely place a child will appear. Get down to a speed that lets you stop before that gap, and wait until the child is safely clear before moving on.",
 };
 
 export const BALL_START_M = 120,

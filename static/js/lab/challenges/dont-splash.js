@@ -29,9 +29,9 @@ export const challenge = {
   puddles: true,
   street: "Main Street",
   description:
-    "Rain on Main Street in Mount Pleasant. You're in the kerb lane, where the gutter has flooded: people wait at the bus stop right beside one puddle, someone is walking up the sidewalk beside a deeper one, and further on a puddle has nobody near it at all.",
+    "On rainy Main Street, the gutter is flooded near a bus stop and a person walking along the sidewalk. A later puddle has nobody beside it.",
   lesson:
-    "In the rain, watch for puddles by the kerb and for people beside them. Where your lane leaves room, ease left inside it so your wheels miss the puddle; where it doesn't, slow right down until you're through. Splashing a pedestrian is careless driving. A puddle with nobody near is just water.",
+    "Scan the sidewalk as you approach each puddle. Steer gently away while staying in your lane if there's room. Otherwise slow before the puddle so your wheels pass through it without throwing water at people.",
 };
 
 // The route, edge by edge (the kerb lane of each), where it starts and ends, and the speed it starts at.

@@ -22,9 +22,9 @@ export const challenge = {
   hazard: "school-bus",
   street: "West 2nd Avenue",
   description:
-    "A school bus coming the other way on West 2nd Avenue has stopped with its red lights flashing. Your side of the road is clear.",
+    "A school bus facing you on West 2nd Avenue is stopped with flashing red lights. Children may cross from in front of it.",
   lesson:
-    "In BC, traffic going both ways must stop for a school bus stopped with its red lights flashing, and stay stopped until it moves off or the lights go off. Children getting off often cross the street in front of it.",
+    "Stop even though the bus is across the road from you. In this BC drive, wait until it moves off or its red lights stop flashing, then check for children before moving.",
 };
 
 const SCHOOL_START_M = 100;

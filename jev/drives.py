@@ -9,8 +9,7 @@ from . import geometry as g
 
 def suggested_drives(router, start: dict) -> list:
     x0, y0, x1, y1 = router.pack["extent"]
-    candidates = []
-    seen_cells = set()
+    candidates = {}
     # Spread endpoints across the neighbourhood, then route through the directed street graph.
     lanes = sorted(router.lanes.values(), key=lambda lane: (str(lane["edge"]), lane["idx"]))
     for lane in lanes:
@@ -22,16 +21,17 @@ def suggested_drives(router, start: dict) -> list:
             continue
         # One candidate in each 150 m neighbourhood keeps routing cost bounded.
         cell = (int(p[0] // 150), int(p[1] // 150))
-        if cell in seen_cells:
-            continue
-        seen_cells.add(cell)
-        candidates.append((cell, p))
+        candidates.setdefault(cell, p)
+        if len(candidates) == 32:
+            break
     routes = []
-    for _, goal in candidates[:32]:
+    for goal in candidates.values():
         found = router.routes(start, {"x": goal[0], "y": goal[1]}, k=1)
         if not found:
             continue
         route = found[0]
+        if len(route["polyline"]) < 2:
+            continue
         length = g.cumulative_s(route["polyline"])[-1]
         if not 250 < length < 1900:
             continue

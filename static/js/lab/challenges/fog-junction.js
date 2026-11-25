@@ -12,8 +12,10 @@ export const challenge = {
   icon: "◌",
   difficulty: "Visibility",
   hazard: "signal",
-  description: "A Victoria junction with only 28 metres of sight. Can you stop within what you can see?",
-  lesson: "An unseen signal is unknown. Slow early, then observe.",
+  description:
+    "In Victoria, fog limits your view of the junction ahead to about 28 metres. The signal is still hidden as you approach.",
+  lesson:
+    "Adjust speed while the signal is out of sight so you can stop within the visible road. Decide whether to proceed only once you can read the light and see your path.",
 };
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);

@@ -21,6 +21,7 @@
 // With hazards off (the seeded benchmark and the challenges other than "Between the cars" and "Blind
 // left") nothing here is computed.
 
+import { extraRedTurn } from "./features/index.js";
 import { CAR } from "./vehicle.js";
 import { segmentHitsBox } from "./crosswalk.js";
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
@@ -182,11 +183,12 @@ export function trafficNotice(world, snap) {
       text: `${name(g.hidden_by)} HIDES THE CROSS STREET · ${g.waiting_to_see ? "WAIT UNTIL YOU CAN SEE" : "CREEP UP AND LOOK"}`,
       wait: !!g.waiting_to_see,
     };
-  const w = i.left_on_red?.wait_for || i.right_on_red?.wait_for;
+  const extraTurn = extraRedTurn(i);
+  const w = extraTurn?.move.wait_for || i.right_on_red?.wait_for;
   if (w?.hidden_by)
     return {
       key: `rtor:${i.id}`,
-      text: `${name(w.hidden_by)} HIDES TRAFFIC FROM THE ${i.left_on_red ? "RIGHT" : "LEFT"} · WAIT`,
+      text: `${name(w.hidden_by)} HIDES TRAFFIC FROM THE ${extraTurn?.direction === "left" ? "RIGHT" : "LEFT"} · WAIT`,
       wait: true,
     };
   return null;

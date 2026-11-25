@@ -33,9 +33,9 @@ export const challenge = {
   snowbanks: true,
   street: "Avenue Laval",
   description:
-    "Snow is falling on Avenue Laval in the Plateau, and the banks the plows left have pushed the parked cars out from both kerbs: there is room for only one car at a time. A car coming the other way is already in the narrow stretch, and at the corner beyond, the snow is piled higher than a person.",
+    "Snowbanks and parked cars narrow Avenue Laval to one car's width. An oncoming car is already inside the narrow section.",
   lesson:
-    "Where snowbanks leave room for one car, take turns: whoever is already in the narrow stretch, or got there first, goes first, so wait at your end. Keep to the middle through it, and creep up to corners where the banks are high: someone waiting to cross can be hidden right behind them.",
+    "Wait outside the pinch point until the other car clears it. Then cross centrally through the remaining space and slow where the tall banks hide people near the next corner.",
 };
 
 export const SB_START_M = 42,

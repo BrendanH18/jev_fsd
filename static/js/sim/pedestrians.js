@@ -1,4 +1,4 @@
-import { flashing } from "./night-flash.js";
+import { specialSignalPhase } from "./features/index.js";
 import { pxoPedestrian } from "./pxo.js";
 // Pedestrians walk sidewalks and cross at junctions; drivers yield to crossings in their path.
 // Signal crossings only during walk; unmarked corners when no vehicle arrives within a few seconds.
@@ -74,6 +74,15 @@ const WORKER_GAP_S = 4;
 // At a scramble crossing, this share of those at a corner cross diagonally, to the corner opposite.
 const DIAGONAL_P = 0.35;
 
+function streetKey(e) {
+  return `${[e.from, e.to].sort().join("|")}|${Math.round(e.length)}`;
+}
+
+// A crossing's segment is also used by the driver-side conflict checks.
+function crossingPoint(p) {
+  return Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]);
+}
+
 export class Crowd {
   constructor(world, { count = PEDESTRIANS, seed = 1 } = {}) {
     this.world = world;
@@ -82,6 +91,7 @@ export class Crowd {
     this.habits = rng(seed * 4099 + 29); // walking speeds and jaywalking, apart from the routes
     this.marking = rng(seed * 7919 + 43); // crossing at marked crosswalks, apart from both
     this.list = [];
+    this.spawned = 0;
     this.kids = 0;
     this.build();
     if (this.legsAt.size) this.spawn(count);
@@ -94,7 +104,8 @@ export class Crowd {
     const streets = new Map();
     for (const e of map.edges.values()) {
       if (e.ring) continue;
-      const key = `${[e.from, e.to].sort().join("|")}|${Math.round(e.length)}`;
+      if (!Number.isFinite(e.length) || e.length <= 0) continue;
+      const key = streetKey(e);
       if (!streets.has(key)) streets.set(key, { id: key, edge: e });
     }
     this.streets = [...streets.values()];
@@ -105,8 +116,8 @@ export class Crowd {
     for (const c of [...(map.crosswalks || []), ...(this.pxo ? map.pxos || [] : [])]) {
       if (c.pxo && !this.pxo) continue;
       const e0 = map.edges.get(c.edge);
-      const st = e0 && streets.get(`${[e0.from, e0.to].sort().join("|")}|${Math.round(e0.length)}`);
-      if (!st) continue;
+      const st = e0 && streets.get(streetKey(e0));
+      if (!st || !Number.isFinite(c.x) || !Number.isFinite(c.y)) continue;
       const e = st.edge,
         s = projectPoint(e.pts, e.cum, [c.x, c.y]).s;
       const cw = {
@@ -132,13 +143,16 @@ export class Crowd {
     }
     this.ringNodes = new Set();
     for (const rb of (map.roundabouts || new Map()).values()) for (const v of rb.vertices) this.ringNodes.add(v);
+    const intersectionsAt = new Map();
+    for (const inter of map.intersections?.values() || [])
+      for (const vertex of inter.vertices || []) if (!intersectionsAt.has(vertex)) intersectionsAt.set(vertex, inter);
     this.legsAt = new Map();
     for (const [node, list] of legs) {
       if (this.ringNodes.has(node)) continue;
       // how far out the crosswalks sit: past the widest street's asphalt at this node
       let half = 0;
       for (const l of list) half = Math.max(half, Math.abs(l.st.edge.asphalt[0]), Math.abs(l.st.edge.asphalt[1]));
-      const inter = [...map.intersections.values()].find((i) => i.vertices?.includes(node)) || null;
+      const inter = intersectionsAt.get(node) || null;
       for (const l of list) {
         const e = l.st.edge,
           L = e.cum[e.cum.length - 1];
@@ -160,7 +174,9 @@ export class Crowd {
   }
 
   spawn(count) {
+    if (!Number.isFinite(count) || count <= 0) return;
     const total = this.streets.reduce((a, st) => a + st.edge.length, 0);
+    if (!Number.isFinite(total) || total <= 0) return;
     for (let k = 0, attempts = 0; k < count && attempts < count * 10; attempts++) {
       let pick = this.random() * total,
         st = this.streets[0];
@@ -181,7 +197,7 @@ export class Crowd {
       const s = a + this.random() * (b - a);
       const p = offsetPoint(e, s, sidewalkOffset(e, side));
       const ped = new Pedestrian({
-        id: `ped_${++k}`,
+        id: `ped_${++this.spawned}`,
         x: p[0],
         y: p[1],
         psi: 0,
@@ -196,16 +212,17 @@ export class Crowd {
       if (this.habits() < 0.12) ped.speed = 0.75 + this.habits() * 0.25; // older or unhurried
       this.walkAlong(ped, st, side, s, dir);
       this.list.push(ped);
+      k++;
     }
   }
 
   leg(node, st) {
-    return this.legsAt.get(node).list.find((l) => l.st === st);
+    return this.legsAt.get(node)?.list.find((l) => l.st === st);
   }
 
   // The street (one entry for both directions of a two-way street) edge `e` is on, or undefined.
   streetOf(e) {
-    return this.streetIndex.get(`${[e.from, e.to].sort().join("|")}|${Math.round(e.length)}`);
+    return e ? this.streetIndex.get(streetKey(e)) : undefined;
   }
 
   // A child getting off school bus `bus`, stopped on street edge `e` (sim/school-bus.js), by its front
@@ -335,18 +352,22 @@ export class Crowd {
 
   // Queue a walk along street `st`'s sidewalk on `side` from `s` toward the end in direction `dir`.
   walkAlong(ped, st, side, s, dir) {
+    if (dir !== 1 && dir !== -1) throw new RangeError("Sidewalk direction must be 1 or -1");
+    if (side !== 1 && side !== -1) throw new RangeError("Sidewalk side must be 1 or -1");
+    if (!Number.isFinite(s)) throw new RangeError("Sidewalk position must be finite");
     const e = st.edge;
     const node = dir > 0 ? e.to : e.from;
     const L = e.cum[e.cum.length - 1];
     // no crosswalks at a roundabout: walk up to it and turn back
-    const known = this.legsAt.has(node);
-    const end = known ? this.leg(node, st).s : dir > 0 ? Math.max(s, L - 12) : Math.min(s, 12);
+    const leg = this.leg(node, st);
+    const end = leg ? leg.s : dir > 0 ? Math.max(s, L - 12) : Math.min(s, 12);
+    if (!Number.isFinite(end)) throw new RangeError("Sidewalk end must be finite");
     const lat = sidewalkOffset(e, side);
     // walking past a marked crosswalk, often cross there; else now and then, on a quiet block, cut
     // across to the other sidewalk partway along
-    const marked = (st.crosswalks || [])
-      .filter((c) => (c.s - s) * dir > 1 && (end - c.s) * dir > 1)
-      .sort((a, b) => (a.s - b.s) * dir)[0];
+    let marked;
+    for (const c of st.crosswalks || [])
+      if ((c.s - s) * dir > 1 && (end - c.s) * dir > 1 && (!marked || (c.s - marked.s) * dir < 0)) marked = c;
     const atMarked = marked && this.marking() < MARKED_P ? marked : null;
     let cross = atMarked ? atMarked.s : null;
     if (!atMarked && QUIET.has(e.cls) && !e.ring && Math.abs(end - s) > 35 && this.habits() < JAYWALK_P) {
@@ -377,11 +398,15 @@ export class Crowd {
       side = -side;
     }
     ped.path = path;
-    ped.at = { node, st, side, s: end, dir, turnBack: !known };
+    ped.at = { node, st, side, s: end, dir, turnBack: !leg };
   }
 
   // At a corner: turn onto the next street, cross this one, or cross the next one.
   plan(ped) {
+    if (!ped.at) {
+      ped.v = 0;
+      return;
+    }
     const { node, st, side } = ped.at;
     if (ped.at.turnBack) {
       this.walkAlong(ped, st, side, ped.at.s, -ped.at.dir);
@@ -389,6 +414,10 @@ export class Crowd {
     }
     const info = this.legsAt.get(node);
     const here = this.leg(node, st);
+    if (!here) {
+      this.walkAlong(ped, st, side, ped.at.s, -ped.at.dir);
+      return;
+    }
     const from = here.ends[side];
     const others = info.list.filter((l) => l !== here);
     // the corner shares a block with the nearest sidewalk end of another leg
@@ -445,6 +474,8 @@ export class Crowd {
   }
 
   step(dt) {
+    if (!Number.isFinite(dt) || dt < 0) throw new RangeError("Invalid pedestrian step duration");
+    if (dt === 0) return;
     const t = this.world.t;
     let home = false;
     for (const ped of this.list) {
@@ -463,11 +494,11 @@ export class Crowd {
         continue;
       } // (a garbage crew at the bins, or climbing on)
       if (ped.guard) continue; // (a crossing guard and the children with them: sim/crossing-guard.js)
-      if (!ped.path.length && ped.home) {
+      if (!ped.path?.length && ped.home) {
         home = ped.gone = true;
         continue;
       }
-      if (!ped.path.length) {
+      if (!ped.path?.length) {
         if (ped.then) {
           this.walkAlong(ped, ped.then.st, ped.then.side, ped.then.s, ped.then.dir);
           ped.then = null;
@@ -475,12 +506,14 @@ export class Crowd {
         continue;
       }
       const wp = ped.path[0];
+      if (!crossingPoint(wp.p)) throw new RangeError(`Invalid waypoint for pedestrian ${ped.id}`);
+      if (!Number.isFinite(ped.speed) || ped.speed < 0) throw new RangeError(`Invalid speed for pedestrian ${ped.id}`);
       if (this.pxo && wp.cross?.leg?.pxo && !wp.cross.diagonal) wp.cross.marked = wp.cross.leg.pxo;
       if (wp.cross && !ped.crossing) {
         // at the curb: wait for the walk phase or a safe gap
         if ((!ped.dart && this.occupiedCrossing(ped, wp.cross)) || !this.mayCross(wp.cross, t)) {
           ped.v = 0;
-          ped.waiting += dt;
+          ped.waiting = (ped.waiting ?? 0) + dt;
           continue;
         }
         ped.crossing = wp.cross;
@@ -530,7 +563,7 @@ export class Crowd {
       ped.v = v;
       ped.x += (dx / d) * v * dt;
       ped.y += (dy / d) * v * dt;
-      ped.phase += v * dt;
+      ped.phase = (ped.phase ?? 0) + v * dt;
     }
     if (home) for (let i = this.list.length - 1; i >= 0; i--) if (this.list[i].gone) this.list.splice(i, 1);
   }
@@ -538,6 +571,7 @@ export class Crowd {
   // Wait on the sidewalk before starting a crossing occupied by a slow/stopped body. Starting
   // anyway, then waiting beside that body, makes the driver yield to someone who cannot cross.
   occupiedCrossing(ped, cross) {
+    if (!crossingPoint(cross?.from) || !crossingPoint(cross?.to)) return true;
     return [this.world.ego, ...this.world.npcs].some((o) => {
       // Riders start/end at their own streetcar's door; its padded body is not another car
       // blocking their crossing. mayCross still requires its doors to be open for boarding.
@@ -615,6 +649,7 @@ export class Crowd {
   }
 
   mayCross(cross, t) {
+    if (!crossingPoint(cross?.from) || !crossingPoint(cross?.to)) return false;
     // (a child off a school bus crosses in front of it while its reds flash, once nothing coming is
     // too close to stop; with them off, on a gap)
     // (a streetcar's rider steps into the street while its doors are open, once nothing coming is too
@@ -635,16 +670,16 @@ export class Crowd {
     const info = this.legsAt.get(cross.node);
     // (a police officer directing traffic there: walk with the axis they wave, sim/traffic-officer.js)
     const officer =
-      info.inter && cross.leg.group && this.world.officers?.list.length
+      info?.inter && cross.leg?.group && this.world.officers?.list.length
         ? officerWalk(this.world, info.inter.id, cross.leg.group === "A" ? "B" : "A")
         : null;
     if (officer !== null) return officer;
     // (with a signal's lights out, its walk signals are out too: cross on a gap, as where there is none)
     if (
-      info.inter &&
-      cross.leg.group &&
+      info?.inter &&
+      cross.leg?.group &&
       alternateSignal(this.world, info.inter.id) !== "dark" &&
-      !flashing(info.inter, this.world)
+      !specialSignalPhase(info.inter, this.world)
     ) {
       // walk with the parallel traffic, and only step off on the walk signal
       return pedPhase(info.inter, cross.leg.group === "A" ? "B" : "A", t) === "walk";
@@ -656,6 +691,7 @@ export class Crowd {
   // its edge, and nothing approaching is closer than it could stop braking at MARKED_DECEL after
   // MARKED_REACT_S.
   canStopFor(cross) {
+    if (!crossingPoint(cross?.from) || !crossingPoint(cross?.to)) return false;
     const mid = [(cross.from[0] + cross.to[0]) / 2, (cross.from[1] + cross.to[1]) / 2];
     const half = dist(cross.from, cross.to) / 2;
     for (const o of [this.world.ego, ...this.world.npcs]) {
@@ -678,6 +714,7 @@ export class Crowd {
 
   // Nothing moving would reach the crossing within `gap` seconds (looking out to `range` meters).
   clearFor(cross, gap, range) {
+    if (!crossingPoint(cross?.from) || !crossingPoint(cross?.to) || !(gap >= 0) || !(range >= 0)) return false;
     const mid = [(cross.from[0] + cross.to[0]) / 2, (cross.from[1] + cross.to[1]) / 2];
     const half = dist(cross.from, cross.to) / 2 + 2;
     for (const o of [this.world.ego, ...this.world.npcs]) {
@@ -695,6 +732,7 @@ export class Crowd {
 
   // Pedestrians near (x, y), for collision checks.
   near(x, y, r) {
+    if (!Number.isFinite(r) || r <= 0) return [];
     return this.list.filter((p) => Math.abs(p.x - x) < r && Math.abs(p.y - y) < r);
   }
 }
@@ -707,7 +745,7 @@ export function crosswalkConflict(pts, cum, sFrom, sTo, crowd, laneHalf = 1.8) {
   let best = null;
   for (const ped of crowd.list) {
     const c = ped.crossing;
-    if (!c) continue;
+    if (!c || !Number.isFinite(ped.x) || !Number.isFinite(ped.y)) continue;
     const hit = segmentCrossing(pts, cum, sFrom, sTo, c.from, c.to);
     if (!hit || (best && hit.s >= best.s)) continue;
     // how far the pedestrian still is from the path's crossing point, along the crosswalk
@@ -727,12 +765,12 @@ export function crosswalkConflict(pts, cum, sFrom, sTo, crowd, laneHalf = 1.8) {
 // across that crosswalk now would meet them in it.
 const KERB_M = 6;
 export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
-  if (!crowd?.legsAt) return null;
+  if (!crowd?.legsAt || !Number.isFinite(t) || !Number.isFinite(within) || within < 0) return null;
   for (const ped of peds) {
     if (ped.crossing || ped.frozen > 0) continue;
-    const wp = ped.path.slice(0, 2).find((w) => w.cross);
+    const wp = ped.path?.[0]?.cross ? ped.path[0] : ped.path?.[1];
     const c = wp?.cross;
-    if (!c || c.jaywalk || dist([ped.x, ped.y], c.from) > KERB_M) continue;
+    if (!c || c.jaywalk || !crossingPoint(c.from) || dist([ped.x, ped.y], c.from) > KERB_M) continue;
     const info = crowd.legsAt.get(c.node);
     if (!info?.inter || !c.leg?.group || (crowd.world && alternateSignal(crowd.world, info.inter.id) === "dark"))
       continue;
@@ -754,25 +792,28 @@ export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
 // First intersection of the path (between sFrom and sTo) with segment a-b: { s, u } where u is the
 // fraction along a-b.
 function segmentCrossing(pts, cum, sFrom, sTo, a, b) {
-  let i = 0,
-    lo = 0,
+  if (pts.length < 2 || cum.length !== pts.length || !(sFrom <= sTo)) return null;
+  if (!crossingPoint(a) || !crossingPoint(b)) return null;
+  const sx = b[0] - a[0],
+    sy = b[1] - a[1];
+  let lo = 0,
     hi = cum.length - 1;
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1;
     if (cum[mid] <= sFrom) lo = mid;
     else hi = mid - 1;
   }
-  i = lo;
-  for (; i < pts.length - 1 && cum[i] <= sTo; i++) {
+  for (let i = Math.min(lo, pts.length - 2); i < pts.length - 1 && cum[i] <= sTo; i++) {
     const p = pts[i],
       q = pts[i + 1];
-    const r = [q[0] - p[0], q[1] - p[1]],
-      s = [b[0] - a[0], b[1] - a[1]];
-    const den = r[0] * s[1] - r[1] * s[0];
+    const rx = q[0] - p[0],
+      ry = q[1] - p[1];
+    const den = rx * sy - ry * sx;
     if (Math.abs(den) < 1e-9) continue;
-    const w = [a[0] - p[0], a[1] - p[1]];
-    const t = (w[0] * s[1] - w[1] * s[0]) / den,
-      u = (w[0] * r[1] - w[1] * r[0]) / den;
+    const wx = a[0] - p[0],
+      wy = a[1] - p[1];
+    const t = (wx * sy - wy * sx) / den,
+      u = (wx * ry - wy * rx) / den;
     if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
       const at = cum[i] + t * (cum[i + 1] - cum[i]);
       if (at >= sFrom && at <= sTo) return { s: at, u };
@@ -794,7 +835,8 @@ function dist(a, b) {
 // Signal group whose approaches run along heading h (either direction).
 function groupOf(inter, h) {
   let best = null;
-  for (const a of inter.approaches) {
+  for (const a of inter.approaches || []) {
+    if (!Number.isFinite(a.heading_deg)) continue;
     const d = Math.abs(Math.sin((a.heading_deg * Math.PI) / 180 - h));
     if (!best || d < best.d) best = { d, group: a.group };
   }

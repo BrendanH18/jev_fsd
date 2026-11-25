@@ -19,10 +19,12 @@ CONDITIONS = (
     "hour",
     "cover",
     "set",
+    "drives",
+    "stopped",
     "suite_version",
 )
 DEFAULTS = {"features": "bare", "weather": "dry", "track": "guarded", "park": False, "without": []}
-DIFF_FIELDS = ("weather", "features", "npcs", "track", "park", "hour", "without", "cover", "mode", "driver")
+DIFF_FIELDS = ("weather", "features", "npcs", "track", "park", "hour", "without", "cover", "mode", "engine", "driver")
 COUNTED_VIOLATIONS = tuple(
     field
     for _, fields in safety.QUESTIONS.values()
@@ -64,6 +66,9 @@ def condition_differences(left, right):
         elif field in DEFAULTS:
             before = left.get(field, DEFAULTS[field])
             after = right.get(field, DEFAULTS[field])
+        elif field == "hour":
+            before = left.get(field, 15.5 if left.get("features") == "city" else None)
+            after = right.get(field, 15.5 if right.get("features") == "city" else None)
         else:
             before, after = left.get(field), right.get(field)
         if field == "without" and all(
@@ -161,6 +166,7 @@ def assess_regression(left, right, routes=None):
     verdict_pairs = label_pairs = collision_pairs = traffic_counter_pairs = 0
     missing_traffic_counts = {}
     new_audit_failures = []
+    new_simulation_errors = []
     increased_violations = []
     lost_passes = []
     increased_collisions = []
@@ -174,6 +180,10 @@ def assess_regression(left, right, routes=None):
             if before["pass"] and not after["pass"]:
                 lost_passes.append(before["id"])
         earlier, later = outcomes.reasons(before), outcomes.reasons(after)
+        had_error = "simulation error" in (earlier or ()) or bool(before.get("simulation_error"))
+        has_error = "simulation error" in (later or ()) or bool(after.get("simulation_error"))
+        if has_error and not had_error:
+            new_simulation_errors.append({"id": before["id"], "error": after.get("simulation_error")})
         if earlier is not None and later is not None:
             label_pairs += 1
             added = sorted(set(later) - set(earlier) - NON_AUDIT_FAILURES)
@@ -197,13 +207,16 @@ def assess_regression(left, right, routes=None):
             elif first is not None or second is not None or field in REQUIRED_VIOLATION_COUNTS:
                 missing_traffic_counts[field] = missing_traffic_counts.get(field, 0) + 1
     return {
-        "regressed": bool(lost_passes or increased_collisions or increased_violations or new_audit_failures),
+        "regressed": bool(
+            lost_passes or increased_collisions or increased_violations or new_audit_failures or new_simulation_errors
+        ),
         "deltas": {
             "passed": passed_delta if verdict_pairs else None,
             "collisions": collision_delta if collision_pairs else None,
             "violations": violation_delta if traffic_counter_pairs else None,
         },
         "new_audit_failures": new_audit_failures,
+        "new_simulation_errors": new_simulation_errors,
         "increased_violations": increased_violations,
         "lost_passes": lost_passes,
         "increased_collisions": increased_collisions,
@@ -232,6 +245,14 @@ def describe(name, config):
 ARENA_CONDITIONS = ("map", "pack", "seed", "version", "weather", "time", "car")
 
 
+def arena_condition_fields(before, after):
+    return [
+        field
+        for field in ARENA_CONDITIONS
+        if before.get(field) is not None and after.get(field) is not None and before[field] != after[field]
+    ]
+
+
 def drive_condition_conflicts(left_config, left_rows, right_config, right_rows):
     """Challenges both arena runs drove under different recorded per-drive conditions."""
     if not (is_arena_config(left_config) and is_arena_config(right_config)):
@@ -242,11 +263,7 @@ def drive_condition_conflicts(left_config, left_rows, right_config, right_rows):
         paired = right.get(route_id)
         if paired is None:
             continue
-        fields = [
-            field
-            for field in ARENA_CONDITIONS
-            if row.get(field) is not None and paired.get(field) is not None and row[field] != paired[field]
-        ]
+        fields = arena_condition_fields(row, paired)
         if fields:
             conflicts.append(f"{route_id} ({', '.join(fields)})")
     return conflicts
@@ -262,26 +279,21 @@ def match_routes(left_name, left_config, left_rows, right_name, right_config, ri
             continue
         paired = right[route_id]
         if arena:
-            if any(
-                row.get(field) is not None and paired.get(field) is not None and row[field] != paired[field]
-                for field in ARENA_CONDITIONS
-            ):
+            if arena_condition_fields(row, paired):
                 changed_tags.append(route_id)
                 continue
-            ids.append(route_id)
-            if changed := route_changes(row, paired):
-                changes.append({"id": route_id, **changed})
-            continue
-        first = [outcomes.tag(row, tag) for tag in ROUTE_TAGS]
-        second = [outcomes.tag(paired, tag) for tag in ROUTE_TAGS]
-        if None in first or None in second:
-            missing_tags.append(route_id)
-        elif first != second:
-            changed_tags.append(route_id)
         else:
-            ids.append(route_id)
-            if changed := route_changes(row, paired):
-                changes.append({"id": route_id, **changed})
+            first = [outcomes.tag(row, tag) for tag in ROUTE_TAGS]
+            second = [outcomes.tag(paired, tag) for tag in ROUTE_TAGS]
+            if None in first or None in second:
+                missing_tags.append(route_id)
+                continue
+            if first != second:
+                changed_tags.append(route_id)
+                continue
+        ids.append(route_id)
+        if changed := route_changes(row, paired):
+            changes.append({"id": route_id, **changed})
     routes_meta = {
         "matched": ids,
         "baseline_only": [route_id for route_id in left if route_id not in right],

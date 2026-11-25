@@ -18,7 +18,7 @@ const target = (kind) => ({
 function emit(surface, type, fields = {}, focus = target("canvas")) {
   const event = new Event(type, { cancelable: true });
   Object.assign(event, fields);
-  Object.defineProperty(event, "target", { value: focus });
+  event.composedPath = () => [focus, surface];
   surface.dispatchEvent(event);
   return event;
 }
@@ -33,7 +33,10 @@ press("ArrowLeft");
 assert(input.left);
 emit(window, "blur");
 assert(!input.anyDriving);
-for (const kind of ["input", "textarea", "select", "editable", "button", "a", "[role='textbox']"]) {
+assert(!press("w").defaultPrevented);
+assert(!input.anyDriving);
+emit(window, "focus");
+for (const kind of ["input", "textarea", "select", "editable", "button", "a[href]", "[role='textbox']"]) {
   press("w");
   assert(input.throttle);
   emit(document, "focusin", {}, target(kind));
@@ -45,7 +48,7 @@ for (const kind of ["input", "textarea", "select", "editable", "[role='textbox']
   press("p", target(kind));
   assert.equal(pauses, 0);
 }
-for (const kind of ["button", "a", "[role='button']", "[role='radio']", "[role='switch']"]) {
+for (const kind of ["button", "a[href]", "[role='button']", "[role='radio']", "[role='switch']"]) {
   for (const key of ["w", "a", "s", "d", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
     assert(!press(key, target(kind)).defaultPrevented, `${kind} retains normal ${key} behaviour`);
     assert(!input.anyDriving, `${key} cannot drive while ${kind} is focused`);

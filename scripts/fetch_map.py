@@ -12,6 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jev.config import MAPS_DIR, PRESET_BBOXES, Settings, parse_bbox  # noqa: E402
 from jev.osm import fetch  # noqa: E402
+from jev.osm.audit import audit_map, valid_bbox
+from jev.osm.audit_report import render
 from jev.osm.bridges import bridges_path, build_bridges
 from jev.osm.bus_lanes import build_buslanes, buslanes_path
 from jev.osm.calming import build_calming, calming_path
@@ -81,8 +83,16 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--refresh-osm", action="store_true", help="download fresh raw OSM before rebuilding")
     parser.add_argument("--offline", action="store_true", help="use only saved packs, layers and raw OSM")
     parser.add_argument(
-        "--osm-file", type=Path, help="rebuild from a local OSM XML file without updating the raw download cache"
+        "--osm-file", type=Path, help="rebuild from local OSM XML or .osm.gz without updating the raw download cache"
     )
+    audit_options = parser.add_argument_group("read-only audit")
+    audit_options.add_argument(
+        "--audit", action="store_true", help="check prepared files without reading raw OSM or writing"
+    )
+    audit_options.add_argument("--all", action="store_true", help="audit every bundled preset")
+    audit_options.add_argument("--json", action="store_true", help="write the audit as JSON")
+    audit_options.add_argument("--require-rail", action="store_true", help="require a rail sidecar during audit")
+    audit_options.add_argument("--against", type=Path, help="also audit and compare bytes with this directory")
     for option, (description, _) in LAYER_OPTIONS.items():
         help_text = "rebuild only " + description
         if option in ("transit", "restrictions"):
@@ -96,9 +106,19 @@ def main(argv: list[str]) -> int:
             for token in argv[1:]
         ]
     )
-    bbox = parse_bbox(args.area) if args.area is not None else Settings().bbox
-    if bbox is None:
-        parser.error("AREA must be W,S,E,N in degrees or a preset name")
+    bbox = parse_bbox(args.area) if args.area is not None else None
+    if not args.all and args.area is None:
+        bbox = Settings().bbox
+    if not args.all and (bbox is None or not valid_bbox(bbox)):
+        parser.error("AREA must be ordered W,S,E,N in degrees or a preset name")
+    if args.audit and (args.force or args.refresh_osm or args.osm_file is not None):
+        parser.error("--audit cannot be combined with --force, --refresh-osm or --osm-file")
+    if not args.audit and (args.all or args.json or args.require_rail or args.against is not None):
+        parser.error("--all, --json, --require-rail and --against require --audit")
+    if args.all and args.area is not None:
+        parser.error("--all cannot be combined with an explicit AREA")
+    if args.against is not None and not args.against.is_dir():
+        parser.error("--against must name an existing reference directory")
     if args.refresh_osm and (args.offline or args.osm_file is not None):
         parser.error("--refresh-osm cannot be combined with --offline or --osm-file")
 
@@ -110,6 +130,21 @@ def main(argv: list[str]) -> int:
     }
     layer_only = bool(selected)
     maps_dir = args.maps_dir
+    if args.audit:
+        if not maps_dir.is_dir():
+            parser.error("--maps-dir must name an existing directory for audit")
+        label = args.area.strip().lower() if args.area is not None else "configured"
+        areas = PRESET_BBOXES if args.all else {label: bbox}
+        if args.require_rail and selected and "rail" not in selected:
+            parser.error("--require-rail needs rail in the selected layers")
+        options = {"include_layers": selected or None, "require_rail": args.require_rail}
+        audits = [audit_map(name, bounds, maps_dir, **options) for name, bounds in areas.items()]
+        references = None
+        if args.against is not None:
+            references = {name: audit_map(name, bounds, args.against, **options) for name, bounds in areas.items()}
+        output, ok = render(audits, references, machine=args.json)
+        print(output)
+        return 0 if ok else 1
     refresh = not (args.offline or args.osm_file is not None) and (
         args.refresh_osm
         or args.transit

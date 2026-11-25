@@ -6,7 +6,6 @@ import * as THREE from "three";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { sceneryFor } from "../map/scenery.js";
 import { hash01 } from "./geo.js";
-import { toThree } from "./scene.js";
 import { snowable } from "./weather.js";
 import { lighting } from "./atmosphere.js";
 import { leafTexture, needleTexture, barkTexture, LEAF_CUTOFF } from "./textures.js";
@@ -226,22 +225,20 @@ function withWind(material, amount) {
 
 export function buildTrees(map) {
   const spots = sceneryFor(map).trees;
-
+  const group = new THREE.Group();
+  group.userData.count = spots.length;
+  if (!spots.length) return group;
+  const hasBroadleaf = spots.some((t) => t.kind !== "conifer");
+  const hasConifer = spots.some((t) => t.kind === "conifer");
   const crowns = [],
     cores = [],
     trunks = [],
     conifers = [];
-  for (let v = 0; v < VARIANTS; v++) {
-    crowns.push(crownGeometry(v + 1));
-    cores.push(coreGeometry(v + 1));
-    trunks.push(trunkGeometry(v + 1));
-    conifers.push(coniferGeometry(v + 1));
-  }
-  const distantCrown = crownGeometry(1, 40, 1.6),
-    distantCore = coreGeometry(1, 1);
+  const distantCrown = hasBroadleaf ? crownGeometry(1, 40, 1.6) : null;
+  const distantCore = hasBroadleaf ? coreGeometry(1, 1) : null;
   const distantTrunk = new THREE.CylinderGeometry(0.1, 0.17, 1, 5).translate(0, 0.5, 0);
-  const distantConifer = coniferGeometry(1, false);
-  const leafMap = leafTexture();
+  const distantConifer = hasConifer ? coniferGeometry(1, false) : null;
+  const leafMap = hasBroadleaf ? leafTexture() : null;
   // Alpha to coverage turns the cutout edge into a partial-coverage edge wherever the target is
   // multisampled (Low draws to the antialiased canvas, High to a multisampled scene target). The
   // view switches it off on single-sample targets (see SceneView.applyCoverage).
@@ -275,7 +272,14 @@ export function buildTrees(map) {
   );
   const coreMat = leafyCore(snowable(new THREE.MeshStandardMaterial({ roughness: 0.95 }), "leaf"), leafMap);
   const needleMat = withWind(
-    snowable(new THREE.MeshStandardMaterial({ map: needleTexture(), side: THREE.DoubleSide, roughness: 0.85 }), "leaf"),
+    snowable(
+      new THREE.MeshStandardMaterial({
+        map: hasConifer ? needleTexture() : null,
+        side: THREE.DoubleSide,
+        roughness: 0.85,
+      }),
+      "leaf",
+    ),
     0.02,
   );
   const needleDepth = withWind(
@@ -292,9 +296,11 @@ export function buildTrees(map) {
     return chunks.get(k);
   };
   const q = new THREE.Quaternion(),
-    Y = new THREE.Vector3(0, 1, 0);
+    Y = new THREE.Vector3(0, 1, 0),
+    position = new THREE.Vector3(),
+    scale = new THREE.Vector3();
   const inst = (x, y, z, sx, sy, sz, rot, col = null) => ({
-    m: new THREE.Matrix4().compose(toThree(x, y, z), q.clone().setFromAxisAngle(Y, rot), new THREE.Vector3(sx, sy, sz)),
+    m: new THREE.Matrix4().compose(position.set(x, z, -y), q.setFromAxisAngle(Y, rot), scale.set(sx, sy, sz)),
     col,
   });
   for (const t of spots) {
@@ -319,7 +325,6 @@ export function buildTrees(map) {
     b.core[v].push(inst(t.x, t.y, cz, r, r * 0.95, r, rot, base.clone().multiplyScalar(0.8)));
   }
 
-  const group = new THREE.Group();
   const emit = (level, geo, mat, list, depthMat = null) => {
     if (!list.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, list.length);
@@ -337,6 +342,10 @@ export function buildTrees(map) {
     const near = new THREE.Group(),
       far = new THREE.Group();
     for (let v = 0; v < VARIANTS; v++) {
+      if (c.trunk[v].length) trunks[v] ??= trunkGeometry(v + 1);
+      if (c.core[v].length) cores[v] ??= coreGeometry(v + 1);
+      if (c.crown[v].length) crowns[v] ??= crownGeometry(v + 1);
+      if (c.conifer[v].length) conifers[v] ??= coniferGeometry(v + 1);
       emit(near, trunks[v], barkMat, c.trunk[v]);
       emit(near, cores[v], coreMat, c.core[v]);
       emit(near, crowns[v], leafMat, c.crown[v], leafDepth);
@@ -349,7 +358,6 @@ export function buildTrees(map) {
     emit(far, distantConifer, needleMat, c.conifer.flat());
     group.add(chunkLOD(near, far));
   }
-  group.userData.count = spots.length;
   return group;
 }
 

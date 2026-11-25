@@ -1,3 +1,13 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_WHITE,
+} from "./actor-details.js";
+import { rollWheels, flashPhase, syncHeadMaterial, syncBrakeMaterial, syncAmberLenses } from "./actor-motion.js";
 // The delivery van (sim/double-parked.js): a high-roof long-wheelbase cargo van, built from boxes at
 // its simulated size (a sloping nose and windscreen, a tall boxy body with a sliding side door and
 // twin rear doors), its four amber corner lamps blinking together while its hazards are on. The same
@@ -5,6 +15,7 @@
 // the origin, as for cars.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { DELIVERY_VAN } from "../sim/vehicle.js";
 import { lamp, shared, wheel } from "./emergency.js";
@@ -27,6 +38,8 @@ const tail = new THREE.MeshStandardMaterial({
   roughness: 0.3,
 });
 const seam = new THREE.MeshStandardMaterial({ color: 0x24272b, roughness: 0.8 });
+
+shareActorResources([tail, seam]);
 
 export function createVanMesh(vehicle) {
   const spec = DELIVERY_VAN,
@@ -130,18 +143,20 @@ export function createVanMesh(vehicle) {
     false,
     "door-seams",
   );
+  const head = shared.head.clone();
   add(
     merge([
       box(0.05, 0.18, 0.32, xf + 0.01, hoodTop - 0.1, -(w / 2 - 0.3)),
       box(0.05, 0.18, 0.32, xf + 0.01, hoodTop - 0.1, w / 2 - 0.3),
     ]),
-    shared.head,
+    head,
     false,
     "headlamps",
   );
+  const brake = tail.clone();
   add(
     merge([-1, 1].map((side) => box(0.05, 0.62, 0.16, xr - 0.02, 1.25, side * (w / 2 - 0.1)))),
-    tail,
+    brake,
     false,
     "tail-lamps",
   );
@@ -156,15 +171,28 @@ export function createVanMesh(vehicle) {
     const m = new THREE.Mesh(box(0.06, 0.12, 0.14, x, x > 0 ? hoodTop - 0.32 : 0.86, z), lamp(AMBER));
     m.name = "hazard-lamp";
     body.add(m);
-    lenses.push(m);
+    lenses.push({ mesh: m, side: z < 0 ? "left" : "right" });
   }
   // (and repeaters on the sides, by the front wheels)
   for (const side of [-1, 1]) {
     const m = new THREE.Mesh(box(0.14, 0.05, 0.02, wb + 0.75, 0.86, side * (w / 2 + 0.01)), lamp(AMBER));
     m.name = "hazard-repeater";
     body.add(m);
-    lenses.push(m);
+    lenses.push({ mesh: m, side: side < 0 ? "left" : "right" });
   }
+  addActorDetails(body, "delivery-van", () => [
+    ...sides((side) => [
+      detail("cargo-door-hinges", STEEL, 0.053, 0.44, 0.065, xr - 0.029, 1.82, side * (w / 2 - 0.15)),
+      detail("cab-door-grips", RUBBER, 0.18, 0.046, 0.045, cabRear + 0.22, 1.23, side * (w / 2 + 0.027)),
+      detail("cab-mirror-housing", RUBBER, 0.14, 0.26, 0.17, screenFoot - 0.09, 1.6, side * (w / 2 + 0.095)),
+      detail("rear-bumper-reflectors", REFLECT_RED, 0.023, 0.068, 0.21, xr - 0.014, sill + 0.16, side * (w / 2 - 0.25)),
+      detail("rear-mudflaps", RUBBER, 0.05, 0.35, 0.25, -0.41, 0.25, (side * spec.track) / 2),
+    ]),
+    detail("slider-door-grip", RUBBER, 0.21, 0.045, 0.037, cabRear - 0.88, 1.31, w / 2 + 0.023),
+    detail("rear-door-release", RUBBER, 0.037, 0.08, 0.19, xr - 0.028, 1.18, 0.17),
+    detail("roof-brake-lamp", REFLECT_RED, 0.025, 0.074, 0.36, xr - 0.015, roof - 0.16, 0),
+    detail("rear-registration-plate", REFLECT_WHITE, 0.025, 0.13, 0.3, xr - 0.016, 0.72, 0),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.6, w + 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(spec.length / 2 - spec.rearOverhang, 0.02, 0);
   blob.renderOrder = 1;
@@ -184,22 +212,29 @@ export function createVanMesh(vehicle) {
     g.add(pivot);
     wheels.push({ pivot, wheel: wh, steer });
   }
-  g.userData = { van: true, wheels, spin: 0, lenses, phase: hash01(vehicle.id, 7) * BLINK_S };
+  g.userData = {
+    head,
+    brake,
+    prevV: null,
+    brakeLevel: 0,
+    van: true,
+    wheels,
+    spin: 0,
+    lenses,
+    phase: hash01(vehicle.id, 7) * BLINK_S,
+  };
   g.position.set(vehicle.x, 0, -vehicle.y);
   g.rotation.y = vehicle.psi;
   return g;
 }
 
-export function syncVan(mesh, vehicle, dt = 0, t = 0) {
+export function syncVan(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   if (!mesh) return;
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
-  u.spin += ((vehicle.v || 0) * dt) / TIRE;
-  for (const w of u.wheels) {
-    w.wheel.rotation.z = -u.spin;
-    w.pivot.rotation.y = w.steer ? vehicle.delta || 0 : 0;
-  }
-  const lit = !!vehicle.hazards && ((t + u.phase) % BLINK_S) / BLINK_S < 0.5;
-  for (const m of u.lenses) m.material.emissiveIntensity = lit ? 6 : 0;
+  syncHeadMaterial(u.head, lightsOn);
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn);
+  rollWheels(u, vehicle, dt, TIRE);
+  syncAmberLenses(u.lenses, vehicle, flashPhase(t, BLINK_S, u.phase) < 0.5);
 }

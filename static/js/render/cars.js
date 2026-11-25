@@ -1,11 +1,13 @@
+import { rollWheels, advanceRotation, animationTime, readBrakeLevel, flashPhase } from "./actor-motion.js";
 // Car meshes: a side profile extruded to the car's width with rounded edges, a glass cabin with a
 // painted roof and pillars, lights, plates, and wheels with rims. Six silhouettes use the driven
 // model's dimensions; numeric traffic styles share CAR. Local +X is forward, +Z is right, rear axle at origin.
 // Cyclists are here too; pedestrians are in people.js.
 
 import * as THREE from "three";
+import { shareActorResources, rememberActorMaterial } from "./actor-resources.js";
 import { mergeGeometries, toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
-import { CAR } from "../sim/vehicle.js";
+import { BIKE, CAR } from "../sim/vehicle.js";
 import { getVehicleModel } from "../sim/vehicle-models.js";
 import { blobTexture, glowTexture, poolTexture } from "./textures.js";
 import { hash01 } from "./geo.js";
@@ -391,6 +393,7 @@ function styleGeometry(name, spec = CAR, height = STYLE_HEIGHT[name]) {
       box(0.065, 0.07, 0.11, xr - 0.035, tailY - 0.12, rearLampZ),
     ]),
   };
+  shareActorResources(Object.values(g).filter((part) => part?.isBufferGeometry));
   geoCache.set(key, g);
   return g;
 }
@@ -446,8 +449,9 @@ const shared = {
     toneMapped: true,
   }),
 };
+shareActorResources(Object.values(shared));
 const paints = new Map();
-function paint(hex) {
+function paint(hex = 0x2f7cff) {
   if (!paints.has(hex)) {
     paints.set(
       hex,
@@ -462,6 +466,7 @@ function paint(hex) {
         "car",
       ),
     );
+    shareActorResources([paints.get(hex)]);
   }
   return paints.get(hex);
 }
@@ -499,6 +504,7 @@ function wheelGeometry(r, style = "sedan") {
   parts.push(new THREE.CylinderGeometry(0.06, 0.06, 0.24, 10).rotateX(Math.PI / 2)); // hub
   const rim = mergeParts(parts);
   const g = mergeGeometries([tire.index ? tire.toNonIndexed() : tire, rim.toNonIndexed()], true);
+  shareActorResources([g]);
   geoCache.set(key, g);
   return g;
 }
@@ -524,10 +530,7 @@ function mergeParts(parts) {
 
 export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
   const model = typeof styleIndex === "string" ? getVehicleModel(styleIndex) : null;
-  const numeric = Number.isInteger(styleIndex)
-    ? ((styleIndex % STYLE_NAMES.length) + STYLE_NAMES.length) % STYLE_NAMES.length
-    : Math.floor(hash01(id, 4) * STYLE_NAMES.length);
-  const style = model?.style || (id === "ego" ? "sedan" : STYLE_NAMES[numeric]);
+  const style = model?.style || (id === "ego" ? "sedan" : streetCarStyle(id, styleIndex));
   const spec = model?.spec || CAR;
   const height = model?.height || STYLE_HEIGHT[style];
   const geo = styleGeometry(style, spec, height),
@@ -609,7 +612,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
     wheel.castShadow = true;
     axle.add(wheel);
     g.add(axle);
-    wheels.push({ pivot: axle, wheel });
+    wheels.push({ pivot: axle, wheel, steer: lx === spec.wheelbase });
   }
   g.userData = {
     wheels,
@@ -619,7 +622,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
     head,
     brake,
     blinkers,
-    prevV: 0,
+    prevV: null,
     brakeLevel: 0,
     pivot,
     pitch: 0,
@@ -638,6 +641,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
 
 // The driven car gets two real spot lights at its actual lamp lenses.
 export function addHeadlights(mesh) {
+  if (mesh.userData.headlights) return;
   const lights = [],
     lamp = mesh.userData.headlampPosition;
   for (const z of [-lamp.z, lamp.z]) {
@@ -667,26 +671,22 @@ export function syncCar(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
-  u.spin += (vehicle.v * dt) / u.tire;
-  for (let i = 0; i < u.wheels.length; i++) {
-    u.wheels[i].wheel.rotation.z = -u.spin;
-    u.wheels[i].pivot.rotation.y = i < 2 ? vehicle.delta : 0;
-  }
+  rollWheels(u, vehicle, dt, u.tire);
   // pitch and roll follow the car's accelerations through a soft suspension
-  if (dt > 0) {
+  if (animationTime(dt)) {
     const k = Math.min(1, dt * 8);
     u.pitch += ((vehicle.ax || 0) * PITCH_PER_MS2 - u.pitch) * k;
     u.roll += ((vehicle.latAccel || 0) * ROLL_PER_MS2 - u.roll) * k;
     u.pivot.rotation.set(u.roll, 0, u.pitch);
   }
   // indicators blink at about 75 per minute
-  const on = t % 0.8 < 0.45;
+  const on = flashPhase(t, 0.8) < 0.45 / 0.8;
   u.blinkers.left.visible = on && vehicle.signal === "left";
   u.blinkers.right.visible = on && vehicle.signal === "right";
   u.pool.visible = lightsOn > 0.02;
   const high = !!vehicle.highBeam;
   if (high) {
-    u.highHead ||= shared.head.clone();
+    u.highHead ||= rememberActorMaterial(mesh, shared.head.clone());
     u.highHead.emissiveIntensity = 0.35 + lightsOn * 14;
     u.head.material = u.highHead;
   } else u.head.material = shared.head;
@@ -700,16 +700,11 @@ export function syncCar(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
       l.target.position.y = high ? 0.2 : -0.6;
     }
   // brake lights: on while decelerating or held stopped; the tail lamps glow dimly at night
-  if (dt > 0) {
-    const decel = (u.prevV - vehicle.v) / dt;
-    const target = decel > 0.6 || Math.abs(vehicle.v) < 0.15 ? 1 : 0;
-    u.brakeLevel += (target - u.brakeLevel) * Math.min(1, dt * 12);
-    u.prevV = vehicle.v;
-    u.tail.emissiveIntensity = 0.3 + lightsOn * 1.5 + u.brakeLevel * (2.2 + lightsOn * 2);
-    for (const s of u.brake) {
-      s.material.opacity = u.brakeLevel * 0.5 + lightsOn * 0.25;
-      s.visible = s.material.opacity > 0.02;
-    }
+  const brake = readBrakeLevel(u, vehicle.v, dt);
+  u.tail.emissiveIntensity = 0.3 + lightsOn * 1.5 + brake * (2.2 + lightsOn * 2);
+  for (const sprite of u.brake) {
+    sprite.material.opacity = brake * 0.5 + lightsOn * 0.25;
+    sprite.visible = sprite.material.opacity > 0.02;
   }
 }
 
@@ -755,12 +750,18 @@ function distantCarGeometry(style) {
 // Both detail levels retain instance references, so a pull-out removes the car at any distance.
 const PARKED_CHUNK = 360;
 const STYLE_NAMES = ["sedan", "sedan", "hatch", "suv", "suv", "sport", "wagon", "pickup"];
+
+function streetCarStyle(id, styleIndex) {
+  const n = STYLE_NAMES.length;
+  return STYLE_NAMES[Number.isInteger(styleIndex) ? ((styleIndex % n) + n) % n : Math.floor(hash01(id, 4) * n)];
+}
 // Keep the same instance buffers and draw count. A style batch only needs spokes while
 // one of its cars is close enough to see them. Photo mode keeps the original near detail.
 class ParkedCarLOD extends THREE.LOD {
-  constructor(cars, wheels, detailed, simple) {
+  constructor(cars, instances, wheels, detailed, simple) {
     super();
     this.cars = cars;
+    this.instances = instances;
     this.wheels = wheels;
     this.detailed = detailed;
     this.simple = simple;
@@ -771,13 +772,23 @@ class ParkedCarLOD extends THREE.LOD {
     if (this.getCurrentLevel() !== 0) return;
     const radius = this.wheels.geometry === this.detailed ? 16 : 12;
     const { x, y, z } = camera.position;
-    const close = photoMode || this.cars.some((car) => (car.x - x) ** 2 + (car.y + z) ** 2 + y * y < radius * radius);
+    const close =
+      photoMode ||
+      this.cars.some(
+        (car) =>
+          !hiddenParked.has(this.instances.get(car)) && (car.x - x) ** 2 + (car.y + z) ** 2 + y * y < radius * radius,
+      );
     this.wheels.geometry = close ? this.detailed : this.simple;
   }
 }
 
 export function buildParkedCars(cars) {
   const group = new THREE.Group();
+  const instances = (group.userData.instances = new WeakMap());
+  if (!cars.length) {
+    group.userData.count = 0;
+    return group;
+  }
   const white = snowable(
     new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
@@ -792,7 +803,7 @@ export function buildParkedCars(cars) {
   const headOff = new THREE.MeshStandardMaterial({ color: 0xc9d0d8, roughness: 0.15, metalness: 0.3 });
   const chunks = new Map();
   for (const car of cars) {
-    const style = STYLE_NAMES[car.style || 0] || "sedan";
+    const style = streetCarStyle(car.id, car.style);
     const key = `${Math.floor(car.x / PARKED_CHUNK)},${Math.floor(car.y / PARKED_CHUNK)}|${style}`;
     if (!chunks.has(key)) chunks.set(key, []);
     chunks.get(key).push(car);
@@ -813,14 +824,14 @@ export function buildParkedCars(cars) {
         one,
       ),
     );
-    for (const c of list) c.instances = [];
+    for (const c of list) instances.set(c, []);
     const emit = (level, geometry, material, matrices, colors = null, shadow = false) => {
       const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
       const per = matrices.length / list.length; // 1, or 4 for the wheels
       matrices.forEach((m, i) => {
         mesh.setMatrixAt(i, m);
         if (colors) mesh.setColorAt(i, colors[i]);
-        list[Math.floor(i / per)].instances.push({ mesh, i, matrix: m.clone() });
+        instances.get(list[Math.floor(i / per)]).push({ mesh, i, matrix: m.clone() });
       });
       mesh.castShadow = shadow;
       mesh.receiveShadow = true;
@@ -848,41 +859,46 @@ export function buildParkedCars(cars) {
     emit(far, distant.glass, shared.glass, mats, null, true);
     emit(far, distant.trim, shared.trim, mats);
     emit(far, distant.wheels, [shared.tire, shared.rim], wheels);
-    group.add(chunkLOD(near, far, 100, new ParkedCarLOD(list, nearWheels, detailed, distant.wheels)));
+    group.add(chunkLOD(near, far, 100, new ParkedCarLOD(list, instances, nearWheels, detailed, distant.wheels)));
   }
   group.userData.count = cars.length;
   return group;
 }
 
 // A parked car has pulled out: collapse its instances (it is drawn as traffic from now on).
+const hiddenParked = new WeakSet();
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
-export function hideParkedCar(car) {
-  for (const { mesh, i } of car.instances || []) {
+export function hideParkedCar(instances) {
+  hiddenParked.add(instances);
+  for (const { mesh, i } of instances) {
     mesh.setMatrixAt(i, HIDDEN);
     mesh.instanceMatrix.needsUpdate = true;
   }
 }
 
-export function restoreParkedCar(car) {
-  for (const { mesh, i, matrix } of car.instances || []) {
+export function restoreParkedCar(instances) {
+  hiddenParked.delete(instances);
+  for (const { mesh, i, matrix } of instances) {
     mesh.setMatrixAt(i, matrix);
     mesh.instanceMatrix.needsUpdate = true;
   }
 }
 
 // Street-side door panel: match the simulation hinge, angle, length and thickness exactly.
-export function createDoorMesh(car) {
+export function createDoorMesh(car, door = null) {
+  const { length = 1.1, width = 0.12 } = door?.spec ?? {};
+  const carWidth = car.spec?.width ?? W;
   const group = new THREE.Group();
   const swing = new THREE.Group();
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.65, 0.12), paint(car.color));
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(length, 0.65, width), paint(car.color));
   panel.position.y = 0.72;
-  const window = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.38, 0.07), shared.glass);
+  const window = new THREE.Mesh(new THREE.BoxGeometry(length - 0.1, 0.38, width * (0.07 / 0.12)), shared.glass);
   window.position.y = 1.2;
   swing.add(panel, window);
   // Parked bodies are batched geometry. Cover the closed panel with a recessed dark cabin
   // opening while its separate door swings, without rebuilding thousands of instances.
-  const opening = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.85, 0.025), shared.trim);
-  opening.position.set(1.55, 0.84, (car.curb === "right" ? -1 : 1) * (W / 2 + 0.015));
+  const opening = new THREE.Mesh(new THREE.BoxGeometry(length - 0.02, 0.85, 0.025), shared.trim);
+  opening.position.set(1.55, 0.84, (car.curb === "right" ? -1 : 1) * (carWidth / 2 + 0.015));
   group.add(opening, swing);
   group.userData.swing = swing;
   panel.castShadow = window.castShadow = true;
@@ -909,8 +925,10 @@ export function syncDoor(mesh, door) {
 const bikeShared = {
   tire: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
   metal: new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.8, roughness: 0.35 }),
+  rear: new THREE.MeshStandardMaterial({ color: 0xa82022, emissive: 0x75170f, emissiveIntensity: 0.8 }),
   helmet: new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4 }),
 };
+shareActorResources(Object.values(bikeShared));
 const rod = (x0, y0, x1, y1, r = 0.022) => {
   const len = Math.hypot(x1 - x0, y1 - y0);
   const g = new THREE.CylinderGeometry(r, r, len, 6);
@@ -920,14 +938,31 @@ const rod = (x0, y0, x1, y1, r = 0.022) => {
 export function createBikeMesh(color = 0x2b6cb0, look = 0) {
   const g = new THREE.Group();
   const R = 0.34,
-    wb = 1.05;
+    wb = BIKE.wheelbase;
   const frameMat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.35 });
+  g.name = "bicycle";
   const wheels = [];
   for (const x of [0, wb]) {
-    const w = new THREE.Mesh(new THREE.TorusGeometry(R, 0.025, 6, 24), bikeShared.tire);
-    w.position.set(x, R, 0);
-    g.add(w);
-    wheels.push(w);
+    const pivot = new THREE.Group();
+    pivot.position.set(x, R, 0);
+    const wheel = new THREE.Group();
+    const tire = new THREE.Mesh(new THREE.TorusGeometry(R, 0.025, 6, 24), bikeShared.tire);
+    tire.name = "tire";
+    wheel.add(tire);
+    const spokes = [];
+    for (let i = 0; i < 8; i++) {
+      const phi = (i * Math.PI) / 4;
+      spokes.push(rod(0, 0, R * Math.cos(phi), R * Math.sin(phi), 0.006));
+    }
+    const metal = new THREE.Mesh(
+      mergeGeometries([...spokes, new THREE.CylinderGeometry(0.047, 0.047, 0.073, 12).rotateX(Math.PI / 2)]),
+      bikeShared.metal,
+    );
+    metal.name = "hub-and-spokes";
+    wheel.add(metal);
+    pivot.add(wheel);
+    g.add(pivot);
+    wheels.push({ pivot, wheel, steer: x === wb });
   }
   const crank = [0.45, 0.3],
     seat = [0.3, 0.85],
@@ -961,6 +996,18 @@ export function createBikeMesh(color = 0x2b6cb0, look = 0) {
   helmet.position.set(0, 1.77 - 0.92, 0); // on the head, in the rider's hip frame
   rider.userData.body.add(helmet);
   g.add(rider);
+  const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.054, 0.14), bikeShared.tire);
+  saddle.name = "saddle";
+  saddle.position.set(seat[0] + 0.02, seat[1] + 0.005, 0);
+  g.add(saddle);
+  const lampFront = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), shared.head);
+  lampFront.name = "bicycle-front-lamp";
+  lampFront.position.set(head[0] + 0.03, head[1] + 0.08, 0);
+  g.add(lampFront);
+  const lampRear = new THREE.Mesh(new THREE.SphereGeometry(0.037, 8, 6), bikeShared.rear);
+  lampRear.name = "bicycle-rear-reflector";
+  lampRear.position.set(seat[0] - 0.16, seat[1] - 0.09, 0);
+  g.add(lampRear);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(wb / 2, 0.02, 0);
   g.add(blob);
@@ -980,8 +1027,7 @@ export function syncBike(mesh, vehicle, dt = 0) {
   // lean into turns: tan(lean) = v^2 * curvature / g
   mesh.rotation.x = Math.atan((vehicle.latAccel || 0) / 9.81) * -0.9;
   const u = mesh.userData;
-  u.spin += (vehicle.v * dt) / 0.34;
-  for (const w of u.wheels) w.rotation.z = -u.spin;
-  u.crank += ((vehicle.v * dt) / 0.34) * 0.55;
+  rollWheels(u, vehicle, dt, 0.34);
+  u.crank = advanceRotation(u.crank, vehicle.v, dt, 0.34 / 0.55);
   poseRider(u.rider, u.crank);
 }

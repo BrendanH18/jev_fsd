@@ -12,8 +12,9 @@ export const challenge = {
   icon: "↗",
   difficulty: "Anticipation",
   hazard: "pull",
-  description: "A parked car signals and joins your lane. Notice the indicator and leave a gap.",
-  lesson: "Ease off for a merging car rather than closing the gap.",
+  description: "A car at the kerb signals and starts to pull into your lane as you approach from behind.",
+  lesson:
+    "Ease off at the indicator to open a gap before the car moves across. Once it has joined the lane, restore a comfortable following gap before accelerating.",
 };
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);

@@ -37,8 +37,9 @@ const frontOf = (v) => (v.spec || CAR).length - (v.spec || CAR).rearOverhang;
 // Where the line from p in direction (ux, uy) crosses crosswalk `cw` (sidewalk end to sidewalk end):
 // the distance along that line, or null if it misses.
 export function distanceTo(cw, p, ux, uy) {
-  const a = cw.ends[1],
-    b = cw.ends[-1];
+  const a = cw?.ends?.[1],
+    b = cw?.ends?.[-1];
+  if (!a || !b || !p) return null;
   const sx = b[0] - a[0],
     sy = b[1] - a[1];
   const den = ux * sy - uy * sx;
@@ -47,12 +48,13 @@ export function distanceTo(cw, p, ux, uy) {
     wy = a[1] - p[1];
   const t = (wx * sy - wy * sx) / den,
     u = (wx * uy - wy * ux) / den;
-  return u >= 0 && u <= 1 ? t : null;
+  return u >= 0 && u <= 1 && Number.isFinite(t) ? t : null;
 }
 
 // How far a vehicle's front is short of crosswalk `cw`'s centre, along its heading (negative: past
 // it), or null when it is not heading across it.
 export function frontTo(cw, v) {
+  if (!v) return null;
   const [fx, fy] = v.front || [v.x, v.y];
   return distanceTo(cw, [fx, fy], Math.cos(v.psi), Math.sin(v.psi));
 }
@@ -62,13 +64,15 @@ export function frontTo(cw, v) {
 // false). `vehicles` defaults to all traffic.
 export function stoppedAt(world, cw, car, vehicles = world.npcs, ahead = true) {
   const out = [];
+  const carFront = frontOf(car);
   for (const n of vehicles) {
+    if (!Number.isFinite(n.v) || !Number.isFinite(n.psi)) continue;
     if (n === car || n.kind === "bike" || n.kind === "pedestrian" || n.parked || Math.abs(n.v) >= STOPPED_MPS) continue;
     if (Math.abs(wrap(n.psi - car.psi)) > SAME_WAY) continue;
     const d = frontTo(cw, n);
     if (d === null || d > STOPPED_AT_M || d < -1) continue;
     const local = car.toLocal(...(n.front || [n.x, n.y]));
-    if (Math.abs(local.right) < OTHER_LANE_M || (ahead && local.ahead - frontOf(car) < -BESIDE_M)) continue;
+    if (Math.abs(local.right) < OTHER_LANE_M || (ahead && local.ahead - carFront < -BESIDE_M)) continue;
     out.push(n);
   }
   return out;
@@ -77,9 +81,9 @@ export function stoppedAt(world, cw, car, vehicles = world.npcs, ahead = true) {
 // The marked crosswalks a route crosses, with the route arc length where it crosses each (cached).
 const along = new WeakMap();
 export function crosswalksAlong(route, crowd) {
-  if (!route || !crowd?.marked?.length) return [];
+  if (!route?.pts?.length || !crowd?.marked?.length || route.pts.length !== route.cum?.length) return [];
   const list = along.get(route);
-  if (list && list.crowd === crowd.marked) return list.items;
+  if (list && list.crowd === crowd.marked && list.count === crowd.marked.length) return list.items;
   const items = [];
   for (const cw of crowd.marked) {
     for (let i = 0; i < route.pts.length - 1; i++) {
@@ -95,7 +99,7 @@ export function crosswalksAlong(route, crowd) {
     }
   }
   items.sort((x, y) => x.s - y.s);
-  along.set(route, { crowd: crowd.marked, items });
+  along.set(route, { crowd: crowd.marked, count: crowd.marked.length, items });
   return items;
 }
 
@@ -105,7 +109,7 @@ export function crosswalksAlong(route, crowd) {
 export function noteStop(world) {
   const car = world.ego,
     marked = world.crowd?.marked;
-  if (!marked?.length) {
+  if (!marked?.length || !Number.isFinite(world.t) || !Number.isFinite(car.v)) {
     world.crosswalkStop = null;
     return;
   }
@@ -122,7 +126,8 @@ export function noteStop(world) {
   }
   if (stop) return;
   for (const cw of marked) {
-    if (Math.abs(cw.ends[1][0] - car.x) > 40 || Math.abs(cw.ends[1][1] - car.y) > 40) continue;
+    const end = cw.ends?.[1];
+    if (!end || Math.abs(end[0] - car.x) > 40 || Math.abs(end[1] - car.y) > 40) continue;
     const at = frontTo(cw, car);
     if (at !== null && at >= -1 && at <= AT_CROSSWALK_M) {
       world.crosswalkStop = { id: cw.id, since: world.t, done: false };
@@ -135,7 +140,8 @@ export function noteStop(world) {
 export const looked = (world, cw) => world.crosswalkStop?.id === cw.id && world.t - world.crosswalkStop.since >= LOOK_S;
 
 // Could the car, at speed v, stop with its front HOLD_M short of a crosswalk `toCentre` metres ahead?
-export const canStopShort = (v, toCentre) => toCentre - HOLD_M >= Math.max(0, v) ** 2 / (2 * OWED_DECEL);
+export const canStopShort = (v, toCentre) =>
+  Number.isFinite(v) && Number.isFinite(toCentre) && toCentre - HOLD_M >= Math.max(0, v) ** 2 / (2 * OWED_DECEL);
 
 // True when every line of sight from `observer` to pedestrian `ped` passes through the body of a
 // road vehicle in traffic (`vehicles`: not cyclists, not parked).
@@ -143,7 +149,7 @@ export function hiddenByTraffic(observer, ped, vehicles, standing = []) {
   const dx = ped.x - observer.x,
     dy = ped.y - observer.y,
     d = Math.hypot(dx, dy);
-  if (d < 1 || d > HIDE_RANGE_M) return false;
+  if (!Number.isFinite(d) || d < 1 || d > HIDE_RANGE_M) return false;
   const nx = -dy / d,
     ny = dx / d;
   const near = vehicles
@@ -158,15 +164,19 @@ export function hiddenByTraffic(observer, ped, vehicles, standing = []) {
     )
     .concat(standing.filter((v) => v !== observer));
   if (!near.length) return false;
+  const from = [observer.x, observer.y];
   for (const k of [0, 1, -1]) {
     const to = [ped.x + nx * PROBE_M * k, ped.y + ny * PROBE_M * k];
-    if (!near.some((v) => segmentHitsBox([observer.x, observer.y], to, v.obb()))) return false;
+    if (!near.some((v) => v.obb && segmentHitsBox(from, to, v.obb()))) return false;
   }
   return true;
 }
 
 // Does segment a-b pass through box (an OBB)? Liang–Barsky in the box's frame.
 export function segmentHitsBox(a, b, box) {
+  if (!a || !b || !box?.center) return false;
+  if (!Number.isFinite(box.halfLength) || !Number.isFinite(box.halfWidth) || box.halfLength < 0 || box.halfWidth < 0)
+    return false;
   const c = Math.cos(box.heading),
     s = Math.sin(box.heading);
   const loc = (p) => {
@@ -176,6 +186,8 @@ export function segmentHitsBox(a, b, box) {
   };
   const p = loc(a),
     q = loc(b);
+  if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || !Number.isFinite(q[0]) || !Number.isFinite(q[1]))
+    return false;
   let lo = 0,
     hi = 1;
   for (let axis = 0; axis < 2; axis++) {

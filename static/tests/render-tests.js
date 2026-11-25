@@ -193,17 +193,18 @@ export function runRenderTests() {
           triangles(chunk.levels[1].object) < triangles(chunk.levels[0].object) / 2,
       ),
   );
-  hideParkedCar(car);
+  const { instances } = parked.userData;
+  hideParkedCar(instances.get(car));
   check(
     "pull-out removes every near and far instance",
-    car.instances.every(({ mesh, i }) => {
+    instances.get(car).every(({ mesh, i }) => {
       mesh.getMatrixAt(i, matrix);
       return matrix.elements[0] === 0 && matrix.elements[5] === 0 && matrix.elements[10] === 0;
     }),
   );
   check(
     "pull-out leaves neighboring parked instances intact",
-    neighbor.instances.every(({ mesh, i }) => {
+    instances.get(neighbor).every(({ mesh, i }) => {
       mesh.getMatrixAt(i, matrix);
       return Math.abs(matrix.determinant() - 1) < 1e-5;
     }),
@@ -329,10 +330,12 @@ export function runRenderTests() {
 
   const calls = [],
     renderer = { shadowMap: { autoUpdate: true } };
+  const registration = { scene: new THREE.Scene(), sceneryLODs: new Set(), applyCoverage() {} };
+  SceneView.prototype.addScenery.call(registration, parked);
   const view = {
+    ...registration,
     renderer,
     camera,
-    sceneryLODs: [lod],
     sky: { material: { uniforms: { cloudTime: { value: 0 } } } },
     reflection: {
       render: () => {
@@ -356,12 +359,7 @@ export function runRenderTests() {
     /* verify state restoration below */
   }
   check("render errors restore shadow updates", renderer.shadowMap.autoUpdate);
-  const registration = { scene: new THREE.Scene(), sceneryLODs: [], applyCoverage() {} };
-  SceneView.prototype.addScenery.call(registration, parked);
-  check(
-    "reflection camera cannot independently select detail",
-    registration.sceneryLODs.includes(lod) && !lod.autoUpdate,
-  );
+  check("reflection camera cannot independently select detail", registration.sceneryLODs.has(lod) && !lod.autoUpdate);
 
   const savedReflection = {
     texture: reflection.texture.value,
@@ -401,17 +399,33 @@ export function runRenderTests() {
       "mirror pass unbinds its attached reflection texture",
       reflectionSampler === null && reflection.texture.value === mirror.rt.texture,
     );
+    const publishedMatrix = reflection.matrix.value.clone();
+    const render = fakeRenderer.render;
     fakeRenderer.render = () => {
       throw new Error("test reflection failure");
     };
+    camera.position.x += 1;
+    let renderFailed = false;
     try {
       mirror.render();
-    } catch {
-      /* verify state restoration below */
+    } catch (error) {
+      renderFailed = error.message === "test reflection failure";
     }
     check(
-      "reflection errors restore target, strength and sampler",
-      target === null && reflection.strength.value === 1 && reflection.texture.value === mirror.rt.texture,
+      "reflection errors restore the target and withhold the incomplete reflection",
+      renderFailed &&
+        target === null &&
+        reflection.strength.value === 0 &&
+        reflection.texture.value === null &&
+        reflection.matrix.value.equals(publishedMatrix),
+    );
+    fakeRenderer.render = render;
+    check(
+      "the next successful reflection publishes its texture and projection",
+      mirror.render() &&
+        reflection.strength.value === 1 &&
+        reflection.texture.value === mirror.rt.texture &&
+        !reflection.matrix.value.equals(publishedMatrix),
     );
   } finally {
     mirror.dispose();

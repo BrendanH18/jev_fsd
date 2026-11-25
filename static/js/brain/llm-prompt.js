@@ -16,6 +16,16 @@
 //  * Hand over computed targets (target_speed, vs_target, outcome) instead of expecting arithmetic.
 //  * Keep the system message identical between calls so providers can cache it.
 
+import {
+  characterCount,
+  chatChoices,
+  invalidRequest,
+  isObject,
+  MAX_CHAT_CHARS,
+  own,
+  QUESTION_FIELDS,
+  questionIds,
+} from "./model-contract.js";
 import { situationClauses } from "./state.js";
 // (each registered feature's line, at its place: sim/features/index.js)
 import { promptLines } from "../sim/features/index.js";
@@ -28,8 +38,7 @@ const OPEN_CHECKS =
   'Every manoeuvre in `candidates` already passed a 3-second collision check against the objects the car can see, but not the road rules: one whose `outcome` begins "flagged:" broke a road rule in its 3-second prediction, and the outcome says which. Your job is to choose the one that best fits `driving_style` and `situation`; the drive is judged on what the car does. Unseen objects and later changes are still possible.';
 
 const systemPrompt = (CHECKED) => `
-Flashing amber means slow and proceed cautiously, yielding to pedestrians and vehicles already in the junction. Flashing red means a full stop, then yield to main-street traffic as at a two-way stop; neither is an advance green or a right-on-red decision.
-
+${promptLines("introduction")}
 ${promptLines("restrictions")}${promptLines("headlights")}You are the driving policy of a car in a city traffic simulator. Several times a second you receive what the car's sensors observe and the manoeuvres it can make next, and you choose one.
 
 ${CHECKED}
@@ -42,8 +51,7 @@ The input is JSON:
 - \`observed.lanes\` appears on streets with several lanes in the car's direction: the lane the car is in, the lane its route uses, the gaps in the lanes beside it, and \`return_within_m\` while the car is outside its route's lane.
 
 How to choose \`candidate\`:
-- On yellow with \`intersection.amber.stop=false\`, continue only with a clear path and never speed up above \`intersection.amber.speed_at_observation_mps\`. Red still requires stopping before entry.
-- Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal whose \`intersection.amber.stop\` is true (or, without that field, one it can stop for safely), a stop sign whose stop is not completed, an all-way stop where it is not the car's turn, or a roundabout yield line with ring traffic.
+${promptLines("amberDecision")}- Choose \`stop_at_line\` when \`situation\` says the car must stop at a line ahead: a red or unseen signal, a yellow signal whose \`intersection.amber.stop\` is true (or, without that field, one it can stop for safely), a stop sign whose stop is not completed, an all-way stop where it is not the car's turn, or a roundabout yield line with ring traffic.
 - Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car.${promptLines("pedestrian")}
 - Choose \`stop_for_oncoming\` when \`situation\` says the car is turning left and oncoming traffic has the right of way.
 - Choose \`stop_for_cyclist\` when \`situation\` says the car is turning right and a cyclist on its right has the right of way.
@@ -52,20 +60,15 @@ How to choose \`candidate\`:
 - Choose \`stop_at_crosswalk\` when \`situation\` says a vehicle in the next lane is stopped at a crosswalk ahead: never pass it until the car has stopped and looked.
 - Choose \`stop_for_streetcar\` when \`situation\` says a streetcar ahead, going the car's way, is stopped with its doors open: riders cross between it and the curb. Keep the car stopped behind its rear doors until they close.
 - Choose \`stop_before_tracks\` when \`situation\` says a train is coming at a level crossing ahead, or that there is no room past the tracks: never stop on them. Keep the car stopped short of them until the train has passed and there is room for all of the car beyond them.
-${promptLines("beforeMerge")}- At a lane closure (\`lane_closure\`), zipper merge: stay in the car's lane right up to the merge point, never changing lanes before it, then take turns, one from each lane. In the closed lane, choose \`wait_to_merge\` when \`situation\` says it is not the car's turn, and keep the car at the merge point until \`lane_closure.your_turn\` is true; then its candidates already take it across. In the open lane, choose \`let_merge_in\` when \`situation\` says to let the car at the merge in, and go once it is across in front.
-${promptLines("parking")}${promptLines("afterParking")}- Behind a cyclist riding in the car's lane on a street with one lane each way (\`cyclist_pass\`), never squeeze past it in the lane. Choose \`follow_cyclist\` to stay behind it while \`situation\` says it cannot be passed or the oncoming lane is not clear, and \`pass_cyclist\` only when \`situation\` says the oncoming lane is clear for the whole pass: it goes round through the oncoming lane at least \`cyclist_pass.min_passing_distance_m\` clear of the cyclist (1 m where the limit is 50 km/h or less, 1.5 m above) and back in ahead of it. Once passing, carry on, unless \`situation\` says to fall back in behind.
-- Choose \`wait_short_of_junction\` when \`situation\` says traffic past the next signal leaves no room for the car beyond the junction: even on a green, never enter a junction the car cannot clear. Keep the car at the line until there is room for all of it past the junction.
+${promptLines("beforeMerge")}${promptLines("beforeParking")}${promptLines("parking")}${promptLines("afterParking")}${promptLines("afterParkingAdvice")}- Choose \`wait_short_of_junction\` when \`situation\` says traffic past the next signal leaves no room for the car beyond the junction: even on a green, never enter a junction the car cannot clear. Keep the car at the line until there is room for all of it past the junction.
 ${promptLines("beforeRunner")}${promptLines("streetHazards")}${promptLines("driveways")}${promptLines("snowbanks")}${promptLines("junctions")}${promptLines("rearTraffic")}${promptLines("beforeSchoolBus")}- Choose \`stop_for_school_bus\` when \`situation\` says a school bus ahead, going either way, is stopped with its red lights flashing, and keep the car stopped until they go off.
 - In a school or playground zone (\`speed_zone\`), keep to its limit while it is in effect: prefer a candidate whose \`end_speed\` is at or below \`car.target_speed\`.
-${promptLines("beforeBusLanes")}- An in-effect \`bus_lane\` is reserved: stay out unless \`entering_allowed\` is true for the last 50 m before a right turn or an actual curb parking/pull-out manoeuvre. Choose a safe lane change out when necessary.
-${promptLines("afterBusLanes")}${promptLines("afterGlare")}- A vehicle can hide another behind it. Turning left, when \`intersection.oncoming.lane_hidden_by\` names a vehicle (one waiting to turn left from the other side, say), the car cannot see whether anything is coming through in the lane it hides: choose \`stop_for_oncoming\` and wait until it can see that the lane is clear, even when no oncoming vehicle is listed.
+${promptLines("beforeBusLanes")}${promptLines("reservedLane")}${promptLines("afterBusLanes")}${promptLines("afterGlare")}- A vehicle can hide another behind it. Turning left, when \`intersection.oncoming.lane_hidden_by\` names a vehicle (one waiting to turn left from the other side, say), the car cannot see whether anything is coming through in the lane it hides: choose \`stop_for_oncoming\` and wait until it can see that the lane is clear, even when no oncoming vehicle is listed.
 - Beside cars parked at the kerb that hide the sidewalk (\`blind_spot\`), keep to \`car.target_speed\`: someone could step out from between them unseen, and the car must be able to stop for them. Prefer a candidate whose \`end_speed\` is at or below it.
-- Behind a snow plow (\`snow_plow\`), keep to \`car.target_speed\`, which keeps the car \`snow_plow.keep_back_m\` back. Never pass one on the right, nor draw level with one on its right: prefer a candidate whose \`end_speed\` is at or below \`car.target_speed\`. Pass one only with a \`change_left_*\` candidate when \`situation\` says the car may, and move back in front of it only when \`situation\` says to.
-${promptLines("afterPlow")}- At an all-way stop, vehicles go in the order they stopped at their lines; \`intersection.priority.your_turn\` says whether it is the car's turn.
+${promptLines("nearbySpecial")}${promptLines("afterPlow")}- At an all-way stop, vehicles go in the order they stopped at their lines; \`intersection.priority.your_turn\` says whether it is the car's turn.
 ${promptLines("afterAllWay")}- At a two-way stop, or a junction without a sign or signal, \`intersection.give_way\` says whether the way is clear. Choose \`stop_at_line\` or \`wait_to_give_way\` when \`situation\` says the car must give way, and \`creep_to_look\` when it says to creep forward to look.
 - Under an advance green (\`intersection.advance\`: a flashing green, or a green left arrow), \`intersection.signal\` is already the light for the way the car goes. A green left arrow is for left turns only: going straight or right, the car's light is red, and it waits for its own green even while the cars turning left beside it go. When \`intersection.advance.protected_left\` is true, oncoming traffic is held on red and the car turns left without waiting for it.
-- A left turn on red is allowed only when \`intersection.left_on_red\` is present: from one one-way street onto another, after a full stop, yielding to pedestrians and traffic from the right. Never at a scramble, in Québec, or where a sign forbids it. When stop_completed and clear are true, the candidate at target makes the turn.
-- At a red light where \`situation\` says the car may turn right on red now, the candidate at target turns; \`stop_at_line\` waits for the green instead. Both are allowed.
+${promptLines("beforeRightOnRed")}- At a red light where \`situation\` says the car may turn right on red now, the candidate at target turns; \`stop_at_line\` waits for the green instead. Both are allowed.
 - Choose \`stop_at_destination\` when \`situation\` says the destination is within reach.
 - Choose a \`change_left_*\` or \`change_right_*\` candidate (a full lane change) only when \`situation\` says it passes a slower vehicle ahead, moves the car over away from a vehicle stopped at the roadside, returns the car to its route's lane or moves it into the lane its route takes for a turn. A candidate whose \`steer\` begins "continue into" finishes a lane change already under way; choose one whose \`steer\` begins "move back" only when no "continue into" candidate is offered.
 - Otherwise choose the candidate whose \`vs_target\` is "at target" and whose \`lane\` is "centered". When none is at target, choose the one whose \`end_speed\` is closest to target_speed without being above it.
@@ -83,30 +86,52 @@ Reply with one JSON object and nothing else. Use exactly the keys listed in \`an
 
 export const SYSTEM_PROMPT = systemPrompt(GUARDED_CHECKS);
 export const OPEN_SYSTEM_PROMPT = systemPrompt(OPEN_CHECKS);
+const GUARDED_SYSTEM_CHARS = characterCount(SYSTEM_PROMPT);
+const OPEN_SYSTEM_CHARS = characterCount(OPEN_SYSTEM_PROMPT);
 
 // Returns { messages, expect }. `expect` lists the values the model may answer with; the server
 // uses it for structured output (when the endpoint supports it) and to validate the reply.
 export function buildLlmPrompt(snap, request) {
   const { state = {}, questions = {} } = request;
+  if (!isObject(state)) invalidRequest("state must be an object");
+  const asked = new Set(questionIds(questions));
   const expect = {};
-  if (questions.motion) expect.motion = Object.keys(questions.motion.criteria);
-  if (questions.vector) expect.candidate = Object.keys(questions.vector.criteria);
-  if (questions.headlights) expect.headlights = Object.keys(questions.headlights.criteria);
-  if (questions.route) expect.route = Object.keys(questions.route.criteria);
+  for (const [id, field] of Object.entries(QUESTION_FIELDS)) {
+    if (asked.has(id)) expect[field] = chatChoices(questions, id);
+  }
   // `units` lives in the system message; candidates and route options are listed separately below.
   const { driving_style, units, candidates = [], rejected, route_options, ...observed } = state;
   const input = { driving_style, situation: snap ? situationClauses(snap, { track: request.track }) : [], observed };
   if (expect.candidate) {
+    if (!Array.isArray(candidates)) invalidRequest("state.candidates must be an array for a candidate question");
     const offered = new Set(expect.candidate);
-    input.candidates = candidates.filter((c) => offered.has(c.id));
+    const seen = new Set();
+    input.candidates = candidates.filter((candidate) => {
+      const id = own(candidate, "id");
+      if (!offered.has(id)) return false;
+      if (seen.has(id)) invalidRequest(`duplicate candidate observation for ${id}`);
+      seen.add(id);
+      return true;
+    });
+    for (const id of offered) if (!seen.has(id)) invalidRequest(`missing candidate observation for ${id}`);
   }
   if (expect.motion) input.motion_options = questions.motion.criteria;
   if (expect.route) input.route_options = questions.route.criteria;
   input.answer = expect;
+  const open = request.track === "open";
+  const system = open ? OPEN_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  let user;
+  try {
+    user = JSON.stringify(input);
+  } catch {
+    invalidRequest("LLM decision state cannot be encoded as JSON");
+  }
+  const total = (open ? OPEN_SYSTEM_CHARS : GUARDED_SYSTEM_CHARS) + characterCount(user);
+  if (total > MAX_CHAT_CHARS) invalidRequest(`LLM prompt has ${total} characters (limit ${MAX_CHAT_CHARS})`);
   return {
     messages: [
-      { role: "system", content: request.track === "open" ? OPEN_SYSTEM_PROMPT : SYSTEM_PROMPT },
-      { role: "user", content: JSON.stringify(input) },
+      { role: "system", content: system },
+      { role: "user", content: user },
     ],
     expect,
   };

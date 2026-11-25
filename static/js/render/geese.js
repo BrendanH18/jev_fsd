@@ -99,6 +99,7 @@ export class GeeseView {
       for (const grazing of [false, true]) {
         const mesh = new THREE.InstancedMesh(gooseGeometry({ gosling, grazing }), material, CAPACITY);
         mesh.count = 0;
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         mesh.frustumCulled = false;
         mesh.castShadow = true;
         mesh.name = `geese_${gosling ? "goslings" : "adults"}${grazing ? "_grazing" : ""}`;
@@ -112,14 +113,15 @@ export class GeeseView {
     this.s = new THREE.Vector3(1, 1, 1);
   }
 
-  sync(world, t) {
+  sync(world, t, camera = null) {
     const counts = {};
     for (const key of Object.keys(this.meshes)) counts[key] = 0;
-    const ego = world.ego;
+    const x = camera?.position.x ?? world.ego.x,
+      y = camera ? -camera.position.z : world.ego.y;
     for (const g of world.geese?.gaggles || []) {
-      if (Math.hypot(g.geo.mid[0] - ego.x, g.geo.mid[1] - ego.y) > DRAW_WITHIN_M) continue;
       const grass = g.phase === "waiting" || g.phase === "across";
       for (const o of g.geese) {
+        if ((o.x - x) ** 2 + (o.y - y) ** 2 > DRAW_WITHIN_M ** 2) continue;
         // (grazing on the grass, now and then looking up; standing in the road, alert)
         const grazing =
           grass && o.v < 0.03 && !onRoadway(g, o) && Math.sin(t * 0.6 + o.wobble * 3 + (o.gosling ? 1 : 0)) > -0.35;
@@ -140,7 +142,11 @@ export class GeeseView {
     }
     for (const [key, mesh] of Object.entries(this.meshes)) {
       mesh.count = counts[key];
-      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.count) {
+        mesh.instanceMatrix.clearUpdateRanges();
+        mesh.instanceMatrix.addUpdateRange(0, mesh.count * 16);
+        mesh.instanceMatrix.needsUpdate = true;
+      }
     }
   }
 }

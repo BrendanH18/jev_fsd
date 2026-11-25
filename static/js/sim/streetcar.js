@@ -58,23 +58,25 @@ const holdAhead = (car, right) => holdFromRear(right) - (car.spec || STREETCAR).
 // of the path do not run past its right side going its way, or the driver's front has already reached
 // its rear doors (its rear, in its lane). The first stretch of the path ahead that does counts.
 export function streetcarHold(pts, cum, front, car, look = LOOK_M) {
+  if (!car || !Number.isFinite(car.psi) || !Number.isFinite(car.x) || !Number.isFinite(car.y)) return null;
+  if (!pts || pts.length !== cum?.length || !Number.isFinite(front) || !(look >= 0)) return null;
   const cs = car.spec || STREETCAR,
     c = Math.cos(car.psi),
     s = Math.sin(car.psi);
-  const from = front - cs.length;
+  const from = front - cs.length,
+    rx = car.x - c * cs.rearOverhang,
+    ry = car.y - s * cs.rearOverhang;
   for (let i = 0; i < pts.length - 1 && cum[i] <= front + look; i++) {
     const len = cum[i + 1] - cum[i];
-    if (cum[i + 1] < from || len <= 0) continue;
+    if (cum[i + 1] < from || !Number.isFinite(len) || len <= 0) continue;
     const a = pts[i],
       b = pts[i + 1],
       dx = b[0] - a[0],
       dy = b[1] - a[1];
     if (Math.abs(wrap(car.psi - Math.atan2(dy, dx))) > SAME_WAY) continue;
     // (how far right of the streetcar's centreline this stretch runs, at its rear)
-    const rx = car.x - c * cs.rearOverhang,
-      ry = car.y - s * cs.rearOverhang;
     const t = ((rx - a[0]) * dx + (ry - a[1]) * dy) / (len * len);
-    if (t < 0 || t > 1) continue;
+    if (!(t >= 0 && t <= 1)) continue;
     const right = (a[0] + dx * t - rx) * s - (a[1] + dy * t - ry) * c;
     if (right < -IN_LANE_M || right > SIDE_M) continue;
     const at = holdFromRear(right);
@@ -90,12 +92,16 @@ export function streetcarHold(pts, cum, front, car, look = LOOK_M) {
 // { beside, ahead_m (its front to where it stops), right_m (how far right of the streetcar's
 // centreline it is) }, or null when it is not going the streetcar's way.
 export function streetcarRelation(o, car) {
-  if (o === car || Math.abs(wrap(car.psi - o.psi)) > SAME_WAY) return null;
+  if (!o || !car || o === car || typeof car.toLocal !== "function") return null;
+  if (!(Math.abs(wrap(car.psi - o.psi)) <= SAME_WAY)) return null;
   const cs = car.spec || STREETCAR,
-    os = o.spec || CAR,
-    l = car.toLocal(o.x, o.y);
+    os = o.spec || CAR;
+  // (Vehicle.toLocal throws on a point that is not finite: an invalid position has no relation)
+  if (!Number.isFinite(o.x) || !Number.isFinite(o.y)) return null;
+  const l = car.toLocal(o.x, o.y);
   const right = l.right,
     front = l.ahead + os.length - os.rearOverhang;
+  if (!Number.isFinite(right) || !Number.isFinite(front) || !Number.isFinite(cs.rearOverhang)) return null;
   return {
     beside: Math.abs(right) >= IN_LANE_M,
     ahead_m: holdAhead(car, right) - front,
@@ -105,7 +111,7 @@ export function streetcarRelation(o, car) {
 }
 
 // Whether a driver at speed `v` can stop within `room` metres braking at no more than OWED_DECEL.
-export const canStopFor = (v, room) => room >= Math.max(0, v) ** 2 / (2 * OWED_DECEL);
+export const canStopFor = (v, room) => Number.isFinite(v) && room >= Math.max(0, v) ** 2 / (2 * OWED_DECEL);
 
 // Where a streetcar's doors are, as points beside it on the curb side (`side` metres right of its
 // right flank): its four doors, front to rear.

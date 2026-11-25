@@ -13,36 +13,64 @@ each harness error and each leg that left no result.
 
 from __future__ import annotations
 
+import argparse
+import gzip
+import html
 import json
-from collections import Counter
 import os
 import re
 import sys
+from collections import Counter
+from itertools import product
 from pathlib import Path
+from zlib import error as DeflateError
 
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "soak.yml"
+REPORT_FILES = ("soak.json", "soak.json.gz", "run.json", "run.json.gz")
 NO_RESULT = "no result (setup failed, timed out or was cancelled)"
 NON_AUDITS = {"simulation error", "stuck", "timeout", "collision"}
 CATEGORIES = {"throws": "simulation error", "stuck": "stuck", "collisions": "collision", "audits": "audit failure"}
 
 
+# This reads the workflow's literal matrix and LEG, without evaluating workflow expressions.
+YAML_QUOTED = re.compile(r"'(?:[^']|'')*|" r'"(?:[^"\\]|\\.)*"')
+MATRIX_REF = re.compile(r"\$\{\{\s*matrix\.(\w+)\s*\}\}")
+
+
+def _split_unquoted(line: str, delimiter: str, *, comment=False) -> list[str]:
+    parts = []
+    start = 0
+    quoted = iter(YAML_QUOTED.finditer(line))
+    quote = next(quoted, None)
+    for pos, char in enumerate(line):
+        while quote and pos >= quote.end():
+            quote = next(quoted, None)
+        if quote and pos >= quote.start():
+            continue
+        if char != delimiter:
+            continue
+        if comment:
+            if pos == 0 or line[pos - 1].isspace():
+                return [line[:pos]]
+        else:
+            parts.append(line[start:pos])
+            start = pos + 1
+    return [*parts, line[start:]]
+
+
 def _strip_yaml_comment(line: str) -> str:
-    in_single = False
-    in_double = False
-    for idx, ch in enumerate(line):
-        if ch == "'" and not in_double:
-            in_single = not in_single
-        elif ch == '"' and not in_single:
-            in_double = not in_double
-        elif ch == "#" and not in_single and not in_double and (idx == 0 or line[idx - 1].isspace()):
-            return line[:idx].rstrip()
-    return line.rstrip()
+    return _split_unquoted(line, "#", comment=True)[0].rstrip()
 
 
 def _unquote(value: str) -> str:
     value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-        return value[1:-1]
+    if value.startswith("'") and value.endswith("'"):
+        return value[1:-1].replace("''", "'")
+    if value.startswith('"') and value.endswith('"'):
+        try:
+            return json.loads(value)
+        except ValueError as err:
+            raise ValueError(f"unsupported quoted matrix value {value!r}") from err
     return value
 
 
@@ -100,38 +128,75 @@ def _extract_subblock(lines: list[str], key: str, parent_indent: int | None = No
     return result
 
 
-def _matrix_values(matrix_lines: list[str]) -> dict[str, list[str]]:
-    values: dict[str, list[str]] = {}
-    in_include = False
-    include_indent = -1
-    for raw in matrix_lines:
-        line = _strip_yaml_comment(raw)
-        stripped = line.strip()
-        if not stripped:
+def _matrix_values(matrix_lines: list[str]) -> list[dict[str, str]]:
+    lines = [cleaned for raw in matrix_lines if (cleaned := _strip_yaml_comment(raw)).strip()]
+    if not lines:
+        return []
+    matrix_indent = min(len(line) - len(line.lstrip()) for line in lines)
+    axes = {}
+    special = {"include": [], "exclude": []}
+    axis, row = None, None
+    for line in lines:
+        item = line.strip()
+        indent = len(line) - len(line.lstrip())
+        if indent == matrix_indent and not item.startswith("-"):
+            axis, sep, value = item.partition(":")
+            if not sep or not re.fullmatch(r"\w+", axis):
+                raise ValueError(f"unsupported matrix entry {item!r}")
+            row = None
+            value = value.strip()
+            if axis in special:
+                if value not in ("", "[]"):
+                    raise ValueError(f"matrix {axis} needs a block sequence")
+            elif value.startswith("[") and value.endswith("]"):
+                axes[axis] = [_unquote(part) for part in _split_unquoted(value[1:-1], ",") if part.strip()]
+            elif not value:
+                axes[axis] = []
+            else:
+                raise ValueError(f"matrix axis {axis!r} needs a literal list")
             continue
-        indent = len(line) - len(line.lstrip(" "))
-        if in_include and indent <= include_indent and not stripped.startswith("-"):
-            in_include = False
-        if stripped == "include:":
-            in_include = True
-            include_indent = indent
-            continue
-        if in_include:
-            inline_map = re.match(r"^-\s*\{(.+)\}\s*$", stripped)
-            if inline_map:
-                for pair in inline_map.group(1).split(","):
-                    if ":" in pair:
-                        key, val = pair.split(":", 1)
-                        values.setdefault(key.strip(), []).append(_unquote(val))
-                continue
-            kv = re.match(r"^(?:-\s+)?([A-Za-z_]\w*)\s*:\s*(.+)$", stripped)
-            if kv:
-                values.setdefault(kv.group(1), []).append(_unquote(kv.group(2)))
-            continue
-        inline_list = re.match(r"^([A-Za-z_]\w*)\s*:\s*\[([^\]]*)\]\s*$", stripped)
-        if inline_list:
-            values[inline_list.group(1)] = [_unquote(item) for item in inline_list.group(2).split(",") if item.strip()]
-    return values
+        if axis in special:
+            if item.startswith("-"):
+                row = {}
+                special[axis].append(row)
+                item = item[1:].strip()
+            if row is None:
+                raise ValueError(f"matrix {axis} needs an object")
+            if item.startswith("{") and item.endswith("}"):
+                pairs = _split_unquoted(item[1:-1], ",")
+            else:
+                pairs = [item] if item else []
+            for pair in pairs:
+                key, sep, value = pair.partition(":")
+                if not sep or not value.strip():
+                    raise ValueError(f"invalid matrix {axis} pair {pair!r}")
+                row[key.strip()] = _unquote(value)
+        elif axis in axes and item.startswith("-"):
+            axes[axis].append(_unquote(item[1:]))
+        else:
+            raise ValueError(f"unsupported matrix entry {item!r}")
+
+    def matches(row, constraints):
+        return all(row.get(key) == value for key, value in constraints.items())
+
+    base = []
+    if axes:
+        for values in product(*axes.values()):
+            row = dict(zip(axes, values))
+            if not any(matches(row, excluded) for excluded in special["exclude"]):
+                base.append(row)
+    expanded = [dict(row) for row in base]
+    for additions in special["include"]:
+        targets = [
+            index
+            for index, row in enumerate(base)
+            if all(key not in row or row[key] == value for key, value in additions.items())
+        ]
+        if not targets:
+            expanded.append(additions)
+        for index in targets:
+            expanded[index].update(additions)
+    return expanded
 
 
 def _job_leg_template(job_lines: list[str], child_indent: int) -> str | None:
@@ -146,7 +211,7 @@ def _job_leg_template(job_lines: list[str], child_indent: int) -> str | None:
 
 def expected_legs(workflow: Path = WORKFLOW) -> list[str]:
     """Every leg's artifact name: each `LEG:` template expanded over its job's matrix."""
-    text = workflow.read_text()
+    text = workflow.read_text(encoding="utf-8-sig")
     legs: list[str] = []
     for block in _job_blocks(text):
         child_indent = None
@@ -162,12 +227,17 @@ def expected_legs(workflow: Path = WORKFLOW) -> list[str]:
             continue
         strategy_lines = _extract_subblock(block[1:], "strategy", parent_indent=child_indent)
         matrix_lines = _extract_subblock(strategy_lines, "matrix")
-        values = _matrix_values(matrix_lines)
-        key = re.search(r"\$\{\{\s*matrix\.(\w+)\s*\}\}", template)
-        if key:
-            legs += [template.replace(key.group(0), v) for v in values.get(key.group(1), [])]
-        else:
+        refs = set(MATRIX_REF.findall(template))
+        if not refs:
             legs.append(template)
+            continue
+        if not matrix_lines:
+            raise ValueError(f"LEG {template!r} references a missing matrix")
+        for row in _matrix_values(matrix_lines):
+            missing = refs - row.keys()
+            if missing:
+                raise ValueError(f"LEG {template!r} references missing matrix keys: {', '.join(sorted(missing))}")
+            legs.append(MATRIX_REF.sub(lambda match: row[match[1]], template))
     return list(dict.fromkeys(legs))
 
 
@@ -177,15 +247,48 @@ def artifact_runs(data: dict) -> list[dict]:
     runs = data.get("runs", [data])
     if not isinstance(runs, list) or not runs:
         raise ValueError("expected a nonempty runs array")
+    if "schema" in data and (type(data["schema"]) is not int or data["schema"] != 1):
+        raise ValueError(f"unsupported soak schema {data['schema']!r}")
+    if "failed" in data and type(data["failed"]) is not bool:
+        raise ValueError("expected a boolean soak failure status")
+    skipped = data.get("skipped", [])
+    if not isinstance(skipped, list) or any(not isinstance(key, str) or not key.strip() for key in skipped):
+        raise ValueError("expected a skipped configuration ID array")
+    if len(skipped) != len(set(skipped)):
+        raise ValueError("duplicate skipped configuration ID")
+    configurations = set()
     for run in runs:
         if not isinstance(run, dict):
             raise ValueError("expected run objects")
-        if "results" not in run and not run.get("harness_error") and not CATEGORIES.keys() & run.keys():
+        if "id" in run:
+            name = run["id"]
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError("expected a configuration ID")
+            if name in configurations:
+                raise ValueError(f"duplicate configuration ID {name!r}")
+            configurations.add(name)
+        if "harness_error" in run and (not isinstance(run["harness_error"], str) or not run["harness_error"].strip()):
+            raise ValueError("expected a nonblank harness error")
+        if (
+            "stopped" in run
+            and run["stopped"] is not None
+            and (not isinstance(run["stopped"], str) or not run["stopped"].strip())
+        ):
+            raise ValueError("expected a nonblank stop reason")
+        if (
+            "results" not in run
+            and not (run.get("harness_error") or run.get("stopped"))
+            and not CATEGORIES.keys() & run.keys()
+        ):
             raise ValueError("expected route results, failure lists or a harness error")
         results = run.get("results", [])
         if not isinstance(results, list):
             raise ValueError("expected a route results array")
-        if not results and not run.get("harness_error") and not any(run.get(key) for key in CATEGORIES):
+        if (
+            not results
+            and not (run.get("harness_error") or run.get("stopped"))
+            and not any(run.get(key) for key in CATEGORIES)
+        ):
             raise ValueError("expected at least one route, classified failure or harness error")
         ids = set()
         for route in results:
@@ -197,6 +300,18 @@ def artifact_runs(data: dict) -> list[dict]:
             if "pass" in route and type(route["pass"]) is not bool:
                 raise ValueError(f"{route['id']}: expected a boolean verdict")
             failure_labels(route)
+            if "arrived" in route and type(route["arrived"]) is not bool:
+                raise ValueError(f"{route['id']}: expected a boolean arrival")
+            for field in ("deadlocks", "collisions"):
+                count = route.get(field)
+                if count is not None and (type(count) is not int or count < 0):
+                    raise ValueError(f"{route['id']}: {field} must be a nonnegative integer")
+            error = route.get("simulation_error")
+            if error is not None and (not isinstance(error, str) or not error.strip()):
+                raise ValueError(f"{route['id']}: expected a nonblank simulation error")
+    overlap = configurations.intersection(skipped)
+    if overlap:
+        raise ValueError(f"run and skipped configurations overlap: {', '.join(sorted(overlap))}")
     return runs
 
 
@@ -227,15 +342,20 @@ def leg_failures(data: dict) -> tuple[int, list[str]]:
     """The number of routes a leg drove, and one line per failed route or harness error."""
     # soak.json has a run per map and seed (or a harness error); run.json is a single run.
     total, failed = 0, []
-    for run in artifact_runs(data):
+    runs = artifact_runs(data)
+    for run in runs:
+        is_soak = "runs" in data or "schema" in data or bool(CATEGORIES.keys() & run.keys())
         prefix = f"{run['id']} " if "id" in run else ""
         if run.get("harness_error"):
             failed.append(f"{prefix}harness error: {run['harness_error']}")
+        if run.get("stopped"):
+            failed.append(f"{prefix}stopped: {run['stopped']}")
         failing = {}
         for r in run.get("results", []):
             total += 1
             labels = failure_labels(r)
-            if not r.get("pass", False) or labels:
+            labels.extend(label for label in inferred_labels(r) if label not in labels)
+            if not r.get("pass", False) or (is_soak and labels):
                 failing[r["id"]] = labels
         for key in CATEGORIES:
             for rid, labels in classified_routes(run, key).items():
@@ -244,7 +364,25 @@ def leg_failures(data: dict) -> tuple[int, list[str]]:
                     continue
                 existing.extend(label for label in labels if label not in existing)
         failed += [f"{prefix}{rid}: {', '.join(dict.fromkeys(why)) or 'failed'}" for rid, why in failing.items()]
+    if skipped := data.get("skipped"):
+        failed.append(f"skipped configurations ({len(skipped)}): {', '.join(skipped)}")
+    if data.get("failed") and not failed:
+        failed.append("harness marked the leg failed without route details")
     return total, failed
+
+
+def inferred_labels(route: dict) -> list[str]:
+    labels = failure_labels(route)
+    inferred = []
+    if route.get("simulation_error"):
+        inferred.append("simulation error")
+    if route.get("collisions"):
+        inferred.append("collision")
+    if (
+        route.get("deadlocks") or (route.get("arrived") is False and "simulation error" not in labels + inferred)
+    ) and "timeout" not in labels:
+        inferred.append("stuck")
+    return inferred
 
 
 def leg_categories(data: dict) -> dict[str, int]:
@@ -274,8 +412,8 @@ def leg_dirs(root: Path) -> dict[str, list[Path]]:
     """Each downloaded leg's directory by name (its leg.txt, else the directory's name)."""
     if not root.is_dir():
         return {}
-    dirs = sorted(p for p in root.iterdir() if p.is_dir())
-    if any((root / name).is_file() for name in ("leg.txt", "soak.json", "run.json")):
+    dirs = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+    if any((root / name).is_file() for name in ("leg.txt", *REPORT_FILES)):
         dirs.insert(0, root)
     named = {}
     for d in dirs:
@@ -290,20 +428,31 @@ def leg_dirs(root: Path) -> dict[str, list[Path]]:
 
 
 def escape(text: str) -> str:
-    return text.replace("|", "\\|").replace("\r\n", "<br>").replace("\n", "<br>").replace("\r", "<br>")
+    return (
+        html.escape(text, quote=False)
+        .replace("\\", "\\\\")
+        .replace("|", "\\|")
+        .replace("\r\n", "<br>")
+        .replace("\n", "<br>")
+        .replace("\r", "<br>")
+    )
 
 
 def _single_line(text: str) -> str:
     return text.replace("%", "%25").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
 
-def main(root: Path) -> int:
-    found = leg_dirs(root)
+def main(root: Path, *, workflow=None) -> int:
     try:
-        expected = expected_legs()
+        found = leg_dirs(root)
     except OSError as err:
+        found = {}
+        print(f"::warning title=City soak::{_single_line(f'could not list artifacts: {err}')}")
+    try:
+        expected = expected_legs() if workflow is None else expected_legs(workflow)
+    except (OSError, ValueError) as err:
         expected = []
-        print(f"::warning title=City soak::could not read the expected legs: {err}")
+        print(f"::warning title=City soak::{_single_line(f'could not read the expected legs: {err}')}")
     rows, warnings = [], []
     totals = {"throws": 0, "stuck": 0, "collisions": 0, "audits": 0}
     coverage = Counter()
@@ -312,30 +461,39 @@ def main(root: Path) -> int:
         if len(candidates) > 1:
             detail = f"multiple artifacts claim this leg ({', '.join(p.name for p in candidates)})"
             warnings.append(f"{name}: {detail}")
-            rows.append((name, "-", detail))
+            rows.append((name, "-", escape(detail)))
             coverage["unreadable"] += 1
             continue
         leg = candidates[0] if candidates else None
-        result = next((f for f in ("soak.json", "run.json") if leg and (leg / f).is_file()), None)
-        if result is None:
+        reports = [f for f in REPORT_FILES if leg and (leg / f).is_file()]
+        if len(reports) > 1:
+            detail = f"multiple report files in one artifact ({', '.join(reports)})"
+            warnings.append(f"{name}: {detail}")
+            rows.append((name, "-", escape(detail)))
+            coverage["unreadable"] += 1
+            continue
+        if not reports:
             coverage["missing"] += 1
             rows.append((name, "-", NO_RESULT))
             warnings.append(f"{name}: {NO_RESULT}")
             continue
+        result = reports[0]
         try:
-            payload = json.loads((leg / result).read_text(encoding="utf-8-sig"))
+            opener = gzip.open if result.endswith(".gz") else open
+            with opener(leg / result, "rt", encoding="utf-8-sig") as stream:
+                payload = json.load(stream)
             total, failed = leg_failures(payload)
             counts = leg_categories(payload)
-        except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
+        except (OSError, ValueError, EOFError, DeflateError) as err:
             coverage["unreadable"] += 1
-            rows.append((name, "-", f"unreadable {result}: {err}"))
+            rows.append((name, "-", escape(f"unreadable {result}: {err}")))
             warnings.append(f"{name}: unreadable {result}: {err}")
             continue
         for key in totals:
             totals[key] += counts[key]
         coverage["readable"] += 1
         coverage["routes"] += total
-        rows.append((name, str(total), "<br>".join(failed) if failed else "passed"))
+        rows.append((name, str(total), "<br>".join(map(escape, failed)) if failed else "passed"))
         warnings += [f"{name}: {line}" for line in failed]
 
     out = ["## City soak", ""]
@@ -354,13 +512,17 @@ def main(root: Path) -> int:
             "| Leg | Routes | Failures |",
             "|---|---|---|",
         ]
-        out += [f"| {escape(name)} | {total} | {escape(status)} |" for name, total, status in rows]
+        out += [f"| {escape(name)} | {total} | {status} |" for name, total, status in rows]
     text = "\n".join(out) + "\n"
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
-        with open(summary, "a", encoding="utf-8") as fh:
-            fh.write(text)
+        try:
+            with open(summary, "a", encoding="utf-8") as fh:
+                fh.write(text)
+        except OSError as err:
+            sys.stdout.write(text)
+            warnings.append(f"could not write step summary: {err}")
     else:
         sys.stdout.write(text)
     for line in warnings:
@@ -369,9 +531,11 @@ def main(root: Path) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("artifacts", type=Path, help="directory of downloaded soak artifacts")
+    parser.add_argument("--workflow", type=Path, help="derive expected legs from another workflow file")
+    args = parser.parse_args()
     try:
-        main(Path(sys.argv[1]))
+        main(args.artifacts, workflow=args.workflow)
     except Exception as err:  # report-only: a broken summary must not turn the soak red
-        print(f"::warning title=City soak::the summary failed: {err!r}")
+        print(f"::warning title=City soak::{_single_line(f'the summary failed: {err!r}')}")

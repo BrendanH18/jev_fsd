@@ -1,3 +1,4 @@
+import { animationTime } from "./actor-motion.js";
 // Spring potholes (sim/potholes.js), drawn as broken asphalt: a ragged rim of cracked, crumbled surface
 // round a dark hole. In rain or snow the hole holds water, a puddle that mirrors the sky like the wet
 // road round it, so it is much harder to tell from it. And the cars driving over them: a tyre dropping
@@ -134,7 +135,7 @@ export function potholeJolt(world, mesh, vehicle, dt, calmed = false) {
     u.pitch = front ? 1 : -1;
   }
   u.inside = inside;
-  u.t += dt;
+  u.t += animationTime(dt);
   const k = u.t < 6 * SETTLE_S ? Math.exp(-u.t / SETTLE_S) * Math.cos((2 * Math.PI * u.t) / PERIOD_S) : 0;
   const wb = vehicle.spec?.wheelbase || 2.7;
   mesh.position.y -= u.amp * k;

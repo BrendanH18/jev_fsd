@@ -1,4 +1,3 @@
-import { reserveSlot } from "./parking.js";
 // Traffic parallel parking (World option `parkers`): now and then, from the feature's own seeded random
 // stream, the ordinary traffic car right ahead of the driven car in its lane, on a street with a parking
 // lane and a free gap long enough to parallel park in, becomes a parker. It signals right, slows, stops
@@ -37,6 +36,7 @@ import { CAR } from "./vehicle.js";
 import { projectPoint } from "../map/mapdata.js";
 import { obbOverlap } from "./collision.js";
 import { speedControl } from "./controller.js";
+import { releaseSlot, reserveAvailableSlots } from "./parking.js";
 import {
   freeStretches,
   planSpaceOn,
@@ -45,6 +45,7 @@ import {
   reversing,
   frameOf,
   parkRoom,
+  parkingObstructed,
   solveS,
 } from "./parallel-park.js";
 import { behindInLane } from "./following.js";
@@ -158,12 +159,7 @@ export function parkerPlan(world, n) {
   const e = cur && map.edges.get(cur.id);
   if (!e?.parking?.[1] || cur.lane !== e.lanes - 1 || e.ring) return null;
   // (never on the block of a work zone, a lane closure or a double-parked van, as for the driven car)
-  if (
-    world.workZones?.zones.some((z) => z.closed === e.id || z.open === e.id) ||
-    world.laneClosures?.zones.some((z) => z.edge === e.id) ||
-    world.doubleParked?.vans.some((d) => d.edge === e.id || d.opposite === e.id)
-  )
-    return null;
+  if (parkingObstructed(world, e.id)) return null;
   const v = Math.max(0, n.v),
     least = Math.max(STOP_MIN_M, (v * v) / (2 * PARK_DECEL) + 6);
   let best = null;
@@ -190,9 +186,10 @@ const SWEEP_M = 0.25;
 export function sClear(world, plan, spec) {
   const R = plan.R,
     S = solveS(R, plan.X, plan.goalW - plan.startW);
+  const [x, y] = at(plan, plan.startU, plan.startW);
   let pose = {
-    x: at(plan, plan.startU, plan.startW)[0],
-    y: at(plan, plan.startU, plan.startW)[1],
+    x,
+    y,
     psi: plan.h,
     spec,
     v: 0,
@@ -224,11 +221,12 @@ export function sClear(world, plan, spec) {
 // Make traffic car `n` a parker for `plan`: its hold line, the slots of the space reserved for it, and
 // its right indicator on. `stay`: once in, it stays parked (a challenge's).
 export function commitParker(world, n, plan, { stay = false } = {}) {
+  if (n.parker) return n.parker;
   const state = world.parkers,
     spec = n.spec || CAR,
     hold = plan.hold + HOLD_MARGIN_M,
     rearU = plan.startU - spec.rearOverhang;
-  n.parker = {
+  const parker = {
     phase: "approach",
     since: world.t,
     id: plan.id,
@@ -264,7 +262,8 @@ export function commitParker(world, n, plan, { stay = false } = {}) {
     line: at(plan, rearU - hold, plan.laneW),
     lineU: rearU - hold,
   };
-  for (const slot of plan.slots) if (!slot.reserved && !slot.occupant) reserveSlot(world.map, slot, n);
+  reserveAvailableSlots(world.map, plan.slots, n);
+  n.parker = parker;
   n.signal = "right";
   state.active.push(n);
   state.committed++;
@@ -275,7 +274,7 @@ export function commitParker(world, n, plan, { stay = false } = {}) {
 function release(world, n, gaveUp) {
   const state = world.parkers,
     pk = n.parker;
-  for (const slot of pk?.plan.slots || []) if (slot.reserved?.owner === n) slot.reserved = null;
+  for (const slot of pk?.plan.slots || []) releaseSlot(slot, n);
   delete n.parker;
   n.signal = null;
   n.reverseLamps = false;
@@ -314,6 +313,7 @@ function settle(world, fleet, n) {
 // go, and now and then the car right ahead of the driven car becomes one.
 export function manageParkers(world, fleet) {
   const state = world.parkers;
+  if (!state?.enabled) return;
   for (const n of [...state.active])
     if (!n.parker || !fleet.vehicles.includes(n)) {
       if (n.parker) release(world, n, true);
@@ -524,7 +524,7 @@ export function parkerStop(n) {
 // that parker's lane, or null: { parker, phase, to_hold_m, gap_m, hold_m, line_s }.
 export function parkerConflict(world, vehicle, path, front, { lat = 0, hint = null } = {}) {
   const list = world.parkers?.active;
-  if (!list?.length || !path?.pts) return null;
+  if (!list?.length || !path?.pts?.length || !Number.isFinite(front) || !Number.isFinite(lat)) return null;
   let best = null;
   for (const P of list) {
     const pk = P.parker;
@@ -547,6 +547,7 @@ export const PARKER_PHASE = { approach: "signalling", stop: "stopped", reverse: 
 // The driven car's sensing: the parker it is behind, or null. `p`: its route projection; `frontS`: its
 // front bumper's route arc length.
 export function parkerSensing(world, p, frontS) {
+  if (!p) return null;
   const route = world.route,
     c = parkerConflict(world, world.ego, route, frontS, { lat: p.lateral, hint: p.index });
   if (!c || !world.sees(world.ego, c.parker)) return null;
@@ -574,6 +575,7 @@ export function parkerSensing(world, p, frontS) {
 export function auditParkers(world) {
   const state = world.parkers,
     route = world.route;
+  if (!state) return;
   state.behind = false;
   if (!state.active.length || !route) return;
   const ego = world.ego,
@@ -587,8 +589,9 @@ export function auditParkers(world) {
     world.events.push(ev);
   };
   for (const P of state.active) {
-    const pk = P.parker,
-      mine = c?.parker === P ? c : null,
+    const pk = P.parker;
+    if (!pk) continue;
+    const mine = c?.parker === P ? c : null,
       at = pk.phase === "stop" || pk.phase === "reverse";
     const call = calls.get(P.id) || { behind: false, blocked: false, passed: false };
     calls.set(P.id, call);

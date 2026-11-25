@@ -25,9 +25,9 @@ export const challenge = {
   tailgaters: true,
   street: "William Avenue",
   description:
-    "William Avenue runs straight through the Exchange District, two lanes each way, 50 km/h. You're in the left lane when a driver in a hurry closes up right behind you, half a second back, and stays there. The right lane is empty, and the light ahead at Isabel Street will change.",
+    "A driver follows very closely in the left lane of William Avenue. The right lane is open and the Isabel Street signal is ahead.",
   lesson:
-    "A tailgater can't stop in time if you brake suddenly, so never brake-check them and don't speed up to please them. Leave twice your usual gap ahead so you can brake early and gently, and let them by: move into the right lane when it's safe, or, with no lane to move into, ease off a little so they can pass. Canadian driver's handbooks give the same advice.",
+    "Increase your space ahead so you can brake gently for the signal. Check right, signal and move over when safe so the driver behind can go by.",
 };
 
 const EDGE = "e481",

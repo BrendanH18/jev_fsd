@@ -1,19 +1,17 @@
-import { FEATURE_METRICS, FEATURES } from "../sim/features/index.js";
+import { FEATURE_METRICS, FEATURES, featureMetricEnabled } from "../sim/features/index.js";
 
 const round = (value) => Math.round(value * 1000) / 1000;
 const auditPair = ({ name, label }) => [name, label];
-const COUNTER_AUDITS = FEATURE_METRICS.filter(({ traceType }) => !traceType);
+const COUNTER_AUDITS = FEATURE_METRICS.filter(({ trace, traceType }) => trace !== false && !traceType);
 const countersAt = (slot) => COUNTER_AUDITS.filter(({ at }) => at === slot).map(auditPair);
 const THRESHOLD_AUDITS = FEATURES.filter(({ metric }) => metric?.traceType);
 const CORE_AUDITS = {
-  amber_lights_run: "Ignored a safe amber stop or sped up to beat the light",
+  ...Object.fromEntries(countersAt("afterRedLights")),
   collisions: "Collision",
   red_lights_run: "Red light",
   stop_signs_run: "Missed stop",
   failed_to_yield: "Failed to yield",
-  plow_right_passes: "Passed a snow plow on the right",
-  merge_cut_ins: "Merged out of turn at a lane closure",
-  close_passes: "Passed a cyclist closer than the minimum passing distance",
+  ...Object.fromEntries(countersAt("vehiclePassing")),
   ...Object.fromEntries(countersAt("afterRestrictions")),
   ...Object.fromEntries(countersAt("afterCalming")),
   ...Object.fromEntries(countersAt("guards")),
@@ -25,7 +23,17 @@ const AUDITS = [
   ...Object.entries(CORE_AUDITS),
   ...countersAt("beforeRunner"),
   ...COUNTER_AUDITS.filter(
-    ({ at }) => !["beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
+    ({ at }) =>
+      ![
+        "afterRedLights",
+        "vehiclePassing",
+        "beforeRunner",
+        "afterCalming",
+        "afterRestrictions",
+        "guards",
+        "pxo",
+        "turns",
+      ].includes(at),
   ).map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;
@@ -133,11 +141,13 @@ export class EvaluationTrace {
       if (count > 0) this.event(key, message, world.t, { count });
       this.audit[key] = world.violations[key] || 0;
     }
-    for (const {
-      seen,
-      metric: { name, label, threshold, traceType },
-    } of THRESHOLD_AUDITS) {
-      if (world[seen] && world.violations[name] > threshold && !this.thresholdAudits.has(name)) {
+    for (const feature of THRESHOLD_AUDITS) {
+      const { name, label, threshold, traceType } = feature.metric;
+      if (
+        featureMetricEnabled(world, feature) &&
+        world.violations[name] > threshold &&
+        !this.thresholdAudits.has(name)
+      ) {
         this.event(traceType, label, world.t);
         this.thresholdAudits.add(name);
       }

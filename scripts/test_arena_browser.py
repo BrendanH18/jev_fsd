@@ -28,7 +28,8 @@ def check(url, chromium=None, output=None):
         )
         page.locator("#arena-run").click()
         expect(page.locator("#arena-import")).to_be_disabled()
-        expect(page.locator("#arena-status")).to_contain_text("Complete", timeout=180000)
+        # Running both drivers on every challenge can take several minutes on a shared CI runner.
+        expect(page.locator("#arena-status")).to_contain_text("Complete", timeout=480_000)
         expect(page.locator("#history-status")).to_contain_text("Saved on this browser. Up to 20 recent evaluations")
         assert page.evaluate("localStorage.getItem('jev-fsd-evaluations-v2')") is None, "saved runs belong in IndexedDB"
         expect(page.locator("#arena-results tr")).to_have_count(n)

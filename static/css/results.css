@@ -63,3 +63,9 @@
 @media(max-width:600px) { .results header nav { gap: 14px; } }
 .results th { white-space: normal; min-width: 90px; vertical-align: bottom; }
 .results .table-wrap > .results-note { padding: 14px 16px; margin: 0; }
+.results-matrix th[scope="row"] { text-transform: none; letter-spacing: normal; color: var(--text); font-size: inherit; }
+.results-matrix th[scope="row"] small { display: block; color: var(--muted); }
+.results-scroll:focus-visible { outline: 2px solid #83d9c4; outline-offset: -2px; }
+.results-toolbar input[type="search"] { min-width: min(180px, 100%); }
+.published-replay-log button { flex-wrap: wrap; overflow-wrap: anywhere; }
+.published-replay-log button:focus-visible, .published-replay-marker:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

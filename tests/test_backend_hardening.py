@@ -23,6 +23,7 @@ import helpers  # noqa: F401  (puts the project root on sys.path)
 import jev
 import server
 from jev import client as jev_client
+from jev import endpoints as jev_endpoints
 from jev import decide, decision, endpoints, llm, maps, security
 from jev.client import SpendGuard
 from jev.config import PRESET_BBOXES, Settings, _float, parse_bbox
@@ -767,7 +768,7 @@ class HealthDiagnosticsVersionTests(unittest.TestCase):
             def __exit__(self, *_args):
                 return False
 
-            def read(self):
+            def read(self, _limit=-1):
                 return b'{"ok": true}'
 
         def fake_urlopen(req, timeout=None):
@@ -777,7 +778,7 @@ class HealthDiagnosticsVersionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             s = Settings(environ={}, env_file=Path(tmp) / ".env")
             c = jev_client.JevClient(s, api_key="k-test")
-            with patch.object(jev_client.urllib.request, "urlopen", side_effect=fake_urlopen):
+            with patch.object(jev_endpoints._OPENER, "open", side_effect=fake_urlopen):
                 c._stdlib_request("GET", "/v1/models", None, max_attempts=1)
         lowered = {k.lower(): v for k, v in captured_headers.items()}
         self.assertEqual(lowered.get("user-agent"), "jev-fsd/%s (stdlib)" % jev.VERSION)

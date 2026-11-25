@@ -1,3 +1,14 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_AMBER,
+  REFLECT_WHITE,
+} from "./actor-details.js";
+import { rollWheels, flashPhase, followAnimation, syncBrakeMaterial, syncHeadMaterial } from "./actor-motion.js";
 // School buses (sim/school-bus.js): a Type C bus built from boxes at its simulated size, in school
 // bus yellow with black rub rails and bumpers, a short hood over the engine, a band of windows, the
 // entrance door on the curb side behind the front wheel, "SCHOOL BUS" signs front and rear, and the
@@ -7,6 +18,7 @@
 // headlamps as on the city bus. Local +X is forward, +Z is right, rear axle at the origin.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { SCHOOL_BUS } from "../sim/vehicle.js";
 import { blobTexture } from "./textures.js";
@@ -51,6 +63,7 @@ const shared = {
     opacity: 0.65,
   }),
 };
+shareActorResources(Object.values(shared));
 let signMaterial = null,
   stopMaterial = null;
 
@@ -70,7 +83,9 @@ function sign() {
   ctx.fillText("SCHOOL BUS", c.width / 2, c.height / 2 + 2, c.width - 16);
   const texture = new THREE.CanvasTexture(c);
   texture.colorSpace = THREE.SRGBColorSpace;
-  return (signMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.5 }));
+  signMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.5 });
+  shareActorResources([signMaterial]);
+  return signMaterial;
 }
 
 // The stop arm's sign: a red octagon with a white border and STOP.
@@ -95,12 +110,14 @@ function stopSign() {
   ctx.fillText("STOP", 64, 66);
   const texture = new THREE.CanvasTexture(c);
   texture.colorSpace = THREE.SRGBColorSpace;
-  return (stopMaterial = new THREE.MeshStandardMaterial({
+  stopMaterial = new THREE.MeshStandardMaterial({
     map: texture,
     roughness: 0.5,
     side: THREE.DoubleSide,
     emissive: 0x000000,
-  }));
+  });
+  shareActorResources([stopMaterial]);
+  return stopMaterial;
 }
 
 const lamp = (color) =>
@@ -163,9 +180,10 @@ export function createSchoolBusMesh(id = "school_bus") {
     false,
     "windows",
   );
+  const head = shared.head.clone();
   add(
     merge([box(0.06, 0.16, 0.3, xf + 0.03, 1.0, -(w / 2 - 0.45)), box(0.06, 0.16, 0.3, xf + 0.03, 1.0, w / 2 - 0.45)]),
-    shared.head,
+    head,
     false,
     "headlamps",
   );
@@ -208,7 +226,9 @@ export function createSchoolBusMesh(id = "school_bus") {
     stopSign(),
   );
   plate.name = "stop-arm";
-  arm.add(plate);
+  const hinge = new THREE.Mesh(box(0.34, 0.055, 0.045, -0.15, 0, 0), shared.black);
+  hinge.name = "stop-arm-linkage";
+  arm.add(hinge, plate);
   body.add(arm);
   // indicators front and rear at each corner, red brake and tail lamps at the rear
   const brake = new THREE.MeshStandardMaterial({
@@ -238,6 +258,20 @@ export function createSchoolBusMesh(id = "school_bus") {
       blinkers[side].push(m);
     }
   }
+  addActorDetails(body, "school-bus", () => [
+    ...sides((side) => [
+      detail("extension-mirror-stalk", RUBBER, 0.07, 0.055, 0.34, xh + 0.12, 1.87, side * (w / 2 + 0.13)),
+      detail("extension-mirror", STEEL, 0.075, 0.28, 0.13, xh + 0.08, 1.78, side * (w / 2 + 0.27)),
+      detail("rear-door-outline", RUBBER, 0.023, 1.62, 0.027, xr - 0.025, 1.55, side * 0.55),
+      detail("upper-clearance-marker", REFLECT_RED, 0.025, 0.066, 0.12, xr - 0.02, h - 0.075, side * (w / 2 - 0.1)),
+      detail("hood-marker", REFLECT_AMBER, 0.083, 0.055, 0.07, xf - 0.36, 1.375, side * (w / 2 - 0.29)),
+    ]),
+    detail("boarding-step", STEEL, 0.85, 0.052, 0.15, doorX, floor + 0.04, w / 2 + 0.07),
+    detail("rear-emergency-door-handle", STEEL, 0.032, 0.045, 0.15, xr - 0.023, 1.48, 0.41),
+    detail("rear-door-step", RUBBER, 0.22, 0.055, 0.74, xr - 0.14, 0.38, 0),
+    detail("swing-arm-housing", RUBBER, 0.22, 0.18, 0.085, xh - 1.7, 1.75, -w / 2 - 0.03),
+    detail("front-plate", REFLECT_WHITE, 0.03, 0.13, 0.31, xf + 0.215, 0.55, 0),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.6, w + 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set((xr + xf) / 2, 0.02, 0);
   blob.renderOrder = 1;
@@ -259,6 +293,7 @@ export function createSchoolBusMesh(id = "school_bus") {
     wheels.push({ pivot, wheel: wl, steer });
   }
   g.userData = {
+    head,
     schoolBus: true,
     wheels,
     tire,
@@ -269,7 +304,7 @@ export function createSchoolBusMesh(id = "school_bus") {
     swing: 0,
     blinkers,
     brake,
-    prevV: 0,
+    prevV: null,
     brakeLevel: 0,
     open: 0,
   };
@@ -281,32 +316,23 @@ export function syncSchoolBus(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData,
     sb = vehicle.school || {};
-  u.spin += (vehicle.v * dt) / u.tire;
-  for (const w of u.wheels) {
-    w.wheel.rotation.z = -u.spin;
-    w.pivot.rotation.y = w.steer ? vehicle.delta : 0;
-  }
+  syncHeadMaterial(u.head, lightsOn);
+  rollWheels(u, vehicle, dt, u.tire);
   // the door slides in and back over half a second
-  u.open += ((vehicle.doors ? 1 : 0) - u.open) * Math.min(1, dt * 4);
+  u.open = followAnimation(u.open, Number(!!vehicle.doors), dt, 4);
   u.door.position.z = -0.06 * u.open;
   u.door.position.x = -0.8 * u.open;
   // the stop arm swings out with the reds, over about a second
-  u.swing += ((sb.arm ? 1 : 0) - u.swing) * Math.min(1, dt * 3);
+  u.swing = followAnimation(u.swing, Number(!!sb.arm), dt, 3);
   u.arm.rotation.y = (-Math.PI / 2) * u.swing;
-  const left = t % FLASH_S < FLASH_S / 2;
+  const left = flashPhase(t, FLASH_S) < 0.5;
   for (const color of ["amber", "red"]) {
     const on = sb.lights === color;
     u.lamps[color].left.emissiveIntensity = on && left ? 6 : 0;
     u.lamps[color].right.emissiveIntensity = on && !left ? 6 : 0;
   }
-  const blink = t % 0.8 < 0.45;
+  const blink = flashPhase(t, 0.8) < 0.45 / 0.8;
   for (const m of u.blinkers.left) m.visible = blink && vehicle.signal === "left";
   for (const m of u.blinkers.right) m.visible = blink && vehicle.signal === "right";
-  if (dt > 0) {
-    const decel = (u.prevV - vehicle.v) / dt;
-    const target = decel > 0.6 || Math.abs(vehicle.v) < 0.15 ? 1 : 0;
-    u.brakeLevel += (target - u.brakeLevel) * Math.min(1, dt * 12);
-    u.prevV = vehicle.v;
-    u.brake.emissiveIntensity = 0.3 + lightsOn * 1.5 + u.brakeLevel * (2.2 + lightsOn * 2);
-  }
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn);
 }

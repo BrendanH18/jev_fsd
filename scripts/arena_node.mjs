@@ -28,10 +28,10 @@ import {
   commaList,
   jsonDifferences,
   parseOptions,
-  readJson,
   wholeNumber,
-  writeArtifact,
 } from "./cli_tools.mjs";
+
+import { MAX_RECORDING_BYTES, readRecordingJson, writeJsonArtifact, writeNewJson } from "./recording_artifacts.mjs";
 
 const OPTIONS = [
   "brain",
@@ -54,6 +54,7 @@ const OPTIONS = [
   "difficulty",
   "skip",
   "limit",
+  "expect-drives",
 ];
 
 const USAGE = [
@@ -82,6 +83,9 @@ const USAGE = [
   "  --list                      list matching drives as JSON without a server",
   "  --quiet                     emit only the final JSON to stdout",
   "  --progress                  report drive starts to stderr",
+  "  --expect-drives <N>         require exactly N selected drives",
+  "  --details                   include authored conditions in --list output",
+  "  --tape-info                 inspect answer counts for a recording without replaying",
   "  --help, -h                   show this help",
 ].join("\n");
 
@@ -112,7 +116,14 @@ const fail = (message) => {
 };
 let parsed;
 try {
-  parsed = parseOptions(process.argv.slice(2), OPTIONS, ["list", "quiet", "progress", "parking-only"]);
+  parsed = parseOptions(process.argv.slice(2), OPTIONS, [
+    "list",
+    "quiet",
+    "progress",
+    "parking-only",
+    "details",
+    "tape-info",
+  ]);
 } catch (error) {
   fail(error.message);
 }
@@ -123,12 +134,14 @@ if (parsed.help) {
 const args = parsed.args;
 const say = args.quiet ? () => {} : console.log;
 const FILTERS = ["map", "region", "weather", "hazard", "difficulty"];
-let only, skip, limit, filters;
+let only, skip, limit, filters, expected;
 try {
   checkMode(args.check, ["0", "1", "replay", "submission"]);
   only = commaList("only", args.only);
   skip = commaList("skip", args.skip);
   limit = wholeNumber("limit", args.limit, Number.MAX_SAFE_INTEGER, { min: 1 });
+  if (args["expect-drives"] !== undefined)
+    expected = wholeNumber("expect-drives", args["expect-drives"], undefined, { min: 1 });
   filters = FILTERS.flatMap((name) => (args[name] ? [[name, commaList(name, args[name])]] : []));
   checkFiles(
     { replay: args.replay, agent: args.agent },
@@ -156,6 +169,26 @@ if (
 )
   fail("--list only lists drives. Drop driver, check and output options.");
 
+if (args.details && !args.list) fail("--details requires --list.");
+if (args["tape-info"]) {
+  if (!args.replay || Object.keys(args).some((key) => !["replay", "tape-info"].includes(key)))
+    fail("--tape-info uses only --replay.");
+  try {
+    const { parseArenaTape, tapeCounts } = await import("./arena_tape.mjs");
+    const tape = parseArenaTape(readRecordingJson(args.replay));
+    console.log(
+      JSON.stringify({
+        driver: tape.header.driver,
+        planned: tape.header.arena.ids.length,
+        track: tape.header.arena.track ?? "guarded",
+        ...tapeCounts(tape),
+      }),
+    );
+    process.exit(0);
+  } catch (error) {
+    fail(`Cannot inspect ${args.replay}: ${error.message}`);
+  }
+}
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
 if (args.agent && (args.brain || args.replay)) fail("--agent selects a local driver. Drop --brain and --replay.");
 // --reserve 0.5: start no further drive once less than this many dollars of the server's budget
@@ -172,16 +205,18 @@ if (checkSubmission && (partial || args["browser-replay"] || args["comparison-js
   fail("--check submission verifies the entire recording without replay exports.");
 if (args["browser-replay"] && (!args.replay || only?.length !== 1))
   fail("--browser-replay needs --replay and exactly one drive selected with --only.");
-const { lstatSync, writeFileSync } = await import("node:fs");
+const { lstatSync, statSync } = await import("node:fs");
 const browserOutput = args["browser-replay"];
 const comparisonOutput = args["comparison-json"];
 if (comparisonOutput && !args.replay) fail("--comparison-json requires --replay.");
 if (comparisonOutput && lstatSync(comparisonOutput, { throwIfNoEntry: false }))
   fail("--comparison-json must name a new file.");
+if (args.agent && !statSync(args.agent, { throwIfNoEntry: false })?.isFile())
+  fail(`--agent must name a readable module file: ${args.agent}`);
 let replayJson = null;
 if (args.replay) {
   try {
-    replayJson = readJson(args.replay);
+    replayJson = readRecordingJson(args.replay);
   } catch (error) {
     fail(`Cannot read the recording ${args.replay}: ${error.message}`);
   }
@@ -215,7 +250,16 @@ const { challengeProvince } = await import("../static/js/lab/practice.js");
 const fieldOf = (drive, name) => (name === "region" ? challengeProvince(drive) : drive[name]);
 const { agentDefinitions, registerAgent } = await import("../static/js/brain/registry.js");
 const rec = await import("../static/js/brain/recording.js");
-const { LOCAL_RECORDING_FORMAT, LocalRecording } = await import("./local_recording.mjs");
+const { checkedLocalDefinition, LOCAL_RECORDING_FORMAT, LocalRecording } = await import("./local_recording.mjs");
+const { parseArenaTape } = await import("./arena_tape.mjs");
+let parsedTape;
+if (replayJson) {
+  try {
+    parsedTape = parseArenaTape(replayJson);
+  } catch (error) {
+    fail(`Cannot replay ${args.replay}: ${error.message}`);
+  }
+}
 const localTape = replayJson?.format === LOCAL_RECORDING_FORMAT || Boolean(args.agent && args.record);
 if (localTape && (browserOutput || comparisonOutput)) fail("Replay exports currently require a model recording.");
 const { arenaSuiteVersion, authoredDrive } = await import("./canonical_suite.mjs");
@@ -223,31 +267,6 @@ const { driverScores } = await import("../static/js/bench/scores.js");
 const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).captureBrowserReplay() : null;
 
 let brain = String(args.brain || "rules");
-if (args.agent) {
-  try {
-    const { default: definition } = await import(pathToFileURL(args.agent).href);
-    if (typeof definition?.id !== "string" || definition.id.includes(":"))
-      throw new Error("Use a local driver id without a provider prefix.");
-    registerAgent(definition);
-    brain = definition.id;
-  } catch (error) {
-    fail(`Cannot load agent ${args.agent}: ${error.message}`);
-  }
-}
-if (/^(?:decision|llm):/.test(brain) && !replayJson) {
-  const status = await api("/api/status");
-  (await import("../static/js/brain/decision.js")).registerDecisionAgents(status.decision);
-  (await import("../static/js/brain/llm.js")).registerLlmAgents(status.llm);
-}
-if (!replayJson && !agentDefinitions().some((d) => d.id === brain))
-  fail(
-    `Unknown brain "${brain}": use one of ${agentDefinitions()
-      .map((d) => d.id)
-      .join(", ")}.`,
-  );
-if ((args.record || args.replay) && !localTape && !rec.driverKind(brain))
-  fail(`--record and --replay need a model or custom driver, not "${brain}".`);
-
 const SETS = { challenges: CHALLENGES, "road-tests": ROAD_TESTS, all: [...CHALLENGES, ...ROAD_TESTS] };
 const set = replayJson ? replayJson.header.arena.set : String(args.set || "challenges");
 if (!Object.hasOwn(SETS, set)) fail(`Unknown set "${set}": use ${Object.keys(SETS).join(", ")}.`);
@@ -261,6 +280,8 @@ if (replayJson) {
 }
 const unknown = [...(only || []), ...(skip || [])].filter((id) => !drives.some((c) => c.id === id));
 if (unknown.length) fail(`No drive ${unknown.join(", ")} in ${set}.`);
+const excluded = only?.filter((id) => skip?.includes(id)) ?? [];
+if (excluded.length) fail(`Drive IDs cannot be both selected and skipped: ${excluded.join(", ")}.`);
 for (const [name, values] of filters) {
   const available = [...new Set(drives.map((drive) => fieldOf(drive, name)).filter(Boolean))].sort();
   const unknown = values.filter((value) => !available.includes(value));
@@ -276,6 +297,8 @@ drives = drives
       filters.every(([name, values]) => values.includes(fieldOf(drive, name))),
   )
   .slice(0, limit);
+if (expected !== undefined && drives.length !== expected)
+  fail(`Expected ${expected} selected drives, found ${drives.length}.`);
 if (args.list) {
   await new Promise((resolve) =>
     process.stdout.write(
@@ -283,7 +306,19 @@ if (args.list) {
         set,
         drives: drives.map((drive) => {
           const { id, title, map, weather, hazard, difficulty, park } = drive;
-          return { id, title, map, region: challengeProvince(drive), weather, hazard, difficulty, park: Boolean(park) };
+          return {
+            id,
+            title,
+            map,
+            region: challengeProvince(drive),
+            weather,
+            hazard,
+            difficulty,
+            park: Boolean(park),
+            ...(args.details
+              ? { seed: drive.seed, time: drive.time, version: drive.version, limit_s: drive.limit_s ?? 180 }
+              : {}),
+          };
         }),
       })}\n`,
       resolve,
@@ -292,12 +327,43 @@ if (args.list) {
   process.exit(0);
 }
 if (!drives.length) fail(replayJson ? "The recording has no matching drives." : "The selection leaves no drives.");
+if (args.agent) {
+  try {
+    const { default: definition } = await import(pathToFileURL(args.agent).href);
+    registerAgent(checkedLocalDefinition(definition));
+    brain = definition.id;
+  } catch (error) {
+    fail(`Cannot load agent ${args.agent}: ${error.message}`);
+  }
+}
+if (/^(?:decision|llm):/.test(brain) && !replayJson) {
+  const status = await api("/api/status");
+  (await import("../static/js/brain/decision.js")).registerDecisionAgents(status.decision);
+  (await import("../static/js/brain/llm.js")).registerLlmAgents(status.llm);
+}
+const selectedAgent = agentDefinitions().find((definition) => definition.id === brain);
+if (!replayJson && !selectedAgent)
+  fail(
+    `Unknown brain "${brain}": use one of ${agentDefinitions()
+      .map((d) => d.id)
+      .join(", ")}.`,
+  );
+if (!replayJson && selectedAgent?.available === false)
+  fail(`Driver "${brain}" is unavailable${selectedAgent.note ? `: ${selectedAgent.note}` : "."}`);
+if (reserve !== null && localTape) fail("--reserve applies to model recordings.");
+if ((args.record || args.replay) && !localTape && !rec.driverKind(brain))
+  fail(`--record and --replay need a model or custom driver, not "${brain}".`);
+
 const { evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 
 // The challenge maps, with every layer, as the app loads them.
 const maps = {};
 for (const id of new Set(drives.map((c) => c.map)))
-  maps[id] = new MapData(await api(`/api/map?bbox=${encodeURIComponent(id)}`));
+  try {
+    maps[id] = new MapData(await api(`/api/map?bbox=${encodeURIComponent(id)}`));
+  } catch (error) {
+    fail(`Cannot load Arena map ${id}: ${error.message}`);
+  }
 const shas = Object.fromEntries(Object.entries(maps).map(([id, map]) => [id, rec.mapFingerprint(map)]));
 
 let recording = null;
@@ -308,11 +374,7 @@ const manifestModule =
     : null;
 let manifest = null;
 if (replayJson) {
-  try {
-    recording = localTape ? new LocalRecording(replayJson) : rec.ModelRecording.parse(replayJson);
-  } catch (error) {
-    fail(`Cannot replay ${args.replay}: ${error.message}`);
-  }
+  recording = parsedTape;
   const changed = Object.keys(shas).filter((id) => recording.header.maps?.[id] !== shas[id]);
   if (changed.length)
     fail(`The map data of ${changed.join(", ")} has changed since this recording was made (a rebuilt pack or layer).`);
@@ -448,7 +510,7 @@ for (const [index, challenge] of drives.entries()) {
     recording.results[challenge.id] = { ...trimmed(r), result_sha: resultSha(r) };
     manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
     setRecordingSuiteVersion(recording, partial ? CUSTOM_SUITE : arenaSuiteVersion({ ...suite, maps: shas }, results));
-    writeArtifact(args.record, recording.serialize(), { gzip: args.record.endsWith(".gz") });
+    writeJsonArtifact(args.record, recording.serialize(), MAX_RECORDING_BYTES);
   }
   if (replayJson) {
     const actualSha = resultSha(r);
@@ -464,13 +526,20 @@ for (const [index, challenge] of drives.entries()) {
         rec.canonicalJson({ ...trimmed(r), result_sha: actualSha, suite_version: recording.header.suite_version })
     )
       fail(`The recorded results for ${challenge.id} differ from the replay.`);
+    if (!r.model_recording.exact) {
+      const { calls, served, missing, drift } = tape.stats;
+      const remaining = Object.values(tape.remainingAnswers()).reduce((sum, count) => sum + count, 0);
+      console.error(
+        `  tape ${challenge.id}: calls=${calls} served=${served} missing=${missing} cancellation_drift=${drift} unused=${remaining}`,
+      );
+    }
     if (!r.model_recording.same_result || !r.model_recording.exact) drifted.push(challenge.id);
     else if (recorded.comparison_score_inputs) r.comparison_score_inputs = recorded.comparison_score_inputs;
     else if (scoreInputs) comparisons[challenge.id] = { result_sha: recorded.result_sha, score_inputs: scoreInputs };
     if (capture) {
       if (drifted.length) fail(`Cannot export ${challenge.id}: the replay differs from the recorded drive.`);
       const text = `${JSON.stringify(capture.finish(challenge, args.replay, recording, r))}\n`;
-      writeArtifact(browserOutput, text);
+      writeJsonArtifact(browserOutput, text);
     }
   }
   const shares =
@@ -519,7 +588,7 @@ const suite_version = replayJson
 if (manifest && !replayJson) manifest.suite_version = suite_version;
 for (const result of results) result.suite_version = suite_version;
 if (args.json)
-  writeArtifact(
+  writeJsonArtifact(
     args.json,
     JSON.stringify(
       {
@@ -534,11 +603,10 @@ if (args.json)
       null,
       1,
     ),
-    { gzip: args.json.endsWith(".gz") },
   );
 if (comparisonOutput) {
   try {
-    writeFileSync(comparisonOutput, `${JSON.stringify(comparisons, null, 1)}\n`, { flag: "wx" });
+    writeNewJson(comparisonOutput, comparisons, 1);
   } catch (error) {
     if (error.code === "EEXIST") fail("--comparison-json must name a new file.");
     throw error;

@@ -21,9 +21,9 @@ export const challenge = {
   roadClosures: true,
   street: "Spring Garden Road",
   description:
-    "A street festival has closed Spring Garden Road in downtown Halifax between Queen Street and Birmingham Street. Your route still runs down that block, and you won't know until you see the barricades past Queen Street.",
+    "Festival barricades close Spring Garden Road beyond Queen Street. The original route points into the blocked block.",
   lesson:
-    "When you see ROAD CLOSED barricades, never drive past them, however empty the street looks. Slow down early, turn off at the junction before them, and follow the detour. If you see them too late to turn, stop short of the junction and find another way.",
+    "Once you spot the barricades, slow and take the last available legal turn before the closure. If you can't make the turn safely, stop clear of the junction and work out another route.",
 };
 
 const START = "e489",

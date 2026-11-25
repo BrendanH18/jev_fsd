@@ -12,6 +12,8 @@ Use --group ui to run just the driving app controls and startup recovery from th
 """
 
 import argparse
+import csv
+import json
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -268,6 +270,8 @@ def check_published_replay(page, url):
       await new Promise(requestAnimationFrame);
       return { hidden, removed: button.textContent === 'Play replay' };
     }""")
+    check_result_controls(page, url)
+    check_published_debrief(page, url)
     return report(
         "published browser replay",
         [
@@ -281,6 +285,165 @@ def check_published_replay(page, url):
             {"name": "Removing a replay stops its animation", "ok": lifecycle["removed"]},
         ],
     )
+
+
+def check_result_controls(page, url):
+    page.goto(url + "?replay=jev-flagger&at=12.345&city-weather=rain#replay-heading")
+    city = page.locator("#results-city")
+    city.get_by_role("combobox", name="Filter by weather").wait_for()
+    assert city.get_by_role("combobox", name="Filter by weather").input_value() == "rain"
+    assert city.locator("tbody tr").count() == 1
+    with page.expect_download() as event:
+        city.get_by_role("button", name="Export CSV").click()
+    with event.value.path().open(encoding="utf-8-sig") as saved:
+        headers, row = list(csv.reader(saved))
+    assert headers[:4] == ["Map", "Map ID", "Weather", "Suite version"]
+    assert row[1:3] == ["kitsilano", "rain"]
+    assert any(label.endswith(" total") for label in headers)
+    with page.expect_download() as event:
+        city.get_by_role("button", name="Export JSON").click()
+    with event.value.path().open(encoding="utf-8") as saved:
+        payload = json.load(saved)
+    assert payload["filters"]["weather"] == "rain"
+    assert payload["rows"][0]["map_name"] == "Kitsilano"
+    city.get_by_role("button", name="Reset filters").click()
+    assert page.evaluate("document.activeElement.getAttribute('aria-label')") == "Search city or weather"
+    assert page.evaluate("!new URL(location.href).searchParams.has('city-weather')")
+    replay = page.locator("#published-replay")
+    select = replay.get_by_role("combobox", name="Published drive")
+    slider = replay.get_by_role("slider", name="Replay time")
+    slider.wait_for()
+    assert select.input_value() == "jev-flagger"
+    assert float(slider.input_value()) == 12.345
+    assert replay.get_by_role("combobox", name="Playback speed").locator("option[value='0.25']").count() == 1
+    replay.get_by_role("button", name="Start", exact=True).click()
+    assert float(slider.input_value()) == 0
+    replay.get_by_role("button", name="Next event", exact=True).click()
+    assert float(slider.input_value()) > 0
+    replay.get_by_role("button", name="End", exact=True).click()
+    assert slider.input_value() == slider.get_attribute("max")
+    with page.expect_download() as event:
+        replay.get_by_role("button", name="Download replay JSON").click()
+    assert event.value.suggested_filename == "jev-flagger-replay.json"
+    with event.value.path().open(encoding="utf-8") as saved:
+        assert json.load(saved)["challenge"] == "flagger"
+    terminal = page.locator("#results-replay")
+    terminal.get_by_role("searchbox", name="Search terminal replays").fill("no-such-recording")
+    assert terminal.get_by_role("status").inner_text() == "No terminal replays match."
+    challenges = page.locator("#results-challenges")
+    open_track = page.locator("#results-open")
+    kinds = challenges.get_by_role("combobox", name="Drive type")
+    kinds.select_option("road-test")
+    assert all("Road test" in title for title in challenges.locator("tbody th").all_text_contents())
+    assert challenges.locator("tbody tr").count() > 1
+    challenges.get_by_role("combobox", name="Filter by map").select_option("kitsilano")
+    assert challenges.locator("tbody tr").count() == 1
+    assert "Kitsilano" in challenges.locator("tbody tr").inner_text()
+    challenges.get_by_role("combobox", name="Driver column sort metric").select_option("duration")
+    challenges.get_by_role("button", name="Rules", exact=True).click()
+    assert challenges.get_by_role("columnheader", name="Rules").get_attribute("aria-sort") == "ascending"
+    with page.expect_download() as event:
+        challenges.get_by_role("button", name="Export JSON").click()
+    with event.value.path().open(encoding="utf-8") as saved:
+        payload = json.load(saved)
+    assert payload["track"] == "guarded"
+    assert payload["filters"]["sort"] == "driver-rules"
+    assert payload["rows"][0]["kind"] == "road-test"
+    assert payload["rows"][0]["map_name"] == "Kitsilano"
+    with page.expect_download() as event:
+        challenges.get_by_role("button", name="Export CSV").click()
+    with event.value.path().open(encoding="utf-8-sig") as saved:
+        headers, row = list(csv.reader(saved))
+    assert row[2:7] == ["road test", "Kitsilano", "kitsilano", "guarded", payload["version"]]
+    assert "Rules failures" in headers and "Rules path score" in headers
+    challenges.get_by_role("button", name="Reset filters").click()
+    outcome = challenges.get_by_role("combobox", name="Result outcome")
+    outcome.select_option("fail")
+    assert challenges.locator("tbody tr").count() > 0
+    assert challenges.locator("tbody tr").count() == challenges.locator("tbody tr:has(.fail)").count()
+    outcome.select_option("pass")
+    assert challenges.locator("tbody tr:has(.fail)").count() == 0
+    outcome.select_option("split")
+    assert challenges.locator("tbody tr").count() == challenges.locator("tbody tr:has(.pass):has(.fail)").count()
+    open_track.get_by_role("combobox", name="Result outcome").select_option("flags")
+    assert open_track.locator("tbody tr").count() > 0
+    assert open_track.locator("tbody tr").count() == open_track.locator("tbody tr:has(.flagged-count)").count()
+    assert (
+        open_track.get_by_role("combobox", name="Driver column sort metric").locator("option[value='flags']").count()
+        == 1
+    )
+    assert challenges.get_by_role("button", name="Map", exact=True).count() == 1
+    assert city.get_by_role("combobox", name="City driver sort metric").locator("option").count() == 5
+
+    page.evaluate("""() => Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+      configurable: true
+    })""")
+    replay.get_by_role("button", name="Start", exact=True).click()
+    replay.get_by_role("button", name="+1 s", exact=True).click()
+    replay.get_by_role("button", name="Copy link to this moment").click()
+    copied = replay.get_by_role("textbox", name="Link to replay moment")
+    copied.wait_for()
+    assert "replay=jev-flagger" in copied.input_value() and "at=1.000" in copied.input_value()
+    assert copied.evaluate("(input) => input.selectionEnd === input.value.length")
+    terminal.get_by_role("searchbox", name="Search terminal replays").fill("")
+    terminal.get_by_role("button", name="Copy command").first.click()
+    terminal.get_by_text("Use your keyboard to copy the selected command.", exact=True).wait_for()
+
+
+def check_published_debrief(page, url):
+    comparison = page.evaluate("""async () => {
+      const { DriveReport } = await import(new URL('js/ui/drive-report.js', location.href).href);
+      const { api } = await import(new URL('js/common.js', location.href).href);
+      const data = await api('/api/results');
+      const drive = data.rows.find((run) => run.suite === 'challenges' && run.driver === 'rules').drives[0];
+      const challenge = { id: drive.id };
+      const config = { ...drive, challenge: drive.id };
+      const report = {
+        config, elapsed_s: drive.time_s, status: 'arrived', incidents: [],
+        collisions: 0, red_lights: 0, stop_signs: 0, failed_to_yield: 0, off_road_s: 0, resets: 0,
+      };
+      const build = (value) => {
+        const section = DriveReport.prototype.comparison.call({}, challenge, value);
+        document.body.append(section);
+        return section;
+      };
+      const sections = [
+        build({ ...report, config: { ...config, map_sha: undefined }, off_road_s: undefined }),
+        build(report),
+        build({ ...report, config: { ...config, map_sha: 'other' } }),
+      ];
+      for (let i = 0; i < 60 && sections[2].querySelectorAll('tbody tr').length < 4; i++)
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      const [missing, matched, changed] = sections;
+      const link = new URL(matched.querySelector('a').href);
+      const observed = {
+        unavailable: missing.querySelector('tbody td').textContent,
+        missingFingerprint: missing.querySelector('[role=status]').textContent,
+        query: link.searchParams.get('challenges-query'),
+        jump: link.hash,
+        challenge: drive.id,
+        tied: matched.textContent.includes('Tied at this precision'),
+        mismatched: changed.querySelector('[role=status]').textContent,
+      };
+      sections.forEach((section) => section.remove());
+      return observed;
+    }""")
+    assert comparison["unavailable"] == "Unavailable"
+    assert "no map fingerprint" in comparison["missingFingerprint"]
+    assert comparison["query"] == comparison["challenge"] and comparison["jump"] == "#challenges-heading"
+    assert comparison["tied"]
+    assert "No guarded results match" in comparison["mismatched"]
+
+    for endpoint in ("**/api/results", "**/demo-data/results.json"):
+        page.route(endpoint, lambda route: route.fulfill(status=503))
+    page.goto(url)
+    retry = page.get_by_role("button", name="Retry results")
+    retry.wait_for()
+    for endpoint in ("**/api/results", "**/demo-data/results.json"):
+        page.unroute(endpoint)
+    retry.click()
+    page.get_by_text("committed runs,", exact=False).wait_for()
 
 
 def check_snapshot_form(page):
@@ -540,7 +703,31 @@ def check_driving_ui(page):
           $('left-handed-touch').checked = true; change($('left-handed-touch'));
           check('Swapping controls puts the accelerator side before the steering pad', app.touch.pedalEls.throttle.getBoundingClientRect().x
             < app.touch.wheel.getBoundingClientRect().x);
+          const touchAction = name => app.touch.buttons.find(button => button.dataset.action === name);
+          check('Touch-only actions expose the matching keyboard shortcuts',
+            touchAction('horn').getAttribute('aria-keyshortcuts') === 'H'
+            && touchAction('reset').getAttribute('aria-keyshortcuts') === 'R'
+            && touchAction('camera').getAttribute('aria-keyshortcuts') === 'C');
+          shortcuts.checked = false; change(shortcuts);
+          check('Unavailable shortcuts are removed from main and touch controls',
+            !$('camera-view').hasAttribute('aria-keyshortcuts') && !touchAction('horn').hasAttribute('aria-keyshortcuts'));
+          shortcuts.checked = true; change(shortcuts);
+          check('Re-enabling character keys restores touch shortcut hints',
+            touchAction('signalLeft').getAttribute('aria-keyshortcuts') === 'Q'
+            && touchAction('signalRight').getAttribute('aria-keyshortcuts') === 'E');
+          app.advance(0.02);
+          check('The touch pause button reflects the live paused state', touchAction('pause').getAttribute('aria-pressed') === 'true');
+          touchAction('signalLeft').click(); app.advance(0.02);
+          check('The left indicator reports its current state before manual driving resumes',
+            touchAction('signalLeft').getAttribute('aria-pressed') === 'true');
+          touchAction('signalRight').click(); app.advance(0.02);
+          check('Switching to the right indicator updates both touch controls',
+            touchAction('signalLeft').getAttribute('aria-pressed') === 'false'
+            && touchAction('signalRight').getAttribute('aria-pressed') === 'true');
+          touchAction('signalRight').click(); app.advance(0.02);
+          touchAction('horn').focus();
           touchSetting.value = 'hide'; change(touchSetting);
+          check('Hiding the touch controls restores focus to the setting', document.activeElement === touchSetting);
           check('Touch controls can be hidden without changing the driving mode', app.touch.el.hidden && !document.body.classList.contains('touch-driving'));
           check('The touch setting persists independently of the world URL', localStorage.getItem('jev-fsd-ui-touch') === '"hide"');
 
@@ -696,6 +883,77 @@ def check_startup_recovery(page, url):
     )
 
 
+def check_startup_preferences(page, url):
+    base = url.rstrip("/")
+    page.add_init_script("""
+      localStorage.setItem('jev-fsd-quality', 'low');
+      localStorage.removeItem('jev-fsd-replay');
+    """)
+    page.goto(base + "/?drive=manual&quality=unknown&time=11:12", wait_until="domcontentloaded")
+    page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+    ok = report(
+        "startup preferences",
+        page.evaluate("""async () => {
+      const app = window.__jev, $ = (id) => document.getElementById(id);
+      const initial = app.view.quality === 'low' && $('time').selectedOptions[0]?.textContent === '11:12';
+      app.view.render = () => {};
+      history.replaceState({ retained: true }, '', location.href);
+      app.setTime('11:16');
+      const time = history.state.retained && $('time').selectedOptions[0]?.textContent === '11:16';
+      const weather = $('weather');
+      weather.value = 'rain'; weather.dispatchEvent(new Event('change'));
+      $('quality').dispatchEvent(new Event('change'));
+      const quality = !new URL(location.href).searchParams.has('quality') && localStorage.getItem('jev-fsd-quality') === 'low';
+      const { checkQualityFallback } = await import('/tests/ui-tests.js');
+      const qualityFallback = checkQualityFallback(app);
+      const before = app.world.tick;
+      const originalFetch = window.fetch;
+      let pendingRoute;
+      window.fetch = (url, options) => String(url).endsWith('/api/route')
+        ? new Promise((_resolve, reject) => {
+            pendingRoute = options.signal;
+            pendingRoute.addEventListener('abort', () => reject(pendingRoute.reason), { once: true });
+          })
+        : originalFetch(url, options);
+      let routeCancelled;
+      try {
+        const lookup = app.setDestination([2, 3]);
+        $('view').dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+        await lookup;
+        routeCancelled = pendingRoute?.aborted && $('minimap').getAttribute('aria-busy') === 'false';
+      } finally {
+        window.fetch = originalFetch;
+      }
+      app.advance(0.1);
+      return [
+        { name: 'An invalid quality override uses saved graphics and keeps the exact clock time', ok: initial },
+        { name: 'Reflecting conditions in the URL preserves history state', ok: time && history.state.retained },
+        { name: 'A graphics selection replaces the old URL override', ok: quality },
+        qualityFallback,
+        { name: 'Losing graphics pauses stepping and offers recovery', ok: app.world.paused
+          && app.world.tick === before && !document.querySelector('.simulation-error').hidden },
+        { name: 'Losing graphics cancels pending routes', ok: routeCancelled },
+      ];
+    }"""),
+    )
+    page.goto(base + "/?replay=1&bbox=kitsilano&quality=low&weather=rain", wait_until="domcontentloaded")
+    page.locator("#retry-start").wait_for(timeout=TIMEOUT_MS)
+    ok &= report(
+        "watch link recovery",
+        page.evaluate("""() => {
+      const url = new URL(document.querySelector('#start-free-drive').href);
+      return [
+        { name: 'A missing Watch hand-off gives recovery instructions', ok: document.querySelector('#loading-text')
+          .textContent.includes('no saved drive') && document.querySelector('#view').inert },
+        { name: 'Free drive recovery retains display and weather parameters', ok: !url.searchParams.has('replay')
+          && !url.searchParams.has('bbox') && url.searchParams.get('quality') === 'low'
+          && url.searchParams.get('weather') === 'rain' && url.searchParams.get('drive') === 'manual' },
+      ];
+    }"""),
+    )
+    return ok
+
+
 def check(url, chromium=None, groups=GROUPS):
     ok = True
     with sync_playwright() as p:
@@ -743,6 +1001,50 @@ def check(url, chromium=None, groups=GROUPS):
             page.goto(url.rstrip("/") + "/?drive=manual&quality=low", wait_until="domcontentloaded")
             page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
             ok &= check_driving_ui(page)
+            ok &= report(
+                "Photo Mode routing",
+                page.evaluate("import('/tests/ui-tests.js').then(async m => [await m.checkPhotoRoutes(window.__jev)])"),
+            )
+            for skip_id, target_id in (("skip-drive-settings", "settings-toggle"), ("skip-drive-map", "minimap")):
+                skip_link = page.locator(f"#{skip_id}")
+                skip_link.focus()
+                skip_link.press("Enter")
+                ok &= report(
+                    "keyboard bypass",
+                    [
+                        {
+                            "name": f"{skip_id} moves keyboard focus",
+                            "ok": page.locator(f"#{target_id}:focus").count() == 1,
+                        }
+                    ],
+                )
+            if "ui" in groups:
+                ok &= report("UI fixtures", page.evaluate("import('/tests/ui-tests.js').then(m => m.runUiTests())"))
+            page.set_viewport_size({"width": 320, "height": 360})
+            page.emulate_media(contrast="more", forced_colors="active")
+            ok &= report(
+                "compact and high-contrast controls",
+                page.evaluate("""() => {
+                  const app = window.__jev, setting = document.querySelector('#touch-setting');
+                  setting.value = 'show';
+                  setting.dispatchEvent(new Event('change'));
+                  const touch = app.touch;
+                  const elementBounds = [touch.wheel, ...touch.buttons, ...Object.values(touch.pedalEls)]
+                    .map(element => element.getBoundingClientRect());
+                  const inside = elementBounds.every(rect => rect.width > 0 && rect.top >= 0
+                    && rect.left >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight);
+                  const contrast = getComputedStyle(document.body).getPropertyValue('--muted').trim() === '#c9d1df';
+                  const cursor = getComputedStyle(document.querySelector('#minimap-cursor')).forcedColorAdjust;
+                  setting.value = 'hide';
+                  setting.dispatchEvent(new Event('change'));
+                  return [
+                    { name: 'The narrow touch layout fits a 320 by 360 viewport', ok: inside },
+                    { name: 'The HUD honours higher contrast', ok: contrast },
+                    { name: 'The minimap cursor retains its contrasting outline in forced colours', ok: cursor === 'none' },
+                  ];
+                }"""),
+            )
+            page.emulate_media(contrast="no-preference", forced_colors="none")
             page.set_viewport_size({"width": 420, "height": 360})
             ok &= report(
                 "short photo viewport",
@@ -760,6 +1062,9 @@ def check(url, chromium=None, groups=GROUPS):
             page.close()
             page = open_page(None)
             ok &= check_startup_recovery(page, url)
+            page.close()
+            page = open_page(None)
+            ok &= check_startup_preferences(page, url)
             page.close()
 
         kinds = (PRACTICE_KINDS if "practice" in groups else []) + (PARKING_KINDS if "parking" in groups else [])

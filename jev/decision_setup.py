@@ -27,9 +27,11 @@ from .decision import DecisionConfig, DecisionRegistry
 from .llm_setup import (
     MODELS_TIMEOUT_S,
     Pillar,
+    SetupAuthError,
     SetupError,
     _lock,
     base_url_for,
+    catalog_key,
     fetch_json,
     parse_models,
     probe_url,
@@ -44,8 +46,8 @@ OPENROUTER_CATALOG = "https://openrouter.ai/api/v1/models?output_modalities=deci
 JEV_PRICE_PER_MTOK = round(PRICE_PER_INPUT_TOKEN_USD * 1_000_000, 6)
 # From https://docs.typesafe.ai/models (2026-10-15). Shown when TypeSafe's own list cannot be loaded.
 TYPESAFE_MODELS = (
-    {"id": "jev-latest", "name": "Jev latest (stable; jev-1.13.0 today)"},
-    {"id": "jev-preview", "name": "Jev preview (newest; jev-1.14.0 today)"},
+    {"id": "jev-latest", "name": "Jev latest (stable alias)"},
+    {"id": "jev-preview", "name": "Jev preview (preview alias)"},
     {"id": "jev-1.14.0", "name": "Jev 1.14"},
     {"id": "jev-1.13.0", "name": "Jev 1.13"},
 )
@@ -124,7 +126,11 @@ def _typesafe_models(data, secret=None) -> List[dict]:
     if not isinstance(models, list):
         return parse_models(data, secret=secret)
     return parse_models(
-        [{"id": m.get("name"), "name": m.get("description")} for m in models if isinstance(m, dict)],
+        [
+            {**m, "id": m.get("id") or m.get("name"), "name": m.get("display_name") or m.get("description")}
+            for m in models
+            if isinstance(m, dict)
+        ],
         secret=secret,
     )
 
@@ -133,9 +139,9 @@ def list_models(settings: Settings, body: dict) -> dict:
     """The model picker's list. OpenRouter's decision catalog is public, so it is loaded without a key.
     TypeSafe's needs one; without it (or if it cannot be loaded) the documented Jev models are shown."""
     p = DECISION.provider(body.get("provider"))
-    key = text(body, "api_key", 512) or (settings.get(p["key_env"]) if p.get("key_env") else None)
+    key = catalog_key(settings, p, body)
     if p["id"] == "openrouter":
-        models = parse_models(fetch_json(OPENROUTER_CATALOG, None, p["label"], MODELS_TIMEOUT_S))
+        models = parse_models(fetch_json(OPENROUTER_CATALOG, None, p["label"], MODELS_TIMEOUT_S), modality="decisions")
         return {"provider": p["id"], "endpoint": public_url(p["base_url"]) + p["path"], "models": models}
     if p["id"] == "typesafe":
         documented = [
@@ -147,9 +153,9 @@ def list_models(settings: Settings, body: dict) -> dict:
                 listed = _typesafe_models(
                     fetch_json(p["base_url"] + "/v1/models", key, p["label"], MODELS_TIMEOUT_S), secret=key
                 )
+            except SetupAuthError:
+                raise
             except SetupError as err:
-                if "rejected the key" in str(err):
-                    raise
                 listed, note = (
                     [],
                     "TypeSafe's model list could not be loaded (%s); showing the documented models." % err,
@@ -160,6 +166,8 @@ def list_models(settings: Settings, body: dict) -> dict:
                 for m in listed
                 if m["id"] not in known
             ]
+            if not listed and note is None:
+                note = "TypeSafe returned an empty model list; showing the documented models."
         return {
             "provider": p["id"],
             "endpoint": public_url(p["base_url"]) + p["path"],
@@ -174,6 +182,8 @@ def list_models(settings: Settings, body: dict) -> dict:
 def save(settings: Settings, registry: DecisionRegistry, client: JevClient, body: dict) -> dict:
     """Save a decision model. TypeSafe with the built-in Jev's own model saves only the key."""
     p = DECISION.provider(body.get("provider"))
+    if p["id"] == "typesafe" and client.base_url != p["base_url"] and text(body, "api_key", 512):
+        raise SetupError("TYPESAFE_BASE_URL overrides the built-in driver URL. Clear it before saving a TypeSafe key.")
     if p["id"] == "typesafe" and text(body, "model", 200) == client.model and not text(body, "name", 40):
         key = text(body, "api_key", 512)
         if not key and not settings.get(KEY_ENV):

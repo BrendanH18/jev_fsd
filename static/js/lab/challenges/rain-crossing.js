@@ -13,8 +13,9 @@ export const challenge = {
   icon: "☂",
   difficulty: "Patience",
   hazard: "pedestrian",
-  description: "A person crosses a wet Montréal street after dark. Smooth braking matters.",
-  lesson: "Leave extra braking room on wet roads.",
+  description: "After dark in Montréal, a person crosses your path on a rain-soaked street with less grip for braking.",
+  lesson:
+    "Ease off while you still have a clear stretch ahead and brake progressively. Leave enough stopping room to yield before the crossing on the wet surface.",
 };
 
 export const scenario = (map, challenge) => laneScenario(map, challenge);

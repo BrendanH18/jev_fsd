@@ -5,6 +5,9 @@
 import { advanceStyle, timingPlan } from "../sim/signals.js";
 import { zoneAt, zoneSpans } from "../sim/speed-zones.js";
 import { calmingSpans } from "../sim/traffic-calming.js";
+import { requireMapGraph } from "./pack-issues.js";
+
+export { inspectMapPack } from "./pack-issues.js";
 
 const CELL = 50;
 const JUNCTION_LINK_M = 20; // an edge this short after a junction is a link inside it (a junction mapped as several nodes)
@@ -45,7 +48,7 @@ const MONTREAL_ISLAND = [
 
 // Whether a map whose bounding box is [W, S, E, N] permits right turns on red (judged at its centre).
 export function rightOnRedAllowed(bbox) {
-  if (!Array.isArray(bbox) || bbox.length !== 4) return true;
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite)) return true;
   const x = (bbox[0] + bbox[2]) / 2,
     y = (bbox[1] + bbox[3]) / 2;
   let inside = false;
@@ -61,6 +64,8 @@ export function dist(a, b) {
   return Math.hypot(b[0] - a[0], b[1] - a[1]);
 }
 export function wrapAngle(a) {
+  if (!Number.isFinite(a)) return NaN;
+  if (Math.abs(a) > 32 * Math.PI) a %= 2 * Math.PI;
   while (a <= -Math.PI) a += 2 * Math.PI;
   while (a > Math.PI) a -= 2 * Math.PI;
   return a;
@@ -86,7 +91,19 @@ function segIndex(cum, s) {
   return lo;
 }
 
+function appendLanes(cell, out, seen) {
+  if (!cell) return;
+  for (const lane of cell) {
+    if (seen.has(lane)) continue;
+    seen.add(lane);
+    out.push(lane);
+  }
+}
+
 export function pointAt(pts, cum, s) {
+  if (!pts.length || Number.isNaN(s)) return undefined;
+  if (cum.length !== pts.length) return undefined;
+  if (pts.length === 1) return pts[0];
   if (s <= 0) return pts[0];
   if (s >= cum[cum.length - 1]) return pts[pts.length - 1];
   const i = segIndex(cum, s);
@@ -96,12 +113,22 @@ export function pointAt(pts, cum, s) {
 }
 
 export function headingAt(pts, cum, s) {
+  if (!pts.length || Number.isNaN(s)) return NaN;
+  if (cum.length !== pts.length) return NaN;
+  if (pts.length === 1) return 0;
   const i = Math.min(segIndex(cum, Math.max(0, Math.min(s, cum[cum.length - 1]))), pts.length - 2);
   return headingOf(pts[i], pts[i + 1]);
 }
 
 // Closest point on a polyline. lateral > 0 means right of travel.
 export function projectPoint(pts, cum, p, hint = null) {
+  if (!p || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) || !pts.length) return null;
+  if (cum.length !== pts.length) return null;
+  if (pts.length === 1) {
+    const point = pts[0];
+    return { distance: dist(p, point), s: cum[0], lateral: 0, index: 0, point, heading: 0 };
+  }
+  if (!Number.isInteger(hint) || hint < 0 || hint >= pts.length - 1) hint = null;
   let best = null;
   const lo = hint === null ? 0 : Math.max(0, hint - 5);
   const hi = hint === null ? pts.length - 1 : Math.min(pts.length - 1, hint + 25);
@@ -117,7 +144,11 @@ export function projectPoint(pts, cum, p, hint = null) {
       const t = seg2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / seg2));
       const qx = a[0] + dx * t,
         qy = a[1] + dy * t;
-      const d = Math.hypot(p[0] - qx, p[1] - qy);
+      const dxPoint = p[0] - qx;
+      const dyPoint = p[1] - qy;
+      // Either component alone rules out a point this far from the current best.
+      if (best && (Math.abs(dxPoint) > best.distance * 2 || Math.abs(dyPoint) > best.distance * 2)) continue;
+      const d = Math.hypot(dxPoint, dyPoint);
       if (best === null || d < best.distance) {
         const segLen = Math.sqrt(seg2);
         const lateral = segLen > 0 ? ((p[0] - qx) * dy - (p[1] - qy) * dx) / segLen : 0;
@@ -137,6 +168,8 @@ export function projectPoint(pts, cum, p, hint = null) {
 // swings across the road. Turns (>= 20 deg): round the corner where the two lane lines meet.
 // Near-straight joins whose ends do not meet: spread the shift over a few meters.
 export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
+  if (!Number.isFinite(radius) || radius < 0) throw new RangeError("Lane join radius must be finite and nonnegative");
+  if (!Number.isFinite(blend) || blend < 0) throw new RangeError("Lane join blend must be finite and nonnegative");
   if (!before.length) return after.slice();
   if (!after.length) return before.slice();
   const ca = cumulative(after);
@@ -194,6 +227,7 @@ export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
 
 export class MapData {
   constructor(pack) {
+    requireMapGraph(pack);
     this.pack = pack;
     this.restrictions = pack.restrictions?.restrictions || [];
     this.redTurns = pack.restrictions?.red_turns || [];
@@ -239,40 +273,49 @@ export class MapData {
     // bus routes and their stops (jev/osm/transit.py), when the map has them
     this.transit = pack.transit || null;
     // marked crosswalks between junctions (jev/osm/crossings.py), when the map has them
-    this.crosswalks = (pack.crossings?.crossings || []).filter((c) => !c.pxo && this.edges.has(c.edge));
-    this.pxos = (pack.crossings?.crossings || []).filter((c) => c.pxo && this.edges.has(c.edge));
+    this.crosswalks = [];
+    this.pxos = [];
+    for (const crossing of pack.crossings?.crossings || []) {
+      if (!crossing || !this.edges.has(crossing.edge)) continue;
+      (crossing.pxo ? this.pxos : this.crosswalks).push(crossing);
+    }
     // railway tracks and their level crossings with the streets (jev/osm/rail.py; sim/rail.js)
     this.rail = pack.rail || null;
     // school and playground zones (jev/osm/zones.py), each edge's stretches of them in order
     this.buslanes = pack.buslanes?.lanes || [];
     // one-way streets cyclists may ride both ways (jev/osm/contraflow.py; sim/contraflow.js), by edge:
     // { edge, kind: "lane" | "track" | "shared", side }
-    this.contraflow = new Map(
-      (pack.contraflow?.edges || [])
-        .filter((c) => this.edges.has(c.edge) && this.edges.get(c.edge).oneway)
-        .map((c) => [c.edge, c]),
-    );
+    this.contraflow = new Map();
+    for (const entry of pack.contraflow?.edges || []) {
+      if (this.edges.get(entry?.edge)?.oneway) this.contraflow.set(entry.edge, entry);
+    }
     // driveways cars back out of (jev/osm/driveways.py; sim/driveway-reversers.js): { id, edge, s, side,
     // x, y, heading, length }
-    this.driveways = (pack.driveways?.driveways || []).filter((d) => this.edges.has(d.edge));
+    this.driveways = (pack.driveways?.driveways || []).filter((d) => d && this.edges.has(d.edge));
     // the parks and water geese live by, and the street spans beside them where a gaggle may cross
     // (jev/osm/parks.py; sim/geese.js): { id, kind, name, rings, closed, lines } and { edge, from, to,
     // left, right, water }
     this.parks = pack.parks?.areas || [];
-    this.parkSpans = (pack.parks?.spans || []).filter((sp) => this.edges.has(sp.edge));
+    this.parkSpans = (pack.parks?.spans || []).filter((sp) => sp && this.edges.has(sp.edge));
     // the stretches of street on bridges and overpasses, where black ice forms first (jev/osm/bridges.py;
     // sim/black-ice.js): { edge, from, to, name, kind }
-    this.bridges = (pack.bridges?.spans || []).filter((sp) => this.edges.has(sp.edge));
+    this.bridges = (pack.bridges?.spans || []).filter((sp) => sp && this.edges.has(sp.edge));
     this.zones = pack.zones?.zones || [];
     this.zoneSpans = zoneSpans(this.zones, this.edges);
     // speed humps, tables, cushions and bumps (jev/osm/calming.py; sim/traffic-calming.js), each edge's in
     // order, and by 20 m cell for the renderer's ride over them: { device, h (the street's heading),
     // w (half the asphalt's width) }
-    this.calming = (pack.calming?.devices || []).filter((d) => (d.at || []).some((a) => this.edges.has(a.edge)));
+    this.calming = [];
+    for (const device of pack.calming?.devices || []) {
+      if (!Array.isArray(device?.at)) continue;
+      const at = device.at.filter(Boolean);
+      if (at.some((a) => this.edges.has(a.edge)))
+        this.calming.push(at.length === device.at.length ? device : { ...device, at });
+    }
     this.calmingSpans = calmingSpans(this.calming, this.edges);
     this.calmingGrid = new Map();
     for (const device of this.calming) {
-      const a = device.at.find((x) => this.edges.has(x.edge)),
+      const a = device.at.find((x) => x && this.edges.has(x.edge)),
         e = this.edges.get(a.edge);
       const item = {
         device,
@@ -309,14 +352,18 @@ export class MapData {
     return zoneAt(this.zoneSpans, lane.edge, (s * e.length) / Math.max(1e-6, lane.length), clock);
   }
   successors(edgeId) {
-    return this.out.get(this.edges.get(edgeId).to) || [];
+    return this.out.get(this.edges.get(edgeId)?.to) || [];
   }
   headingIn(edgeId) {
-    const p = this.edges.get(edgeId).pts;
+    const p = this.edges.get(edgeId)?.pts;
+    if (!p?.length) return NaN;
+    if (p.length === 1) return 0;
     return headingOf(p[p.length - 2], p[p.length - 1]);
   }
   headingOut(edgeId) {
-    const p = this.edges.get(edgeId).pts;
+    const p = this.edges.get(edgeId)?.pts;
+    if (!p?.length) return NaN;
+    if (p.length === 1) return 0;
     return headingOf(p[0], p[1]);
   }
   turnAngle(a, b) {
@@ -325,7 +372,12 @@ export class MapData {
   // A signal's junction: its vertices, and where its approaches start (a junction drawn as two
   // nodes may list only one).
   junctionNodes(inter) {
-    return new Set([...(inter?.vertices || []), ...(inter?.approaches || []).map((a) => this.edges.get(a.edge)?.from)]);
+    const nodes = new Set(inter?.vertices || []);
+    for (const approach of inter?.approaches || []) {
+      const edge = this.edges.get(approach.edge);
+      if (edge) nodes.add(edge.from);
+    }
+    return nodes;
   }
   // The turn from edge ids[k] at the junction it leads into, carried on across short links that go
   // straight inside that junction (`nodes`), never on to the next junction: { turn, at }, where
@@ -345,6 +397,7 @@ export class MapData {
     return { turn, at: j };
   }
   classifyTurn(angle) {
+    if (!Number.isFinite(angle)) return null;
     const deg = (Math.abs(angle) * 180) / Math.PI;
     if (deg < 25) return "straight";
     if (deg > 150) return "uturn";
@@ -352,38 +405,54 @@ export class MapData {
   }
 
   lanesNear(x, y, radius = 60) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius) || radius < 0) return [];
     const cx = Math.floor(x / CELL),
       cy = Math.floor(y / CELL),
       r = Math.ceil(radius / CELL);
     const seen = new Set();
     const out = [];
-    for (let i = cx - r; i <= cx + r; i++)
-      for (let j = cy - r; j <= cy + r; j++) {
-        const cell = this.grid.get(`${i},${j}`);
-        if (!cell) continue;
-        for (const lane of cell)
-          if (!seen.has(lane)) {
-            seen.add(lane);
-            out.push(lane);
-          }
+    // The ordinary 3×3 road query is cheap even on a small challenge map.
+    if (
+      (2 * r + 1) ** 2 <= Math.max(9, this.grid.size) &&
+      Number.isSafeInteger(Math.abs(cx) + r) &&
+      Number.isSafeInteger(Math.abs(cy) + r)
+    ) {
+      for (let i = cx - r; i <= cx + r; i++)
+        for (let j = cy - r; j <= cy + r; j++) appendLanes(this.grid.get(`${i},${j}`), out, seen);
+    } else {
+      // Iterate populated cells for sparse or enormous windows. Sort the same way as the normal
+      // traversal so nearest-lane ties keep their original winner.
+      const cells = [];
+      for (const [key, lanes] of this.grid) {
+        const [i, j] = key.split(",").map(Number);
+        if (Math.abs(i - cx) <= r && Math.abs(j - cy) <= r) cells.push({ i, j, lanes });
       }
+      cells.sort((a, b) => a.i - b.i || a.j - b.j);
+      for (const cell of cells) appendLanes(cell.lanes, out, seen);
+    }
     return out;
   }
 
   // Nearest lane point. With a heading, lanes pointing the other way are skipped first.
   nearestLane(x, y, heading = null, radius = 60, tolerance = Math.PI / 3) {
+    if (heading !== null && !Number.isFinite(heading)) return null;
+    if (!Number.isFinite(tolerance) || tolerance < 0) return null;
     const lanes = this.lanesNear(x, y, radius);
-    let best = null;
-    for (let pass = 0; pass < 2; pass++) {
-      for (const lane of lanes) {
-        const proj = projectPoint(lane.pts, lane.cum, [x, y]);
-        if (!proj || proj.distance > radius) continue;
-        if (heading !== null && pass === 0 && Math.abs(wrapAngle(proj.heading - heading)) > tolerance) continue;
-        if (best === null || proj.distance < best.distance) best = { ...proj, lane };
+    let best = null,
+      fallback = null;
+    for (const lane of lanes) {
+      const proj = projectPoint(lane.pts, lane.cum, [x, y]);
+      if (!proj || proj.distance > radius) continue;
+      if (!fallback || proj.distance < fallback.distance) fallback = { ...proj, lane };
+      if (
+        heading !== null &&
+        (!best || proj.distance < best.distance) &&
+        Math.abs(wrapAngle(proj.heading - heading)) <= tolerance
+      ) {
+        best = { ...proj, lane };
       }
-      if (best || heading === null) break;
     }
-    return best;
+    return best ?? fallback;
   }
 
   // Meters outside the asphalt (0 when on the road) plus the edge it measured against.
@@ -408,13 +477,14 @@ export class MapData {
   }
 
   controlOf(edgeId) {
-    return this.edges.get(edgeId).control || null;
+    return this.edges.get(edgeId)?.control || null;
   }
 
   // Half the asphalt width of the widest other road meeting this edge's end (as in
   // jev/osm/controls.py).
   crossingHalfWidth(edgeId) {
     const e = this.edges.get(edgeId);
+    if (!e) return 0;
     let widest = 0;
     for (const id of [...(this.inn.get(e.to) || []), ...(this.out.get(e.to) || [])]) {
       const o = this.edges.get(id);
@@ -511,6 +581,7 @@ function cellsOf(pts) {
     const [x0, y0] = pts[i],
       [x1, y1] = pts[i + 1];
     const n = Math.max(1, Math.ceil(dist(pts[i], pts[i + 1]) / (CELL / 2)));
+    if (!Number.isSafeInteger(n)) throw new RangeError("Lane segment is too long to index");
     for (let k = 0; k <= n; k++) {
       const t = k / n;
       cells.add(`${Math.floor((x0 + (x1 - x0) * t) / CELL)},${Math.floor((y0 + (y1 - y0) * t) / CELL)}`);
@@ -524,6 +595,7 @@ function cellsOf(pts) {
 // not on the street. (One just past its far end, coming into it from the junction there, is on it,
 // at its end.)
 export function onStreet(e, n) {
+  if (!Number.isFinite(n.psi)) return null;
   const p = projectPoint(e.pts, e.cum, [n.x, n.y], null);
   if (
     !p ||

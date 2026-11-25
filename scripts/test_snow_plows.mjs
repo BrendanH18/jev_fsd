@@ -1,3 +1,4 @@
+import { hooks } from "../static/js/sim/features/index.js";
 // Snow plows: the plow and where it is from other vehicles, the streets plows work, free-drive plows
 // coming and going while it snows, traffic staying behind one rather than pass it on the right, the
 // driven car's sensing, its stay-back speed, its lane options and candidates, passing on the left in
@@ -97,7 +98,7 @@ function plowAhead(world, fleet, { lane = 0, gap = 25, v = PLOW_MPS } = {}) {
   const l = WPG.lane(EDGE, lane),
     front = world.ego.spec.length - world.ego.spec.rearOverhang;
   const egoS = projectOn(l, world.ego);
-  return fleet.addPlow(l, egoS + front + gap + SNOW_PLOW.rearOverhang, v, [[NEXT, lane]]);
+  return fleet.plows.addPlow(l, egoS + front + gap + SNOW_PLOW.rearOverhang, v, [[NEXT, lane]]);
 }
 function projectOn(lane, v) {
   let best = 0,
@@ -216,7 +217,7 @@ await test("free drive: while it snows one plow at a time, put down out of sight
   world.placeOnLane(far, 10);
   step({ world, fleet, autopilot: idle });
   assert.ok(!fleet.vehicles.includes(plow), "taken off out of sight");
-  assert.ok(fleet.nextPlow >= world.t + 25, "another later");
+  assert.ok(fleet.plows.nextPlow >= world.t + 25, "another later");
   const dry = william({ weather: "dry", plows: PLOW_COUNT, seed: 7 });
   for (let i = 0; i < 60 * 5; i++) step({ world: dry.world, fleet: dry.fleet, autopilot: idle });
   assert.equal(dry.fleet.vehicles.filter(isPlow).length, 0, "none in dry weather");
@@ -224,7 +225,7 @@ await test("free drive: while it snows one plow at a time, put down out of sight
   for (let i = 0; i < 60 * 5; i++) step({ world: off.world, fleet: off.fleet, autopilot: idle });
   assert.equal(off.fleet.vehicles.filter(isPlow).length, 0, "none unless asked for");
   assert.equal(
-    new NpcFleet(new World(WPG, { seed: 1, weather: "snow" }), { count: 0, bikes: 0 }).plowTarget,
+    new NpcFleet(new World(WPG, { seed: 1, weather: "snow" }), { count: 0, bikes: 0 }).plows.plowTarget,
     0,
     "the benchmark and challenges ask for none",
   );
@@ -235,7 +236,7 @@ await test("traffic stays behind a plow in the lane to its left, never passes on
   // (a car in the curb lane behind a plow in the left lane, the curb lane empty ahead)
   for (const w of ["snow", "dry"]) {
     const { world, fleet } = william({ weather: w, s: 20 });
-    const plow = fleet.addPlow(WPG.lane(EDGE, 0), 70, PLOW_MPS, [[NEXT, 0]]);
+    const plow = fleet.plows.addPlow(WPG.lane(EDGE, 0), 70, PLOW_MPS, [[NEXT, 0]]);
     const car = npc(world, fleet, { lane: 1, s: 40, v: 8, id: "curb" });
     let level = false;
     for (let i = 0; i < 60 * 30; i++) {
@@ -252,7 +253,7 @@ await test("traffic stays behind a plow in the lane to its left, never passes on
     [1, 0],
   ]) {
     const { world, fleet } = william({ weather: "snow", s: 20 });
-    const plow = fleet.addPlow(WPG.lane(EDGE, lane), 90, PLOW_MPS, [[NEXT, lane]]);
+    const plow = fleet.plows.addPlow(WPG.lane(EDGE, lane), 90, PLOW_MPS, [[NEXT, lane]]);
     const car = npc(world, fleet, { lane: own, s: 50, v: 6, id: "follower" });
     let gap = Infinity,
       level = false;
@@ -272,7 +273,7 @@ await test("traffic stays behind a plow in the lane to its left, never passes on
     ["dry", 1, true],
   ]) {
     const { world, fleet } = william({ weather: w, s: 20 });
-    const plow = fleet.addPlow(WPG.lane(EDGE, lane), 75, PLOW_MPS, [[NEXT, lane]]);
+    const plow = fleet.plows.addPlow(WPG.lane(EDGE, lane), 75, PLOW_MPS, [[NEXT, lane]]);
     const car = npc(world, fleet, { lane, s: 45, v: 6, id: "eager", lcRate: 1000 });
     let side = null;
     for (let i = 0; i < 60 * 40 && side === null; i++) {
@@ -363,7 +364,7 @@ await test("candidates: none takes the car past a plow on its right, nor closes 
 
 await test("closed loop: Rules passes a curb-lane plow on the left in clear weather and moves back in 30 m ahead; in snow, in rain, or with the plow in the left lane it stays 30 m back", async () => {
   const pass = william({ weather: "dry", s: 15 });
-  const plow = pass.fleet.addPlow(WPG.lane(EDGE, 1), 60, PLOW_MPS, [[NEXT, 1]]);
+  const plow = pass.fleet.plows.addPlow(WPG.lane(EDGE, 1), 60, PLOW_MPS, [[NEXT, 1]]);
   const r = await closedLoop(pass, plow, { limit: 40 });
   assert.ok(r.level !== null && r.level > 1.7, `passed it with the plow on its right (${r.level?.toFixed(2)})`);
   assert.ok(r.backIn !== null && r.backIn >= STAY_BACK_M, `back in ${r.backIn?.toFixed(1)} m ahead of it`);
@@ -379,7 +380,7 @@ await test("closed loop: Rules passes a curb-lane plow on the left in clear weat
     ["snow", 1, 0],
   ]) {
     const ctx = william({ weather: w, lane: own, s: 15 });
-    const p = ctx.fleet.addPlow(WPG.lane(EDGE, lane), 60, PLOW_MPS, [[NEXT, lane]]);
+    const p = ctx.fleet.plows.addPlow(WPG.lane(EDGE, lane), 60, PLOW_MPS, [[NEXT, lane]]);
     const q = await closedLoop(ctx, p, { limit: 50 });
     assert.equal(q.level, null, `${w}, car in lane ${own}, plow in lane ${lane}: stays behind`);
     assert.ok(
@@ -392,13 +393,13 @@ await test("closed loop: Rules passes a curb-lane plow on the left in clear weat
   for (const [id] of fast) WPG.edges.get(id).limit = 90 / 3.6;
   try {
     const ctx = william({ weather: "dry", s: 15 });
-    const p = ctx.fleet.addPlow(WPG.lane(EDGE, 1), 150, PLOW_MPS, [[NEXT, 1]]);
+    const p = ctx.fleet.plows.addPlow(WPG.lane(EDGE, 1), 150, PLOW_MPS, [[NEXT, 1]]);
     const q = await closedLoop(ctx, p, { limit: 60, settle: 25 });
     assert.equal(q.level, null, "stays behind");
     assert.ok(q.minGap > 70, `above 80 km/h, ${q.minGap.toFixed(1)} m back`);
     // (and traffic, which sees as far as it needs to, 100 m)
     const t = william({ weather: "dry", s: 15 });
-    const tp = t.fleet.addPlow(WPG.lane(EDGE, 1), 160, PLOW_MPS, [[NEXT, 1]]);
+    const tp = t.fleet.plows.addPlow(WPG.lane(EDGE, 1), 160, PLOW_MPS, [[NEXT, 1]]);
     const car = npc(t.world, t.fleet, { lane: 1, s: 40, v: 10, id: "fast_follower" });
     let gap = Infinity;
     for (let i = 0; i < 60 * 50; i++) {
@@ -424,7 +425,7 @@ await test("three lanes one way: a plow two lanes to the left still holds the ca
     world.placeOnLane(own, 5);
     world.route = new Route(routeFromLanes(WPG, [own, next], 5, Math.min(60, next.length - 5)), WPG, world.ego.spec);
     const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 2 });
-    const plow = fleet.addPlow(WPG.lane(E, 0), 45, PLOW_MPS, [[N, 0]]);
+    const plow = fleet.plows.addPlow(WPG.lane(E, 0), 45, PLOW_MPS, [[N, 0]]);
     assert.equal(plowRelation(world.ego, plow).lane, "left", "two lanes over");
     const r = await closedLoop({ world, fleet }, plow, { limit: 35, settle: 15 });
     assert.equal(r.level, null, `${w}: the car stays behind a plow two lanes to its left`);
@@ -432,18 +433,18 @@ await test("three lanes one way: a plow two lanes to the left still holds the ca
   // (the audit counts passing it two lanes over)
   const { world, fleet } = william({ weather: "snow" });
   const map3 = WPG;
-  fleet.addPlow(map3.lane(E, 0), 80, 0, [[N, 0]]);
+  fleet.plows.addPlow(map3.lane(E, 0), 80, 0, [[N, 0]]);
   const l = map3.lane(E, 2);
   for (let s = 30; s <= 120; s += 0.5) {
     const p = pointAt(l.pts, l.cum, s);
     Object.assign(world.ego, { x: p[0], y: p[1], psi: headingAt(l.pts, l.cum, s), v: 8 });
-    world.auditPlows();
+    for (const audit of hooks("audit", "afterFlagger")) audit(world);
   }
   assert.equal(world.violations.plow_right_passes, 1, "passed on the right, two lanes over");
   // (a working plow is never picked to pull into a parking space)
   const park = william({ weather: "snow", s: 20 });
   park.world.parked.slots.length = 0;
-  const p0 = park.fleet.addPlow(WPG.lane(EDGE, 1), 60, PLOW_MPS, [[NEXT, 1]]);
+  const p0 = park.fleet.plows.addPlow(WPG.lane(EDGE, 1), 60, PLOW_MPS, [[NEXT, 1]]);
   const lane = WPG.lane(EDGE, 1),
     at = pointAt(lane.pts, lane.cum, 100);
   park.world.parked.slots.push({ edge: EDGE, curb: "right", x: at[0], y: at[1], occupant: null, reserved: null });
@@ -454,13 +455,13 @@ await test("three lanes one way: a plow two lanes to the left still holds the ca
 
 await test("the audit: passing a plow on the right fails the drive, once a pass; one turning left may be passed on the right; moving back in too soon after passing on the left is noted", () => {
   const { world, fleet } = william({ weather: "snow", s: 20 });
-  const plow = fleet.addPlow(WPG.lane(EDGE, 0), 80, 0, [[NEXT, 0]]);
+  const plow = fleet.plows.addPlow(WPG.lane(EDGE, 0), 80, 0, [[NEXT, 0]]);
   const drive = (lane, from, to) => {
     const l = WPG.lane(EDGE, lane);
     for (let s = from; s <= to; s += 0.5) {
       const p = pointAt(l.pts, l.cum, s);
       Object.assign(world.ego, { x: p[0], y: p[1], psi: headingAt(l.pts, l.cum, s), v: 8 });
-      world.auditPlows();
+      for (const audit of hooks("audit", "afterFlagger")) audit(world);
     }
   };
   drive(1, 40, 120);
@@ -475,7 +476,7 @@ await test("the audit: passing a plow on the right fails the drive, once a pass;
   assert.equal(world.violations.plow_right_passes, 2, "not a plow turning left");
   plow.signal = null;
   // (past a plow in the curb lane on its left, then straight back into its lane 10 m ahead of it)
-  const curb = fleet.addPlow(WPG.lane(EDGE, 1), 220, 0, [[NEXT, 1]]);
+  const curb = fleet.plows.addPlow(WPG.lane(EDGE, 1), 220, 0, [[NEXT, 1]]);
   world.events.length = 0;
   drive(0, 180, 236);
   drive(1, 236, 240);
@@ -574,7 +575,7 @@ await test("a restored checkpoint keeps the plow, and the fleet's list of plows 
   };
   recorder.restore(0, target);
   const plow = ctx.fleet.vehicles.find(isPlow);
-  assert.ok(plow && ctx.fleet.plows.length === 1 && ctx.fleet.plows[0] === plow, "the same plow");
+  assert.ok(plow && ctx.fleet.plows.plows.length === 1 && ctx.fleet.plows.plows[0] === plow, "the same plow");
   ctx.autopilot.setEnabled(false);
   setWeather("dry");
 });
@@ -599,7 +600,7 @@ await test("the challenge, closed loop: Rules and the cautious agent stay 30 m b
     if (brain === "disguised") {
       plow.kind = "dump_truck";
       plow.v0 = PLOW_MPS / weather.speed;
-      fleet.plows = [];
+      fleet.plows.plows = [];
     }
     let level = null,
       minGap = Infinity;

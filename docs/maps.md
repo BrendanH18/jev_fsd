@@ -4,8 +4,9 @@ Use **Explore cities** in the simulator, then select a neighbourhood. Twelve map
 Canadian cities cover residential streets, downtown avenues, historic street grids, a harbour
 front, a warehouse district, a prairie main street and river crossings. Each is
 a neighbourhood-sized extract of real OpenStreetMap roads, lane tags, buildings and traffic controls. The processed
-packs are bundled, so these choices work without a map download. Three suggested drives are
-routed from the car's current position when the explorer opens; the world pauses while choosing.
+packs are bundled, so these choices work without a map download. The explorer looks for up to
+three suggested drives from the car's position. If the current spot has too few reachable
+destinations, try another street and reopen the explorer.
 
 | URL parameter | Neighbourhood | Directed segments | Signals | Stops | Buildings |
 |---|---|---:|---:|---:|---:|
@@ -78,6 +79,13 @@ new OSM data: it widened or narrowed the asphalt of 378 directed segments (all b
 some) and moved back the 202 signal and 2 stop lines set back from those streets' curbs. A fresh
 build of Kitsilano from its cached OSM with the fixed code gives the same roads, lanes and controls
 as its migrated pack, except for one stop line 1 cm away (packs store lengths to the centimetre).
+
+### Inspect the catalog a visitor sees
+
+Run `python3 scripts/build_demo.py --list-maps` to inspect the exact IDs the public demo accepts.
+The catalog reports whether each current pack was read, its projected extent and prepared counts.
+The counts measure graph edges and feature records. A row with `cached: false` cannot provide
+a map in the static build. Use the pack filename above to inspect or restore it before rebuilding.
 
 ### Rebuild and verify maps offline
 

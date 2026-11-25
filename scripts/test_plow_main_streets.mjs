@@ -42,7 +42,7 @@ let turns = 0,
   left = 0,
   forced = 0;
 for (const [i, lane] of plowLanes(KITS).entries()) {
-  const plow = fleet.addPlow(lane, Math.min(5, lane.length / 2), 0);
+  const plow = fleet.plows.addPlow(lane, Math.min(5, lane.length / 2), 0);
   // (walk the path on: every turn it planned, with what the junction offered)
   for (let hop = 0; hop < 4; hop++) {
     const edges = plow.path.edges;

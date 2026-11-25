@@ -1,5 +1,4 @@
 import { FEATURE_METRICS, hooks } from "../sim/features/index.js";
-import { setNightFlash } from "../sim/night-flash.js";
 
 const CHECKPOINT = hooks("checkpoint");
 const CHECKPOINT_SHARE = hooks("checkpointShare");
@@ -142,11 +141,8 @@ export class DriveRecorder {
       [
         "collision",
         "red_light",
-        "amber_light",
         "stop_sign",
         "failed_to_yield",
-        "merged_out_of_turn",
-        "close_pass",
         "contraflow_conflict",
         "reversing_conflict",
         "pothole_hit",
@@ -189,10 +185,8 @@ export class DriveRecorder {
       for (const field of Object.keys(object)) if (!(field in state[key])) delete object[field];
       Object.assign(object, state[key]);
     }
-    setNightFlash(target.world);
     target.fleet.world = target.world;
     target.world.crowd.world = target.world;
-    target.world.laneClosures.world = target.world;
     target.world.stepOuts.world = target.world;
     for (const restore of CHECKPOINT) restore(target.world, target.fleet);
     target.world.npcs = target.fleet.vehicles;

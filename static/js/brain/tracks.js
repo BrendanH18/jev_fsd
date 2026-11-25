@@ -12,31 +12,39 @@
 
 import { FEATURE_FLAG_TEXT } from "../sim/features/index.js";
 
-export const TRACKS = ["guarded", "open"];
+export const TRACKS = Object.freeze(["guarded", "open"]);
 export const DEFAULT_TRACK = "guarded";
 export const isTrack = (t) => TRACKS.includes(t);
-
-// The rejections the open track still enforces.
-const ENFORCED = new Set(["collision"]);
 
 // The open track's candidates: those the filter rejected for anything but a predicted collision become
 // eligible, flagged. A manoeuvre whose forward sim collides stays removed whatever check rejected it
 // first (a road closure's barricade, say, is checked before collisions). Returns the same shape as
 // simulateAll; `rejected` counts only what stays removed.
 export function openTrack(candidates, sim) {
+  const eligible = [];
+  const rejected = new Map();
   for (const c of candidates) {
-    if (c.sim?.collision) {
+    let check = typeof c.reject === "string" && c.reject && c.reject === c.reject.trim() ? c.reject : null;
+    if (c.sim?.collision || check === "collision") {
       c.eligible = false;
-      c.reject ||= "collision";
+      check ??= "collision";
+      c.reject = check;
       delete c.flagged;
-    } else if (c.reject && !ENFORCED.has(c.reject)) {
+    } else if (check) {
       c.eligible = true;
       c.flagged = true;
-    } else delete c.flagged;
+    } else {
+      // A malformed rejection cannot become an advisory and bypass the filter.
+      if (c.reject != null && c.reject !== "") c.eligible = false;
+      delete c.flagged;
+    }
+    if (c.eligible === true) eligible.push(c);
+    else {
+      const reason = c.reject == null ? String(c.reject) : (check ?? "unknown");
+      rejected.set(reason, (rejected.get(reason) ?? 0) + 1);
+    }
   }
-  const rejected = {};
-  for (const c of candidates) if (!c.eligible) rejected[c.reject] = (rejected[c.reject] || 0) + 1;
-  return { ...sim, eligible: candidates.filter((c) => c.eligible), rejected };
+  return { ...sim, eligible, rejected: Object.fromEntries(rejected) };
 }
 
 // Those of `eligible` that passed every check: what Rules and the built-in agents choose among.
@@ -45,14 +53,11 @@ export const unflagged = (eligible) => eligible.filter((c) => !c.flagged);
 // What each road-rule check means, for a driver reading a flagged manoeuvre: what the prediction found,
 // in the words the situation clauses use. A check without an entry reads by its id.
 export const FLAG_TEXT = {
-  bus_lane_driving: "it drives in a reserved bus lane while the lane is in effect",
   lane_change_gap: "the gap in the next lane is too small for this lane change",
   lane_change_too_late: "it changes lanes too late, too close to the turn or junction",
   must_return_to_route_lane: "it leaves no room to get back to the route's lane before that lane ends",
   visibility_stopping_distance: "it is too fast to stop within the distance the car can see",
   passes_cyclist_too_close: "it passes a cyclist with less than 1 m of room",
-  passes_cyclist_without_room: "it passes a cyclist with less than the legal passing distance",
-  crosses_into_oncoming_traffic: "it crosses into the oncoming lane into the way of oncoming traffic",
   off_road: "it leaves the road",
   passes_officer_stop: "it goes on past the line while the police officer signals stop",
   runs_red: "it crosses the stop line where the signal requires the car to stop",
@@ -75,12 +80,6 @@ export const FLAG_TEXT = {
   crosses_in_front_of_train: "it crosses the level crossing with a train coming",
   no_room_past_tracks: "it stops on the level crossing, with no room past the tracks",
   blocks_junction: "it enters a junction it has no room to clear",
-  merges_out_of_turn: "it merges at the lane closure out of turn",
-  takes_merge_turn: "it takes the turn of the car merging at the lane closure",
-  into_closed_lane: "it moves into a closed lane",
-  merges_early: "it leaves the closed lane before the merge point",
-  passes_plow_on_right: "it passes a snow plow on the right",
-  follows_plow_too_close: "it closes in behind a snow plow inside its stay-back distance",
   enters_unseen_junction: "it enters a junction before it can see that it is clear",
   passes_turn_round_point: "it drives past the point where the route turns round",
   passes_parking_space: "it drives past the parking space at the destination",
@@ -91,6 +90,6 @@ export const FLAG_TEXT = {
   ...FEATURE_FLAG_TEXT,
 };
 export const flagText = (reject) => {
-  if (typeof reject !== "string" || !reject) return "unknown road-rule check";
+  if (typeof reject !== "string" || !reject.trim()) return "unknown road-rule check";
   return Object.hasOwn(FLAG_TEXT, reject) ? FLAG_TEXT[reject] : reject.replaceAll("_", " ");
 };

@@ -30,9 +30,9 @@ export const challenge = {
   hidden: true,
   street: "13 Avenue SW",
   description:
-    "Cars are parked along both sides of 13 Avenue SW, a residential street in the Beltline with one lane each way. Between them, a car is about to back out of a driveway on your right as you come along.",
+    "Parked cars on 13 Avenue SW hide most of a driveway on your right. A car starts backing out through the gap.",
   lesson:
-    "Watch driveways for reversing lights. Slow down and give a car backing out room to finish; never try to squeeze past behind it.",
+    "Scan gaps between parked cars for reversing lights. Slow while the car is still in the driveway and hold clear of its reversing path until it has finished.",
 };
 
 export const RV_START_M = 110,

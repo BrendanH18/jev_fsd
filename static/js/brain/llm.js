@@ -12,7 +12,16 @@ import { agentDefinition, agentDefinitions } from "./registry.js";
 import { syncEndpointAgents, checkEndpoints, checkedStatus, defaultFrom } from "./endpoints.js";
 import { buildLlmPrompt } from "./llm-prompt.js";
 
-const TIMEOUT_MARGIN_MS = 750; // the server's own timeout fires first and explains itself
+import {
+  callModel,
+  checkCoordinates,
+  endpointTimeout,
+  invalidRequest,
+  isObject,
+  limitedText,
+  own,
+  replyError,
+} from "./model-contract.js";
 
 export class LlmBrain {
   constructor(endpoint) {
@@ -20,37 +29,34 @@ export class LlmBrain {
     this.name = endpoint.id;
     this.questionDriven = true; // like Jev: nothing to ask means a local decision, no call
     this.transport = api; // the server call; a model recording (recording.js) swaps it
-    this.timeoutMs = Math.round((endpoint.timeout_s || 10) * 1000) + TIMEOUT_MARGIN_MS;
+    this.timeoutMs = endpointTimeout(endpoint.timeout_s, 10);
   }
 
-  async decide(snap, _eligible, request, signal) {
-    const started = performance.now();
+  async decide(snap, eligible, request, signal) {
+    signal?.throwIfAborted();
+    const body = { endpoint: this.endpoint.name, tick: snap.tick ?? 0, epoch: request.epoch ?? 0 };
+    checkCoordinates(body);
     const { messages, expect } = buildLlmPrompt(snap, request);
-    const res = await this.transport(
+    if (!Object.keys(expect).length) invalidRequest("at least one question is required");
+    if (expect.candidate?.some((id) => !eligible.some((c) => c.id === id)))
+      invalidRequest("a candidate choice is outside the eligible set");
+    const { response, meta, trace, invalid } = await callModel(
+      this,
       "/api/llm/decide",
-      { endpoint: this.endpoint.name, tick: snap.tick || 0, epoch: request.epoch || 0, messages, expect },
-      { signal },
+      { ...body, messages, expect },
+      signal,
     );
-    const meta = {
-      ...res?.meta,
-      source: this.name,
-      live_call: true,
-      round_trip_ms: Math.round(performance.now() - started),
-    };
-    // The call happened, so the error carries its tokens, cost and trace into the Rules fallback.
-    const invalid = (reason) => {
-      throw Object.assign(new Error(`invalid output: ${reason}`), { meta, trace: res?.trace });
-    };
-    const raw = res?.answer;
-    if (res?.invalid || !raw || typeof raw !== "object" || Array.isArray(raw))
-      invalid(res?.invalid || res?.error || "missing answer object");
+    const raw = own(response, "answer");
+    if (!isObject(raw)) invalid(replyError(response) ?? "missing answer object");
     const answer = {};
     for (const [field, choices] of Object.entries(expect)) {
-      if (choices.includes(raw[field])) answer[field] = raw[field];
+      const choice = own(raw, field);
+      if (choices.includes(choice)) answer[field] = choice;
       else if (field === "motion" || field === "candidate") invalid(`missing or invalid ${field}`);
     }
-    if (typeof raw.reason === "string") answer.reason = raw.reason.slice(0, 200);
-    return llmDecision(answer, request, meta, res.trace);
+    const reason = own(raw, "reason");
+    if (typeof reason === "string") answer.reason = limitedText(reason, 200);
+    return llmDecision(answer, request, meta, trace);
   }
 }
 
@@ -60,11 +66,16 @@ export function llmDecision(answer, request, meta, trace = null) {
   const local = request.local || {};
   const pick = (choice) => ({ type: "choice", choice, probabilities: { [choice]: 1 }, confidence: null });
   const answers = { ...local };
-  if (answer.motion && !local.motion) answers.motion = pick(answer.motion);
-  if (answer.candidate && !local.vector) answers.vector = pick(answer.candidate);
-  if (answer.headlights && !local.headlights) answers.headlights = pick(answer.headlights);
-  if (answer.route && !local.route) answers.route = pick(answer.route);
-  if (answer.reason) meta = { ...meta, reason: answer.reason };
+  for (const [field, question] of [
+    ["motion", "motion"],
+    ["candidate", "vector"],
+    ["headlights", "headlights"],
+    ["route", "route"],
+  ]) {
+    const choice = own(answer, field);
+    if (typeof choice === "string" && choice && !Object.hasOwn(answers, question)) answers[question] = pick(choice);
+  }
+  if (typeof own(answer, "reason") === "string" && answer.reason) meta = { ...meta, reason: answer.reason };
   return {
     motion: answers.motion?.choice ?? "drive",
     candidateId: answers.vector?.choice ?? null,
@@ -78,7 +89,7 @@ export function llmDecision(answer, request, meta, trace = null) {
 // Register the endpoints listed in /api/status (or returned by the setup dialog). Safe to call more
 // than once: changed endpoints are updated and endpoints no longer configured are removed. The
 // public demo has no server, so it lists none. Returns the ids that were added, changed or removed.
-export const registerLlmAgents = (llm) => syncEndpointAgents("llm", llm?.endpoints || [], llmBrainFor);
+export const registerLlmAgents = (llm) => syncEndpointAgents("llm", llm?.endpoints ?? [], llmBrainFor);
 export const llmBrainFor = (id) => {
   const e = agentDefinition(id)?.llm;
   return e ? new LlmBrain(e) : null;

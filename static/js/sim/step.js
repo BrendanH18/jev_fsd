@@ -29,7 +29,6 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
     throw new RangeError("Invalid ego pose after driver step");
   world.parked.step(dt, world);
   for (const step of AFTER_PARKED) step(world, fleet, dt);
-  world.laneClosures.step(dt);
   for (const step of AFTER_MERGE) step(world, fleet, dt);
   for (const step of AFTER_OUTAGES) step(world, fleet, dt);
   world.stepOuts.step(dt);
