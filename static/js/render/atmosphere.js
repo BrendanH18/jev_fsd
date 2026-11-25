@@ -14,20 +14,32 @@ export const lighting = {
 
 // Materials that glow after dark (lamp heads, light pools): their emissive intensity (or opacity)
 // follows `lighting.night` between a day and a night value.
-const nightMaterials = [];
+const nightMaterials = new Map();
 export function glowsAtNight(material, day, night, prop = "emissiveIntensity") {
-  nightMaterials.push({ material, day, night, prop });
+  let properties = nightMaterials.get(material);
+  if (!properties) {
+    properties = new Map();
+    nightMaterials.set(material, properties);
+    const release = () => {
+      material.removeEventListener("dispose", release);
+      nightMaterials.delete(material);
+    };
+    material.addEventListener("dispose", release);
+  }
+  properties.set(prop, { day, night });
   material[prop] = day + (night - day) * lighting.night.value;
   return material;
 }
 export function updateNightMaterials() {
   const k = lighting.night.value;
-  for (const { material, day, night, prop } of nightMaterials) material[prop] = day + (night - day) * k;
+  for (const [material, properties] of nightMaterials)
+    for (const [prop, { day, night }] of properties) material[prop] = day + (night - day) * k;
 }
 
 // Sun direction in Three.js coordinates (x east, y up, z south) and its elevation (rad). (A location
 // with a `day` of the year, from a sun glare challenge's clock, has the sun of that date: sim/sun-glare.js)
 export function sunPosition(hour, location = null) {
+  if (!Number.isFinite(hour)) hour = 15.5;
   const {
     elevation: el,
     H,
@@ -96,6 +108,7 @@ function keyed(elDeg) {
 export function atmosphereFor(hour, weather = "dry", location = null) {
   if (!Object.hasOwn(WEATHER, weather)) weather = "dry";
   const W = WEATHER[weather];
+  if (!Number.isFinite(hour)) hour = 15.5;
   const sun = sunPosition(hour, location);
   const elDeg = (sun.elevation * 180) / Math.PI;
   const sky = keyed(elDeg);

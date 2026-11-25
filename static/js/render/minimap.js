@@ -10,44 +10,68 @@ export class Minimap {
     this.map = map;
     this._onClearRoute = onClearRoute;
     this.clearButton = clearButton || canvas.parentElement?.querySelector("#clear-route") || null;
-    this.clearButton?.addEventListener("click", () => this._onClearRoute?.());
-    const [x0, y0, x1, y1] = map.extent;
+    const [x0, , , y1] = map.extent;
     this.x0 = x0;
     this.y1 = y1;
     this.extent = map.extent;
-    const w = canvas.width,
-      h = canvas.height;
-    this.scale = Math.min(w / (x1 - x0), h / (y1 - y0));
-    this.ox = (w - (x1 - x0) * this.scale) / 2;
-    this.oy = (h - (y1 - y0) * this.scale) / 2;
     this.roads = document.createElement("canvas");
+    this._onPick = onClick;
+    this.syncSize();
+    this._events = new AbortController();
+    const { signal } = this._events;
+    this.clearButton?.addEventListener("click", () => this._onClearRoute?.(), { signal });
+    canvas.addEventListener(
+      "click",
+      (ev) => {
+        const rect = canvas.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0)) return;
+        const px = (ev.clientX - rect.left) * (canvas.width / rect.width);
+        const py = (ev.clientY - rect.top) * (canvas.height / rect.height);
+        this.pick(px, py);
+      },
+      { signal },
+    );
+  }
+
+  syncSize() {
+    const { width: w, height: h } = this.canvas;
+    if (this._events?.signal.aborted || (w === this.width && h === this.height)) return;
+    this.width = w;
+    this.height = h;
+    this.routePoints = null;
+    this.routePath = null;
+    const [x0, y0, x1, y1] = this.extent;
+    const dx = x1 - x0,
+      dy = y1 - y0;
+    this.scale = dx > 0 && dy > 0 ? Math.min(w / dx, h / dy) : 0;
+    this.ox = this.scale > 0 ? (w - dx * this.scale) / 2 : 0;
+    this.oy = this.scale > 0 ? (h - dy * this.scale) / 2 : 0;
     this.roads.width = w;
     this.roads.height = h;
-    this.drawRoads();
-    canvas.addEventListener("click", (ev) => {
-      const rect = canvas.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const px = (ev.clientX - rect.left) * (canvas.width / rect.width);
-      const py = (ev.clientY - rect.top) * (canvas.height / rect.height);
-      this.pick(px, py);
-    });
-    this._onPick = onClick;
+    if (this.scale > 0) this.drawRoads();
+  }
+
+  dispose() {
+    this._events.abort();
+    this._onPick = null;
+    this._onClearRoute = null;
+    this.scale = 0;
+    if (this.clearButton) this.clearButton.hidden = true;
+    this.roads.width = this.roads.height = 0;
+    this.routePoints = null;
+    this.routePath = null;
   }
 
   // Sets a destination at a canvas pixel when it lies on the map, for pointer and keyboard alike.
   pick(px, py) {
-    const [x0, y0, x1, y1] = this.extent;
-    const [x, y] = this.toWorld(px, py);
-    if (!(x >= x0 && x <= x1 && y >= y0 && y <= y1)) return false;
-    this._onPick([x, y]);
-    return true;
+    return this.pickKeyboard(px, py);
   }
 
   // The keyboard marker is clamped to pxBounds(), whose edges can convert back a rounding step
   // outside the extent, so it is checked in pixels and clamped to the extent in world coordinates.
   pickKeyboard(px, py) {
     const [left, top, right, bottom] = this.pxBounds();
-    if (!(px >= left && px <= right && py >= top && py <= bottom)) return false;
+    if (!(this._onPick && this.scale > 0 && px >= left && px <= right && py >= top && py <= bottom)) return false;
     const [x0, y0, x1, y1] = this.extent;
     const [x, y] = this.toWorld(px, py);
     this._onPick([Math.min(x1, Math.max(x0, x)), Math.min(y1, Math.max(y0, y))]);
@@ -56,6 +80,8 @@ export class Minimap {
 
   // The map's projected rectangle in canvas pixels, inside any letterbox.
   pxBounds() {
+    this.syncSize();
+    if (!this.scale) return [0, 0, 0, 0];
     const [x0, y0, x1, y1] = this.extent;
     return [this.ox, this.oy, this.ox + (x1 - x0) * this.scale, this.oy + (y1 - y0) * this.scale];
   }
@@ -81,6 +107,7 @@ export class Minimap {
 
   drawRoads() {
     const c = this.roads.getContext("2d");
+    if (!c) return;
     c.fillStyle = "#11151c";
     c.fillRect(0, 0, this.roads.width, this.roads.height);
     const [x0, y0, x1, y1] = this.extent;
@@ -96,7 +123,7 @@ export class Minimap {
         c.fillStyle = area.kind === "water" ? "#213b51" : "#253b31";
         c.beginPath();
         for (const ring of area.rings) this.trace(c, ring);
-        c.fill();
+        c.fill("evenodd");
       }
       if (area.lines?.length) {
         c.strokeStyle = "#325979";
@@ -107,7 +134,7 @@ export class Minimap {
       }
     }
     c.fillStyle = "#1c222c";
-    for (const b of this.map.pack.buildings) {
+    for (const b of this.map.pack.buildings ?? []) {
       c.beginPath();
       this.trace(c, b.pts);
       c.fill();
@@ -167,12 +194,15 @@ export class Minimap {
   }
 
   draw({ ego, npcs = [], route = null, destination = null }) {
+    if (this._events.signal.aborted) return;
+    this.syncSize();
     const c = this.ctx;
-    c.drawImage(this.roads, 0, 0);
     if (this.clearButton) {
-      const shouldHide = !route || !this._onClearRoute;
+      const shouldHide = !this.scale || !route || !this._onClearRoute;
       if (this.clearButton.hidden !== shouldHide) this.clearButton.hidden = shouldHide;
     }
+    if (!c || !this.scale) return;
+    c.drawImage(this.roads, 0, 0);
     if (route) {
       if (this.routePoints !== route.pts) {
         this.routePoints = route.pts;
@@ -193,8 +223,14 @@ export class Minimap {
       this.routePoints = null;
       this.routePath = null;
     }
+    const [left, top, right, bottom] = this.pxBounds();
+    c.save();
+    c.beginPath();
+    c.rect(left, top, right - left, bottom - top);
+    c.clip();
     for (const n of npcs) {
       const [px, py] = this.toPx(n.x, n.y);
+      if (!(px >= left && px <= right && py >= top && py <= bottom)) continue;
       if (EMERGENCY_KINDS.has(n.kind)) {
         if (n.siren) {
           c.strokeStyle = "rgba(255, 79, 216, 0.65)";
@@ -220,7 +256,7 @@ export class Minimap {
         c.fillRect(px - 1.5, py - 1.5, 3, 3);
       }
     }
-    if (destination) {
+    if (destination?.every(Number.isFinite)) {
       const [px, py] = this.toPx(destination[0], destination[1]);
       c.strokeStyle = "#57d27f";
       c.lineWidth = 2;
@@ -230,7 +266,7 @@ export class Minimap {
       c.fillStyle = "#57d27f";
       c.fillRect(px - 1, py - 1, 2, 2);
     }
-    if (ego) {
+    if (ego && [ego.x, ego.y, ego.psi].every(Number.isFinite)) {
       const [px, py] = this.toPx(ego.x, ego.y);
       c.save();
       c.translate(px, py);
@@ -248,6 +284,7 @@ export class Minimap {
       c.fill();
       c.restore();
     }
+    c.restore();
     this.drawCompass(c);
   }
 }

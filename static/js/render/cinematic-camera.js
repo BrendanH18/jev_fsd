@@ -21,6 +21,7 @@ export class CinematicCamera {
     this.index = -1;
     this.elapsed = 0;
     this.anchor = null;
+    this.trackDirection = null;
     this.side = 1;
     this.orbitStart = 0;
   }
@@ -38,8 +39,10 @@ export class CinematicCamera {
       this.side = -this.side;
       const fx = Math.cos(ego.psi),
         fy = Math.sin(ego.psi);
-      const lead = Math.min(45, Math.max(18, 18 + Math.abs(ego.v || 0) * 2.5));
+      const speed = Number.isFinite(ego.v) ? ego.v : 0;
+      const lead = Math.min(45, 18 + Math.abs(speed) * 2.5) * (speed < 0 ? -1 : 1);
       const lateral = 5.5 * this.side;
+      this.trackDirection = speed < 0 ? [-fx, -fy] : [fx, fy];
       this.anchor = [ego.x + fx * lead - fy * lateral, ego.y + fy * lead + fx * lateral, 1.1];
     } else this.anchor = null;
     if (shot.name === "aerial") this.orbitStart = ego.psi + Math.PI * 0.75;
@@ -50,14 +53,13 @@ export class CinematicCamera {
     const shot = this.shot;
     if (this.elapsed >= shot.max) return true;
     if (this.elapsed < shot.min || shot.name !== "trackside") return false;
-    const fx = Math.cos(ego.psi),
-      fy = Math.sin(ego.psi);
+    const [fx, fy] = this.trackDirection;
     const ahead = (this.anchor[0] - ego.x) * fx + (this.anchor[1] - ego.y) * fy;
     return ahead < -22;
   }
 
   pose(ego, dt = 0, height = 1.45) {
-    if (this.index >= 0) this.elapsed += Math.max(0, dt);
+    if (this.index >= 0 && Number.isFinite(dt) && dt > 0) this.elapsed += dt;
     let cut = false;
     if (this.index < 0 || this.finished(ego)) {
       this.cut(ego);
@@ -92,4 +94,4 @@ export class CinematicCamera {
   }
 }
 
-export const CINEMATIC_SHOTS = SHOTS.map((shot) => shot.name);
+export const CINEMATIC_SHOTS = Object.freeze(SHOTS.map((shot) => shot.name));

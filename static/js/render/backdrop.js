@@ -11,19 +11,19 @@ const ARC = [-78, 72]; // degrees from north, clockwise (west is negative)
 const SEGMENTS = 360;
 
 // Ridge height (m, at RADIUS) at an azimuth: a few named-peak bumps plus rougher noise.
+const PEAKS = [
+  [-62, 180, 14],
+  [-40, 260, 10],
+  [-18, 330, 9],
+  [-4, 290, 7],
+  [8, 360, 8],
+  [24, 300, 10],
+  [44, 250, 12],
+  [62, 190, 14],
+];
 function ridge(az) {
-  const peaks = [
-    [-62, 180, 14],
-    [-40, 260, 10],
-    [-18, 330, 9],
-    [-4, 290, 7],
-    [8, 360, 8],
-    [24, 300, 10],
-    [44, 250, 12],
-    [62, 190, 14],
-  ];
   let h = 90 + 40 * Math.sin(az * 0.21) + 25 * Math.sin(az * 0.53 + 1.3);
-  for (const [c, height, width] of peaks)
+  for (const [c, height, width] of PEAKS)
     h = Math.max(h, height * Math.exp(-(((az - c) / width) ** 2)) + 60 * Math.exp(-(((az - c) / (width * 2.2)) ** 2)));
   h += 18 * Math.sin(az * 1.7 + 0.4) + 9 * Math.sin(az * 3.9 + 2.1) + 4 * Math.sin(az * 9.1);
   // taper off at the ends of the range
@@ -91,6 +91,7 @@ export function buildBackdrop(center) {
       }`,
   });
   const mesh = new THREE.Mesh(geo, mat);
+  mesh.matrixAutoUpdate = false;
   mesh.frustumCulled = false;
   mesh.renderOrder = -90; // just after the sky, before anything nearer
   return mesh;
@@ -103,7 +104,7 @@ export function tintBackdrop(mesh, a) {
   u.horizon.value.copy(a.fogColor);
   u.light.value = 0.12 + 0.88 * a.day;
   u.haze.value = 0.38 + 0.3 * (1 - a.day);
-  const hidden = { fog: 1, rain: 0.85, snow: 0.8 }[a.weather] || 0;
+  const hidden = a.weather === "fog" ? 1 : a.weather === "rain" ? 0.85 : a.weather === "snow" ? 0.8 : 0;
   u.visible.value = 1 - hidden;
   u.snowCover.value = a.weather === "snow" ? 1 : 0.12;
 }

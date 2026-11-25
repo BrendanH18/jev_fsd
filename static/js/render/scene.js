@@ -119,7 +119,7 @@ function skyMaterial() {
         float sum = 0.0, amp = 0.5;
         mat2 turn = mat2(1.6, 1.2, -1.2, 1.6);
         for (int i = 0; i < 5; i++) {
-          sum += amp * mix(0.5, vnoise(p), 1.0 - smoothstep(0.2, 0.5, fw));
+          sum += amp * (fw < 0.5 ? mix(0.5, vnoise(p), 1.0 - smoothstep(0.2, 0.5, fw)) : 0.5);
           p = turn * p; amp *= 0.5; fw *= 2.0;
         }
         return sum;
@@ -132,7 +132,7 @@ function skyMaterial() {
         vec2 across = normalize(d.xz + 1e-5), sunFlat = normalize(sunDir.xz + 1e-5);
         float toward = max(dot(across, sunFlat), 0.0);
         col += glowColor * (0.25 + 0.75 * pow(toward, 4.0)) * exp(-max(h, 0.0) * 7.0);
-        col = mix(col, groundColor, smoothstep(0.0, -0.08, h));
+        col = mix(col, groundColor, 1.0 - smoothstep(-0.08, 0.0, h));
         float s = max(dot(d, sunDir), 0.0);
         col += sunColor * sunGlow * (pow(s, 1400.0) * 40.0 + pow(s, 60.0) * 0.35 + pow(s, 6.0) * 0.12);
         if (stars > 0.0 && h > 0.0) {
@@ -182,7 +182,7 @@ export class SceneView {
     setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
 
     this.scene = new THREE.Scene();
-    this.sceneryLODs = [];
+    this.sceneryLODs = new Set();
     this.scene.background = new THREE.Color();
     this.scene.fog = new THREE.FogExp2(0xffffff, 0.0016);
     this.camera = new THREE.PerspectiveCamera(58, 1, 0.3, 6000);
@@ -193,6 +193,10 @@ export class SceneView {
     this.look = { exposure: 0, contrast: 0, saturation: 0, vignette: 0 };
     this.camPos = new THREE.Vector3();
     this.camLook = new THREE.Vector3();
+    this.drawingBufferSize = new THREE.Vector2();
+    this.shadowCenter = new THREE.Vector3();
+    this.shadowSnap = new THREE.Vector3();
+    this.rendererSize = new THREE.Vector2();
 
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(4500, 32, 16), skyMaterial());
     this.sky.renderOrder = LAYER.sky;
@@ -229,18 +233,15 @@ export class SceneView {
 
     const [x0, y0, x1, y1] = extent;
     const size = Math.max(x1 - x0, y1 - y0) + 6000;
+    const grassMap = grassTexture().clone();
     const grassMat = snowable(
-      withMacroVariation(
-        new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, metalness: 0 }),
-        0.06,
-        0.3,
-      ),
+      withMacroVariation(new THREE.MeshStandardMaterial({ map: grassMap, roughness: 0.95, metalness: 0 }), 0.06, 0.3),
       "grass",
     );
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), grassMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((x0 + x1) / 2, 0, -(y0 + y1) / 2);
-    grassMat.map.repeat.set(size / 14, size / 14);
+    grassMap.repeat.set(size / 14, size / 14);
     groundLayer(ground, LAYER.grass);
     this.scene.add(ground);
     this.backdrop = buildBackdrop(new THREE.Vector3((x0 + x1) / 2, 0, -(y0 + y1) / 2));
@@ -256,16 +257,20 @@ export class SceneView {
   setQuality(name) {
     this.quality = Object.hasOwn(QUALITY, name) ? name : "high";
     const q = QUALITY[this.quality];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
+    const dpr = window.devicePixelRatio;
+    const pixelRatio = Number.isFinite(dpr) && dpr > 0 ? Math.min(dpr, q.pixelRatio) : 1;
+    if (this.renderer.getPixelRatio() !== pixelRatio) this.renderer.setPixelRatio(pixelRatio);
     if (this.sun.shadow.mapSize.x !== q.shadowMap) {
       this.sun.shadow.mapSize.set(q.shadowMap, q.shadowMap);
-      if (this.sun.shadow.map) {
-        this.sun.shadow.map.dispose();
-        this.sun.shadow.map = null;
-      }
+      this.sun.shadow.dispose();
+      this.sun.shadow.map = null;
+      this.sun.shadow.mapPass = null;
+      this.sun.shadow.needsUpdate = true;
     }
-    if (q.post && !this.post) this.post = new PostFX(this.renderer, this.scene, this.camera, { ao: q.ao });
-    if (q.post && this.post) this.post.setAO(q.ao);
+    if (q.post) {
+      if (this.post) this.post.setAO(q.ao);
+      else this.post = new PostFX(this.renderer, this.scene, this.camera, { ao: q.ao });
+    }
     if (!q.post && this.post) {
       this.post.dispose();
       this.post = null;
@@ -274,7 +279,10 @@ export class SceneView {
     this.reflection.resolutionScale = q.reflectionScale;
     this.applyCoverage();
     this.resize();
-    if (this.atmosphere) this.setAtmosphere(this.atmosphere);
+    if (this.atmosphere) {
+      this.post?.setBloom(this.atmosphere.bloom.strength, this.atmosphere.bloom.threshold);
+      this.applyLook();
+    }
     return this.quality;
   }
 
@@ -311,7 +319,11 @@ export class SceneView {
     lighting.wet.value = a.wet;
     lighting.sunDir.value.copy(a.sun.dir);
     updateNightMaterials();
-    if (this.environmentWeather !== a.weather || this.environmentSun.dot(a.sun.dir) < ENVIRONMENT_SUN_DOT) {
+    if (
+      !this.environmentTarget ||
+      this.environmentWeather !== a.weather ||
+      this.environmentSun.dot(a.sun.dir) < ENVIRONMENT_SUN_DOT
+    ) {
       const next = this.environmentGenerator.fromScene(this.environmentScene, 0.02, 0.1, 1000);
       this.scene.environment = next.texture;
       this.environmentTarget?.dispose();
@@ -325,7 +337,7 @@ export class SceneView {
   // Exposure in stops and grade offsets chosen in photo mode, layered on the current atmosphere.
   setLook(changes = {}) {
     for (const [key, value] of Object.entries(changes))
-      if (key in this.look && Number.isFinite(value)) this.look[key] = value;
+      if (Object.hasOwn(this.look, key) && Number.isFinite(value)) this.look[key] = value;
     this.applyLook();
     return { ...this.look };
   }
@@ -333,7 +345,7 @@ export class SceneView {
   applyLook() {
     const a = this.atmosphere;
     if (!a) return;
-    this.renderer.toneMappingExposure = a.exposure * 2 ** this.look.exposure;
+    this.renderer.toneMappingExposure = a.exposure * 2 ** THREE.MathUtils.clamp(this.look.exposure, -16, 16);
     if (this.post) {
       const g = a.grade;
       this.post.setGrade({
@@ -357,11 +369,11 @@ export class SceneView {
   followShadow(x, y) {
     const { fwd, right, up } = this._basis;
     const texel = (2 * SHADOW_HALF) / this.sun.shadow.mapSize.x;
-    const c = toThree(x, y, 0);
+    const c = this.shadowCenter.set(x, 0, -y);
     const a = Math.round(c.dot(right) / texel) * texel;
     const b = Math.round(c.dot(up) / texel) * texel;
     const f = c.dot(fwd);
-    const snapped = right.clone().multiplyScalar(a).addScaledVector(up, b).addScaledVector(fwd, f);
+    const snapped = this.shadowSnap.copy(right).multiplyScalar(a).addScaledVector(up, b).addScaledVector(fwd, f);
     this.sun.target.position.copy(snapped);
     this.sun.position.copy(snapped).addScaledVector(this.keyDir, 400);
     this.sun.target.updateMatrixWorld();
@@ -370,10 +382,13 @@ export class SceneView {
   resize() {
     const w = Math.max(1, window.innerWidth),
       h = Math.max(1, window.innerHeight);
-    this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
-    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const current = this.renderer.getSize(this.rendererSize);
+    if (current.x !== w || current.y !== h) this.renderer.setSize(w, h, false);
+    if (this.camera.aspect !== w / h) {
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+    }
+    const size = this.renderer.getDrawingBufferSize(this.drawingBufferSize);
     if (this.post) this.post.setSize(size.x, size.y);
     if (this.reflection) this.reflection.setSize(size.x, size.y);
   }
@@ -384,7 +399,7 @@ export class SceneView {
 
   setCamera(mode) {
     this.mode = CAMERA_MODES.includes(mode) ? mode : "chase";
-    this.camPos.set(0, 0, 0); // snap rather than swoop between very different views
+    this.snapCamera = true; // snap rather than swoop between very different views
     this.cameraPitch = 0;
     this.cameraRoll = 0;
     if (this.mode === "cinematic") this.cinematic.reset();
@@ -392,46 +407,51 @@ export class SceneView {
   }
 
   updateCamera(ego, dt) {
+    dt = Number.isFinite(dt) && dt > 0 ? dt : 0;
     const fx = Math.cos(ego.psi),
       fy = Math.sin(ego.psi);
-    let target,
-      look,
-      up = new THREE.Vector3(0, 1, 0),
-      lerp = 1 - 0.002 ** dt;
-    this.camera.fov = this.mode === "hood" ? 64 : 58;
+    const target = (this.cameraTarget ??= new THREE.Vector3());
+    const look = (this.cameraAim ??= new THREE.Vector3());
+    const up = (this.cameraUp ??= new THREE.Vector3()).set(0, 1, 0);
+    let lerp = 1 - 0.002 ** dt;
+    let fov = this.mode === "hood" ? 64 : 58;
     if (this.mode === "cinematic") {
       const shot = this.cinematic.pose(ego, dt, this.vehicleHeight);
-      target = toThree(...shot.position);
-      look = toThree(...shot.look);
-      this.camera.fov = shot.fov;
-      if (shot.cut) this.camPos.set(0, 0, 0);
+      target.set(shot.position[0], shot.position[2], -shot.position[1]);
+      look.set(shot.look[0], shot.look[2], -shot.look[1]);
+      fov = shot.fov;
+      if (shot.cut) this.snapCamera = true;
       lerp = 1 - shot.lag ** dt;
     } else if (this.mode === "orbit") {
       const pose = this.orbit.pose(ego, this.vehicleHeight);
-      target = toThree(pose.x, pose.y, pose.z);
-      look = toThree(...pose.look);
+      target.set(pose.x, pose.z, -pose.y);
+      look.set(pose.look[0], pose.look[2], -pose.look[1]);
       lerp = 1; // Direct manipulation: no spring lag while dragging, still follows the car.
     } else if (this.mode === "top") {
-      target = toThree(ego.x, ego.y, 130);
-      look = toThree(ego.x, ego.y, 0);
-      up = new THREE.Vector3(0, 0, -1);
+      target.set(ego.x, 130, -ego.y);
+      look.set(ego.x, 0, -ego.y);
+      up.set(0, 0, -1);
       lerp = 1 - 0.02 ** dt;
     } else if (this.mode === "far") {
-      target = toThree(ego.x - fx * 28, ego.y - fy * 28, 17);
-      look = toThree(ego.x + fx * 12, ego.y + fy * 12, 0.5);
+      target.set(ego.x - fx * 28, 17, fy * 28 - ego.y);
+      look.set(ego.x + fx * 12, 0.5, -ego.y - fy * 12);
     } else if (this.mode === "hood") {
       // at the base of the windshield, looking down the road over the hood
       const hood = this.vehicleCamera || { x: 2.05, y: 1.32 };
-      target = toThree(ego.x + fx * hood.x, ego.y + fy * hood.x, hood.y);
-      look = toThree(ego.x + fx * 30, ego.y + fy * 30, hood.y - 0.42);
+      target.set(ego.x + fx * hood.x, hood.y, -ego.y - fy * hood.x);
+      look.set(ego.x + fx * 30, hood.y - 0.42, -ego.y - fy * 30);
       if (this.cameraMotion !== false) {
         const smooth = 1 - Math.exp(-8 * dt);
         this.cameraPitch =
           (this.cameraPitch || 0) +
-          (THREE.MathUtils.clamp((ego.ax || 0) * 0.006, -0.035, 0.025) - (this.cameraPitch || 0)) * smooth;
+          (THREE.MathUtils.clamp((Number.isFinite(ego.ax) ? ego.ax : 0) * 0.006, -0.035, 0.025) -
+            (this.cameraPitch || 0)) *
+            smooth;
         this.cameraRoll =
           (this.cameraRoll || 0) +
-          (THREE.MathUtils.clamp((ego.latAccel || 0) * 0.005, -0.03, 0.03) - (this.cameraRoll || 0)) * smooth;
+          (THREE.MathUtils.clamp((Number.isFinite(ego.latAccel) ? ego.latAccel : 0) * 0.005, -0.03, 0.03) -
+            (this.cameraRoll || 0)) *
+            smooth;
         look.y += this.cameraPitch * 30;
         up.set(Math.sin(ego.psi) * this.cameraRoll, 1, Math.cos(ego.psi) * this.cameraRoll).normalize();
       } else {
@@ -441,14 +461,15 @@ export class SceneView {
       lerp = 1;
     } else {
       const extra = Math.max(0, (ego.spec?.length || 4.5) - 4.5);
-      target = toThree(
+      target.set(
         ego.x - fx * (8 + extra),
-        ego.y - fy * (8 + extra),
         3.1 + Math.max(0, (this.vehicleHeight || 1.45) - 1.45),
+        fy * (8 + extra) - ego.y,
       );
-      look = toThree(ego.x + fx * 8, ego.y + fy * 8, 1.1);
+      look.set(ego.x + fx * 8, 1.1, -ego.y - fy * 8);
     }
-    if (this.camPos.lengthSq() === 0) {
+    if (this.snapCamera !== false) {
+      this.snapCamera = false;
       this.camPos.copy(target);
       this.camLook.copy(look);
     }
@@ -457,18 +478,26 @@ export class SceneView {
     this.camera.position.copy(this.camPos);
     this.camera.up.copy(up);
     this.camera.lookAt(this.camLook);
-    this.camera.updateProjectionMatrix();
+    if (this.camera.fov !== fov) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.sky.position.copy(this.camera.position);
     this.followShadow(ego.x, ego.y);
   }
 
   render(dt = 0, photoMode = false) {
-    lighting.time.value += dt;
+    if (Number.isFinite(dt) && dt > 0) lighting.time.value += dt;
     this.sky.material.uniforms.cloudTime.value = lighting.time.value;
     this.camera.updateMatrixWorld();
     // Select detail once from the viewing camera. A mirrored camera must not change the meshes
     // between the reflection, shadow and main passes within the same frame.
-    for (const lod of this.sceneryLODs) lod.update(this.camera, photoMode);
+    for (const lod of this.sceneryLODs) {
+      let root = lod;
+      while (root.parent) root = root.parent;
+      if (root === this.scene) lod.update(this.camera, photoMode);
+      else this.sceneryLODs.delete(lod);
+    }
     const shadows = this.renderer.shadowMap.autoUpdate;
     try {
       // Wet frames update shadows in the first scene pass (the reflection), then reuse those same
@@ -488,24 +517,25 @@ export class SceneView {
     object.traverse((child) => {
       if (child.isLOD) {
         child.autoUpdate = false;
-        this.sceneryLODs.push(child);
+        this.sceneryLODs.add(child);
       }
     });
     this.scene.add(object);
-    this.applyCoverage();
+    this.applyCoverage(object);
   }
 
   // Cut-out materials marked coverageEdges use alpha to coverage only where the scene target is
   // multisampled. On a single-sample target (Ultra keeps one for ambient occlusion) Three no longer
   // discards the partly transparent edge texels, and they sparkle across every tree crown. The wet-road
   // mirror pass draws the same materials, so it takes the main target's sample count.
-  applyCoverage() {
+  applyCoverage(root = this.scene) {
     const on = this.post ? this.post.sceneRT.samples > 0 : !!this.renderer.getContextAttributes?.()?.antialias;
     this.reflection?.setSamples(this.post ? this.post.sceneRT.samples : 0);
-    this.scene.traverse((o) => {
+    root.traverse((o) => {
       if (!o.material) return;
+
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-        if (m.userData.coverageEdges && m.alphaToCoverage !== on) {
+        if (m?.userData.coverageEdges && m.alphaToCoverage !== on) {
           m.alphaToCoverage = on;
           m.needsUpdate = true;
         }

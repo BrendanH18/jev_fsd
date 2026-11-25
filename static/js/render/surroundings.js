@@ -25,7 +25,7 @@ const M_PER_DEG_LAT = 110574,
 
 // A frame converter from a map's own coordinates to the Kitsilano frame and back.
 function frames(origin) {
-  const o = origin || KITS;
+  const o = Number.isFinite(origin?.lat) && Number.isFinite(origin?.lon) ? origin : KITS;
   const kxMap = M_PER_DEG_LON * Math.cos((o.lat * Math.PI) / 180),
     kxK = M_PER_DEG_LON * Math.cos((KITS.lat * Math.PI) / 180);
   return {
@@ -36,7 +36,7 @@ function frames(origin) {
 
 // Is the map in Vancouver (within 12 km of Kitsilano)?
 export function inVancouver(origin) {
-  if (!origin) return false;
+  if (!Number.isFinite(origin?.lat) || !Number.isFinite(origin?.lon)) return false;
   const [x, y] = frames(origin).fromK(0, 0);
   return Math.hypot(x, y) < 12000;
 }
@@ -125,6 +125,7 @@ function sceneryMaterial({ facade = null, roughness = 0.85, metalness = 0 } = {}
 
 function instanced(group, geo, mat, items, { shadow = false } = {}) {
   // chunked so the camera can skip what is behind it
+  if (!items.length) return;
   const chunks = new Map();
   for (const it of items) {
     const k = `${Math.floor(it.x / CHUNK)},${Math.floor(it.y / CHUNK)}`;
@@ -133,17 +134,21 @@ function instanced(group, geo, mat, items, { shadow = false } = {}) {
   }
   const Y = new THREE.Vector3(0, 1, 0),
     q = new THREE.Quaternion(),
-    m = new THREE.Matrix4();
+    m = new THREE.Matrix4(),
+    position = new THREE.Vector3(),
+    scale = new THREE.Vector3(),
+    color = new THREE.Color();
   for (const list of chunks.values()) {
     const mesh = new THREE.InstancedMesh(geo, mat, list.length);
     list.forEach((it, i) => {
       q.setFromAxisAngle(Y, it.rot || 0);
-      mesh.setMatrixAt(i, m.compose(toThree(it.x, it.y, it.z || 0), q, new THREE.Vector3(it.sx, it.sy, it.sz)));
-      if (it.color !== undefined) mesh.setColorAt(i, new THREE.Color(it.color));
+      mesh.setMatrixAt(i, m.compose(position.set(it.x, it.z || 0, -it.y), q, scale.set(it.sx, it.sy, it.sz)));
+      if (it.color !== undefined) mesh.setColorAt(i, color.set(it.color));
     });
     mesh.castShadow = shadow;
     mesh.receiveShadow = true;
     mesh.computeBoundingSphere();
+    mesh.matrixAutoUpdate = false;
     group.add(mesh);
   }
 }
@@ -163,7 +168,7 @@ export function buildSurroundings(map) {
   const cell = 50,
     R = 6000;
   const wpos = [];
-  for (let x = -R; x < R; x += cell)
+  for (let x = -R; vancouver && x < R; x += cell)
     for (let y = -2000; y < R; y += cell) {
       if (!water(x + cell / 2, y + cell / 2)) continue;
       const a = toThree(x, y),
@@ -172,20 +177,18 @@ export function buildSurroundings(map) {
         d = toThree(x, y + cell);
       wpos.push(a.x, 0, a.z, b.x, 0, b.z, c.x, 0, c.z, a.x, 0, a.z, c.x, 0, c.z, d.x, 0, d.z);
     }
-  const wgeo = new THREE.BufferGeometry();
-  wgeo.setAttribute("position", new THREE.Float32BufferAttribute(wpos, 3));
-  const wn = new Float32Array(wpos.length);
-  for (let i = 1; i < wn.length; i += 3) wn[i] = 1;
-  wgeo.setAttribute("normal", new THREE.BufferAttribute(wn, 3));
-  const wuv = new Float32Array((wpos.length / 3) * 2);
-  for (let i = 0, j = 0; i < wpos.length; i += 3, j += 2) {
-    wuv[j] = wpos[i] / 60;
-    wuv[j + 1] = wpos[i + 2] / 60;
-  }
-  wgeo.setAttribute("uv", new THREE.BufferAttribute(wuv, 2));
-  const waves = macroTexture().clone();
-  waves.needsUpdate = true;
   if (wpos.length) {
+    const wgeo = new THREE.BufferGeometry();
+    wgeo.setAttribute("position", new THREE.Float32BufferAttribute(wpos, 3));
+    const wn = new Float32Array(wpos.length);
+    for (let i = 1; i < wn.length; i += 3) wn[i] = 1;
+    wgeo.setAttribute("normal", new THREE.BufferAttribute(wn, 3));
+    const wuv = new Float32Array((wpos.length / 3) * 2);
+    for (let i = 0, j = 0; i < wpos.length; i += 3, j += 2) {
+      wuv[j] = wpos[i] / 60;
+      wuv[j + 1] = wpos[i + 2] / 60;
+    }
+    wgeo.setAttribute("uv", new THREE.BufferAttribute(wuv, 2));
     const sea = new THREE.Mesh(
       wgeo,
       new THREE.MeshStandardMaterial({
@@ -193,7 +196,7 @@ export function buildSurroundings(map) {
         roughness: 0.12,
         metalness: 0.1,
         envMapIntensity: 1.4,
-        bumpMap: waves,
+        bumpMap: macroTexture(),
         bumpScale: 0.6,
       }),
     );
@@ -422,5 +425,6 @@ export function buildSurroundings(map) {
 // Fog and weather set how far out the scenery can be seen.
 export function tintSurroundings(a) {
   haze.color.value.copy(a.fogColor);
-  haze.k.value = { fog: 0.004, rain: 0.0011, snow: 0.0012 }[a.weather] || 0.00022 + 0.0002 * (1 - a.day);
+  const weatherHaze = a.weather === "fog" ? 0.004 : a.weather === "rain" ? 0.0011 : a.weather === "snow" ? 0.0012 : 0;
+  haze.k.value = weatherHaze || 0.00022 + 0.0002 * (1 - a.day);
 }
