@@ -8,7 +8,6 @@ All coordinates are meters in the projection's frame (x east, y north), rounded 
 
 from __future__ import annotations
 
-import json
 import random
 import time
 from pathlib import Path
@@ -17,7 +16,7 @@ from typing import Callable, Tuple
 from .. import geometry as g
 from . import fetch
 from .buildings import extract_buildings
-from .cache import write_json
+from .cache import decode_json, write_json
 from .controls import attach_controls
 from .graph import RoadGraph, build_graph
 from .parse import OsmData
@@ -45,8 +44,8 @@ def build_pack(
     path = pack_path(maps_dir, bbox)
     if path.is_file() and not force:
         try:
-            cached = json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, ValueError, RecursionError) as err:
+            cached = decode_json(path.read_bytes())
+        except (OSError, ValueError, RecursionError) as err:
             log("map: rebuilding unreadable pack %s (%s)" % (path.name, err))
         else:
             if _is_pack(cached):
@@ -87,12 +86,30 @@ def build_pack(
 def _is_pack(data) -> bool:
     if not isinstance(data, dict) or data.get("pack_version") != PACK_VERSION:
         return False
-    arrays = ("bbox", "extent", "nodes", "edges", "lanes", "intersections", "stops", "buildings")
+    arrays = ("nodes", "edges", "lanes", "intersections", "stops", "buildings")
+    for field in (*arrays, *(key for key in ("yields", "roundabouts") if key in data)):
+        records = data.get(field)
+        if not isinstance(records, list) or any(not isinstance(record, dict) for record in records):
+            return False
+    origin, bbox, extent = data.get("origin"), data.get("bbox"), data.get("extent")
+
+    def coordinates(values, size):
+        return isinstance(values, list) and len(values) == size and all(type(x) in (float, int) for x in values)
+
+    if not (coordinates(bbox, 4) and coordinates(extent, 4) and isinstance(origin, dict)):
+        return False
+    west, south, east, north = bbox
+    lon, lat = origin.get("lon"), origin.get("lat")
     return (
-        all(isinstance(data.get(key), list) for key in arrays)
-        and all(isinstance(data.get(key), dict) for key in ("origin", "stats"))
-        and len(data["bbox"]) == 4
-        and all(type(coord) in (float, int) and -180 <= coord <= 180 for coord in data["bbox"])
+        -180 <= west < east <= 180
+        and -90 <= south < north <= 90
+        and extent[0] < extent[2]
+        and extent[1] < extent[3]
+        and type(lon) in (float, int)
+        and -180 <= lon <= 180
+        and type(lat) in (float, int)
+        and -90 <= lat <= 90
+        and isinstance(data.get("stats"), dict)
         and bool(data["edges"] and data["lanes"])
     )
 

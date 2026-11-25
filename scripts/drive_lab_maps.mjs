@@ -1,10 +1,11 @@
-// The bundled maps as scripts/test_drive_lab.mjs and its arena workers (drive_lab_arena.mjs) load
-// them. Import after setting globalThis.document, as the simulation modules expect.
+// The bundled maps used by the drive-lab tests and their arena workers.
 import fs from "node:fs";
 
 const { MapData } = await import("../static/js/map/mapdata.js");
 
-export const names = {
+const packVersion = "6";
+const bundled = new URL("../data/maps/", import.meta.url);
+export const names = Object.freeze({
   saskatoon: "ca5573a8d934",
   kitsilano: "623b012bc8b5",
   mount_pleasant: "7165f1c807a8",
@@ -12,38 +13,86 @@ export const names = {
   montreal: "bb9df59633e0",
   toronto: "4a96d42cb3f2",
   ottawa: "d25b07def0d2",
+  quebec_city: "8e99888cb743",
   calgary: "a53c5bcf6438",
   edmonton: "3e794edbefcb",
   winnipeg: "19bb885c9cae",
   halifax: "49db0d437c8c",
+});
+
+const layerArrays = {
+  transit: ["routes", "stops"],
+  crossings: ["crossings"],
+  zones: ["zones"],
+  rail: ["tracks", "crossings"],
+  calming: ["devices"],
+  scrambles: ["scrambles"],
+  buslanes: ["lanes"],
+  restrictions: ["restrictions"],
+  contraflow: ["edges"],
+  driveways: ["driveways"],
+  parks: ["areas", "spans"],
+  bridges: ["spans"],
 };
-// (with its bus routes, crosswalks, school and playground zones, level crossings, speed humps and scramble crossings, as the server and the demo serve it)
-export const load = (id) => {
-  const pack = JSON.parse(fs.readFileSync(new URL(`../data/maps/${names[id]}.v6.pack.json`, import.meta.url)));
-  const transit = new URL(`../data/maps/${names[id]}.transit.v1.json`, import.meta.url);
-  if (fs.existsSync(transit)) pack.transit = JSON.parse(fs.readFileSync(transit));
-  // (crossings v2, with Ontario's pedestrian crossovers, where a map has it)
-  const crossings = [2, 1]
-    .map((v) => new URL(`../data/maps/${names[id]}.crossings.v${v}.json`, import.meta.url))
-    .find((u) => fs.existsSync(u));
-  if (crossings) pack.crossings = JSON.parse(fs.readFileSync(crossings));
-  const zones = new URL(`../data/maps/${names[id]}.zones.v1.json`, import.meta.url);
-  if (fs.existsSync(zones)) pack.zones = JSON.parse(fs.readFileSync(zones));
-  const rail = new URL(`../data/maps/${names[id]}.rail.v1.json`, import.meta.url);
-  if (fs.existsSync(rail)) pack.rail = JSON.parse(fs.readFileSync(rail));
-  // (and speed humps and the like, and scramble crossings)
-  for (const name of [
-    "calming",
-    "scrambles",
-    "buslanes",
-    "restrictions",
-    "contraflow",
-    "driveways",
-    "parks",
-    "bridges",
-  ]) {
-    const url = new URL(`../data/maps/${names[id]}.${name}.v1.json`, import.meta.url);
-    if (fs.existsSync(url)) pack[name] = JSON.parse(fs.readFileSync(url));
+
+function readArtifact(directory, file, kind, version, fields, optional) {
+  try {
+    const input = fs.readFileSync(new URL(file, directory));
+    const value = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(input));
+    if (value?.[`${kind}_version`] !== version) throw new Error(`expected v${version} ${kind}`);
+    for (const field of fields) {
+      if (
+        !Array.isArray(value[field]) ||
+        value[field].some((record) => !record || Array.isArray(record) || typeof record !== "object")
+      ) {
+        throw new Error(`expected ${field} array of objects`);
+      }
+    }
+    return value;
+  } catch (error) {
+    if (optional && error.code === "ENOENT") return null;
+    throw new Error(`Cannot read map artifact ${file}: ${error.message}`, { cause: error });
   }
-  return new MapData(pack);
-};
+}
+
+export function readPreparedMap(id, { directory = bundled, onWarning = console.warn } = {}) {
+  if (!Object.hasOwn(names, id)) throw new Error(`Unknown drive-lab map ${JSON.stringify(id)}`);
+  const key = names[id];
+  const pack = readArtifact(directory, `${key}.v${packVersion}.pack.json`, "pack", packVersion, [
+    "nodes",
+    "edges",
+    "lanes",
+    "intersections",
+    "stops",
+    "buildings",
+  ]);
+  if (pack.name !== key) throw new Error(`Pack ${key} has mismatched name ${JSON.stringify(pack.name)}`);
+  for (const [kind, fields] of Object.entries(layerArrays)) {
+    const versions = kind === "crossings" ? ["2", "1"] : ["1"];
+    let error;
+    let loaded;
+    for (const version of versions) {
+      const file = `${key}.${kind}.v${version}.json`;
+      try {
+        const layer = readArtifact(directory, file, kind, version, fields, true);
+        if (!layer) continue;
+        if (layer.name !== undefined && layer.name !== key && layer.name !== "")
+          throw new Error(`${file} belongs to a different map`);
+        loaded = { layer, file };
+      } catch (err) {
+        if (error) throw new AggregateError([error, err], `${error.message}; ${err.message}`);
+        error = err;
+      }
+      if (loaded) break;
+    }
+    if (loaded) {
+      pack[kind] = loaded.layer;
+      if (error) onWarning(`Using ${loaded.file} after ${error.message}`);
+    } else if (error) {
+      throw error;
+    }
+  }
+  return pack;
+}
+
+export const load = (id) => new MapData(readPreparedMap(id));

@@ -69,8 +69,9 @@ def parse_maxspeed(value: Optional[str], cls: str) -> float:
         m = re.match(r"\s*(\d+(?:\.\d+)?)\s*(mph|km/h|kmh)?", value)
         if m:
             v = float(m.group(1))
-            unit = (m.group(2) or "km/h").lower()
-            return v * 0.44704 if unit == "mph" else v / 3.6
+            speed = v * 0.44704 if m.group(2) == "mph" else v / 3.6
+            if math.isfinite(speed) and speed > 0:
+                return speed
     base = cls[:-5] if cls.endswith("_link") else cls
     return DEFAULT_LIMIT.get(base, 11.2)
 
@@ -80,7 +81,15 @@ def _int_tag(tags: dict, key: str) -> Optional[int]:
     if v is None:
         return None
     m = re.match(r"\s*(\d+)", v)
-    return int(m.group(1)) if m else None
+    if not m:
+        return None
+    digits = m.group(1).lstrip("0") or "0"
+    if len(digits) > 1024:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
 
 
 def lanes_per_direction(tags: dict, oneway: bool) -> Tuple[int, int]:
@@ -92,7 +101,7 @@ def lanes_per_direction(tags: dict, oneway: bool) -> Tuple[int, int]:
         return (min(max(n, 1), MAX_LANES_PER_DIRECTION), 0)
     if fwd is None and bwd is None:
         if total:
-            fwd = bwd = max(1, math.ceil(total / 2))
+            fwd = bwd = max(1, (total + 1) // 2)
         else:
             fwd = bwd = 1
     elif fwd is None:
