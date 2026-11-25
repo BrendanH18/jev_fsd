@@ -273,7 +273,7 @@ def custom_key_env(name: str) -> str:
 def _free_name(entries: list, name: str, model: str, base_url: str) -> str:
     """A name derived from the model id must not take over a different saved model: lab/gpt-4o-mini and
     gpt-4o.mini both slug to gpt-4o-mini. The same model on the same server keeps its name (an update)."""
-    taken = {e.get("name"): e for e in entries if isinstance(e, dict)}
+    taken = {e["name"]: e for e in entries if isinstance(e, dict) and isinstance(e.get("name"), str)}
     candidate, n = name, 2
     while candidate in taken and (
         taken[candidate].get("model") != model or str(taken[candidate].get("base_url") or "").rstrip("/") != base_url
@@ -297,8 +297,10 @@ def _price(body: dict, field: str) -> Optional[float]:
     if value in (None, ""):
         return None
     try:
+        if isinstance(value, bool):
+            raise TypeError()
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise SetupError("%s must be a number of USD per million tokens" % field)
     return number
 
@@ -313,7 +315,7 @@ def _read_file(pillar: Pillar, settings: Settings) -> dict:
             "never here. See docs/agents.md.",
             "endpoints": [],
         }
-    except (OSError, ValueError) as err:
+    except (OSError, ValueError, RecursionError) as err:
         raise SetupError("%s could not be read (%s); fix or delete it first." % (path.name, err))
     if isinstance(data, list):
         data = {"endpoints": data}
@@ -324,8 +326,13 @@ def _read_file(pillar: Pillar, settings: Settings) -> dict:
 
 def _write_file(pillar: Pillar, settings: Settings, data: dict) -> None:
     path = pillar.path(settings)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    envfile._atomic_write(path, json.dumps(data, indent=2) + "\n")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        envfile._atomic_write(path, json.dumps(data, indent=2) + "\n")
+    except (OSError, ValueError) as err:
+        raise SetupError(
+            "Could not save %s: %s" % (path.name, err.strerror if isinstance(err, OSError) else err)
+        ) from err
 
 
 def write_key(settings: Settings, key_env: str, key: str) -> List[str]:
@@ -334,6 +341,8 @@ def write_key(settings: Settings, key_env: str, key: str) -> List[str]:
         envfile.write_key(settings.env_file.parent, key, settings.env_file.name, var=key_env)
     except envfile.EnvFileError as err:
         raise SetupError("The key was not saved: %s" % err)
+    except (OSError, UnicodeError) as err:
+        raise SetupError("The key file could not be read or written.") from err
     if settings.environ.get(key_env):
         return [
             "%s is also set in the shell that started the server, and that value wins over .env. "
@@ -416,31 +425,39 @@ def fetch_json(url: str, key: Optional[str], label: str, timeout_s: float, api: 
     if len(raw) > MAX_MODELS_BYTES:
         raise SetupError("The model list from %s is too large." % where)
     try:
-        return json.loads(raw.decode("utf-8", errors="replace"))
+        return json.loads(raw.decode("utf-8"))
     except (ValueError, RecursionError):
         raise SetupError("%s did not return a JSON model list." % where)
 
 
-def parse_models(data: Any, prices_by_id: bool = False) -> List[dict]:
+def parse_models(data: Any, prices_by_id: bool = False, secret: Optional[str] = None) -> List[dict]:
     """{data: [...]} or a bare list -> [{id, name?, price_per_mtok_input?, price_per_mtok_output?,
     context_length?}], sorted by id. OpenRouter's per-token prices become USD per million tokens.
     Anthropic's list has no prices, so with `prices_by_id` they come from CLAUDE_PRICES."""
     items = data.get("data", data.get("models")) if isinstance(data, dict) else data
     models = []
+    seen = set()
     for item in items if isinstance(items, list) else []:
         if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not 0 < len(item["id"]) <= 200:
             continue
-        model: Dict[str, Any] = {"id": item["id"]}
+        model_id = item["id"]
+        if not model_id.strip() or model_id in seen:
+            continue
+        seen.add(model_id)
+        model: Dict[str, Any] = {"id": scrub(model_id, secret)}
         name = item.get("name", item.get("display_name"))  # (display_name: Anthropic's Models API)
         if isinstance(name, str):
-            model["name"] = name[:120]
+            model["name"] = scrub(name, secret)[:120]
         pricing = item.get("pricing")
         if isinstance(pricing, dict):  # OpenRouter: USD per token, as strings
             try:
-                prices = (float(pricing["prompt"]) * 1e6, float(pricing["completion"]) * 1e6)
+                prompt, completion = pricing["prompt"], pricing["completion"]
+                if isinstance(prompt, bool) or isinstance(completion, bool):
+                    raise TypeError()
+                prices = (float(prompt) * 1e6, float(completion) * 1e6)
                 if all(0 <= v < 1e6 for v in prices):
                     model["price_per_mtok_input"], model["price_per_mtok_output"] = (round(v, 6) for v in prices)
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, OverflowError):
                 pass
         listed = CLAUDE_PRICES.get(item["id"]) if prices_by_id else None
         if listed:
@@ -471,7 +488,7 @@ def list_models(settings: Settings, body: dict) -> dict:
     return {
         "provider": p["id"],
         "endpoint": public_url(base_url),
-        "models": parse_models(data, prices_by_id=api == "anthropic"),
+        "models": parse_models(data, prices_by_id=api == "anthropic", secret=key),
     }
 
 
@@ -505,7 +522,7 @@ def save_endpoint(pillar: Pillar, settings: Settings, registry, body: dict) -> d
                     isinstance(e, dict) and e.get("api_key_env") == key_env and e.get("name") != name for e in entries
                 ):
                     raise SetupError("%s is already used by another endpoint; choose another name." % key_env)
-            elif kept and str(kept).startswith(pillar.key_prefix) and settings.get(kept):
+            elif isinstance(kept, str) and kept.startswith(pillar.key_prefix) and settings.get(kept):
                 if str(existing.get("base_url") or "").rstrip("/") != base_url:
                     raise SetupError("This endpoint's saved key is not sent to a new URL. Paste the key again.")
                 key_env = kept

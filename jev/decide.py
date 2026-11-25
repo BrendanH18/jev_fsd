@@ -24,7 +24,11 @@ def validate_request(body: dict) -> Dict[str, Any]:
     questions = body.get("questions")
     if not isinstance(state, dict):
         raise InvalidRequest("state must be a JSON object")
-    if len(json.dumps(state)) > MAX_STATE_BYTES:
+    try:
+        state_size = len(json.dumps(state, allow_nan=False))
+    except (TypeError, ValueError, RecursionError) as err:
+        raise InvalidRequest("state must contain finite JSON values") from err
+    if state_size > MAX_STATE_BYTES:
         raise InvalidRequest("state is larger than %d bytes" % MAX_STATE_BYTES)
     if not isinstance(questions, dict) or not questions:
         raise InvalidRequest("questions must be a non-empty object")
@@ -42,6 +46,8 @@ def validate_request(body: dict) -> Dict[str, Any]:
         if len(instructions) > MAX_INSTRUCTIONS_CHARS:
             raise InvalidRequest("question %s instructions are too long" % qid)
         for key, text in criteria.items():
+            if not isinstance(key, str) or not key.strip():
+                raise InvalidRequest("criteria for %s must have non-empty ids" % qid)
             if text is not None and not isinstance(text, str):
                 raise InvalidRequest("criteria for %s must be strings or null" % qid)
     tick = body.get("tick", 0)
