@@ -654,10 +654,7 @@ test("feature records reject malformed configuration with the field that needs f
   for (const [fields, error] of bad) assert.match(R.recordProblem({ ...valid, ...fields }), error);
   assert.match(R.recordProblem(null), /must be an object/);
   assert.equal(R.recordProblem({ ...valid, notice, coach: { reports: [coachReport], tips: [coachTip] } }), null);
-  assert.equal(
-    R.recordProblem({ ...valid, coach: { deductions: [{ ...postDeduction, category: "control" }] } }),
-    null,
-  );
+  assert.equal(R.recordProblem({ ...valid, coach: { deductions: [{ ...postDeduction, category: "control" }] } }), null);
   assert.throws(() => R.hooks("constructor"), /no slot/);
 });
 
@@ -742,13 +739,28 @@ test("the registry comparison requires both complete captures and flags non-timi
     let check = compare();
     assert.equal(check.status, 1);
     assert.match(check.stderr, /Missing a required baseline capture/);
-    for (const file of ["bare-dry.json", "city-dry.json", "arena-rules.json", "arena-cautious.json", "system-prompt.json"]) {
+    for (const file of [
+      "bare-dry.json",
+      "city-dry.json",
+      "arena-rules.json",
+      "arena-cautious.json",
+      "system-prompt.json",
+    ]) {
       write(before, file, { results: [{ time_s: 2, latency_ms: 30, events: [{ type: "stop" }] }] });
       write(after, file, { results: [{ time_s: 2, latency_ms: 10, events: [{ type: "stop" }] }] });
     }
     check = compare();
     assert.equal(check.status, 0, check.stderr);
     assert.match(check.stdout, /arena-rules.json: identical/);
+    const benchmark = { manifest: { source_commit: "earlier", source_dirty: false, suite: { kind: "bench" } } };
+    write(before, "city-dry.json", { ...benchmark, name: "earlier-run", saved_at: "earlier" });
+    write(after, "city-dry.json", {
+      name: "later-run",
+      saved_at: "later",
+      manifest: { ...benchmark.manifest, source_commit: "later", source_dirty: true },
+    });
+    check = compare();
+    assert.equal(check.status, 0, check.stderr);
     write(after, "city-snow.json", {});
     check = compare();
     assert.equal(check.status, 1);

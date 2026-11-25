@@ -7,7 +7,16 @@ import { benchPage, jsonDifferences } from "./cli_tools.mjs";
 
 const TIMINGS = new Set(["wall_ms", "latency_ms", "latency_p50_ms", "latency_p95_ms", "started_at"]);
 const REQUIRED = ["bare-dry.json", "city-dry.json", "arena-rules.json", "arena-cautious.json", "system-prompt.json"];
-const read = (path) => JSON.parse(readFileSync(path, "utf8"), (key, value) => (TIMINGS.has(key) ? undefined : value));
+function read(path) {
+  const result = JSON.parse(readFileSync(path, "utf8"), (key, value) => (TIMINGS.has(key) ? undefined : value));
+  if (result.manifest?.suite?.kind === "bench") {
+    delete result.name;
+    delete result.saved_at;
+    delete result.manifest.source_commit;
+    delete result.manifest.source_dirty;
+  }
+  return result;
+}
 
 function bench(dir, features, map = "kitsilano", conditions = "dry") {
   if (!["bare", "city"].includes(features)) throw new Error("Choose bare or city for the benchmark.");
