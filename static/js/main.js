@@ -1111,30 +1111,39 @@ export async function boot() {
         input.clearKeys();
       } else world.paused = pausedBeforeLab;
     },
-    onScenic: async (driver) => {
-      const { drives } = await api("/api/drives", {
-        bbox: status.map.bbox.join(","),
-        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
-      });
-      if (!drives.length) throw new Error("Try another position or city in Explore cities.");
-      setHour("golden");
-      selectBrain("rules");
-      const scenic = drives[0];
-      if (
-        !(await routeRequests.choose(scenic.destination, {
-          route: scenic.route,
-          title: scenic.title,
-          check: Object.keys(featureRouteOptions(world)).length > 0,
-        }))
-      )
-        return;
-      if (driver === "manual") {
-        autopilot.setEnabled(false);
-        hud.setAutopilot(false);
-        drive.driver = "manual";
-      }
-      world.paused = false;
-    },
+    onScenic: (driver) =>
+      routeRequests.lookup(
+        async (signal) => {
+          const { drives } = await api(
+            "/api/drives",
+            {
+              bbox: status.map.bbox.join(","),
+              from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+            },
+            { signal },
+          );
+          if (!drives.length) throw new Error("Try another position or city in Explore cities.");
+          return drives[0];
+        },
+        async (scenic) => {
+          setHour("golden");
+          selectBrain("rules");
+          if (
+            !(await routeRequests.choose(scenic.destination, {
+              route: scenic.route,
+              title: scenic.title,
+              check: Object.keys(featureRouteOptions(world)).length > 0,
+            }))
+          )
+            return;
+          if (driver === "manual") {
+            autopilot.setEnabled(false);
+            hud.setAutopilot(false);
+            drive.driver = "manual";
+          }
+          world.paused = false;
+        },
+      ),
     onSeek: restoreFrame,
     onLive: () => {
       restoreFrame(recorder.frames.length - 1);

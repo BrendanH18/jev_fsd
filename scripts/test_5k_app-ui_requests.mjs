@@ -131,6 +131,30 @@ assert.equal(await failed, false);
 assert.match(message, /timed out/);
 assert.equal(routes.pending, null);
 
+// The scenic lookup can finish even after aborting its fetch. Only the map choice may take effect.
+let resolveScenic;
+let scenicSignal;
+let scenicApplied = false;
+const scenicLookup = routes.lookup(
+  (signal) => {
+    scenicSignal = signal;
+    return new Promise((resolve) => {
+      resolveScenic = resolve;
+    });
+  },
+  () => {
+    scenicApplied = true;
+  },
+);
+const mapChoice = routes.choose([2, 3]);
+assert.equal(scenicSignal.aborted, true);
+resolveScenic({ destination: [8, 9], route });
+assert.equal(await scenicLookup, false);
+assert.equal(scenicApplied, false);
+responses.at(-1).resolve({ routes: [route] });
+assert.equal(await mapChoice, true);
+assert.equal(installs.length, 3);
+
 globalThis.document = { querySelector: () => null };
 let headers;
 globalThis.fetch = async (_path, opts) => {
