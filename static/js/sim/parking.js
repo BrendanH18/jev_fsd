@@ -14,6 +14,8 @@ const CORNER_CLEAR_M = 5.0; // no parking this close to the crossing street's cu
 const LINE_CLEAR_M = 6.0; // nor this close before a stop line or yield line
 const CELL = 25;
 const OPEN_DOOR_S = 6;
+const RESERVATION_GAP_M = 0.5;
+const PARKED_REAR_AXLE_OFFSET = CAR.length / 2 - CAR.rearOverhang;
 // On the inside of a bend a straight car body leaves the curve: its ends reach out of the parking lane
 // into the travel lane. A bay whose car would reach further in than this is not a bay.
 const BEND_INTRUSION_M = 0.3;
@@ -28,18 +30,57 @@ export const PARKED_DENSITY = 0.5;
 // Every reserved bay has one shape: who holds it and the stretch of its own edge's kerb it takes.
 // Vehicle reservations keep the same half-metre bumper room as parking's free-space check. A driveway
 // has no vehicle of its own, so it keeps an ordinary car's footprint clear in each bay it crosses.
-export function reserveSlot(map, slot, owner, { spec = owner.spec || CAR, sFrom, sTo } = {}) {
+export function reserveSlot(map, slot, owner, { spec = owner?.spec || CAR, sFrom, sTo } = {}) {
+  if (!owner || (typeof owner !== "object" && typeof owner !== "function"))
+    throw new TypeError("Parking reservation requires an owner");
+  if (!slot) throw new TypeError("Parking reservation requires a bay");
   let s;
   if (sFrom == null || sTo == null) {
-    const e = map.edges.get(slot.edge);
-    s = projectPoint(e.pts, e.cum, [slot.x, slot.y]).s;
+    const e = map?.edges?.get(slot.edge);
+    if (!e) throw new RangeError(`Unknown parking bay edge: ${slot.edge}`);
+    if (!Number.isFinite(slot.x) || !Number.isFinite(slot.y))
+      throw new RangeError("Parking bay coordinates must be finite");
+    if (!Number.isFinite(spec?.rearOverhang) || spec.rearOverhang < 0)
+      throw new RangeError("Parking reservation requires a nonnegative rear overhang");
+    if (sTo == null && (!Number.isFinite(spec.length) || spec.length <= spec.rearOverhang))
+      throw new RangeError("Parking reservation requires a length greater than the rear overhang");
+    s = projectPoint(e.pts, e.cum, [slot.x, slot.y])?.s;
+    if (!Number.isFinite(s)) throw new RangeError("Parking bay edge has no projectable kerb");
   }
-  slot.reserved = {
-    owner,
-    sFrom: sFrom ?? s - spec.rearOverhang - 0.5,
-    sTo: sTo ?? s - spec.rearOverhang + spec.length + 0.5,
-  };
+  const from = sFrom ?? s - spec.rearOverhang - RESERVATION_GAP_M;
+  const to = sTo ?? s - spec.rearOverhang + spec.length + RESERVATION_GAP_M;
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to)
+    throw new RangeError("Parking reservation requires an increasing finite span");
+  slot.reserved = { owner, sFrom: from, sTo: to };
   return slot.reserved;
+}
+
+// A delayed release must leave a reservation that has since changed hands intact.
+export function releaseSlot(slot, owner) {
+  if (!owner || slot?.reserved?.owner !== owner) return false;
+  slot.reserved = null;
+  return true;
+}
+
+// A parking plan claims the empty, unreserved bays it covers. If one has invalid geometry, keep
+// the plan from claiming only the bays it happened to visit before the error.
+export function reserveAvailableSlots(map, slots, owner) {
+  const claimed = [];
+  try {
+    for (const slot of slots) {
+      if (slot.reserved || slot.occupant) continue;
+      reserveSlot(map, slot, owner);
+      claimed.push(slot);
+    }
+  } catch (error) {
+    for (const slot of claimed) releaseSlot(slot, owner);
+    throw error;
+  }
+}
+
+function nearbyCenter(car, x, y, radius2) {
+  const [cx, cy] = car.center;
+  return (cx - x) ** 2 + (cy - y) ** 2 <= radius2;
 }
 
 // How far (metres) a car parked square in the bay centred at `s`, `lat` metres right of edge e's
@@ -101,23 +142,26 @@ export class ParkedCars {
         let w = 0;
         for (const id of [...(map.inn.get(node) || []), ...(map.out.get(node) || [])]) {
           const o = map.edges.get(id);
+          if (!o) continue;
           w = Math.max(w, Math.abs(o.asphalt[0]), Math.abs(o.asphalt[1]));
         }
         half.set(node, w);
       }
       return half.get(node);
     };
-    const junction = (node) =>
-      new Set(
-        [...(map.inn.get(node) || []), ...(map.out.get(node) || [])].map((id) => {
-          const o = map.edges.get(id);
-          return o.from === node ? o.to : o.from;
-        }),
-      ).size >= 3;
+    const junction = (node) => {
+      const neighbors = new Set();
+      for (const id of [...(map.inn.get(node) || []), ...(map.out.get(node) || [])]) {
+        const o = map.edges.get(id);
+        if (o) neighbors.add(o.from === node ? o.to : o.from);
+      }
+      return neighbors.size >= 3;
+    };
     let serial = this.list.length;
     for (const e of map.edges.values()) {
       if (!e.parking || e.ring) continue;
       const L = e.cum[e.cum.length - 1];
+      if (!Number.isFinite(L) || L < SLOT_M) continue;
       const from = (junction(e.from) ? halfAt(e.from) : 0) + CORNER_CLEAR_M;
       let to = L - (junction(e.to) ? halfAt(e.to) : 0) - CORNER_CLEAR_M;
       if (e.control) to = Math.min(to, e.control.s_line - LINE_CLEAR_M);
@@ -141,14 +185,13 @@ export class ParkedCars {
           }
           const pSlot = pointAt(e.pts, e.cum, s),
             hSlot = headingAt(e.pts, e.cum, s);
-          const backSlot = CAR.length / 2 - CAR.rearOverhang;
           const slot = {
             edge: e.id,
             curb: lat > 0 ? "right" : "left",
             occupant: null,
             reserved: null,
-            x: pSlot[0] + Math.sin(hSlot) * lat - Math.cos(hSlot) * backSlot,
-            y: pSlot[1] - Math.cos(hSlot) * lat - Math.sin(hSlot) * backSlot,
+            x: pSlot[0] + Math.sin(hSlot) * lat - Math.cos(hSlot) * PARKED_REAR_AXLE_OFFSET,
+            y: pSlot[1] - Math.cos(hSlot) * lat - Math.sin(hSlot) * PARKED_REAR_AXLE_OFFSET,
             psi: hSlot,
           };
           this.slots.push(slot);
@@ -169,8 +212,12 @@ export class ParkedCars {
             continue;
           }
           // Vehicle positions are at the rear axle
-          const back = CAR.length / 2 - CAR.rearOverhang;
-          const car = new Vehicle(cx - Math.cos(psi) * back, cy - Math.sin(psi) * back, psi, 0);
+          const car = new Vehicle(
+            cx - Math.cos(psi) * PARKED_REAR_AXLE_OFFSET,
+            cy - Math.sin(psi) * PARKED_REAR_AXLE_OFFSET,
+            psi,
+            0,
+          );
           car.id = `parked_${++serial}`;
           car.parked = true;
           car.color = PALETTE[Math.floor(random() * PALETTE.length)];
@@ -186,6 +233,8 @@ export class ParkedCars {
 
   add(car) {
     if (this.list.includes(car)) return;
+    const [x, y] = car?.center ?? [];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new RangeError("Parked car requires a finite center");
     const key = parkedCell(car);
     const cell = this.grid.get(key);
     car.parked = true;
@@ -201,7 +250,7 @@ export class ParkedCars {
 
   // Take a car out of the parking lane (it is pulling out). `removed` tells the renderer.
   remove(car) {
-    if (car.door) return false;
+    if (!car || car.door) return false;
     const i = this.list.indexOf(car);
     if (i < 0) return false;
     this.list.splice(i, 1);
@@ -266,23 +315,29 @@ export class ParkedCars {
   }
 
   step(dt, world) {
+    if (!Number.isFinite(dt) || dt < 0) throw new RangeError("Invalid parked car step duration");
+    if (dt === 0) return;
     // Compact in place, retaining the order in which visible doors were opened.
     let keep = 0;
     for (const door of this.activeDoors) {
       door.t += dt;
       this.poseDoor(door);
       if (door.t >= (door.duration ?? OPEN_DOOR_S)) {
-        door.owner.door = null;
+        if (door.owner.door === door) door.owner.door = null;
       } else this.activeDoors[keep++] = door;
     }
     this.activeDoors.length = keep;
     this.nextDoor -= dt;
     if (this.nextDoor > 0) return;
     this.nextDoor = 12 + this.random() * 16;
-    const nearby = this.near(world.ego.x, world.ego.y, 45).filter((c) => {
-      const l = world.ego.toLocal(c.x, c.y);
-      const stoppingRoom = (world.ego.v * world.ego.v) / (2 * 4) + world.ego.v * 1.5 + 5;
-      return !c.door && !c.stay && l.ahead > Math.max(15, stoppingRoom) && l.ahead < 40 && Math.abs(l.right) < 7;
+    const ego = world.ego;
+    const stoppingRoom = (ego.v * ego.v) / (2 * 4) + ego.v * 1.5 + 5;
+    const minimumAhead = Math.max(15, stoppingRoom);
+    if (minimumAhead >= 40) return;
+    const nearby = this.near(ego.x, ego.y, 45).filter((c) => {
+      if (c.door || c.stay) return false;
+      const l = ego.toLocal(c.x, c.y);
+      return l.ahead > minimumAhead && l.ahead < 40 && Math.abs(l.right) < 7;
     });
     if (nearby.length) this.openDoor(nearby[Math.floor(this.random() * nearby.length)]);
   }
@@ -294,6 +349,7 @@ export class ParkedCars {
   // Move parked car `car` (its rear axle) to (x, y), keeping the grid in step (snowbanks push the cars
   // parked in a narrowing out from the kerb: sim/snowbanks.js).
   move(car, x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new RangeError("Parked car requires a finite destination");
     const before = parkedCell(car);
     if (!this.grid.get(before)?.includes(car)) return;
     car.x = x;
@@ -322,14 +378,22 @@ export class ParkedCars {
     )
       return out;
     const radius2 = r * r;
+    // A map-wide query should scale with populated cells and preserve the normal scan order.
+    if ((c1 - c0 + 1) * (d1 - d0 + 1) > this.grid.size + 64) {
+      const cells = [];
+      for (const [key, cell] of this.grid) {
+        const [i, j] = key.split(",").map(Number);
+        if (i >= c0 && i <= c1 && j >= d0 && j <= d1) cells.push({ i, j, cell });
+      }
+      cells.sort((a, b) => a.i - b.i || a.j - b.j);
+      for (const { cell } of cells) for (const car of cell) if (nearbyCenter(car, x, y, radius2)) out.push(car);
+      return out;
+    }
     for (let i = c0; i <= c1; i++)
       for (let j = d0; j <= d1; j++) {
         const cell = this.grid.get(`${i},${j}`);
         if (!cell) continue;
-        for (const car of cell) {
-          const [cx, cy] = car.center;
-          if ((cx - x) ** 2 + (cy - y) ** 2 <= radius2) out.push(car);
-        }
+        for (const car of cell) if (nearbyCenter(car, x, y, radius2)) out.push(car);
       }
     return out;
   }
