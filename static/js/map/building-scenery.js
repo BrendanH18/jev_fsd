@@ -43,6 +43,12 @@ function convexHull(points) {
 
 // Minimum-area bounding rectangle: center, long axis (ux, uy), half length hl >= half width hw.
 export function minRect(pts) {
+  if (
+    !Array.isArray(pts) ||
+    pts.length < 2 ||
+    Array.from(pts).some((p) => !p || !Number.isFinite(p[0]) || !Number.isFinite(p[1]))
+  )
+    return null;
   const hull = convexHull(pts);
   let best = null;
   for (let i = 0; i < hull.length; i++) {
@@ -178,14 +184,16 @@ export function buildingShapes(map) {
   cache.set(map, out);
   for (const [i, bld] of (map.pack?.buildings || []).entries()) {
     if (
-      !Array.isArray(bld.pts) ||
+      !Array.isArray(bld?.pts) ||
       bld.pts.length < 3 ||
-      bld.pts.some((p) => !Number.isFinite(p[0]) || !Number.isFinite(p[1]))
+      Array.from(bld.pts).some((p) => !p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) ||
+      !Number.isFinite(bld.h)
     )
       continue;
     let pts = bld.pts;
-    if (Math.abs(area(pts)) < 1) continue;
-    if (area(pts) < 0) pts = [...pts].reverse();
+    const signedArea = area(pts);
+    if (!Number.isFinite(signedArea) || Math.abs(signedArea) < 1) continue;
+    if (signedArea < 0) pts = [...pts].reverse();
     const [cx, cy] = centroid(pts);
     pts = pts.map(([x, y]) => {
       const dx = x - cx,

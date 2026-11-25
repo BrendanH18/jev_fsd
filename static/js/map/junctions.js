@@ -92,6 +92,7 @@ export function junctionFills(map) {
 
 // Whether (x, y) lies on a junction's fill.
 export function onJunctionFill(map, x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
   junctionFills(map);
   const cell = cache.get(map).grid.get(`${Math.floor(x / CELL)},${Math.floor(y / CELL)}`);
   if (!cell) return false;

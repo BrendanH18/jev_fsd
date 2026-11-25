@@ -24,10 +24,22 @@
   {"name": "turn +149.9 deg", "angle_deg": 149.9, "in": [[-50.0, 0.0], [0.0, 0.0]], "out": [[0.0, 0.0], [-43.257571028, 25.075536858]]},
   {"name": "turn +150.1 deg", "angle_deg": 150.1, "in": [[-50.0, 0.0], [0.0, 0.0]], "out": [[0.0, 0.0], [-43.344837447, 24.924386988]]},
   {"name": "turn +165 deg", "angle_deg": 165, "in": [[-50.0, 0.0], [0.0, 0.0]], "out": [[0.0, 0.0], [-48.296291314, 12.940952255]]},
-  {"name": "turn -170 deg", "angle_deg": -170, "in": [[-50.0, 0.0], [0.0, 0.0]], "out": [[0.0, 0.0], [-49.240387651, -8.682408883]]}
+  {"name": "turn -170 deg", "angle_deg": -170, "in": [[-50.0, 0.0], [0.0, 0.0]], "out": [[0.0, 0.0], [-49.240387651, -8.682408883]]},
+  {"name": "turn -24.9 deg", "angle_deg": -24.9, "in": [[-50, 0], [0, 0]], "out": [[0, 0], [45.352200715, -21.051790668]]},
+  {"name": "turn -25.1 deg", "angle_deg": -25.1, "in": [[-50, 0], [0, 0]], "out": [[0, 0], [45.278439951, -21.209971137]]},
+  {"name": "turn -149.9 deg", "angle_deg": -149.9, "in": [[-50, 0], [0, 0]], "out": [[0, 0], [-43.257571028, -25.075536858]]},
+  {"name": "turn -150.1 deg", "angle_deg": -150.1, "in": [[-50, 0], [0, 0]], "out": [[0, 0], [-43.344837447, -24.924386988]]},
+  {"name": "straight across negative heading seam", "angle_deg": 20, "in": [[49.240387651, -8.682408883], [0, 0]], "out": [[0, 0], [-49.240387651, -8.682408883]]},
+  {"name": "right across positive heading seam", "angle_deg": -30, "in": [[48.296291314, 12.940952255], [0, 0]], "out": [[0, 0], [-48.296291314, 12.940952255]]},
+  {"name": "seam aliases at due west", "angle_deg": 0, "in": [[50, 0], [0, 0]], "out": [[0, 0], [-50, -0.0]]},
+  {"name": "exact reversal", "angle_deg": 180, "in": [[-50, 0], [0, 0]], "out": [[0, 0], [-50, 0]]}
  ],
  "joins": [
   {"name": "straight on, ends meet", "before": [[-50.0, 0.0], [0.0, 0.0]], "after": [[0.0, 0.0], [50.0, 0.0]]},
+  {"name": "mirrored offset, northbound into westbound", "before": [[700, -280], [700, -230]], "after": [[701, -231], [651, -231]]},
+  {"name": "collinear overlap with one direction of travel", "before": [[-50, 0], [0, 0]], "after": [[-1, 0], [50, 0]]},
+  {"name": "straight unequal lane lengths at an offset", "before": [[-3.2, 0], [0, 0]], "after": [[0, 1], [70, 1]]},
+  {"name": "two collinear approach segments at a right turn", "before": [[-40, 0], [-8, 0], [0, 0]], "after": [[0, 0], [0, -40]]},
   {"name": "straight on, lane shifts 0.5 m", "before": [[-50.0, 0.0], [0.0, 0.0]], "after": [[0.0, -0.5], [50.0, -0.5]]},
   {"name": "straight on, lane shifts 3.5 m", "before": [[-50.0, 0.0], [0.0, 0.0]], "after": [[0.0, -3.5], [50.0, -3.5]]},
   {"name": "10 deg bend, ends meet", "before": [[-50.0, 0.0], [0.0, 0.0]], "after": [[0.0, 0.0], [49.240387651, -8.682408883]]},
