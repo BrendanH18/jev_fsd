@@ -271,8 +271,8 @@ async function loadRuns() {
   if (runs.some((run) => run.name === previous)) saved.value = previous;
 }
 
-function runFromForm() {
-  return run({
+async function runFromForm() {
+  const options = {
     brain: $("#brain").value,
     count: $("#count").valueAsNumber,
     npcs: $("#npcs").valueAsNumber,
@@ -288,7 +288,9 @@ function runFromForm() {
     save: $("#bench-save").checked,
     heldout: $("#heldout").checked,
     track: $("#track").value,
-  });
+  };
+  validateRunInputs(options, Object.keys(WEATHER), { form: true });
+  return run(options);
 }
 
 // heldout: the map's held-out routes (bench/heldout.js) instead of count and seed; never debug against
@@ -514,11 +516,12 @@ async function loadCompareScores(name) {
   if (!name || compareScores.has(name)) return;
   const saved = await api(`/api/bench/runs?name=${encodeURIComponent(name)}`);
   if (!Array.isArray(saved.results)) throw new Error("Saved run has no results.");
-  const { config, suite_version, results } = saved;
+  const { config, suite_version, manifest, results } = saved;
   compareScores.set(name, {
     config,
     suite_version,
-    results: results.map(({ id }) => ({ id })),
+    manifest,
+    results: results.map(({ id, tags }) => ({ id, tags })),
     scores: pickScores(results),
   });
   if (lastRun && $("#compare").value === name) render(lastRun);
@@ -563,8 +566,7 @@ function render(state) {
   const before = compare._runs?.find((run) => run.name === compare.value);
   const note = $("#comparison-note");
   const baseline = compareScores.get(before?.name);
-  const issue =
-    compareError || (before && comparisonIssue(state, state.complete === false ? before : baseline || before));
+  const issue = compareError || (baseline && state.complete !== false && comparisonIssue(state, baseline));
   note.hidden = !issue;
   note.textContent = issue || "";
   const prev = baseline && !issue && state.complete !== false ? { ...before.summary, ...baseline.scores } : null;

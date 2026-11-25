@@ -19,7 +19,15 @@ const config = {
   seed: 1,
   mode: "lockstep",
 };
-const run = { config, suite_version: "custom", results: [{ id: "s1-1" }, { id: "s1-2" }] };
+const tags = { length_m: 900, signals: 2, stops: 1, lefts: 1, rights: 0 };
+const run = {
+  config,
+  suite_version: "custom",
+  results: [
+    { id: "s1-1", tags },
+    { id: "s1-2", tags: { ...tags, length_m: 800 } },
+  ],
+};
 assert.equal(comparisonIssue(run, { ...run, config: { ...config, brain: "cautious" } }), null);
 for (const [change, expected] of [
   [{ bbox: [0, 2, 3, 4] }, "map"],
@@ -39,6 +47,16 @@ for (const [change, expected] of [
   assert.ok(comparisonIssue(run, { ...run, config: { ...config, ...change } }).includes(expected));
 assert.match(comparisonIssue(run, { ...run, results: [{ id: "s1-1" }] }), /completed routes/);
 assert.equal(comparisonIssue(run, { ...run, results: run.results.toReversed() }), null);
+const changedRoute = { id: "s1-1", tags: { ...tags, lefts: 2 } };
+assert.match(comparisonIssue(run, { ...run, results: [changedRoute, run.results[1]] }), /route tags/);
+const missingTags = { ...run, results: [{ id: "s1-1" }, run.results[1]] };
+assert.match(comparisonIssue(run, missingTags), /route identity unavailable/);
+const fingerprinted = { ...missingTags, manifest: { suite: { route_sha: "abcdef" } } };
+assert.equal(comparisonIssue(fingerprinted, fingerprinted), null);
+assert.match(
+  comparisonIssue(fingerprinted, { ...run, manifest: { suite: { route_sha: "123456" } } }),
+  /route fingerprints/,
+);
 assert.match(comparisonIssue(run, { ...run, suite_version: "v1" }), /suite v1/);
 assert.equal(heldoutPlan("constructor"), HELDOUT_DEFAULT);
 assert.doesNotThrow(() => validateRunInputs(config, ["dry"]));
@@ -51,6 +69,7 @@ for (const [change, expected] of [
 ])
   assert.throws(() => validateRunInputs({ ...config, ...change }, ["dry"]), expected);
 assert.doesNotThrow(() => validateRunInputs({ ...config, heldout: true, count: NaN, seed: NaN }, ["dry"]));
+assert.doesNotThrow(() => validateRunInputs({ ...config, count: 61, npcs: 121 }, ["dry"]));
 assert.ok(routeMatches(" S1-2 red ", { id: "s1-2" }, { failures: ["red light"] }));
 assert.ok(routeMatches("overlap", { id: "s1-2" }, { simulation_error: "overlap failure" }));
 assert.ok(!routeMatches("s1-1", { id: "s1-2" }, {}));
@@ -221,6 +240,31 @@ element("#run").disabled = true;
 await import("../static/js/bench/main.js");
 for (let frame = 0; element("#run").disabled && frame < 50; frame++) await new Promise(setImmediate);
 assert.equal(element("#run").disabled, false);
+element("#count").valueAsNumber = 61;
+element("#npcs").valueAsNumber = 121;
+element("#seed").valueAsNumber = 1;
+element("#mode").value = "lockstep";
+element("#weather").value = "dry";
+element("#run").handlers.click();
+await new Promise(setImmediate);
+assert.match(element("#status").textContent, /Scenarios must be a whole number from 1 to 60/);
+element("#count").valueAsNumber = 1;
+element("#run").handlers.click();
+await new Promise(setImmediate);
+assert.match(element("#status").textContent, /Traffic must be a whole number from 0 to 120/);
+
+const replay = {
+  format: "jev-model-recording/1",
+  header: { driver: "jev", bench: { count: 61, npcs: 121, seed: 1, weather: "dry" } },
+  scenarios: { "s1-1": run.results[0] },
+};
+const replayPending = window.__bench.run({ replay, save: false });
+assert.equal(window.__bench.stop(), true);
+const replayed = await replayPending;
+assert.equal(replayed.config.count, 61);
+assert.equal(replayed.config.npcs, 121);
+assert.equal(replayed.stopped, true);
+
 await assert.rejects(window.__bench.run({ brain: "not-installed" }), /unavailable/);
 assert.equal(element("#run").textContent, "Run");
 let release;
