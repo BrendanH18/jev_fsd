@@ -14,6 +14,7 @@ each harness error and each leg that left no result.
 from __future__ import annotations
 
 import json
+from collections import Counter
 import os
 import re
 import sys
@@ -22,6 +23,7 @@ from pathlib import Path
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "soak.yml"
 NO_RESULT = "no result (setup failed, timed out or was cancelled)"
 NON_AUDITS = {"simulation error", "stuck", "timeout", "collision"}
+CATEGORIES = {"throws": "simulation error", "stuck": "stuck", "collisions": "collision", "audits": "audit failure"}
 
 
 def _strip_yaml_comment(line: str) -> str:
@@ -166,67 +168,122 @@ def expected_legs(workflow: Path = WORKFLOW) -> list[str]:
             legs += [template.replace(key.group(0), v) for v in values.get(key.group(1), [])]
         else:
             legs.append(template)
-    return legs
+    return list(dict.fromkeys(legs))
+
+
+def artifact_runs(data: dict) -> list[dict]:
+    if not isinstance(data, dict):
+        raise ValueError("expected a report object")
+    runs = data.get("runs", [data])
+    if not isinstance(runs, list) or not runs:
+        raise ValueError("expected a nonempty runs array")
+    for run in runs:
+        if not isinstance(run, dict):
+            raise ValueError("expected run objects")
+        if "results" not in run and not run.get("harness_error") and not CATEGORIES.keys() & run.keys():
+            raise ValueError("expected route results, failure lists or a harness error")
+        results = run.get("results", [])
+        if not isinstance(results, list):
+            raise ValueError("expected a route results array")
+        ids = set()
+        for route in results:
+            if not isinstance(route, dict) or not isinstance(route.get("id"), str) or not route["id"].strip():
+                raise ValueError("expected a route result with an ID")
+            if route["id"] in ids:
+                raise ValueError(f"duplicate route ID {route['id']!r}")
+            ids.add(route["id"])
+            if "pass" in route and type(route["pass"]) is not bool:
+                raise ValueError(f"{route['id']}: expected a boolean verdict")
+            failure_labels(route)
+    return runs
+
+
+def failure_labels(route: dict) -> list[str]:
+    labels = route.get("failures", [])
+    if not isinstance(labels, list) or any(not isinstance(label, str) or not label.strip() for label in labels):
+        raise ValueError("expected an array of failure labels")
+    return list(dict.fromkeys(labels))
+
+
+def classified_routes(run: dict, key: str) -> dict[str, list[str]]:
+    routes = run.get(key, [])
+    if routes is None:
+        return {}
+    if not isinstance(routes, list):
+        raise ValueError(f"expected an array for {key}")
+    result = {}
+    for route in routes:
+        rid = route.get("id") if isinstance(route, dict) else route
+        if not isinstance(rid, str) or not rid.strip():
+            raise ValueError(f"{key}: expected a route ID")
+        reasons = failure_labels(route) if isinstance(route, dict) else []
+        result.setdefault(rid, []).extend(reasons or [CATEGORIES[key]])
+    return result
 
 
 def leg_failures(data: dict) -> tuple[int, list[str]]:
     """The number of routes a leg drove, and one line per failed route or harness error."""
     # soak.json has a run per map and seed (or a harness error); run.json is a single run.
-    runs = data["runs"] if "runs" in data else [data]
     total, failed = 0, []
-    for run in runs:
+    for run in artifact_runs(data):
         prefix = f"{run['id']} " if "id" in run else ""
         if run.get("harness_error"):
             failed.append(f"{prefix}harness error: {run['harness_error']}")
         failing = {}
         for r in run.get("results", []):
             total += 1
-            if not r.get("pass", False):
-                failing[r["id"]] = list(r.get("failures") or ["failed"])
-        for key in ("throws", "stuck"):
-            for rid in run.get(key) or []:
-                rid = rid if isinstance(rid, str) else rid.get("id", "?")
-                failing.setdefault(rid, [])
-                if key.rstrip("s") not in failing[rid]:
-                    failing[rid].append(key.rstrip("s"))
-        failed += [f"{prefix}{rid}: {', '.join(why) or 'failed'}" for rid, why in failing.items()]
+            labels = failure_labels(r)
+            if not r.get("pass", False) or labels:
+                failing[r["id"]] = labels
+        for key in CATEGORIES:
+            for rid, labels in classified_routes(run, key).items():
+                existing = failing.setdefault(rid, [])
+                if key == "stuck" and "timeout" in existing:
+                    continue
+                existing.extend(label for label in labels if label not in existing)
+        failed += [f"{prefix}{rid}: {', '.join(dict.fromkeys(why)) or 'failed'}" for rid, why in failing.items()]
     return total, failed
 
 
 def leg_categories(data: dict) -> dict[str, int]:
     """Count throws, stuck routes, collisions, and audit failures for a leg."""
-    runs = data["runs"] if "runs" in data else [data]
-    counts = {"throws": 0, "stuck": 0, "collisions": 0, "audits": 0}
-    for run in runs:
-        if any(key in run for key in ("throws", "stuck", "collisions", "audits")):
-            counts["throws"] += len(run.get("throws") or [])
-            counts["stuck"] += len(run.get("stuck") or [])
-            counts["collisions"] += len(run.get("collisions") or [])
-            counts["audits"] += len(run.get("audits") or [])
-            continue
+    counts = dict.fromkeys(CATEGORIES, 0)
+    for run in artifact_runs(data):
+        affected = {key: set(classified_routes(run, key)) for key in CATEGORIES}
         for r in run.get("results", []):
-            if r.get("simulation_error"):
-                counts["throws"] += 1
-            if (r.get("deadlocks") or 0) > 0 or (not r.get("arrived") and not r.get("simulation_error")):
-                counts["stuck"] += 1
-            if (r.get("collisions") or 0) > 0:
-                counts["collisions"] += 1
-            if any(f not in NON_AUDITS for f in r.get("failures") or []):
-                counts["audits"] += 1
+            labels = set(failure_labels(r))
+            if r.get("simulation_error") or "simulation error" in labels:
+                affected["throws"].add(r["id"])
+            if (r.get("deadlocks") or 0) > 0 or (
+                ("stuck" in labels or "timeout" in labels or r.get("arrived") is False)
+                and r["id"] not in affected["throws"]
+            ):
+                affected["stuck"].add(r["id"])
+            if (r.get("collisions") or 0) > 0 or "collision" in labels:
+                affected["collisions"].add(r["id"])
+            if labels - NON_AUDITS:
+                affected["audits"].add(r["id"])
+        for key, ids in affected.items():
+            counts[key] += len(ids)
     return counts
 
 
-def leg_dirs(root: Path) -> dict[str, Path]:
+def leg_dirs(root: Path) -> dict[str, list[Path]]:
     """Each downloaded leg's directory by name (its leg.txt, else the directory's name)."""
     if not root.is_dir():
         return {}
-    dirs = [p for p in root.iterdir() if p.is_dir()]
-    if (root / "leg.txt").exists() or not dirs and any(root.iterdir()):
-        dirs = [root]  # a lone artifact is extracted into root itself
+    dirs = sorted(p for p in root.iterdir() if p.is_dir())
+    if any((root / name).is_file() for name in ("leg.txt", "soak.json", "run.json")):
+        dirs.insert(0, root)
     named = {}
     for d in dirs:
         label = d / "leg.txt"
-        named[label.read_text().strip() if label.exists() else d.name] = d
+        try:
+            name = label.read_text(encoding="utf-8-sig").strip() if label.is_file() else d.name
+        except (OSError, UnicodeError) as err:
+            print(f"::warning title=City soak::{_single_line(f'{d.name}: unreadable leg.txt: {err}')}")
+            name = d.name
+        named.setdefault(name or d.name, []).append(d)
     return named
 
 
@@ -235,7 +292,7 @@ def escape(text: str) -> str:
 
 
 def _single_line(text: str) -> str:
-    return text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    return text.replace("%", "%25").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
 
 
 def main(root: Path) -> int:
@@ -247,23 +304,35 @@ def main(root: Path) -> int:
         print(f"::warning title=City soak::could not read the expected legs: {err}")
     rows, warnings = [], []
     totals = {"throws": 0, "stuck": 0, "collisions": 0, "audits": 0}
+    coverage = Counter()
     for name in expected + sorted(set(found) - set(expected)):
-        leg = found.get(name)
-        result = next((f for f in ("soak.json", "run.json") if leg and (leg / f).exists()), None)
+        candidates = found.get(name, [])
+        if len(candidates) > 1:
+            detail = f"multiple artifacts claim this leg ({', '.join(p.name for p in candidates)})"
+            warnings.append(f"{name}: {detail}")
+            rows.append((name, "-", detail))
+            coverage["unreadable"] += 1
+            continue
+        leg = candidates[0] if candidates else None
+        result = next((f for f in ("soak.json", "run.json") if leg and (leg / f).is_file()), None)
         if result is None:
+            coverage["missing"] += 1
             rows.append((name, "-", NO_RESULT))
             warnings.append(f"{name}: {NO_RESULT}")
             continue
         try:
-            payload = json.loads((leg / result).read_text())
+            payload = json.loads((leg / result).read_text(encoding="utf-8-sig"))
             total, failed = leg_failures(payload)
             counts = leg_categories(payload)
-        except (ValueError, KeyError, TypeError, AttributeError) as err:
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
+            coverage["unreadable"] += 1
             rows.append((name, "-", f"unreadable {result}: {err}"))
             warnings.append(f"{name}: unreadable {result}: {err}")
             continue
         for key in totals:
             totals[key] += counts[key]
+        coverage["readable"] += 1
+        coverage["routes"] += total
         rows.append((name, str(total), "<br>".join(failed) if failed else "passed"))
         warnings += [f"{name}: {line}" for line in failed]
 
@@ -275,6 +344,8 @@ def main(root: Path) -> int:
         bad = sum(1 for _, _, status in rows if status != "passed")
         out += [
             f"{bad} of {len(rows)} legs had failures (report-only: the run stays green).",
+            f"Artifact coverage: {coverage['readable']} readable, {coverage['missing']} missing, "
+            f"{coverage['unreadable']} unreadable, {coverage['routes']} routes.",
             f"Failure categories: throws={totals['throws']}, stuck={totals['stuck']}, "
             f"collisions={totals['collisions']}, audit failures={totals['audits']}.",
             "",

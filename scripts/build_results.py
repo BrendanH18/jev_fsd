@@ -744,6 +744,12 @@ def _check_run_shape(run):
         for row in results
     ):
         raise ValueError("benchmark result needs a route ID and boolean verdict")
+    seen = set()
+    for result in results:
+        route = result["id"]
+        if route in seen:
+            raise ValueError(f"benchmark run repeats route ID {route!r}")
+        seen.add(route)
 
 
 def _validated_run(path: Path, *, validate_filtered=False):
@@ -1038,6 +1044,8 @@ def readme_with(text: str, block: str) -> str:
     pattern = re.compile(re.escape(START) + r".*?" + re.escape(END), re.S)
     if not pattern.search(text):
         raise ValueError(f"README.md has no {START} ... {END} block")
+    if text.count(START) != 1 or text.count(END) != 1:
+        raise ValueError("README.md must contain exactly one pair of results markers")
     return pattern.sub(lambda _: f"{START}\n{block}\n{END}", text, count=1)
 
 
@@ -1090,9 +1098,15 @@ def main(argv=None) -> int:
         action="store_true",
         help="validate every manifest, result, run and submission and report all errors",
     )
+    parser.add_argument("--json", action="store_true", help="emit the --validate-all verdict and errors as JSON")
     args = parser.parse_args(argv)
+    if args.json and (not args.validate_all or args.check or args.diff):
+        parser.error("--json requires --validate-all without --check or --diff")
     if args.validate_all:
         errors = validate_all()
+        if args.json:
+            print(json.dumps({"valid": not errors, "errors": errors}, ensure_ascii=False))
+            return int(bool(errors))
         if errors:
             print(f"Validation failed with {len(errors)} error(s):", file=sys.stderr)
             for err in errors:
@@ -1101,8 +1115,12 @@ def main(argv=None) -> int:
         if not args.check and not args.diff:
             print("All manifests, results, runs and submissions are valid.")
             return 0
-    data = build()
-    output, readme = render(data), readme_with(README.read_text(), readme_block(data))
+    try:
+        data = build()
+        output, readme = render(data), readme_with(README.read_text(), readme_block(data))
+    except _ARTIFACT_ERRORS as err:
+        print(f"Could not generate published results: {err}", file=sys.stderr)
+        return 1
     if args.check or args.diff:
         stale = []
         for p, want in ((OUTPUT, output), (README, readme)):

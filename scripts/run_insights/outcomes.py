@@ -154,6 +154,53 @@ def duplicate_ids(rows):
     return {key: n for key, n in sorted(ids.items()) if n > 1}
 
 
+def event_timeline(rows):
+    """List retained events in saved route order with a stable index within each drive."""
+    return [
+        {"id": row.get("id"), "event_index": index, "type": event["type"], "time_s": event.get("t"), "event": event}
+        for row in rows
+        for index, event in enumerate(events(row) or ())
+    ]
+
+
+def failure_examples(rows):
+    """Identify drives behind each verdict reason, with context needed to find them again."""
+    examples = {}
+    for row in rows:
+        if verdict(row) != "failed":
+            continue
+        for reason in reasons(row) or ():
+            examples.setdefault(reason, []).append(
+                {"id": row.get("id"), "map": row.get("map"), "time_s": row.get("time_s")}
+            )
+    return [{"reason": reason, "routes": len(drives), "drives": drives} for reason, drives in sorted(examples.items())]
+
+
+def invalid_event_times(rows):
+    """Identify event timestamps that would make a saved sequence unsafe to interpret as a timeline."""
+    issues = []
+    for row in rows:
+        previous = None
+        for index, event in enumerate(events(row) or ()):
+            t = event.get("t")
+            if type(t) not in (int, float) or not isfinite(t) or t < 0:
+                error = "invalid time"
+            elif previous is not None and t < previous:
+                error = "time moved backwards"
+            else:
+                previous = t
+                continue
+            issues.append({"id": row.get("id"), "event_index": index, "type": event["type"], "error": error})
+    return issues
+
+
+DIAGNOSTICS = {
+    "event-timeline": ("Export retained events with their position in each drive's log.", event_timeline),
+    "event-time-issues": ("Find missing, invalid or backwards timestamps in retained events.", invalid_event_times),
+    "failure-examples": ("List the failed drives behind each verdict reason.", failure_examples),
+}
+
+
 REPORTS = {
     "suite-verdicts": ("Count recorded pass, fail and unknown verdicts.", lambda r: counts(r, lambda x: [verdict(x)])),
     "suite-arrival-verdicts": ("Cross-tabulate arrival and pass status.", lambda r: cohort(r, arrival)),
