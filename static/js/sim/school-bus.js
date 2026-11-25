@@ -100,8 +100,10 @@ export function schoolBusRelation(o, bus) {
   if (!o || !bus || o === bus || typeof o.toLocal !== "function") return null;
   const relation = relationFor(bus.psi - o.psi);
   if (!relation) return null;
-  const [x, y] = nearEnd(bus, relation),
-    l = o.toLocal(x, y),
+  const [x, y] = nearEnd(bus, relation);
+  // (Vehicle.toLocal throws on a point that is not finite: an invalid position has no relation)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const l = o.toLocal(x, y),
     spec = o.spec || CAR,
     ahead = l.ahead - (spec.length - spec.rearOverhang);
   return Number.isFinite(ahead) && Number.isFinite(l.right) ? { relation, ahead_m: ahead, right_m: l.right } : null;

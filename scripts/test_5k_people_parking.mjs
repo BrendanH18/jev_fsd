@@ -77,7 +77,9 @@ assert.equal(taken.reserved === explicit, true);
 releaseSlot(slot, owner);
 
 const parked = new ParkedCars(map, { density: 0 });
-assert.throws(() => parked.add(new Vehicle(NaN, 0)), /finite center/);
+const lost = new Vehicle(0, 0);
+lost.x = NaN;
+assert.throws(() => parked.add(lost), /finite center/);
 assert.equal(parked.list.length, 0);
 assert.equal(parked.remove(null), false);
 const car = new Vehicle(26, 26);

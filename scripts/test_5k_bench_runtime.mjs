@@ -82,7 +82,12 @@ try {
   globalThis.fetch = async () => {
     throw new Error("offline example");
   };
-  await assert.rejects(buildSuite(map, { count: 1 }), /suite seed 1 .*offline example/);
+  // (the shared request helper words a network failure for people and keeps the original as its cause)
+  await assert.rejects(buildSuite(map, { count: 1 }), (error) => {
+    const chain = [];
+    for (let e = error; e; e = e.cause) chain.push(String(e.message));
+    return /suite seed 1 /.test(chain[0]) && chain.some((message) => message.includes("offline example"));
+  });
   globalThis.fetch = async () => Response.json({ routes: null });
   await assert.rejects(buildSuite(map, { count: 1 }), /expected routes/);
   let calls = 0;

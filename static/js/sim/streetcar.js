@@ -95,8 +95,10 @@ export function streetcarRelation(o, car) {
   if (!o || !car || o === car || typeof car.toLocal !== "function") return null;
   if (!(Math.abs(wrap(car.psi - o.psi)) <= SAME_WAY)) return null;
   const cs = car.spec || STREETCAR,
-    os = o.spec || CAR,
-    l = car.toLocal(o.x, o.y);
+    os = o.spec || CAR;
+  // (Vehicle.toLocal throws on a point that is not finite: an invalid position has no relation)
+  if (!Number.isFinite(o.x) || !Number.isFinite(o.y)) return null;
+  const l = car.toLocal(o.x, o.y);
   const right = l.right,
     front = l.ahead + os.length - os.rearOverhang;
   if (!Number.isFinite(right) || !Number.isFinite(front) || !Number.isFinite(cs.rearOverhang)) return null;

@@ -106,8 +106,10 @@ export function busRelation(o, bus) {
   const heading = o.psi - bus.psi;
   if (!Number.isFinite(heading) || Math.abs(wrapAngle(heading % (2 * Math.PI))) > Math.PI / 6) return null;
   const os = o.spec || CAR,
-    bs = bus.spec || BUS,
-    l = bus.toLocal(o.x, o.y);
+    bs = bus.spec || BUS;
+  // (Vehicle.toLocal throws on a point that is not finite: an invalid position has no relation)
+  if (!Number.isFinite(o.x) || !Number.isFinite(o.y)) return null;
+  const l = bus.toLocal(o.x, o.y);
   if (!Number.isFinite(l.ahead) || !Number.isFinite(l.right) || l.ahead < -LOOK_BEHIND_M || l.ahead > bs.length + 5)
     return null;
   const front = l.ahead + Math.cos(heading) * (os.length - os.rearOverhang),
