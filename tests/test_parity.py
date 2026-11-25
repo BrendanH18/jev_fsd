@@ -109,6 +109,8 @@ def turn_differences(py: dict, js: dict) -> list:
 
 
 def join_differences(py: list, js: list, tolerance: float) -> list:
+    if len(py) < 2 or len(js) < 2:
+        return [f"lane join needs a polyline on both sides ({len(py)} Python, {len(js)} JavaScript points)"]
     out = []
     gap = hausdorff(py, js)
     if gap > tolerance:
@@ -160,6 +162,11 @@ class ParityTests(unittest.TestCase):
     def test_turn_angle_kind_and_sharp_turn_rule(self):
         self.check("turn", self.cases["turns"], self.js["turns"], lambda c, js: turn_differences(python_turn(c), js))
 
+    def test_turn_geometries_match_their_declared_angles(self):
+        for case, js in zip(self.cases["turns"], self.js["turns"]):
+            with self.subTest(case=case["name"]):
+                self.assertAlmostEqual(math.degrees(js["turn_angle"]), case["angle_deg"], places=6)
+
     def test_lane_joins_route_the_same_way(self):
         tol = self.cases["tolerance_m"]
         self.check(
@@ -193,6 +200,10 @@ class ParityTests(unittest.TestCase):
                 ),
             )
         )
+
+    def test_join_comparison_identifies_a_collapsed_polyline(self):
+        message = join_differences([(0, 0), (2, 0)], [(0, 0)], 0.05)
+        self.assertEqual(message, ["lane join needs a polyline on both sides (2 Python, 1 JavaScript points)"])
 
 
 if __name__ == "__main__":
