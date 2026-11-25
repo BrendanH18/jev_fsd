@@ -16,6 +16,7 @@ from jev.osm.cache import read_layer, write_bytes, write_json
 from jev.osm.crossings import crossings_path, load_crossings
 from jev.osm.pack import build_pack, pack_path
 from jev.osm.parse import parse_xml
+from jev.osm.rail import rail_path
 from jev.osm.restrictions import load_restrictions, restrictions_path
 from scripts import fetch_map, migrate_packs
 
@@ -278,6 +279,18 @@ class LayerCacheTests(unittest.TestCase):
         write_json(path, {**legacy, "red_turns": None})
         self.assertIsNone(load_restrictions(BBOX, self.maps))
 
+    def test_restrictions_missing_router_fields_are_a_cache_miss(self):
+        path = restrictions_path(self.maps, BBOX)
+        record = {"from": "e1", "kind": "no_left_turn", "to": ["e2"]}
+        write_json(path, {"restrictions_version": "1", "restrictions": [record]})
+        self.assertEqual(load_restrictions(BBOX, self.maps)["restrictions"], [record])
+        for broken in ({"from": "e1", "to": ["e2"]}, {**record, "to": "e2"}, {**record, "from": None}):
+            with self.subTest(broken=broken):
+                write_json(path, {"restrictions_version": "1", "restrictions": [broken]})
+                log = Mock()
+                self.assertIsNone(load_restrictions(BBOX, self.maps, log=log))
+                self.assertIn(path.name, log.call_args.args[0])
+
     def test_damaged_raw_input_skips_optional_layer_with_diagnostic(self):
         path = fetch.cache_path(self.maps, BBOX)
         path.write_bytes(b"<osm><node/></osm>")
@@ -425,6 +438,25 @@ class FetchMapCliTests(unittest.TestCase):
         self.assertEqual(self.command("kitsilano", "--crossings", "--osm-file", str(extract)), 0)
         self.assertEqual(pack_path(self.maps, BBOX).read_bytes(), original)
         self.assertTrue(layer.is_file())
+
+    def test_full_import_revisits_rail_once_a_later_layer_loads_the_source(self):
+        extract = self.maps / "explicit.osm"
+        extract.write_bytes(OSM)
+        self.assertEqual(self.command("kitsilano", "--osm-file", str(extract)), 0)
+        rail = rail_path(self.maps, BBOX)
+        rail.unlink()
+        restrictions_path(self.maps, BBOX).unlink()
+        raw_path = fetch.cache_path(self.maps, BBOX)
+        self.assertFalse(raw_path.exists())
+
+        def load(_bbox, _maps_dir, **_kwargs):
+            raw_path.write_bytes(OSM)
+            return raw_path
+
+        with patch.object(fetch, "fetch_osm_xml", side_effect=load) as download:
+            self.assertEqual(self.command("kitsilano"), 0)
+        download.assert_called_once()
+        self.assertTrue(rail.is_file())
 
     def test_offline_transit_and_restrictions_use_raw_cache(self):
         fetch.cache_path(self.maps, BBOX).write_bytes(OSM)

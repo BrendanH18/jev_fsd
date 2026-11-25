@@ -164,6 +164,16 @@ def _load_saved_object(path: Path, limit: int):
     return data if isinstance(data, dict) else None
 
 
+def _usable_recording(data) -> bool:
+    """A recording the catalog lists and lookup serves: current format with a header and drives."""
+    return (
+        isinstance(data, dict)
+        and data.get("format") == RECORDING_FORMAT
+        and isinstance(data.get("header"), dict)
+        and isinstance(data.get("drives"), dict)
+    )
+
+
 @lru_cache(maxsize=256)
 def _artifact_metadata(path: Path, signature: tuple, recording: bool, limit: int):
     """Only hold listing metadata in memory, including for large legacy tapes."""
@@ -171,12 +181,9 @@ def _artifact_metadata(path: Path, signature: tuple, recording: bool, limit: int
     if data is None:
         return None
     if recording:
-        if data.get("format") != RECORDING_FORMAT:
+        if not _usable_recording(data):
             return None
-        header, drives = data.get("header"), data.get("drives")
-        if not isinstance(header, dict) or not isinstance(drives, dict):
-            return None
-        return {"name": _recording_name(path), "header": header, "drives": sorted(drives)}
+        return {"name": _recording_name(path), "header": data["header"], "drives": sorted(data["drives"])}
     return {
         "name": path.stem,
         "saved_at": data.get("saved_at"),
@@ -705,9 +712,9 @@ def api_recordings(_body, query):
                 continue
             found = True
             data = _load_saved_object(path, MAX_ARCHIVE_BYTES)
-            if data is not None and data.get("format") == RECORDING_FORMAT:
+            if _usable_recording(data):
                 return data
-            if fallback is None:
+            if fallback is None and data is not None and data.get("format") != RECORDING_FORMAT:
                 fallback = data
         if fallback is not None:
             return fallback

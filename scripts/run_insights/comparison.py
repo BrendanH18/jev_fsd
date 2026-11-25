@@ -229,6 +229,29 @@ def describe(name, config):
     return {"file": name, "config": values}
 
 
+ARENA_CONDITIONS = ("map", "pack", "seed", "version", "weather", "time", "car")
+
+
+def drive_condition_conflicts(left_config, left_rows, right_config, right_rows):
+    """Challenges both arena runs drove under different recorded per-drive conditions."""
+    if not (is_arena_config(left_config) and is_arena_config(right_config)):
+        return []
+    left, right = index_routes("baseline", left_rows), index_routes("comparison", right_rows)
+    conflicts = []
+    for route_id, row in left.items():
+        paired = right.get(route_id)
+        if paired is None:
+            continue
+        fields = [
+            field
+            for field in ARENA_CONDITIONS
+            if row.get(field) is not None and paired.get(field) is not None and row[field] != paired[field]
+        ]
+        if fields:
+            conflicts.append(f"{route_id} ({', '.join(fields)})")
+    return conflicts
+
+
 def match_routes(left_name, left_config, left_rows, right_name, right_config, right_rows):
     validate_suite(left_config, right_config)
     left, right = index_routes(left_name, left_rows), index_routes(right_name, right_rows)
@@ -241,7 +264,7 @@ def match_routes(left_name, left_config, left_rows, right_name, right_config, ri
         if arena:
             if any(
                 row.get(field) is not None and paired.get(field) is not None and row[field] != paired[field]
-                for field in ("map", "pack", "seed", "version", "weather", "time", "car")
+                for field in ARENA_CONDITIONS
             ):
                 changed_tags.append(route_id)
                 continue

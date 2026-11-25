@@ -117,6 +117,8 @@ class SoakSummaryTest(unittest.TestCase):
             ({"runs": ["broken"]}, "run objects"),
             ({}, "route results"),
             ({"results": {}}, "route results array"),
+            ({"results": []}, "at least one route"),
+            ({"throws": []}, "at least one route"),
             ({"results": [{"pass": False}]}, "route result with an ID"),
             ({"results": [route, route]}, "duplicate route ID"),
             ({"results": [{**route, "pass": "false"}]}, "boolean verdict"),

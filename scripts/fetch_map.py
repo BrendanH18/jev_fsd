@@ -144,6 +144,15 @@ def main(argv: list[str]) -> int:
         rebuilt = pending.is_file()
         if layer_only and rebuilt:
             print("map: rebuilding all layers for the replacement pack")
+        deferred_rail = False
+
+        def report(layer, data):
+            layer_path, counts = LAYERS[layer][1:]
+            path_args = {"version": data["crossings_version"]} if layer == "crossings" else {}
+            path = layer_path(maps_dir, bbox, **path_args)
+            summary = ", ".join("%d %s" % (len(data.get(key, [])), label) for key, label in counts)
+            print("%s: %s (%s)" % (layer, path, summary))
+
         for layer, (builder, layer_path, counts) in LAYERS.items():
             if rebuilt or not layer_only or layer in selected:
                 # Some bundled maps lack a rail layer. An omitted rail layer alone does
@@ -162,11 +171,14 @@ def main(argv: list[str]) -> int:
                     load_osm=None if optional_rail else source,
                 )
                 if data is None:
+                    deferred_rail = deferred_rail or optional_rail
                     continue
-                path_args = {"version": data["crossings_version"]} if layer == "crossings" else {}
-                path = layer_path(maps_dir, bbox, **path_args)
-                summary = ", ".join("%d %s" % (len(data.get(key, [])), label) for key, label in counts)
-                print("%s: %s (%s)" % (layer, path, summary))
+                report(layer, data)
+        # A later layer may have loaded the raw source that the skipped rail layer needed.
+        if deferred_rail and source.cache_info().currsize:
+            data = LAYERS["rail"][0](bbox, maps_dir, pack, force=False, log=print, load_osm=source)
+            if data is not None:
+                report("rail", data)
         if rebuilt:
             pending.unlink()
     except (OSError, fetch.FetchError) as err:

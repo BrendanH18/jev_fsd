@@ -24,7 +24,9 @@ def replay_matrix(rows: list[dict]) -> dict:
         tape = row.get("recording")
         if not tape:
             continue
-        manifest = row.get("manifest") or {}
+        manifest = row.get("manifest")
+        if manifest is None:
+            manifest = {}
         if not isinstance(manifest, dict):
             raise ValueError(f"{tape} needs a manifest object")
         tree = manifest.get("source_commit") or row.get("replay_source_commit")

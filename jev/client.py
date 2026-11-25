@@ -103,7 +103,18 @@ class JevResult:
         }
 
     def trace(self) -> dict:
-        return {"request": self.request, "response": self.response, "meta": self.meta()}
+        return {"request": self.request, "response": _json_safe(self.response), "meta": self.meta()}
+
+
+def _json_safe(value):
+    """Copy a provider payload with non-finite numbers replaced by null, so traces always serialize."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 class SpendGuard:

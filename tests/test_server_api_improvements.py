@@ -393,6 +393,15 @@ class ArtifactTests(unittest.TestCase):
         slots = server.api_recordings({}, {})["recordings"]
         self.assertEqual([slot["header"]["driver"] for slot in slots], ["plain"])
 
+    def test_malformed_plain_recording_beside_gzip(self):
+        """Serve the same valid compressed tape that the catalog lists when the plain tape is malformed."""
+        self.write_recording("drive", driver="compressed", zipped=True)
+        plain = self.write_recording("drive", driver="plain")
+        plain.write_text(json.dumps({"format": server.RECORDING_FORMAT, "header": {"driver": "plain"}, "drives": []}))
+        slots = server.api_recordings({}, {})["recordings"]
+        self.assertEqual([slot["header"]["driver"] for slot in slots], ["compressed"])
+        self.assertEqual(server.api_recordings({}, {"name": ["drive"]})["header"]["driver"], "compressed")
+
     def test_snapshot_expect(self):
         """Require snapshot expected answers to be stored as an object."""
         with self.assertRaisesRegex(server.BadRequest, "expect must be an object"):
@@ -767,6 +776,13 @@ class JevClientTests(unittest.TestCase):
                 result = client.JevResult({}, {"usage": {"input_tokens": invalid}}, 1)
                 self.assertEqual(result.cost_usd, 0)
 
+    def test_non_finite_jev_usage_trace(self):
+        """Keep a decision trace serializable when Jev reports an overflowing usage number."""
+        response = json.loads('{"answers": {}, "usage": {"input_tokens": 1e999, "detail": [-1e999, 3]}}')
+        trace = client.JevResult({}, response, 1).trace()
+        self.assertEqual(trace["response"]["usage"], {"input_tokens": None, "detail": [None, 3]})
+        json.dumps(trace, allow_nan=False)
+
     def test_jev_answer_container(self):
         """Return an empty answer object for an unusable Jev answers container."""
         result = client.JevResult({}, {"answers": ["invalid"]}, 1)
@@ -829,6 +845,27 @@ class MapCatalogTests(unittest.TestCase):
                 catalog = maps.catalog(self.root)
                 self.assertEqual(len(catalog), len(maps.MAP_CATALOG))
                 self.assertFalse(catalog[0]["cached"])
+
+    def test_non_finite_map_metadata(self):
+        """Keep the map list serializable when a cached pack has non-finite coordinates."""
+        pack = {
+            "pack_version": maps.PACK_VERSION,
+            "edges": [{"from": 0, "to": 1, "pts": [[0, 0], [1, 1]], "cls": "residential"}],
+            "intersections": [],
+            "stops": [],
+            "buildings": [],
+            "extent": [0, 0, 1, 1],
+        }
+        damaged = (
+            {**pack, "extent": [0, 0, float("nan"), 1]},
+            {**pack, "edges": [{**pack["edges"][0], "pts": [[0, 0], [float("inf"), 1]]}]},
+        )
+        for contents in damaged:
+            with self.subTest(contents=contents):
+                self.path.write_text(json.dumps(contents))
+                catalog = maps.catalog(self.root)
+                self.assertFalse(catalog[0]["cached"])
+                json.dumps(catalog, allow_nan=False)
 
     def test_replaced_map_metadata(self):
         """Refresh a map preview after atomic replacement preserves its size and timestamp."""

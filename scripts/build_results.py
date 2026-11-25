@@ -784,6 +784,8 @@ def _validated_run(path: Path, *, validate_filtered=False):
     skip = excluded or (variant and version != CUSTOM_SUITE)
     if skip and not validate_filtered:
         return None
+    if not validate_filtered:
+        _check_run_shape(run)
     if recording is not None:
         header = recording["header"]
         published_verdicts = {r["id"]: r["pass"] for r in run["results"]}

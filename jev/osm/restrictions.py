@@ -65,10 +65,23 @@ def restrictions_path(maps_dir, bbox):
     return maps_dir / (fetch.cache_key(bbox) + ".restrictions.v1.json")
 
 
-def load_restrictions(bbox, maps_dir, *, log=lambda _msg: None):
-    return read_layer(
-        restrictions_path(maps_dir, bbox), "restrictions", "1", ("restrictions",), log, optional=("red_turns",)
+def _routable(record):
+    """A restriction record has the fields the router's index reads."""
+    return (
+        isinstance(record.get("from"), str)
+        and isinstance(record.get("kind"), str)
+        and isinstance(record.get("to"), list)
+        and all(isinstance(edge, str) for edge in record["to"])
     )
+
+
+def load_restrictions(bbox, maps_dir, *, log=lambda _msg: None):
+    path = restrictions_path(maps_dir, bbox)
+    layer = read_layer(path, "restrictions", "1", ("restrictions",), log, optional=("red_turns",))
+    if layer is not None and not all(_routable(record) for record in layer["restrictions"]):
+        log(f"map: ignoring invalid layer {path.name} (restrictions need from, kind and to edges)")
+        return None
+    return layer
 
 
 def build_restrictions(bbox, maps_dir, pack, force=False, log=lambda _: None, *, load_osm=None):

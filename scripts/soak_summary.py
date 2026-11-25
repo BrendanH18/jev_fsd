@@ -185,6 +185,8 @@ def artifact_runs(data: dict) -> list[dict]:
         results = run.get("results", [])
         if not isinstance(results, list):
             raise ValueError("expected a route results array")
+        if not results and not run.get("harness_error") and not any(run.get(key) for key in CATEGORIES):
+            raise ValueError("expected at least one route, classified failure or harness error")
         ids = set()
         for route in results:
             if not isinstance(route, dict) or not isinstance(route.get("id"), str) or not route["id"].strip():

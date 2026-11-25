@@ -602,6 +602,10 @@ def main():
             # Validate identities before filters can hide malformed or duplicate rows.
             comparison.index_routes(args.run.name, rows)
             comparison.index_routes(args.compare.name, other_rows)
+            if args.same_conditions:
+                conflicts = comparison.drive_condition_conflicts(config, rows, other_config, other_rows)
+                if conflicts:
+                    raise ValueError(f"recorded drive conditions differ: {'; '.join(conflicts)}")
             rows, other_rows = _filter_pair(rows, other_rows, **filters)
             if args.fail_on_regression:
                 routes, _, left_matched, right_matched = comparison.match_routes(

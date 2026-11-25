@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import stat
 import threading
 from copy import deepcopy
@@ -175,19 +176,25 @@ def _pack_metadata(path: Path) -> Optional[dict]:
     return meta
 
 
+def _finite(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _preview_metadata(pack: dict) -> dict:
     if not isinstance(pack, dict) or pack.get("pack_version") != PACK_VERSION:
         raise ValueError("unexpected pack version")
     for field in ("edges", "intersections", "stops", "buildings", "extent"):
         if not isinstance(pack[field], list):
             raise ValueError(f"{field} must be an array")
-    if len(pack["extent"]) != 4:
-        raise ValueError("extent must have four coordinates")
+    if len(pack["extent"]) != 4 or not all(_finite(v) for v in pack["extent"]):
+        raise ValueError("extent must have four finite coordinates")
     preview = []
     seen = set()
     for edge in pack["edges"]:
         start, end = edge["from"], edge["to"]
         points = tuple(map(tuple, edge["pts"]))
+        if not all(len(pt) == 2 and _finite(pt[0]) and _finite(pt[1]) for pt in points):
+            raise ValueError("edge points must be finite coordinate pairs")
         reverse = (end, start, points[::-1])
         edge_key = min((start, end, points), reverse)
         if edge_key in seen:

@@ -75,6 +75,22 @@ class ResultsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "drives or a stop reason"):
             build_results._check_run_shape({**run, "results": []})
 
+    def test_generation_refuses_legacy_run_with_repeated_route(self):
+        row = {"id": "r1", "pass": True, "decisions": 1}
+        run = {
+            "name": "20261119-000000-rules",
+            "saved_at": "2026-11-19T00:00:00Z",
+            "config": {"brain": "rules", "map": "kitsilano", "count": 2, "seed": 1},
+            "summary": {},
+            "results": [row, dict(row)],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / f"{run['name']}.json"
+            path.write_text(json.dumps(run))
+            with patch.object(build_results, "committed_runs", return_value=[path]):
+                with self.assertRaisesRegex(ValueError, "repeats route ID 'r1'"):
+                    build_results.run_rows({})
+
     def test_published_drive_keeps_measured_flagged_choices(self):
         result = {"challenge": "flagger", "map": "kitsilano", "pass": True, "time_s": 36}
         self.assertNotIn("flagged_choices", build_results.published_drive(result))

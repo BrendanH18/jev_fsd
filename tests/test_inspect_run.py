@@ -668,6 +668,9 @@ class InspectRunTests(unittest.TestCase):
                     output = subprocess.run(cli, capture_output=True)
                     self.assertEqual(output.returncode, 3)
                     self.assertEqual(json.loads(output.stdout)["routes"]["changed_tags"], ["a"])
+                    strict = subprocess.run([*cli, "--same-conditions"], capture_output=True)
+                    self.assertEqual(strict.returncode, 2)
+                    self.assertIn(f"recorded drive conditions differ: a ({field})".encode(), strict.stderr)
 
     def test_misplaced_flags_have_actionable_errors(self):
         for args, message in [
