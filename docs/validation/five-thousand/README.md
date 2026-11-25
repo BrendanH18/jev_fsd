@@ -49,8 +49,8 @@ The merged tree was then compared with the base commit `0583591` on one sandbox:
 
 ## Merged comparison
 
-The merged tree at `78cbeb5` (every area branch, the registry merge and the integration fixes) was
-compared with `0583591` on one xlarge Boat sandbox under Node 22, each tree with its own server and
+The final tree at `0242f58` (every area branch, the registry merge, the integration and review fixes
+and the performance fixes) was compared with `0583591` on one xlarge Boat sandbox under Node 22, each tree with its own server and
 `PYTHONHASHSEED=0`. Every field matched except timings and run provenance (`wall_ms`, compute and
 decision latency, start and save times, and the source commit, date and dirty flag):
 
@@ -64,10 +64,12 @@ decision latency, start and save times, and the source commit, date and dirty fl
 | Every challenge and both road tests, Rules | 62/62 | 62/62 | match, full results and the CLI report |
 | Every challenge and both road tests, cautious agent | 62/62 | 62/62 | match, full results and the CLI report |
 
-The review fixes that followed change no driving code on these paths: the cautious agent's cyclist pass
-now comes from the passing-cyclist record in the same position, and the audit's fallback counter is back
-where the base kept it. The stub model recording replays exactly and the Jev fixtures are current.
+The same comparison had matched at `78cbeb5`, before the review and performance fixes. The stub model
+recording replays exactly and the Jev fixtures are current.
 
 Combining the branches needed a few fixes of its own, each checked: tests that encoded an interface
 another area deliberately changed, transit relations guarding a non-finite position before the
-stricter `Vehicle.toLocal`, and pure pursuit accepting the turnaround's unbounded exit lane again.
+stricter `Vehicle.toLocal`, and pure pursuit accepting the turnaround's unbounded exit lane again. A
+profile of the merged tree then removed a slowdown the new guards had added (route projection, lane
+lookup, curve speeds, Rules' feature hooks and vehicle-spec checks): the Rules run over every challenge
+and road test now takes as long as the base's, within run-to-run noise.
