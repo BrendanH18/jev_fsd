@@ -10,21 +10,25 @@
 
 import { buildSuite } from "./scenarios.js";
 
-export const HELDOUT = { kitsilano: { seeds: [101, 102, 103], count: 4 } };
-export const HELDOUT_DEFAULT = { seeds: [101], count: 2 };
+const planFor = (seeds, count) => Object.freeze({ seeds: Object.freeze(seeds), count });
+export const HELDOUT = Object.freeze({ kitsilano: planFor([101, 102, 103], 4) });
+export const HELDOUT_DEFAULT = planFor([101], 2);
 
 // The held-out seeds and routes per seed for a map preset id (a box or an unknown name gets the default).
 export const heldoutPlan = (mapId) => (Object.hasOwn(HELDOUT, mapId) ? HELDOUT[mapId] : HELDOUT_DEFAULT);
 
 // Seeds that must never be used to tune: every held-out seed of every map.
-export const HELDOUT_SEEDS = [...new Set([...Object.values(HELDOUT), HELDOUT_DEFAULT].flatMap((p) => p.seeds))].sort(
-  (a, b) => a - b,
+export const HELDOUT_SEEDS = Object.freeze(
+  [...new Set([...Object.values(HELDOUT), HELDOUT_DEFAULT].flatMap((p) => p.seeds))].sort((a, b) => a - b),
 );
 
 // The held-out suite for a map: each held-out seed's routes, in seed order.
 export async function buildHeldoutSuite(map, mapId, options = {}) {
   const plan = heldoutPlan(mapId),
     suite = [];
-  for (const seed of plan.seeds) suite.push(...(await buildSuite(map, { ...options, count: plan.count, seed })));
+  for (const seed of plan.seeds) {
+    if (options.signal?.aborted) break;
+    suite.push(...(await buildSuite(map, { ...options, count: plan.count, seed })));
+  }
   return suite;
 }

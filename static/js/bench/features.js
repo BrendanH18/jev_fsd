@@ -8,9 +8,11 @@ const defaults = freeDriveOptions({
     return null;
   },
 });
-export const FEATURE_NAMES = [
-  ...new Set([...Object.keys(defaults.world).filter((k) => k !== "pedestrians"), ...Object.keys(defaults.fleet)]),
-].sort();
+export const FEATURE_NAMES = Object.freeze(
+  [
+    ...new Set([...Object.keys(defaults.world).filter((k) => k !== "pedestrians"), ...Object.keys(defaults.fleet)]),
+  ].sort(),
+);
 const disabled = new Map([...queries].map((query) => [query, freeDriveOptions(new URLSearchParams({ [query]: "0" }))]));
 const params = new Map(
   FEATURE_NAMES.map((name) => [

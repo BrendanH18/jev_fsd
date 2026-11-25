@@ -159,7 +159,7 @@ assert.match(source, /A benchmark is already running/);
 assert.match(source, /results\.length === suite\.length/);
 assert.match(source, /state\.stopped \? "skipped"/);
 assert.match(source, /Could not prepare the scenario to watch/);
-assert.match(source, /const r = await runScenario[\s\S]*?if \(stopRequested\) break;[\s\S]*?state\.results\.push/);
+assert.match(source, /const r = await runScenario[\s\S]*?if \(r\.stopped\) break;[\s\S]*?state\.results\.push/);
 assert.match(source, /save: \$\("#bench-save"\)\.checked/);
 assert.match(source, /diagnostics: \$\("#bench-diagnostics"\)\.checked/);
 assert.match(source, /cover:.*valueAsNumber/);
@@ -230,6 +230,7 @@ const { browserRoute } = await import("../static/js/demo/routing.js");
 const map = new MapData(pack);
 let saves = 0;
 let released;
+let routeSignal;
 globalThis.fetch = async (path, options) => {
   if (path === "/api/status")
     return Response.json({ npcs: 40, map: { id: "kitsilano", name: "kitsilano", label: "Kitsilano" } });
@@ -241,6 +242,7 @@ globalThis.fetch = async (path, options) => {
     return Response.json({ saved: "test" });
   }
   if (path === "/api/route") {
+    routeSignal = options.signal;
     if (released) await released;
     const body = JSON.parse(options.body);
     const route = browserRoute(map, body.from, body.to, body);
@@ -287,6 +289,7 @@ const pending = window.__bench.run({ count: 1, npcs: 0 });
 assert.equal(element("#bench-map").disabled, true);
 await assert.rejects(window.__bench.run(), /already running/);
 assert.equal(window.__bench.stop(), true);
+assert.equal(routeSignal.aborted, true);
 release();
 const stopped = await pending;
 assert.equal(stopped.stopped, true);
@@ -303,6 +306,7 @@ const completed = await window.__bench.run({
   save: false,
 });
 assert.equal(completed.results.length, 1);
+assert.match(element("#status").textContent, /1\/1 planned/);
 assert.ok(completed.results[0].diagnostics.final);
 assert.ok(Number.isFinite(completed.results[0].flagged_choices));
 assert.equal(saves, 0);
