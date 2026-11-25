@@ -86,6 +86,14 @@ function segmentFraction(s, from, to) {
   return (s / 2 - from / 2) / (to / 2 - from / 2);
 }
 
+function frameMove(route, from, to) {
+  if (route?.frameMove == null) return 0;
+  if (typeof route.frameMove !== "function") throw new TypeError("Route frameMove must be a function");
+  const metres = route.frameMove(from, to);
+  if (!Number.isFinite(metres)) throw new RangeError("Invalid route frame shift");
+  return metres;
+}
+
 // A lane law's lateral target in metres right of the route at route arc length s. With `shift` it
 // eases from `shift.from` (at route s = shift.start) to `offset` over `shift.len` metres: a lane change.
 // Offsets are measured from the route where the law was chosen (s0), and `shift.from` where the change
@@ -98,20 +106,13 @@ export function lateralAt(law, s, route = null) {
   if (!Number.isFinite(s)) throw new RangeError("Invalid lateral target route position");
   if (law.offset != null && !Number.isFinite(law.offset)) throw new RangeError("Invalid lateral target offset");
   const shift = law.shift;
-  const move = (s0) => {
-    if (route?.frameMove == null) return 0;
-    if (typeof route.frameMove !== "function") throw new TypeError("Route frameMove must be a function");
-    const metres = route.frameMove(s0, s);
-    if (!Number.isFinite(metres)) throw new RangeError("Invalid route frame shift");
-    return metres;
-  };
-  const to = (law.offset || 0) - move(law.s0) + detourAt(law.detour, s);
+  const to = (law.offset || 0) - frameMove(route, law.s0, s) + detourAt(law.detour, s);
   if (!Number.isFinite(to)) throw new RangeError("Lateral target exceeds the supported range");
   if (!shift) return to;
   if (!Number.isFinite(shift.from) || !Number.isFinite(shift.start) || !Number.isFinite(shift.len) || shift.len < 0)
     throw new RangeError("Invalid lane-change geometry");
   if (shift.len === 0 && s >= shift.start) return to;
-  const from = shift.from - move(shift.start);
+  const from = shift.from - frameMove(route, shift.start, s);
   if (!Number.isFinite(from)) throw new RangeError("Lane-change origin exceeds the supported range");
   const u = clamp((s - shift.start) / shift.len, 0, 1);
   if (!Number.isFinite(to - from)) {
@@ -173,7 +174,8 @@ export function curveProfileSpeed(route, s) {
   if (typeof route?.curveSpeedAt !== "function" || !Number.isFinite(route.length) || route.length < 0)
     throw new TypeError("Curve profile requires route geometry with a finite length");
   const { lat, decel } = comfort();
-  let best = { v: Infinity, at: 0 };
+  let bestSpeed = Infinity,
+    bestAt = 0;
   for (let d = 0; d <= CURVE_HORIZON_M && s + d < route.length; d += 3) {
     const vc = route.curveSpeedAt(s, d, lat);
     if (!Number.isFinite(vc) || vc < 0) continue;
@@ -181,9 +183,12 @@ export function curveProfileSpeed(route, s) {
     const squared = vc * vc + braking;
     const v =
       squared === Infinity ? Math.hypot(vc, Math.sqrt(braking)) : squared === 0 && vc > 0 ? vc : Math.sqrt(squared);
-    if (v < best.v) best = { v, at: d };
+    if (v < bestSpeed) {
+      bestSpeed = v;
+      bestAt = d;
+    }
   }
-  return best;
+  return { v: bestSpeed, at: bestAt };
 }
 
 // The "law" a candidate or the autopilot executes between decisions. A lane law's vTarget is a

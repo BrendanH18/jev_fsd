@@ -4,7 +4,7 @@
 
 import { cumulative, pointAt, headingAt, projectPoint, dist } from "./mapdata.js";
 import { secondsToGreen as secondsToGreenFor } from "../sim/signals.js";
-import { firstHookResult, hooks } from "../sim/features/index.js";
+import { hooks } from "../sim/features/index.js";
 import { CAR } from "../sim/vehicle.js";
 import { PEEK_SHORT_M } from "../sim/priority.js";
 
@@ -410,7 +410,11 @@ export class Route {
   }
   // Kept for callers inspecting reserved-lane transitions.
   busMerges() {
-    return firstHookResult(ROUTE_LANE_MERGES, this, RAMP_M) ?? NO_MERGES;
+    for (const merges of ROUTE_LANE_MERGES) {
+      const moves = merges(this, RAMP_M);
+      if (moves) return moves;
+    }
+    return NO_MERGES;
   }
   // Centre of lane k of the edge at s, in metres right of the polyline there.
   laneOffsetAt(s, k) {
