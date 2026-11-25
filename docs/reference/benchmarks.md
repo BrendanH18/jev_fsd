@@ -335,3 +335,45 @@ New Node publication manifests use `jev-run-manifest/2`. The report, manifest, t
 Use `bench_node.mjs --replay TAPE.json.gz --check replay --json RUN.json` to export a complete exact benchmark replay for publication. The report retains the tape's manifest and recording date when the recorded engine and suite match.
 
 When a change alters any canonical result, add a new definition and switch the Node writers to it. Keep earlier definitions and recordings so publication and replay can verify older results on their declared source and engine.
+
+## Select and rerun benchmark routes
+
+Use the same seed, map and requested count to regenerate route IDs. Use
+`--list` to inspect selected IDs and route tags without driving. `--start-at`
+includes the named route and all following routes. `--skip` drops named IDs and
+`--limit` caps what remains. Filtering always preserves suite order.
+
+```sh
+node --experimental-default-type=module scripts/bench_node.mjs \
+  --map kitsilano --seed 1 --count 12 --features city --list
+node --experimental-default-type=module scripts/bench_node.mjs \
+  --map kitsilano --seed 1 --count 12 --features city \
+  --start-at s1-4 --skip s1-5 --limit 2 --check 1 \
+  --quiet --progress --json subset.json.gz
+```
+
+With `--quiet`, the final JSON summary is the only standard-output line.
+`--progress` sends each drive start to standard error. The full artifact is
+written with `--json`; a `.gz` suffix compresses it. Selected subsets carry
+the custom suite label.
+
+The browser benchmark can collect incident context, run a city covering row
+and skip saving the run. Search the results by route ID or failure. The page
+shows differences only for matching benchmark conditions and completed route
+IDs.
+
+## Select and rerun soak configurations
+
+`--list` prints the IDs assigned to a shard. Pass those IDs to `--only` or
+`--skip` to retry specific configurations. `--fail-on-audit` makes every
+recorded drive verdict count, and `--require-count` checks the requested number
+of routes completed. `--fail-fast` finishes the report after the first failed
+configuration and lists IDs still queued. The scheduled soak retains its usual
+policies.
+
+For trace comparison, use `--position-tolerance` (metres),
+`--heading-tolerance` (radians) and `--speed-tolerance` (metres per second) when
+a single numeric tolerance is insufficient. `--exact --check` treats even
+sub-tolerance state differences as divergence. `--output comparison.json.gz`
+writes the comparison directly to a compressed artifact. `--compact` omits
+indentation.

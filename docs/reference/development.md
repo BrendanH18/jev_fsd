@@ -257,3 +257,29 @@ To add a driver, follow the [agent adapter guide](../agents.md): implement
 register its factory with `registerAgent` in `static/js/brain/registry.js` or load its module
 through the simulator and arena. Before contributing, run the tests that cover the change (CI
 runs the full suite) and include a baseline comparison when a change affects driving.
+
+## Plan Node checks
+
+Preview the dispatch order with `node scripts/node_checks.mjs --list`.
+`--match TEXT` and `--exclude TEXT` filter test basenames. `--show-output`
+prints passing checks' output. `--fail-fast` lets running checks finish and
+skips the rest. `--json report.json.gz` exports per-file outcomes and the
+retained failure logs.
+
+Use `node scripts/ci_shard.mjs --shards 6 --file test_bench_options.mjs` to
+find a check's shard. Add `--json` to a lookup, shard listing or full plan to
+read it from another tool. Use `--times PATH` to experiment with an alternate
+timing table and `--require-measured` to identify tests missing timings.
+
+## Check a packaged demo
+
+The static build checks its navigation, bundled map data and published replays
+before CI uploads it. To verify a previously generated copy without writing
+to it, run `python scripts/build_demo.py --check --output .demo-site`. Use
+`python scripts/build_demo.py --list-maps` for its bundled map catalog.
+
+The Arena catalog is available offline with
+`node --experimental-default-type=module scripts/arena_node.mjs --list --set all`.
+Use `--map`, `--region`, `--weather`, `--hazard`, `--difficulty` or
+`--parking-only` to select drives, then remove `--list` to run the selection
+against the local server.
