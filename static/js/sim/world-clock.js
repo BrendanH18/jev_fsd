@@ -61,10 +61,13 @@ export const TIME_PRESETS = {
   night: 22.5,
 };
 export function parseHour(value, fallback = TIME_PRESETS.afternoon) {
-  if (value === null || value === undefined || value === "") return fallback;
-  if (TIME_PRESETS[value] !== undefined) return TIME_PRESETS[value];
-  const m = String(value).match(/^(\d{1,2})(?::(\d{2}))?$/);
-  if (m) return (+m[1] % 24) + (m[2] ? +m[2] / 60 : 0);
-  const f = parseFloat(value);
-  return Number.isFinite(f) ? ((f % 24) + 24) % 24 : fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? normalizeHour(value) : fallback;
+  if (typeof value !== "string") return fallback;
+  const text = value.trim();
+  if (Object.hasOwn(TIME_PRESETS, text)) return TIME_PRESETS[text];
+  const clock = /^(\d{1,2}):([0-5]\d)$/.exec(text);
+  if (clock) return (+clock[1] % 24) + +clock[2] / 60;
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return fallback;
+  const hour = Number(text);
+  return Number.isFinite(hour) ? normalizeHour(hour) : fallback;
 }
