@@ -39,6 +39,10 @@ const SPEND_KEYS = [
   "cost_known",
   "live_call",
 ];
+const NONNEGATIVE_META = ["latency_ms", "input_tokens", "cost_usd"];
+function cleanMetrics(meta) {
+  for (const key of NONNEGATIVE_META) if (!Number.isFinite(meta[key]) || meta[key] < 0) meta[key] = 0;
+}
 
 // A deadlock creep's law `law` (with its s0) where a police officer directing traffic at the junction ahead
 // holds the car, or no longer does (sim/traffic-officer.js): stopping at the line, braking gently and
@@ -102,7 +106,7 @@ export class Autopilot {
     return this.brains[this.brainName];
   }
   setBrain(name) {
-    if (this.brains[name]) {
+    if (Object.hasOwn(this.brains, name) && this.brains[name]) {
       this.brainName = name;
       this.bumpEpoch();
     }
@@ -432,30 +436,32 @@ export class Autopilot {
     }
     const controller = new AbortController();
     this.inFlight = controller;
-    const timeoutMs = this.brain.timeoutMs > 0 ? this.brain.timeoutMs : TIMEOUT_MS;
+    const brain = this.brain;
+    const driver = this.brainName;
+    const timeoutMs = Number.isFinite(brain.timeoutMs) && brain.timeoutMs > 0 ? brain.timeoutMs : TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let result;
+    let by;
+    let abort;
     try {
-      const result = await Promise.race([
-        this.brain.decide(snap, eligible, request, controller.signal),
-        new Promise((_, reject) =>
-          controller.signal.addEventListener(
-            "abort",
-            () => reject(new DOMException("Decision timed out", "AbortError")),
-            { once: true },
-          ),
-        ),
+      const cancelled = new Promise((_, reject) => {
+        abort = () => reject(new DOMException("Decision timed out", "AbortError"));
+        controller.signal.addEventListener("abort", abort, { once: true });
+      });
+      result = await Promise.race([
+        (async () => brain.decide(snap, eligible, request, controller.signal))(),
+        cancelled,
       ]);
-      clearTimeout(timer);
       if (epoch !== this.epoch) return;
-      if (!isDecisionAgent(this.brainName) && !validAgentChoice(result, eligible))
+      const decisionModel = isDecisionAgent(driver);
+      if ((!decisionModel || result?.candidateId !== null) && !validAgentChoice(result, eligible))
         throw Object.assign(new Error("Agent returned a manoeuvre outside the eligible candidate set"), {
           meta: result?.meta,
           trace: result?.trace,
         });
-      result.meta ||= {};
-      result.meta.source ||= this.brainName;
-      for (const key of ["latency_ms", "input_tokens", "cost_usd"])
-        if (!Number.isFinite(result.meta[key]) || result.meta[key] < 0) result.meta[key] = 0;
+      result = { ...result, meta: { ...result.meta } };
+      result.meta.source ||= driver;
+      cleanMetrics(result.meta);
       if (result.candidateId === null && eligible.length) {
         const r = this.rulesDecide(snap, clear);
         result.candidateId = r.candidateId;
@@ -464,27 +470,31 @@ export class Autopilot {
         result.meta.fallback = "invalid vector";
         this.world.violations.fallbacks++;
       }
-      if (isDecisionAgent(this.brainName) || result.meta.live_call) this.totals.calls++;
-      this.apply(result, snap, candidates, request, result.meta.fallback ? "fallback" : "model");
+      if (decisionModel || result.meta.live_call) this.totals.calls++;
+      by = result.meta.fallback ? "fallback" : "model";
     } catch (err) {
-      clearTimeout(timer);
       if (epoch !== this.epoch) return;
       const r = this.rulesDecide(snap, clear);
       // A call that happened but returned an unusable answer still counts its tokens, cost and latency.
-      if (err.meta?.live_call) {
+      if (err?.meta?.live_call) {
         for (const key of SPEND_KEYS) if (err.meta[key] !== undefined) r.meta[key] = err.meta[key];
+        cleanMetrics(r.meta);
         r.trace = err.trace;
         this.totals.calls++;
       }
       r.meta.source = "rules_fallback";
-      r.meta.error = err.name === "AbortError" ? `timeout after ${timeoutMs} ms` : err.message;
+      r.meta.error = err?.name === "AbortError" ? `timeout after ${timeoutMs} ms` : err?.message || String(err);
       r.answers = { ...local };
       this.world.violations.fallbacks++;
-      this.onEvent({ type: "fallback", error: r.meta.error, status: err.status });
-      this.apply(r, snap, candidates, request, "fallback");
+      this.onEvent({ type: "fallback", error: r.meta.error, status: err?.status });
+      result = r;
+      by = "fallback";
     } finally {
+      clearTimeout(timer);
+      if (abort) controller.signal.removeEventListener("abort", abort);
       if (this.inFlight === controller) this.inFlight = null;
     }
+    if (epoch === this.epoch) this.apply(result, snap, candidates, request, by);
   }
 
   // Rules' choice among `clear` (the unflagged manoeuvres). With none, only on the open track (a model
@@ -564,6 +574,7 @@ export class Autopilot {
     this.totals.tokens += result.meta.input_tokens || 0;
     this.totals.cost += result.meta.cost_usd || 0;
     this.lastDecision = {
+      decidedBy: by,
       state: request.state,
       questions: request.questions,
       answers: result.answers,

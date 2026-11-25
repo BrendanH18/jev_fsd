@@ -9,6 +9,24 @@ const AFTER_AMBER = hooks("cautious", "afterAmber");
 const FEATURE_STOP = hooks("cautiousStop");
 const FEATURE_DRIVE = hooks("cautiousDrive");
 
+function bestCandidate(eligible, target) {
+  let best;
+  let lowest = Infinity;
+  for (const candidate of eligible) {
+    const s = candidate.sim;
+    const cost =
+      Math.abs(s.end_speed - target) * 2 +
+      Math.abs(s.lane_err_end) * 3 +
+      Math.max(0, 5 - s.min_gap_m) * 6 -
+      s.progress_m * 0.3;
+    if (!best || cost < lowest) {
+      best = candidate;
+      lowest = cost;
+    }
+  }
+  return best;
+}
+
 // Copy this module to build your own agent. The harness has already rejected unsafe candidates. On the
 // open track (brain/tracks.js) `eligible` also holds manoeuvres that failed a road-rule check, each with
 // `flagged` true and the check in `reject`; this agent keeps to the others, as Rules does.
@@ -26,15 +44,6 @@ export class CautiousAgent {
     const target = FEATURE_STOP.some((shouldStop) => shouldStop(snap))
       ? 0
       : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
-    const ranked = eligible.map((candidate) => ({
-      candidate,
-      cost:
-        Math.abs(candidate.sim.end_speed - target) * 2 +
-        Math.abs(candidate.sim.lane_err_end) * 3 +
-        Math.max(0, 5 - candidate.sim.min_gap_m) * 6 -
-        candidate.sim.progress_m * 0.3,
-    }));
-    ranked.sort((a, b) => a.cost - b.cost);
     // an emergency vehicle is coming: pull over and stop, whatever it costs in lane position
     // parking at the destination, or pulling out of a space, once on offer: carry on with it
     // passing a cyclist through the oncoming lane, once the way is clear: at the pass speed, so as to
@@ -57,7 +66,7 @@ export class CautiousAgent {
       firstHookResult(BEFORE_AMBER, snap, eligible, target) ||
       (amberStop && eligible.find((c) => c.id === "stop_at_line")) ||
       firstHookResult(AFTER_AMBER, snap, eligible, target) ||
-      ranked[0]?.candidate;
+      bestCandidate(eligible, target);
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
     // pulling up to park stops where the car reverses in)
     return {

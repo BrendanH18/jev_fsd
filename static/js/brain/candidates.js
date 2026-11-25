@@ -1212,6 +1212,7 @@ export function simulateAll(candidates, snap, world) {
     else if ((reject = rejectBy(sims.end, c)));
     c.reject = reject;
     c.eligible = !reject;
+    delete c.flagged; // a new guarded prediction replaces a previous open-track advisory
   }
   // (and what a registered feature lets stand once every candidate is judged: sim/features/index.js)
   for (const settle of SETTLE) settle(snap, candidates);

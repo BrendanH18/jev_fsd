@@ -8,7 +8,7 @@
 // to Rules for that decision; the reason shows in the HUD, the Inspect drawer and arena timelines.
 
 import { api } from "../common.js";
-import { agentDefinitions } from "./registry.js";
+import { agentDefinition, agentDefinitions } from "./registry.js";
 import { syncEndpointAgents, checkEndpoints, checkedStatus, defaultFrom } from "./endpoints.js";
 import { buildLlmPrompt } from "./llm-prompt.js";
 
@@ -32,14 +32,25 @@ export class LlmBrain {
       { signal },
     );
     const meta = {
-      ...res.meta,
+      ...res?.meta,
       source: this.name,
       live_call: true,
       round_trip_ms: Math.round(performance.now() - started),
     };
     // The call happened, so the error carries its tokens, cost and trace into the Rules fallback.
-    if (!res.answer) throw Object.assign(new Error(`invalid output: ${res.invalid}`), { meta, trace: res.trace });
-    return llmDecision(res.answer, request, meta, res.trace);
+    const invalid = (reason) => {
+      throw Object.assign(new Error(`invalid output: ${reason}`), { meta, trace: res?.trace });
+    };
+    const raw = res?.answer;
+    if (res?.invalid || !raw || typeof raw !== "object" || Array.isArray(raw))
+      invalid(res?.invalid || res?.error || "missing answer object");
+    const answer = {};
+    for (const [field, choices] of Object.entries(expect)) {
+      if (choices.includes(raw[field])) answer[field] = raw[field];
+      else if (field === "motion" || field === "candidate") invalid(`missing or invalid ${field}`);
+    }
+    if (typeof raw.reason === "string") answer.reason = raw.reason.slice(0, 200);
+    return llmDecision(answer, request, meta, res.trace);
   }
 }
 
@@ -49,15 +60,15 @@ export function llmDecision(answer, request, meta, trace = null) {
   const local = request.local || {};
   const pick = (choice) => ({ type: "choice", choice, probabilities: { [choice]: 1 }, confidence: null });
   const answers = { ...local };
-  if (answer.motion) answers.motion = pick(answer.motion);
-  if (answer.candidate) answers.vector = pick(answer.candidate);
-  if (answer.headlights) answers.headlights = pick(answer.headlights);
-  if (answer.route) answers.route = pick(answer.route);
+  if (answer.motion && !local.motion) answers.motion = pick(answer.motion);
+  if (answer.candidate && !local.vector) answers.vector = pick(answer.candidate);
+  if (answer.headlights && !local.headlights) answers.headlights = pick(answer.headlights);
+  if (answer.route && !local.route) answers.route = pick(answer.route);
   if (answer.reason) meta = { ...meta, reason: answer.reason };
   return {
-    motion: answer.motion || local.motion?.choice || "drive",
-    candidateId: answer.candidate || local.vector?.choice || null,
-    routeId: answer.route || null,
+    motion: answers.motion?.choice ?? "drive",
+    candidateId: answers.vector?.choice ?? null,
+    routeId: answers.route?.choice ?? null,
     answers,
     meta,
     trace,
@@ -69,7 +80,7 @@ export function llmDecision(answer, request, meta, trace = null) {
 // public demo has no server, so it lists none. Returns the ids that were added, changed or removed.
 export const registerLlmAgents = (llm) => syncEndpointAgents("llm", llm?.endpoints || [], llmBrainFor);
 export const llmBrainFor = (id) => {
-  const e = agentDefinitions().find((d) => d.id === id)?.llm;
+  const e = agentDefinition(id)?.llm;
   return e ? new LlmBrain(e) : null;
 };
 

@@ -39,13 +39,21 @@ const META = "$meta"; // provider metadata also present in the stored response
 // undefined members are dropped and non-finite numbers become null.
 export function canonicalJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value))
-    return `[${value.map((v) => (v === undefined || typeof v === "function" ? "null" : canonicalJson(v))).join(",")}]`;
   if (typeof value.toJSON === "function") return canonicalJson(value.toJSON());
-  const keys = Object.keys(value)
-    .filter((k) => value[k] !== undefined && typeof value[k] !== "function")
-    .sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`).join(",")}}`;
+  if (Array.isArray(value)) {
+    const items = [];
+    for (let i = 0; i < value.length; i++) items.push(canonicalJson(value[i]));
+    return `[${items.join(",")}]`;
+  }
+  if (value instanceof Number || value instanceof String || value instanceof Boolean) return JSON.stringify(value);
+  const keys = Object.keys(value).sort();
+  const fields = [];
+  for (const key of keys) {
+    const item = value[key];
+    if (item === undefined || typeof item === "function" || typeof item === "symbol") continue;
+    fields.push(`${JSON.stringify(key)}:${canonicalJson(item)}`);
+  }
+  return `{${fields.join(",")}}`;
 }
 
 // A 64-bit hash (two independent 32-bit lanes over the UTF-16 code units) as 16 hex digits.
@@ -78,9 +86,11 @@ export function requestKey({ driver, model }, path, body) {
 export const mapFingerprint = (map) => hashText(canonicalJson(map.pack));
 export function checkMap(recording, map) {
   const want = recording.header.map_sha;
-  if (want && want !== mapFingerprint(map))
+  if (!want) return;
+  const actual = mapFingerprint(map);
+  if (want !== actual)
     throw new Error(
-      `The recording was made on other map data (${recording.header.map || "map"} ${want}, this one ${mapFingerprint(map)}): a map pack or layer has changed since.`,
+      `The recording was made on other map data (${recording.header.map || "map"} ${want}, this one ${actual}): a map pack or layer has changed since.`,
     );
 }
 
@@ -88,6 +98,19 @@ export function checkMap(recording, map) {
 export const driverKind = (id) =>
   id === "jev" ? "jev" : String(id).startsWith("decision:") ? "decision" : String(id).startsWith("llm:") ? "llm" : null;
 const ENDPOINT_FIELDS = ["id", "name", "label", "model", "timeout_s"];
+const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+const dictionary = (value) => Object.assign(Object.create(null), value);
+const OUTCOME_TYPES = ["response", "timeout", "cancelled", "error"];
+
+function validOutcome(outcome) {
+  if (!isObject(outcome)) return false;
+  const types = OUTCOME_TYPES.filter((type) => Object.hasOwn(outcome, type));
+  if (types.length !== 1) return false;
+  const [type] = types;
+  if (type === "timeout" || type === "cancelled") return outcome[type] === true;
+  if (type === "response") return outcome.response !== undefined;
+  return isObject(outcome.error) && typeof outcome.error.message === "string";
+}
 
 // The header for a new recording. `brain` is the driver's brain (for its endpoint), `model` the model
 // id when the brain does not know it (Jev's comes from the server's status).
@@ -126,16 +149,31 @@ export class ModelRecording {
     if (!header?.driver || !driverKind(header.driver))
       throw new Error("A recording needs a header with a model driver id.");
     this.header = header;
-    this.drives = drives; // drive id -> { key: [outcome, ...] }
-    this.results = results; // drive id -> the drive's result as recorded, timings removed
-    this.scenarios = scenarios; // drive id -> the benchmark scenario driven (start, route, traffic seed)
+    this.drives = dictionary(drives); // drive id -> { key: [outcome, ...] }
+    this.results = dictionary(results); // drive id -> the drive's result as recorded, timings removed
+    this.scenarios = dictionary(scenarios); // drive id -> the benchmark scenario driven (start, route, traffic seed)
   }
 
   static parse(data) {
     const json = typeof data === "string" ? JSON.parse(data) : data;
     if (json?.format !== RECORDING_FORMAT)
       throw new Error(`Not a model recording (format ${JSON.stringify(json?.format)}, expected ${RECORDING_FORMAT}).`);
-    const { header, results = {} } = json;
+    const { header, drives = {}, results = {}, scenarios = {} } = json;
+    for (const [name, value] of Object.entries({ drives, results, scenarios }))
+      if (!isObject(value)) throw new Error(`The recording's ${name} must be an object.`);
+    for (const [driveId, answers] of Object.entries(drives)) {
+      if (!isObject(answers)) throw new Error(`Drive "${driveId}" must have an object of answers.`);
+      for (const [key, outcomes] of Object.entries(answers)) {
+        if (!Array.isArray(outcomes)) throw new Error(`Drive "${driveId}" request "${key}" must have an answer list.`);
+        for (let i = 0; i < outcomes.length; i++)
+          if (!validOutcome(outcomes[i]))
+            throw new Error(`Drive "${driveId}" request "${key}" has an invalid outcome at answer ${i + 1}.`);
+      }
+    }
+    for (const [driveId, result] of Object.entries(results))
+      if (!isObject(result)) throw new Error(`Drive "${driveId}" must have an object as its result.`);
+    for (const [driveId, scenario] of Object.entries(scenarios))
+      if (!isObject(scenario)) throw new Error(`Drive "${driveId}" must have an object as its scenario.`);
     const version = header?.suite_version;
     if (
       (version !== undefined && (typeof version !== "string" || !/^(legacy|custom|v[1-9]\d*)$/.test(version))) ||
@@ -152,7 +190,7 @@ export class ModelRecording {
   // (answers come from the recording; no call is made).
   tape(driveId, mode, { onRequest = null } = {}) {
     if (!["record", "replay"].includes(mode)) throw new Error(`Unknown tape mode "${mode}".`);
-    if (mode === "record") this.drives[driveId] = {};
+    if (mode === "record") this.drives[driveId] = dictionary();
     return new DriveTape(this, String(driveId), mode, onRequest);
   }
 
@@ -216,7 +254,8 @@ export class DriveTape {
     this.driveId = driveId;
     this.mode = mode;
     this.onRequest = onRequest;
-    this.answers = mode === "record" ? recording.drives[driveId] : recording.drives[driveId] || {};
+    this.hasDrive = Object.hasOwn(recording.drives, driveId);
+    this.answers = recording.drives[driveId] || dictionary();
     this.cursor = new Map();
     this.stats = { calls: 0, served: 0, missing: 0, drift: 0 };
   }
@@ -232,9 +271,10 @@ export class DriveTape {
     if (id !== this.driver) throw new Error(`The recording is for ${this.driver}; this drive asked for ${id}.`);
     if (this.mode === "record") {
       if (!brain || typeof brain.transport !== "function") throw new Error(`${id} has no model transport to record.`);
-      const inner = brain.transport;
-      brain.transport = (path, body, opts) => this.record(autopilot, inner, path, body, opts);
-      return brain;
+      const wrapped = Object.assign(Object.create(Object.getPrototypeOf(brain)), brain);
+      const inner = brain.transport.bind(brain);
+      wrapped.transport = (path, body, opts) => this.record(autopilot, inner, path, body, opts);
+      return wrapped;
     }
     const replay = rebuildBrain(this.recording.header);
     replay.transport = (path, body, opts) => this.replay(autopilot, path, body, opts);
@@ -249,16 +289,19 @@ export class DriveTape {
     this.onRequest?.(body);
     const key = this.key(path, body);
     this.stats.calls++;
-    let outcome;
+    const outcomes = (this.answers[key] ||= []);
+    // Reserve in request order even if two identical calls complete in the opposite order.
+    const index = outcomes.length;
+    outcomes.push(null);
     try {
-      const res = await untilAborted(inner(path, body, { signal }), signal);
-      outcome = { response: storedResponse(res, body) };
+      const res = await untilAborted(() => inner(path, body, { signal }), signal);
+      outcomes[index] = { response: storedResponse(res, body) };
       return res;
     } catch (err) {
       if (err?.name === "AbortError" || signal?.aborted)
-        outcome = autopilot.epoch !== body.epoch ? { cancelled: true } : { timeout: true };
+        outcomes[index] = autopilot.epoch !== body.epoch ? { cancelled: true } : { timeout: true };
       else
-        outcome = {
+        outcomes[index] = {
           error: {
             message: String(err?.message ?? err),
             ...(err?.status !== undefined ? { status: err.status } : {}),
@@ -266,8 +309,6 @@ export class DriveTape {
           },
         };
       throw err;
-    } finally {
-      (this.answers[key] ||= []).push(outcome);
     }
   }
 
@@ -286,8 +327,12 @@ export class DriveTape {
     if (outcome.timeout) throw new DOMException("Decision timed out", "AbortError");
     if (outcome.cancelled) {
       // Recorded as cancelled by a new epoch: wait for this run's autopilot to cancel it too.
+      if (!signal) {
+        this.stats.drift++;
+        throw new Error(`recording drift: ${key} was cancelled when recorded, but replay has no cancellation signal`);
+      }
       await new Promise((resolve) =>
-        signal?.aborted ? resolve() : signal?.addEventListener("abort", resolve, { once: true }),
+        signal.aborted ? resolve() : signal.addEventListener("abort", resolve, { once: true }),
       );
       if (autopilot.epoch === body.epoch) {
         this.stats.drift++;
@@ -307,20 +352,33 @@ export class DriveTape {
   get exact() {
     if (this.mode !== "replay") return null;
     const recorded = Object.values(this.answers).reduce((n, list) => n + list.length, 0);
-    return this.stats.missing === 0 && this.stats.drift === 0 && this.stats.served === recorded;
+    return this.hasDrive && this.stats.missing === 0 && this.stats.drift === 0 && this.stats.served === recorded;
+  }
+
+  // Request keys and remaining answer counts help find where a drive stopped matching its tape.
+  remainingAnswers() {
+    if (this.mode !== "replay") return null;
+    return Object.fromEntries(
+      Object.entries(this.answers)
+        .map(([key, list]) => [key, list.length - (this.cursor.get(key) ?? 0)])
+        .filter(([, count]) => count > 0),
+    );
   }
 }
 
-function untilAborted(promise, signal) {
-  if (!signal) return promise;
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      const abort = () => reject(new DOMException("Decision aborted", "AbortError"));
-      if (signal.aborted) abort();
-      else signal.addEventListener("abort", abort, { once: true });
-    }),
-  ]);
+async function untilAborted(call, signal) {
+  if (!signal) return call();
+  if (signal.aborted) throw new DOMException("Decision aborted", "AbortError");
+  let abort;
+  const aborted = new Promise((_, reject) => {
+    abort = () => reject(new DOMException("Decision aborted", "AbortError"));
+    signal.addEventListener("abort", abort, { once: true });
+  });
+  try {
+    return await Promise.race([(async () => call())(), aborted]);
+  } finally {
+    signal.removeEventListener("abort", abort);
+  }
 }
 
 // The Messages API separates system text from chat messages and wraps it for caching. This mirrors
@@ -339,11 +397,13 @@ function anthropicPrompt(messages) {
 // The server's JSON as kept: without the echoed tick and epoch, and with trace.request fields that
 // repeat the request body (including Anthropic's transformed prompt) marked to rebuild on replay.
 function storedResponse(res, body) {
-  const { tick, epoch, ...kept } = JSON.parse(JSON.stringify(res ?? null)) ?? {};
+  const copy = JSON.parse(JSON.stringify(res ?? null));
+  if (!isObject(copy)) return copy;
+  const { tick, epoch, ...kept } = copy;
   const request = kept.trace?.request;
   if (request && typeof request === "object") {
     for (const [k, v] of Object.entries(request)) {
-      if (k in body && v !== null && typeof v === "object" && canonicalJson(v) === canonicalJson(body[k]))
+      if (Object.hasOwn(body, k) && v !== null && typeof v === "object" && canonicalJson(v) === canonicalJson(body[k]))
         request[k] = BODY;
     }
     if (Array.isArray(request.system) && Array.isArray(body.messages)) {
@@ -362,9 +422,12 @@ function storedResponse(res, body) {
 }
 function restoredResponse(stored, body) {
   const res = JSON.parse(JSON.stringify(stored));
+  if (!isObject(res)) return res;
   const request = res.trace?.request;
   if (request && typeof request === "object") {
-    for (const [k, v] of Object.entries(request)) if (v === BODY) request[k] = JSON.parse(JSON.stringify(body[k]));
+    for (const [k, v] of Object.entries(request))
+      if (v === BODY && Object.hasOwn(body, k) && body[k] && typeof body[k] === "object")
+        request[k] = JSON.parse(JSON.stringify(body[k]));
     if (Array.isArray(res.trace.anthropic_prompt) && Array.isArray(body.messages)) {
       const prompt = anthropicPrompt(body.messages);
       for (const [key, value] of Object.entries(prompt))
@@ -372,7 +435,7 @@ function restoredResponse(stored, body) {
       delete res.trace.anthropic_prompt;
     }
   }
-  if (res.trace?.meta === META) res.trace.meta = JSON.parse(JSON.stringify(res.meta));
+  if (res.trace?.meta === META && res.meta) res.trace.meta = JSON.parse(JSON.stringify(res.meta));
   return { tick: body.tick, epoch: body.epoch, ...res };
 }
 
