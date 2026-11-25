@@ -57,6 +57,13 @@ assert.match(
   comparisonIssue(fingerprinted, { ...run, manifest: { suite: { route_sha: "123456" } } }),
   /route fingerprints/,
 );
+const subset = (sha, results = run.results) => ({
+  ...run,
+  results,
+  manifest: { suite: { route_sha: sha, only: true } },
+});
+assert.equal(comparisonIssue(subset("abcdef"), subset("123456")), null);
+assert.match(comparisonIssue(subset("abcdef"), subset("123456", [changedRoute, run.results[1]])), /route tags/);
 assert.match(comparisonIssue(run, { ...run, suite_version: "v1" }), /suite v1/);
 assert.equal(heldoutPlan("constructor"), HELDOUT_DEFAULT);
 assert.doesNotThrow(() => validateRunInputs(config, ["dry"]));

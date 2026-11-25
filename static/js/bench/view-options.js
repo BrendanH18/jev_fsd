@@ -10,8 +10,11 @@ function routeComparisonIssue(current, baseline) {
   const ids = new Set(a.map((result) => result.id));
   if (a.length !== b.length || ids.size !== a.length || byId.size !== b.length || a.some(({ id }) => !byId.has(id)))
     return "completed routes";
-  const aSha = current.manifest?.suite?.route_sha;
-  const bSha = baseline.manifest?.suite?.route_sha;
+  // The fingerprint covers the whole generated suite, so it only identifies the driven routes of a
+  // complete run. Subset (--only) runs fall back to the per-route geometry tags.
+  const whole = (run) => run.manifest?.suite && !run.manifest.suite.only;
+  const aSha = whole(current) && current.manifest.suite.route_sha;
+  const bSha = whole(baseline) && baseline.manifest.suite.route_sha;
   if (aSha && bSha) return aSha === bSha ? null : "route fingerprints";
   // Older runs have no fingerprint. Match the same geometry tags as the offline inspector.
   for (const { id, tags } of a) {
