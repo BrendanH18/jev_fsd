@@ -88,6 +88,8 @@ RESERVED_BODY_KEYS = {"model", "messages", "stream", "response_format", "n"}
 # "openai": Chat Completions, which most servers speak. "anthropic": Anthropic's Messages API (Claude Platform).
 APIS = ("openai", "anthropic")
 # (version 2026-10-21 of Anthropic's API refuses every sampling parameter)
+# Endpoint fields whose null is meaningful (send no such parameter), from JEV_FSD_LLM_* as from llm.json.
+NULLABLE_ENV_FIELDS = frozenset({"max_tokens", "temperature", "rpm"})
 ANTHROPIC_RESERVED_BODY_KEYS = {"model", "messages", "system", "stream", "temperature", "top_p", "top_k"}
 # Anthropic bills prompt-cache writes (5-minute) at 1.25 times its input price and reads at 0.1 times on
 # most models. Some read cheaper (Opus and Sonnet 5.5 at 0.05, Fable and Mythos 5.1 and 5.2 at 0.025),
@@ -294,7 +296,9 @@ def load_configs(settings: Settings) -> Tuple[List[EndpointConfig], List[str]]:
             value = settings.get("JEV_FSD_LLM_" + field.upper())
             if value is not None:
                 env_entry[field] = None if value == "null" else value
-        entries.append(({k: v for k, v in env_entry.items() if v is not None}, "JEV_FSD_LLM_* settings"))
+        # An unset setting is left out; an explicit null for a field that takes one means "send none".
+        kept = {k: v for k, v in env_entry.items() if v is not None or k in NULLABLE_ENV_FIELDS}
+        entries.append((kept, "JEV_FSD_LLM_* settings"))
     configs = [c for c in (EndpointConfig(raw, where, problems) for raw, where in entries) if c.ok]
     return unique(configs, problems), problems
 

@@ -274,6 +274,22 @@ class ModelConfigurationTests(unittest.TestCase):
             }
             self.assertEqual({field: getattr(configs[0], field) for field in expected}, expected)
 
+    def test_environment_nulls_omit_parameters(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)
+            base = {"BASE_URL": "http://localhost:8000", "MODEL": "fixture", "ENDPOINTS": str(path / "none")}
+            for extra, expected in (
+                ({}, (0, 400, None)),
+                ({"TEMPERATURE": "null", "MAX_TOKENS": "null", "RPM": "null"}, (None, None, None)),
+            ):
+                with self.subTest(extra=extra):
+                    values = {**base, **extra}
+                    settings = Settings({"JEV_FSD_LLM_" + k: v for k, v in values.items()}, path / ".env")
+                    configs, problems = llm.load_configs(settings)
+                    self.assertEqual(problems, [])
+                    config = configs[0]
+                    self.assertEqual((config.temperature, config.max_tokens, config.rpm), expected)
+
     def test_price_and_format_status(self):
         ep = endpoint(
             llm.EndpointConfig,
