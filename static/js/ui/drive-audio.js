@@ -6,6 +6,7 @@ export class DriveAudio {
     this.context = null;
     this.volume = 1;
     this.paused = false;
+    this.activeGain = 0;
     button.addEventListener("click", () => this.toggle());
     document.addEventListener("visibilitychange", () => this.updateGain());
   }
@@ -18,6 +19,8 @@ export class DriveAudio {
   updateGain() {
     if (!this.master) return;
     const gain = this.enabled && !this.paused && !document.hidden ? this.volume * 0.4 : 0;
+    if (this.activeGain === gain) return;
+    this.activeGain = gain;
     this.master.gain.setTargetAtTime(gain, this.context.currentTime, 0.08);
   }
 
@@ -83,15 +86,27 @@ export class DriveAudio {
     if (this.button.disabled) return;
     this.button.disabled = true;
     try {
-      if (!this.context) this.create();
-      if (this.context.state !== "running") await this.context.resume();
-      this.enabled = !this.enabled;
+      if (this.enabled) this.enabled = false;
+      else {
+        if (!this.context) this.create();
+        if (this.context.state !== "running") await this.context.resume();
+        if (this.context.state !== "running") throw new Error("The audio device did not start");
+        this.enabled = true;
+        this.lastStrike = null;
+      }
+      this.button.title = "";
       this.button.textContent = this.enabled ? "Sound on" : "Sound off";
       this.button.setAttribute("aria-pressed", String(this.enabled));
       this.updateGain();
     } catch (err) {
-      this.button.textContent = "Sound unavailable";
+      const context = this.context;
+      this.context = null;
+      this.master = null;
+      this.activeGain = 0;
+      if (context && context.state !== "closed") void context.close().catch(() => {});
+      this.button.textContent = "Retry sound";
       this.button.title = err.message;
+      this.button.setAttribute("aria-pressed", "false");
     } finally {
       this.button.disabled = false;
     }
@@ -99,25 +114,28 @@ export class DriveAudio {
 
   update(ego, weather, paused, hood) {
     this.paused = paused;
-    if (!this.context || !this.enabled) return;
+    this.updateGain();
+    if (!this.enabled || paused || document.hidden || this.context?.state !== "running") return;
     const t = this.context.currentTime,
-      speed = Math.abs(ego.v),
+      speed = Number.isFinite(ego.v) ? Math.abs(ego.v) : 0,
       wet = weather === "rain" ? 1 : weather === "fog" ? 0.3 : 0;
     const set = (param, value) => param.setTargetAtTime(value, t, 0.08);
-    this.updateGain();
-    set(this.motor.oscillator.frequency, 55 + speed * 6 + Math.max(0, ego.ax || 0) * 8);
+    set(this.motor.oscillator.frequency, 55 + speed * 6 + Math.max(0, Number.isFinite(ego.ax) ? ego.ax : 0) * 8);
     set(this.harmonic.oscillator.frequency, 110 + speed * 12);
     set(this.motor.level.gain, 0.08 + Math.min(speed / 100, 0.15));
     set(this.road.level.gain, Math.min(0.3, speed * 0.008) * (1 + wet * 0.5));
     set(this.road.filter.frequency, 350 + speed * 35);
     set(this.rain.level.gain, wet * (hood ? 0.11 : 0.07));
-    set(this.tires.level.gain, Math.min(0.16, Math.max(0, Math.abs(ego.latAccel || 0) - 4) * 0.02));
+    set(
+      this.tires.level.gain,
+      Math.min(0.16, Math.max(0, Math.abs(Number.isFinite(ego.latAccel) ? ego.latAccel : 0) - 4) * 0.02),
+    );
   }
 
   // The siren of the nearest emergency vehicle `distance` m away (Infinity: none): a wail rising
   // from 650 to 1,350 Hz and back every 4 s, a fast yelp within 60 m, louder as it nears.
   siren(distance, t, paused) {
-    if (!this.context || !this.enabled) return;
+    if (!this.enabled || this.context?.state !== "running") return;
     const now = this.context.currentTime,
       near = Number.isFinite(distance) && !paused;
     const level = near ? 0.1 * Math.min(1, Math.max(0, 1 - distance / 260)) ** 2 : 0;
@@ -132,7 +150,11 @@ export class DriveAudio {
   // A streetcar's gong `distance` m away while it rings (Infinity: none): a double strike every 1.2 s,
   // a bell's inharmonic partials, quieter farther off.
   gong(distance, t, paused) {
-    if (!this.enabled || paused || !Number.isFinite(distance) || this.context?.state !== "running") return;
+    if (!Number.isFinite(distance)) {
+      this.lastStrike = null;
+      return;
+    }
+    if (!this.enabled || paused || distance >= 250 || this.context?.state !== "running") return;
     const strike = Math.floor(t / 0.3);
     if (strike === this.lastStrike || strike % 4 > 1) return;
     this.lastStrike = strike;
@@ -146,7 +168,7 @@ export class DriveAudio {
     this.beep([350, 440], 0.32, 0.14);
   }
   beep(frequencies, duration, volume) {
-    if (!this.enabled || this.context?.state !== "running") return;
+    if (!this.activeGain || this.context?.state !== "running") return;
     const c = this.context,
       t = c.currentTime;
     for (const frequency of frequencies) {

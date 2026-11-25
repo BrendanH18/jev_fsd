@@ -1,4 +1,9 @@
 import { $, api, h, appUrl } from "../common.js";
+import { preference } from "./preferences.js";
+
+const sortPreference = preference("explorer-sort", "catalog", undefined, {
+  valid: (value) => ["catalog", "city", "name"].includes(value),
+});
 
 const searchText = (value) =>
   String(value || "")
@@ -46,7 +51,6 @@ export class Explorer {
     this.buildView();
     document.body.append(this.dialog);
     $("#explore-world").addEventListener("click", () => this.open());
-    this.loadMaps();
   }
 
   buildView() {
@@ -83,11 +87,25 @@ export class Explorer {
       {
         "aria-label": "Sort neighbourhoods",
         "aria-controls": "explorer-maps",
-        onchange: () => this.renderMaps(),
+        onchange: () => {
+          sortPreference.write(this.sortMaps.value);
+          this.renderMaps();
+        },
       },
       h("option", { value: "catalog" }, "Catalog order"),
       h("option", { value: "city" }, "City A–Z"),
       h("option", { value: "name" }, "Neighbourhood A–Z"),
+    );
+    this.sortMaps.value = sortPreference.read();
+    this.resetFilters = h(
+      "button",
+      {
+        class: "chip-button",
+        type: "button",
+        hidden: true,
+        onclick: () => this.clearFilters(),
+      },
+      "Clear filters",
     );
     this.mapsView = h("div", { id: "explorer-maps" });
     this.mapStatus = h("div", { class: "explorer-status", "aria-live": "polite", "aria-atomic": "true" });
@@ -124,6 +142,7 @@ export class Explorer {
         h("label", {}, h("span", {}, "Region"), this.region),
         h("label", {}, h("span", {}, "Driving style"), this.character),
         h("label", {}, h("span", {}, "Sort maps"), this.sortMaps),
+        this.resetFilters,
       ),
       this.mapStatus,
       this.mapsView,
@@ -196,14 +215,21 @@ export class Explorer {
     try {
       const data = await this.request("/api/maps", undefined, { signal: request.signal });
       if (request !== this.mapRequest) return;
-      if (!Array.isArray(data.maps)) throw new Error("The server returned an invalid map list.");
-      this.maps = data.maps;
+      if (!Array.isArray(data?.maps)) throw new Error("The server returned an invalid map list.");
+      const maps = new Map();
+      for (const entry of data.maps) {
+        if (typeof entry?.id === "string" && typeof entry.name === "string" && !maps.has(entry.id))
+          maps.set(entry.id, entry);
+      }
+      this.maps = [...maps.values()];
+      this.mapsLoaded = true;
       this.updateFilters();
     } catch (err) {
       if (request !== this.mapRequest || request.signal.aborted) return;
       this.mapError = err.message;
     }
     if (request !== this.mapRequest) return;
+    this.mapRequest = null;
     this.mapsLoading = false;
     if (this.dialog.open) this.renderMaps();
   }
@@ -213,6 +239,7 @@ export class Explorer {
     this.sessionOpen = false;
     this.generation++;
     this.driveRequest?.abort();
+    this.driveRequest = null;
     this.onClose();
   }
 
@@ -228,6 +255,7 @@ export class Explorer {
     this.onOpen();
     this.sessionOpen = true;
     this.dialog.showModal();
+    if (!this.mapsLoaded && !this.mapsLoading) this.loadMaps();
     this.search.focus();
     this.pendingMap = null;
     this.switchError = null;
@@ -251,13 +279,16 @@ export class Explorer {
         { signal: request.signal },
       );
       if (generation !== this.generation || !this.dialog.open) return;
-      if (!Array.isArray(data.drives)) throw new Error("The server returned an invalid drive list.");
-      this.drives = data.drives;
+      if (!Array.isArray(data?.drives)) throw new Error("The server returned an invalid drive list.");
+      this.drives = data.drives.filter(
+        (drive) => drive?.route && typeof drive.title === "string" && Array.isArray(drive.destination),
+      );
     } catch (err) {
       if (generation !== this.generation || request.signal.aborted || !this.dialog.open) return;
       this.driveError = err.message;
     }
     if (generation !== this.generation || !this.dialog.open) return;
+    this.driveRequest = null;
     this.loading = false;
     this.renderDrives();
   }
@@ -271,6 +302,7 @@ export class Explorer {
   renderMaps() {
     const visible = filterMaps(this.maps, this.filters),
       cityCount = new Set(visible.map((m) => m.city)).size;
+    this.resetFilters.hidden = !visible.length || !Object.values(this.filters).some(Boolean);
     const sort = this.sortMaps.value;
     if (sort === "city" || sort === "name") {
       visible.sort(
@@ -302,14 +334,7 @@ export class Explorer {
           `Opening ${this.maps.find((m) => m.id === this.pendingMap)?.name || "neighbourhood"}…`,
         ),
       );
-    else
-      this.mapStatus.append(
-        h(
-          "span",
-          { class: "explorer-result-count" },
-          this.maps.length ? `${visible.length} neighbourhood${visible.length === 1 ? "" : "s"} available` : "",
-        ),
-      );
+    else this.mapStatus.append(h("span", { class: "sr-only" }, this.summary.textContent));
     const activeMap = document.activeElement?.dataset?.map;
     this.mapsView.replaceChildren(
       visible.length
@@ -389,13 +414,14 @@ export class Explorer {
   }
 
   async chooseMap(id) {
-    if (id === this.map.id || this.pendingMap) return;
+    if (id === this.map.id || this.pendingMap || !this.maps.some((map) => map.id === id)) return;
     const generation = this.generation;
     this.pendingMap = id;
     this.switchError = null;
     this.renderMaps();
     try {
-      await this.onMap(id);
+      const changed = await this.onMap(id);
+      if (changed === false) throw new Error("Choose another neighbourhood or try again.");
     } catch (err) {
       if (generation !== this.generation) return;
       this.pendingMap = null;
@@ -413,11 +439,10 @@ export class Explorer {
       drawMapPreview(canvas, m);
       this.previews.set(m, canvas);
     }
-    const stats = m.stats || {},
-      roads =
-        stats.roads == null
-          ? "Street data on demand"
-          : `${stats.roads.toLocaleString()} road segments · ${stats.signals || 0} signals`;
+    const stats = m.stats || {};
+    const roads = Number.isFinite(stats.roads)
+      ? [count(stats.roads, "road segment"), count(stats.signals, "signal")].filter(Boolean).join(" · ")
+      : "Street data on demand";
     return h(
       "button",
       {
@@ -426,7 +451,7 @@ export class Explorer {
         style: { "--city-accent": m.accent || "var(--accent)" },
         "aria-current": current ? "location" : null,
         "aria-label": `${m.name}, ${m.city}. ${m.character || "Street map"}.${current ? " Currently driving here." : " Open neighbourhood."}`,
-        disabled: !!this.pendingMap,
+        disabled: !!this.pendingMap || current,
         onclick: () => this.chooseMap(m.id),
       },
       h(
@@ -439,7 +464,7 @@ export class Explorer {
       h(
         "div",
         { class: "city-card-body" },
-        h("div", { class: "city-eyebrow" }, `${m.city} · ${m.province}`),
+        h("div", { class: "city-eyebrow" }, [m.city, m.province].filter(Boolean).join(" · ")),
         h("h3", {}, m.name),
         h("p", {}, m.description),
         h(
@@ -473,12 +498,22 @@ export class Explorer {
       h(
         "div",
         { class: "mission-meta" },
-        `${(d.length_m / 1000).toFixed(1)} km · ${d.turns} turns · ${d.signals} lights · ${d.stops} stops`,
+        [
+          Number.isFinite(d.length_m) ? `${(d.length_m / 1000).toFixed(1)} km` : "",
+          count(d.turns, "turn"),
+          count(d.signals, "light"),
+          count(d.stops, "stop"),
+        ]
+          .filter(Boolean)
+          .join(" · "),
       ),
       h("span", { class: "mission-start" }, "Start drive →"),
     );
   }
 }
+
+const count = (number, label) =>
+  Number.isFinite(number) ? `${number.toLocaleString()} ${label}${number === 1 ? "" : "s"}` : "";
 
 function drawMapPreview(canvas, map) {
   const ctx = canvas.getContext("2d"),
@@ -487,7 +522,7 @@ function drawMapPreview(canvas, map) {
   if (!ctx) return;
   ctx.fillStyle = "#111e26";
   ctx.fillRect(0, 0, w, height);
-  if (!map.extent) return;
+  if (!Array.isArray(map.extent) || map.extent.length !== 4 || !map.extent.every(Number.isFinite)) return;
   const [x0, y0, x1, y1] = map.extent,
     scale = Math.min(w / Math.max(1, x1 - x0), height / Math.max(1, y1 - y0)) * 0.92;
   const x = (p) => w / 2 + (p[0] - (x0 + x1) / 2) * scale;
@@ -496,11 +531,19 @@ function drawMapPreview(canvas, map) {
     ctx.strokeStyle = major ? map.accent || "#6ec7a1" : "#374850";
     ctx.lineWidth = major ? 2.8 : 1.2;
     ctx.beginPath();
-    for (const road of map.preview || [])
-      if (road.major === major && road.pts?.length) {
-        ctx.moveTo(x(road.pts[0]), y(road.pts[0]));
-        for (const p of road.pts.slice(1)) ctx.lineTo(x(p), y(p));
+    for (const road of Array.isArray(map.preview) ? map.preview : []) {
+      if (Boolean(road?.major) !== major || !Array.isArray(road?.pts)) continue;
+      let penDown = false;
+      for (const point of road.pts) {
+        if (!Array.isArray(point) || point.length !== 2 || !point.every(Number.isFinite)) {
+          penDown = false;
+          continue;
+        }
+        if (penDown) ctx.lineTo(x(point), y(point));
+        else ctx.moveTo(x(point), y(point));
+        penDown = true;
       }
+    }
     ctx.stroke();
   }
   const gradient = ctx.createLinearGradient(0, 0, 0, height);

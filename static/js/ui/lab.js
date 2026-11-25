@@ -103,13 +103,18 @@ export class DriveLab {
     $(".hud-top-left").append(actions);
     this.perception = h(
       "section",
-      { class: "perception-panel panel", hidden: true, "aria-label": "Geometric perception" },
+      { id: "ai-eyes-panel", class: "perception-panel panel", hidden: true, "aria-label": "Geometric perception" },
       h("span", { class: "label" }, "AI EYES / GEOMETRIC SENSING"),
       (this.sight = h("div", { class: "perception-sight" }, h("p", {}, "Observing the street…"))),
-      h("p", { class: "perception-legend" }, "Green: visible · Red: hidden from driver · Yellow: selected path"),
-      h("p", { class: "muted" }, "Hidden-object boxes use world truth for inspection; the driver cannot see them."),
+      h(
+        "p",
+        { class: "perception-legend" },
+        "Green: visible · Red: hidden · Amber: hazard · Magenta: siren · Yellow line: selected path",
+      ),
+      h("p", { class: "muted" }, "Red boxes show objects the driver cannot see. Use them to inspect blind spots."),
       (this.rejections = h("div", { class: "candidate-rejections" })),
     );
+    this.eyes.setAttribute("aria-controls", this.perception.id);
     $("#hud-right").append(this.perception);
     this.replay = h(
       "section",
@@ -213,8 +218,17 @@ export class DriveLab {
   }
   toggleEyes(force) {
     const enabled = force === undefined ? this.eyes.getAttribute("aria-pressed") !== "true" : !!force;
+    if (enabled === !this.perception.hidden) return;
+    if (!enabled && this.perception.contains(document.activeElement)) this.eyes.focus({ preventScroll: true });
     this.eyes.setAttribute("aria-pressed", String(enabled));
     this.perception.hidden = !enabled;
+    if (!enabled) {
+      this.lastPerceptionData = null;
+      this.sightKey = null;
+      this.rejectionKey = null;
+      this.sight.replaceChildren(h("p", {}, "Observing the street…"));
+      this.rejections.replaceChildren();
+    }
     this.onPerception?.(enabled);
   }
   toggleTelemetry(force) {
@@ -786,47 +800,70 @@ export class DriveLab {
     }
   }
   showPerception(data) {
-    if (!data) return;
+    if (!data || this.perception.hidden) return;
     this.lastPerceptionData = data;
     const lines = PERCEPTION_FIELDS.map(([order, key, label]) => ({ order, label, text: data[key] }));
     lines.push(...(data.featureLines || []));
-    const badges = [];
     const seenTexts = new Set();
+    const badges = [];
     for (const { label, text } of lines.sort((a, b) => a.order - b.order)) {
       if (!text || seenTexts.has(text)) continue;
       seenTexts.add(text);
-      badges.push(h("span", { class: "perception-badge", title: label }, text));
+      badges.push([label, text]);
     }
-    this.sight.replaceChildren(
-      ...(badges.length ? [h("div", { class: "perception-badges" }, ...badges)] : []),
-      h(
-        "p",
-        { class: "perception-summary" },
-        `${data.seen} visible · ${data.hidden} hidden · ${Math.round(data.range)} m sight · ${Math.round(data.safeSpeed)} km/h sight-limited target`,
-      ),
-    );
+    const summary = [
+      Number.isFinite(data.seen) && `${data.seen} visible`,
+      Number.isFinite(data.hidden) && `${data.hidden} hidden`,
+      Number.isFinite(data.range) && `${Math.round(data.range)} m sight`,
+      Number.isFinite(data.safeSpeed) && `${Math.round(data.safeSpeed)} km/h sight-limited target`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const key = JSON.stringify([summary, badges]);
+    if (this.sightKey !== key) {
+      this.sightKey = key;
+      this.sight.replaceChildren(
+        ...(badges.length
+          ? [
+              h(
+                "div",
+                { class: "perception-badges" },
+                badges.map(([label, text]) => h("span", { class: "perception-badge", title: label }, text)),
+              ),
+            ]
+          : []),
+        h("p", { class: "perception-summary" }, summary || "Sight data unavailable"),
+      );
+    }
     this.renderRejections(data.rejected || []);
   }
   renderRejections(rejected) {
     const visible = this.rejectionsExpanded ? rejected : rejected.slice(0, 4);
     const hiddenCount = rejected.length - 4;
-    this.rejections.replaceChildren(
-      ...visible.map((c) => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason))),
-      hiddenCount > 0
-        ? h(
-            "button",
-            {
-              type: "button",
-              class: "chip-button perception-more",
-              onclick: () => {
-                this.rejectionsExpanded = !this.rejectionsExpanded;
-                this.renderRejections(this.lastPerceptionData?.rejected || rejected);
-              },
+    const key = JSON.stringify([this.rejectionsExpanded, hiddenCount, visible.map(({ id, reason }) => [id, reason])]);
+    if (this.rejectionKey === key) return;
+    this.rejectionKey = key;
+    const wasFocused = this.rejections.contains(document.activeElement);
+    const rows = visible.map((c) => h("div", {}, h("span", {}, c.id.replaceAll("_", " ")), h("b", {}, c.reason)));
+    if (hiddenCount > 0) {
+      rows.push(
+        h(
+          "button",
+          {
+            type: "button",
+            class: "chip-button perception-more",
+            "aria-expanded": String(!!this.rejectionsExpanded),
+            onclick: () => {
+              this.rejectionsExpanded = !this.rejectionsExpanded;
+              this.renderRejections(this.lastPerceptionData?.rejected || rejected);
             },
-            this.rejectionsExpanded ? "Show fewer" : `+${hiddenCount} more`,
-          )
-        : null,
-    );
+          },
+          this.rejectionsExpanded ? "Show fewer" : `Show ${hiddenCount} more`,
+        ),
+      );
+    }
+    this.rejections.replaceChildren(...rows);
+    if (wasFocused) (this.rejections.querySelector(".perception-more") || this.eyes).focus({ preventScroll: true });
   }
   renderIncidentTicks() {
     if (!this.incidentTicks || !this.recorder?.frames?.length) return;

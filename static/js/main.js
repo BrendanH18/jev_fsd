@@ -73,6 +73,9 @@ import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-mod
 import { OrbitControls } from "./ui/orbit-controls.js";
 import { bindMapPicker } from "./ui/map-picker.js";
 import { preference } from "./ui/preferences.js";
+import { describeClock } from "./ui/readouts.js";
+import { readWatchReplay } from "./ui/replay-link.js";
+import { RouteRequest } from "./ui/route-request.js";
 import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
 import { practiceEligible, savePractice } from "./lab/practice.js";
@@ -93,37 +96,58 @@ const FIXED_DT = 1 / 60;
 const loadingText = $("#loading-text");
 
 export async function boot() {
-  loadingText.textContent = "Loading map…";
+  loadingText.textContent = "Checking simulator status…";
   let simulationError = null;
+  let graphicsLost = false;
   const params = new URLSearchParams(location.search);
   const challenge = challengeById(params.get("challenge"));
   if (params.has("challenge") && !challenge)
     throw new Error("Unknown challenge. Open the drive lab to choose an available challenge.");
   if (challenge) for (const [key, value] of Object.entries(challengeConfig(challenge))) params.set(key, String(value));
-  const replay = readReplay();
+  const replay = challenge ? null : readWatchReplay(params);
   const garage = vehicleOptions(replay ? new URLSearchParams() : params);
   const mapQuery = challenge?.map || params.get("bbox") || params.get("map") || replay?.bbox?.join(",") || "";
   const query = mapQuery ? `?bbox=${encodeURIComponent(mapQuery)}` : "";
   const status = await api(`/api/status${query}`);
+  if (!Array.isArray(status?.map?.bbox)) throw new Error("The simulator returned incomplete map settings.");
+  loadingText.textContent = "Loading streets and traffic controls…";
   // The three pillars: Rules, decision models (Jev plus decision:<name>) and LLMs (llm:<name>).
   registerDecisionAgents(status.decision, { demo: !!status.demo });
   registerLlmAgents(status.llm);
   const options = worldOptions(params, status.npcs);
   const pack = await api(`/api/map${query}`);
+  if (!Array.isArray(pack?.edges) || !pack.edges.length) throw new Error("The map contains no drivable streets.");
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
   const map = new MapData(pack);
   const hud = new Hud();
   $("#current-city").textContent = status.map.synthetic ? "Practice grid" : status.map.label;
-  let savedQuality;
-  try {
-    savedQuality = localStorage.getItem("jev-fsd-quality");
-  } catch {
-    /* preferences are optional */
-  }
-  const quality = params.get("quality") || savedQuality || "high";
+  const qualitySetting = preference("quality", "high", undefined, {
+    legacy: true,
+    valid: (value) => [...hud.el.quality.options].some((o) => o.value === value),
+  });
+  const requestedQuality = params.get("quality");
+  const quality = [...hud.el.quality.options].some((o) => o.value === requestedQuality)
+    ? requestedQuality
+    : qualitySetting.read();
   let hour = replay?.hour ?? parseHour(params.get("time"));
   const clock = new WorldClock(hour, options.clockRate, challenge ? 0 : Number(params.get("weekday") || 0));
-  const view = new SceneView($("#view"), map.extent, { quality });
+  loadingText.textContent = "Starting 3D graphics…";
+  const canvas = $("#view");
+  let view;
+  try {
+    view = new SceneView(canvas, map.extent, { quality });
+  } catch (error) {
+    throw new Error("3D graphics could not start. Check that WebGL is enabled in your browser.", { cause: error });
+  }
+  loadingText.textContent = "Building the neighbourhood…";
+  const graphicsNotice = h(
+    "div",
+    { class: "simulation-error", role: "alert", hidden: true },
+    h("strong", {}, "3D graphics disconnected"),
+    h("p", {}, "The drive is paused. Reload the page to reconnect to the graphics device."),
+    h("button", { class: "chip-button", onclick: () => location.reload() }, "Reload graphics"),
+  );
+  document.body.append(graphicsNotice);
   hud.setQuality(view.quality);
   const roads = buildRoads(map);
   view.scene.add(roads.group);
@@ -222,13 +246,16 @@ export async function boot() {
   if (world.scrambles && map.scrambles.size) view.scene.add(buildScrambleMarkings(map, world.crowd));
   const actors = mountActorViews(view, world, fleet);
   const previousEgo = {};
+  loadingText.textContent = "Preparing the drive…";
   world._road = world.roadInfo();
   if (!agentAvailable(autopilot.brainName)) autopilot.setBrain("rules");
   hud.setBrain(autopilot.brainName);
   const panel = new Panel(autopilot, hud);
+  overlays.showCandidates = panel.candidateToggle.checked;
   panel.onShowCandidates = (on) => {
-    overlays.showCandidates = on;
-    if (!on) overlays.setCandidates(null);
+    overlays.showCandidates = on || perception.group.visible;
+    const decision = autopilot.lastDecision;
+    overlays.setCandidates(overlays.showCandidates ? decision?.candidates : null, decision?.chosenId);
   };
   const weatherView = new WeatherView(view);
   const applySky = (skyHour = hour, skyWeather = world.weather, preview = false) => {
@@ -279,12 +306,12 @@ export async function boot() {
     next.searchParams.set("weather", world.weather);
     next.searchParams.set("time", formatClock(hour));
     next.searchParams.set("clock", String(clock.rate));
-    history.replaceState(null, "", next);
+    history.replaceState(history.state, "", next);
   }
   weatherView.apply(world.weather);
   applySky();
   hud.setWeather(world.weather);
-  hud.setTime(nearestPreset(hour));
+  hud.setTime(describeClock(hour, TIME_PRESETS));
   hud.onWeatherChange((name) => {
     world.weather = setWeather(name).name;
     weatherView.apply(world.weather);
@@ -298,7 +325,7 @@ export async function boot() {
     clock.setHour(parseHour(value), world.t);
     hour = clock.hour;
     applySky();
-    hud.setTime(nearestPreset(hour));
+    hud.setTime(describeClock(hour, TIME_PRESETS));
     autopilot.bumpEpoch();
     rememberConditions();
   }
@@ -366,10 +393,12 @@ export async function boot() {
   hud.onQualityChange((name) => {
     view.setQuality(name);
     hud.setQuality(view.quality);
-    try {
-      localStorage.setItem("jev-fsd-quality", view.quality);
-    } catch {
-      /* preferences are optional */
+    const saved = qualitySetting.write(view.quality);
+    const next = new URL(location.href);
+    if (next.searchParams.has("quality")) {
+      if (saved) next.searchParams.delete("quality");
+      else next.searchParams.set("quality", view.quality);
+      history.replaceState(history.state, "", next);
     }
     hud.badge(`graphics: ${view.quality}`, "", 800);
   });
@@ -393,7 +422,7 @@ export async function boot() {
   showMapNote();
 
   function toggleAutopilot() {
-    if (simulationError || photo?.active) return;
+    if (simulationError || graphicsLost || photo?.active) return;
     if (lab?.reviewing) {
       lab.branch("manual");
       return;
@@ -410,14 +439,12 @@ export async function boot() {
   hud.onAutopilotClick(toggleAutopilot);
   // The Decision and LLM buttons each drive with the last model chosen in their pillar (Decision
   // defaults to Jev); their ▾ menus pick another or open the Connect a model dialog.
-  const remembered = { decision: null, llm: null };
+  const modelPreference = {
+    decision: preference("decision", "", undefined, { legacy: true }),
+    llm: preference("llm", "", undefined, { legacy: true }),
+  };
+  const remembered = { decision: modelPreference.decision.read(), llm: modelPreference.llm.read() };
   let pausedBeforeSetup = false;
-  for (const pillar of Object.keys(remembered))
-    try {
-      remembered[pillar] = localStorage.getItem(`jev-fsd-${pillar}`);
-    } catch {
-      /* preferences are optional */
-    }
   const pillarDefault = (pillar) => {
     const current = pillarOf(autopilot.brainName) === pillar ? autopilot.brainName : remembered[pillar];
     return pillar === "decision" ? defaultDecisionId(current) : defaultLlmId(current);
@@ -476,7 +503,7 @@ export async function boot() {
       if (on) {
         pausedBeforeSetup = world.paused;
         world.paused = true;
-        input.clearKeys();
+        input.clear();
       } else world.paused = pausedBeforeSetup;
     },
   });
@@ -505,7 +532,7 @@ export async function boot() {
         return;
       }
     }
-    if (!autopilot.brains[name]) {
+    if (!Object.hasOwn(autopilot.brains, name) || !autopilot.brains[name]) {
       hud.badge("Unknown agent. Choose a driver in Settings.", "safety", 1500);
       return;
     }
@@ -522,11 +549,7 @@ export async function boot() {
     const pillar = pillarOf(name);
     if (pillar in remembered) {
       remembered[pillar] = name;
-      try {
-        localStorage.setItem(`jev-fsd-${pillar}`, name);
-      } catch {
-        /* preferences are optional */
-      }
+      modelPreference[pillar].write(name);
     }
     showPillars();
     if (name === autopilot.brainName) return;
@@ -539,7 +562,7 @@ export async function boot() {
   hud.onBrainChange(selectBrain);
   const audio = new DriveAudio($("#drive-sound"));
   const volume = $("#drive-volume");
-  const volumePreference = preference("volume", 100);
+  const volumePreference = preference("volume", 100, undefined, { valid: (v) => v >= 0 && v <= 100 });
   volume.value = String(volumePreference.read());
   const applyVolume = () => {
     audio.setVolume(Number(volume.value) / 100);
@@ -597,12 +620,27 @@ export async function boot() {
     },
   });
   const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const motionPreference = preference("camera-motion", "");
+  const motionPreference = preference("camera-motion", "", undefined, { valid: (v) => ["", "on", "off"].includes(v) });
+  const resetMotion = h(
+    "button",
+    {
+      type: "button",
+      class: "chip-button",
+      onclick: () => {
+        motionOverride = "";
+        motionPreference.reset();
+        applyMotion();
+      },
+    },
+    "Use system camera motion",
+  );
   const cameraMotion = $("#camera-motion");
+  cameraMotion.closest("label").after(resetMotion);
   let motionOverride = motionPreference.read();
   const applyMotion = () => {
     cameraMotion.checked = motionOverride ? motionOverride === "on" : !motionQuery.matches;
     view.cameraMotion = cameraMotion.checked;
+    resetMotion.hidden = !motionOverride;
   };
   applyMotion();
   motionQuery.addEventListener("change", applyMotion);
@@ -658,7 +696,7 @@ export async function boot() {
   $("#photo-mode").addEventListener("click", () => photo.enter());
   let manualSignal = null;
   function togglePause() {
-    if (simulationError || photo?.active) return; // photo mode holds the world still until it closes
+    if (simulationError || graphicsLost || photo?.active) return; // photo mode holds the world still until it closes
     if (lab?.reviewing) {
       lab.togglePlay();
       return;
@@ -666,7 +704,12 @@ export async function boot() {
     world.paused = !world.paused;
     hud.badge(world.paused ? "PAUSED" : "RESUMED", "", 700);
   }
-  $("#pause-world").addEventListener("click", togglePause);
+  const pauseButton = $("#pause-world");
+  pauseButton.addEventListener("click", togglePause);
+  const conditionsReadout = $("#world-conditions");
+  const wipers = $("#wipers");
+  const leftIndicator = $("#left-indicator");
+  const rightIndicator = $("#right-indicator");
   function signal(side) {
     if (autopilot.enabled) return;
     world.ego.signal = world.ego.signal === side ? null : side;
@@ -750,14 +793,15 @@ export async function boot() {
   let touch = null;
   const coarsePointer = window.matchMedia?.("(pointer: coarse)");
   const touchSetting = $("#touch-setting");
-  const touchPreference = preference("touch", "auto");
+  const touchPreference = preference("touch", "auto", undefined, {
+    valid: (v) => ["auto", "show", "hide"].includes(v),
+  });
   const touchOverride = params.get("touch");
   touchSetting.value = ["1", "true"].includes(touchOverride)
     ? "show"
     : ["0", "false"].includes(touchOverride)
       ? "hide"
       : touchPreference.read();
-  if (!touchSetting.value) touchSetting.value = "auto";
   touchSetting.addEventListener("change", () => {
     touchPreference.write(touchSetting.value);
     if (new URLSearchParams(location.search).has("touch")) {
@@ -924,11 +968,13 @@ export async function boot() {
       world.paused = pausedBeforeExplorer;
     },
     onDrive: async (d) => {
-      try {
-        await applyRoute(d.route, d.destination, d.title);
-      } catch (error) {
-        hud.badge(`Could not start the suggested drive: ${error.message}`, "safety", 2500);
-      }
+      const installed = await routeRequests.choose(d.destination, {
+        route: d.route,
+        title: d.title,
+        check: Object.keys(featureRouteOptions(world)).length > 0,
+      });
+      if (!installed && !routeStatus.hidden)
+        hud.badge(`Could not start the suggested drive. ${routeStatus.textContent}`, "safety", 2500);
     },
     onMap: (id) => {
       if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("map changed")));
@@ -948,20 +994,32 @@ export async function boot() {
     },
   });
 
-  // Apply active routing rules to routes from Explorer and scenic drives. The latest choice wins.
-  let routeGeneration = 0;
-  let routeRequest = null;
   const routeStatus = $("#route-status");
-  function showRouteStatus(message = "") {
-    routeStatus.hidden = !message;
-    routeStatus.textContent = message;
-    $("#minimap").setAttribute("aria-busy", String(message === "Finding route…"));
-  }
-  function cancelRouteRequest() {
-    routeRequest?.abort();
-    routeRequest = null;
-    showRouteStatus();
-  }
+  const mapCanvas = $("#minimap");
+  const routeRequests = new RouteRequest({
+    request: api,
+    payload: (point) => ({
+      bbox: status.map.bbox.join(","),
+      from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+      to: { x: point[0], y: point[1] },
+      k: 1,
+      ...featureRouteOptions(world),
+    }),
+    install: installRoute,
+    show: (message, busy = false) => {
+      routeStatus.hidden = !message;
+      routeStatus.textContent = message;
+      mapCanvas.setAttribute("aria-busy", String(busy));
+    },
+    canInstall: () => !simulationError && !graphicsLost && !lab?.reviewing,
+  });
+  canvas.addEventListener("webglcontextlost", () => {
+    graphicsLost = true;
+    world.paused = true;
+    input.clear();
+    routeRequests.cancel();
+    graphicsNotice.hidden = false;
+  });
   function replaceDriveRoute(route, destination) {
     autopilot.parker.clear(world);
     world.route = route;
@@ -980,8 +1038,7 @@ export async function boot() {
 
   function clearDestination() {
     if (simulationError || lab?.reviewing) return;
-    routeGeneration++;
-    cancelRouteRequest();
+    routeRequests.cancel();
     replaceDriveRoute(null, null);
     autopilot.setEnabled(false);
     hud.setAutopilot(false);
@@ -994,33 +1051,13 @@ export async function boot() {
     if (drive) recorder.record({ world, fleet, autopilot, drive, clock }, true);
     hud.badge("Route cleared", "", 1000);
   }
-  async function applyRoute(data, pt, title, checked = false) {
-    if (simulationError) return false;
-    const generation = checked ? routeGeneration : ++routeGeneration;
-    if (!checked) cancelRouteRequest();
-    const routeOptions = featureRouteOptions(world);
-    if (Object.keys(routeOptions).length && !checked) {
-      const res = await api("/api/route", {
-        bbox: status.map.bbox.join(","),
-        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
-        to: { x: pt[0], y: pt[1] },
-        k: 1,
-        ...routeOptions,
-      });
-      if (generation !== routeGeneration || simulationError) return false;
-      if (!res.routes.length) {
-        hud.badge("No legal route to this destination", "safety", 2200);
-        return false;
-      }
-      data = res.routes[0];
-    }
-
+  function installRoute(data, pt, title) {
+    const route = new Route(data, map, world.ego.spec);
     if (challenge) challengeModified = true;
-    replaceDriveRoute(new Route(data, map, world.ego.spec), pt);
+    replaceDriveRoute(route, pt);
     hud.badge(`route: ${world.route.summary}`, "", 2200);
     if (!autopilot.enabled) toggleAutopilot();
     startDrive(title || `Drive to ${map.nearestLane(...pt)?.lane.edgeRef.name || "your destination"}`, world.route);
-    return true;
   }
 
   let pausedBeforeLab = false;
@@ -1034,6 +1071,7 @@ export async function boot() {
     },
   };
   function restoreFrame(index) {
+    routeRequests.cancel();
     recorder.restore(index, replayTarget);
     input.clearKeys();
     arrivalPending = false;
@@ -1051,9 +1089,11 @@ export async function boot() {
     weatherView.apply(world.weather);
     applySky();
     hud.setWeather(world.weather);
+    hud.setTime(describeClock(hour, TIME_PRESETS));
+    $("#clock-rate").value = String(clock.rate);
     skyAt = world.t;
     acc = 0;
-    lastConditions = "";
+    lastWeather = null;
     manualSignal = world.ego.signal && !autopilot.enabled ? { t: world.t, heading: world.ego.psi } : null;
     driveReport.lastUpdate = -Infinity;
     driveReport.update(drive);
@@ -1079,7 +1119,15 @@ export async function boot() {
       if (!drives.length) throw new Error("Try another position or city in Explore cities.");
       setHour("golden");
       selectBrain("rules");
-      if (!(await applyRoute(drives[0].route, drives[0].destination, drives[0].title))) return;
+      const scenic = drives[0];
+      if (
+        !(await routeRequests.choose(scenic.destination, {
+          route: scenic.route,
+          title: scenic.title,
+          check: Object.keys(featureRouteOptions(world)).length > 0,
+        }))
+      )
+        return;
       if (driver === "manual") {
         autopilot.setEnabled(false);
         hud.setAutopilot(false);
@@ -1144,7 +1192,7 @@ export async function boot() {
     },
     onPerception: (on) => {
       perception.setEnabled(on);
-      overlays.showCandidates = on || $("#show-candidates").checked;
+      overlays.showCandidates = on || panel.candidateToggle.checked;
       overlays.setCandidates(autopilot.lastDecision?.candidates, autopilot.lastDecision?.chosenId);
     },
   });
@@ -1152,37 +1200,10 @@ export async function boot() {
   showTouch();
   coarsePointer?.addEventListener?.("change", showTouch);
 
-  async function setDestination(pt) {
+  function setDestination(pt) {
     if (simulationError) return;
     if (lab?.reviewing) lab.live();
-    const generation = ++routeGeneration; // The latest destination wins.
-    cancelRouteRequest();
-    const request = (routeRequest = new AbortController());
-    showRouteStatus("Finding route…");
-    try {
-      const res = await api(
-        "/api/route",
-        {
-          bbox: status.map.bbox.join(","),
-          from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
-          to: { x: pt[0], y: pt[1] },
-          k: 1,
-          ...featureRouteOptions(world),
-        },
-        { signal: request.signal },
-      );
-      if (generation !== routeGeneration) return;
-      if (!res.routes.length) {
-        showRouteStatus("No route here. Choose another street.");
-        return;
-      }
-      await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
-      if (generation === routeGeneration) showRouteStatus();
-    } catch (err) {
-      if (generation === routeGeneration) showRouteStatus(`Routing failed. ${err.message}`);
-    } finally {
-      if (routeRequest === request) routeRequest = null;
-    }
+    return routeRequests.choose(pt);
   }
 
   // Turn-by-turn guidance for manual drivers; the autopilot's own snapshot is used when it drives.
@@ -1213,12 +1234,12 @@ export async function boot() {
     });
   }
 
-  $("#loading").hidden = true;
-  $("#view").inert = false;
-  hud.show();
   if (challenge) {
-    const driver = params.get("drive") || "manual";
+    const requested = params.get("drive") || "manual";
+    const driver = requested === "manual" || agentAvailable(requested) ? requested : "manual";
     selectBrain(driver === "manual" ? "rules" : driver);
+    if (driver !== requested)
+      hud.badge("Requested driver unavailable. The challenge starts in manual mode.", "safety", 3000);
     autopilot.setEnabled(driver !== "manual");
     hud.setAutopilot(autopilot.enabled);
     overlays.setRoute(world.route);
@@ -1272,6 +1293,9 @@ export async function boot() {
     finishDrive,
     setTime: setHour,
   };
+  $("#loading").hidden = true;
+  canvas.inert = false;
+  hud.show();
   if (params.has("explore")) explorer.open();
   else if (!challenge && !replay && !params.has("drive")) lab.home();
 
@@ -1297,12 +1321,12 @@ export async function boot() {
     announcedTraffic = null,
     announcedCyclist = null,
     announcedLeftRed = null;
-  let lastConditions = "",
-    skyAt = world.t;
+  let lastWeather, lastClockLabel, lastSight;
+  let skyAt = world.t;
   function frame(now) {
     // Schedule before stepping: a failed simulation must not permanently stop rendering or controls.
     if (!manual) requestAnimationFrame(frame);
-    if (simulationError) world.paused = true;
+    if (simulationError || graphicsLost) world.paused = true;
     // A pulse queued while driving was suspended never reaches physics, even if this poll resumes it.
     if (simulationError || world.paused || photo.active) input.stepped();
     input.poll();
@@ -1335,7 +1359,8 @@ export async function boot() {
           world.paused = true;
           autopilot.setEnabled(false);
           hud.setAutopilot(false);
-          input.clearKeys();
+          input.clear();
+          routeRequests.cancel();
           acc = 0;
           drive?.incident("simulation_error", simulationError);
           document.body.append(
@@ -1417,15 +1442,18 @@ export async function boot() {
       if (clock.rate) applySky();
       skyAt = world.t;
     }
-    const conditions = `${garage.vehicle.name} · ${formatClock(hour)} · ${world.weather[0].toUpperCase() + world.weather.slice(1)} · ${Math.round(world.visibility.range)} m sight`;
-    if (conditions !== lastConditions) {
-      $("#world-conditions").textContent = conditions;
-      lastConditions = conditions;
+    const clockLabel = formatClock(hour);
+    const sight = Math.round(world.visibility.range);
+    if (world.weather !== lastWeather || clockLabel !== lastClockLabel || sight !== lastSight) {
+      lastWeather = world.weather;
+      lastClockLabel = clockLabel;
+      lastSight = sight;
+      const conditions = `${garage.vehicle.name} · ${clockLabel} · ${world.weather[0].toUpperCase() + world.weather.slice(1)} · ${sight} m sight`;
+      conditionsReadout.textContent = conditions;
     }
     touch?.setPressed("pause", world.paused);
     touch?.setPressed("signalLeft", world.ego.signal === "left");
     touch?.setPressed("signalRight", world.ego.signal === "right");
-    const pauseButton = $("#pause-world");
     if (pauseButton.getAttribute("aria-pressed") !== String(world.paused)) {
       pauseButton.setAttribute("aria-pressed", String(world.paused));
       pauseButton.textContent = world.paused ? "Resume" : "Pause";
@@ -1488,18 +1516,18 @@ export async function boot() {
         2500,
       );
     }
-    const nearestEv = evs.reduce(
-      (best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)),
-      Infinity,
-    );
+    if (!call) announcedEv = null;
+    const nearestEv = audio.enabled
+      ? evs.reduce((best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)), Infinity)
+      : Infinity;
     audio.siren(nearestEv, world.t, world.paused || document.hidden);
     // a bus ahead signalling to pull out from its stop, with the right of way: say so once
     const bus = fleet.buses?.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
     const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
     if (bus && busKey !== announcedBus) {
-      announcedBus = busKey;
       hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500);
     }
+    announcedBus = busKey;
     // a vehicle stopped at a crosswalk ahead in the next lane, that the car must not pass: say so once
     const cw = world.crowd.marked.find((c) => {
       const d = frontTo(c, world.ego);
@@ -1508,9 +1536,9 @@ export async function boot() {
     const stopped = cw && stoppedAt(world, cw, world.ego).find((n) => world.visibility.sees(world.ego, n));
     const cwKey = stopped ? `${cw.id}:${stopped.id}` : null;
     if (stopped && cwKey !== announcedCrosswalk) {
-      announcedCrosswalk = cwKey;
       hud.badge(`${isBus(stopped) ? "BUS" : "CAR"} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500);
     }
+    announcedCrosswalk = cwKey;
     // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
     const school = fleet.schoolBuses?.find((b) => {
       const r = redsOn(b) && schoolBusRelation(world.ego, b);
@@ -1524,9 +1552,9 @@ export async function boot() {
     });
     const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
     if (school && schoolKey !== announcedSchool) {
-      announcedSchool = schoolKey;
       hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500);
     }
+    announcedSchool = schoolKey;
     // a streetcar ahead with its doors open, that the car must stop behind: say so once
     const tram = fleet.streetcars?.find((c) => {
       const r = doorsOpen(c) && streetcarRelation(world.ego, c);
@@ -1541,9 +1569,9 @@ export async function boot() {
     });
     const tramKey = tram ? `${tram.id}:${tram.transit.departures}` : null;
     if (tram && tramKey !== announcedStreetcar) {
-      announcedStreetcar = tramKey;
       hud.badge("STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS", "safety", 2500);
     }
+    announcedStreetcar = tramKey;
     // a level crossing ahead to wait at, for a train coming or for room past the tracks: say so once,
     // and sound the gong of a train ringing nearby
     const crossing = crossingNotice(world);
@@ -1636,10 +1664,12 @@ export async function boot() {
       );
     announcedLeftRed = leftRedKey;
     announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
-    const ringing = (fleet.trains || [])
-      .filter((n) => n.rail.gong)
-      .map((n) => Math.hypot(n.x - world.ego.x, n.y - world.ego.y));
-    audio.gong(ringing.length ? Math.min(...ringing) : Infinity, world.t, world.paused || document.hidden);
+    if (audio.enabled) {
+      let ringing = Infinity;
+      for (const train of fleet.trains || [])
+        if (train.rail.gong) ringing = Math.min(ringing, Math.hypot(train.x - world.ego.x, train.y - world.ego.y));
+      audio.gong(ringing, world.t, world.paused || document.hidden);
+    }
     announceFeatureNotices("beforeZone", world, autopilot, featureViews, announcedFeatures, hud);
     // into a school or playground zone in effect: say so once
     const zone = world._road?.zone;
@@ -1654,14 +1684,14 @@ export async function boot() {
     if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
     view.updateCamera(renderEgo, dt);
     featureViews.update(fleet, actors.people, actorDt, lightsOn);
-    view.render(dt, photo.active);
-    cockpit.update(view.mode, world.weather, world.t, $("#wipers").checked);
+    if (!graphicsLost) view.render(dt, photo.active);
+    cockpit.update(view.mode, world.weather, world.t, wipers.checked);
     audio.update(world.ego, world.weather, world.paused, view.mode === "hood");
     const blink = world.ego.signal && world.t % 0.8 < 0.45;
     if (blink && !indicatorLit && !world.paused) audio.tick();
     indicatorLit = blink;
-    $("#left-indicator").classList.toggle("active", !!blink && world.ego.signal === "left");
-    $("#right-indicator").classList.toggle("active", !!blink && world.ego.signal === "right");
+    leftIndicator.classList.toggle("active", !!blink && world.ego.signal === "left");
+    rightIndicator.classList.toggle("active", !!blink && world.ego.signal === "right");
     minimap.draw({
       ego: world.ego,
       npcs: world.contraflow.riders.length ? [...fleet.vehicles, ...world.contraflow.riders] : fleet.vehicles,
@@ -1700,28 +1730,6 @@ export async function boot() {
     }
   };
   requestAnimationFrame(frame);
-}
-
-function nearestPreset(hour) {
-  let best = "afternoon",
-    d = Infinity;
-  for (const [name, h] of Object.entries(TIME_PRESETS)) {
-    const x = Math.abs(h - hour);
-    if (x < d) {
-      d = x;
-      best = name;
-    }
-  }
-  return best;
-}
-
-function readReplay() {
-  if (!new URLSearchParams(location.search).has("replay")) return null;
-  try {
-    return JSON.parse(localStorage.getItem("jev-fsd-replay"));
-  } catch {
-    return null;
-  }
 }
 
 const beamIndicator = document.createElement("div");

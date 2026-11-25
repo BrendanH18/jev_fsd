@@ -11,7 +11,8 @@ import { api, h } from "../common.js";
 import { agentDefinitions, agentOptionLabel } from "../brain/registry.js";
 import { decisionIds } from "../brain/decision.js";
 
-const money = (v) => (v === undefined || v === null || v === "" ? "" : String(Number(v.toFixed ? v.toFixed(4) : v)));
+const money = (value) => (Number.isFinite(value) && value >= 0 ? String(value) : "");
+const hasPrice = (model) => money(model?.price_per_mtok_input) !== "" || money(model?.price_per_mtok_output) !== "";
 
 export const KINDS = {
   decision: {
@@ -46,21 +47,21 @@ const endpointOf = (d) => d.decision || d.llm;
 export class ModelSetup {
   // onSaved(result): the server's {llm, decision, id?, saved?, removed?, notes} after a save or removal.
   // onUse(id): drive with a configured model. onPause(on): pause the world while the dialog is open.
-  constructor({ onSaved, onUse, onPause }) {
-    Object.assign(this, { onSaved, onUse, onPause });
+  constructor({ onSaved, onUse, onPause, request = api }) {
+    Object.assign(this, { onSaved, onUse, onPause, request });
     this.kind = "decision";
     this.providers = { decision: [], llm: [] };
     this.chosen = {}; // kind -> provider id last selected
     this.models = [];
-    this.loadToken = 0;
+    this.session = 0;
+    this.mutation = null;
     this.dialog = h("dialog", { class: "drive-dialog llm-setup", "aria-labelledby": "llm-setup-title" });
-    // Escape closes the dialog without close(); the close event can arrive a frame late, so pausing is idempotent.
     this.dialog.addEventListener("close", () => {
-      if (this.dialog.open) return;
-      this.loadToken++;
-      this.key.value = "";
-      this.key.type = "password";
-      this.setPaused(false);
+      if (!this.dialog.open) this.endSession();
+    });
+    this.dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.close();
     });
     this.dialog.addEventListener("click", (ev) => {
       if (ev.target !== this.dialog) return;
@@ -74,16 +75,20 @@ export class ModelSetup {
 
   // `block` is /api/status's `decision` or `llm` block, or the same block from a save reply.
   setStatus(kind, block) {
-    if (block?.providers) this.providers[kind] = block.providers;
+    if (Array.isArray(block?.providers)) this.providers[kind] = block.providers;
     if (kind === "decision" && block?.jev) this.jevModel = block.jev.model;
   }
 
   open(kind = this.kind, providerId = null) {
-    if (!this.providers[kind]?.length) return;
+    if (this.mutation || !this.providers[kind]?.length) return;
+    if (this.dialog.open && kind === this.kind && (!providerId || providerId === this.provider.id)) return;
+    this.modelRequest?.abort();
+    this.session++;
     this.kind = kind;
     if (providerId) this.chosen[kind] = providerId;
     const providers = this.providers[kind];
     this.provider = providers.find((p) => p.id === this.chosen[kind]) || providers[0];
+    this.selectedProvider = null;
     this.render();
     if (!this.dialog.open) {
       this.setPaused(true);
@@ -93,6 +98,15 @@ export class ModelSetup {
   }
   close() {
     this.dialog.close();
+    this.endSession();
+  }
+  endSession() {
+    if (!this.paused) return;
+    this.session++;
+    this.modelRequest?.abort();
+    this.modelRequest = null;
+    this.key.value = "";
+    this.key.type = "password";
     this.setPaused(false);
   }
   setPaused(on) {
@@ -105,11 +119,13 @@ export class ModelSetup {
   render() {
     const kind = KINDS[this.kind];
     const move = (ev) => {
+      if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.isComposing || this.mutation) return;
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(ev.key)) return;
-      const buttons = [...ev.currentTarget.querySelectorAll("button")];
+      const buttons = [...ev.currentTarget.querySelectorAll("button:not([disabled])")];
       const index = buttons.indexOf(ev.target);
       if (index < 0) return;
       ev.preventDefault();
+      ev.stopPropagation();
       const direction = ["ArrowLeft", "ArrowUp"].includes(ev.key) ? -1 : 1;
       const next =
         ev.key === "Home"
@@ -133,6 +149,7 @@ export class ModelSetup {
           class: "llm-provider",
           "data-kind": k,
           "aria-selected": String(k === this.kind),
+          disabled: !this.providers[k].length,
           tabindex: k === this.kind ? 0 : -1,
           onclick: () => {
             if (k !== this.kind) this.open(k);
@@ -184,6 +201,7 @@ export class ModelSetup {
           placeholder: this.kind === "decision" ? "https://my-server.example.com" : "https://my-server.example.com/v1",
           autocomplete: "off",
           spellcheck: "false",
+          oninput: () => this.invalidateModelList(),
           onchange: () => this.loadModels(),
         })),
       )),
@@ -198,6 +216,7 @@ export class ModelSetup {
             type: "password",
             autocomplete: "off",
             spellcheck: "false",
+            oninput: () => this.invalidateModelList(),
             onchange: () => this.loadModels(),
           })),
           (this.showKey = h(
@@ -233,11 +252,11 @@ export class ModelSetup {
             spellcheck: "false",
             oninput: () => this.fillPrices(),
           })),
-          h(
+          (this.testButton = h(
             "button",
             { type: "button", class: "chip-button", onclick: () => this.loadModels(true) },
             "Test connection",
-          ),
+          )),
         ),
         (this.list = h("datalist", { id: "llm-model-list" })),
       ),
@@ -271,6 +290,12 @@ export class ModelSetup {
         )),
       ),
     );
+    this.priceEdited = [false, false];
+    [this.priceIn, this.priceOut].forEach((field, i) => {
+      field.addEventListener("input", () => {
+        this.priceEdited[i] = true;
+      });
+    });
     this.renderSaved();
   }
 
@@ -299,7 +324,7 @@ export class ModelSetup {
                     {
                       type: "button",
                       class: "chip-button",
-                      disabled: d.available === false,
+                      disabled: d.available === false || !!this.mutation,
                       onclick: () => {
                         this.close();
                         this.onUse(d.id);
@@ -315,6 +340,7 @@ export class ModelSetup {
                           type: "button",
                           class: "chip-button",
                           "aria-label": `Remove ${d.label}`,
+                          disabled: !!this.mutation,
                           onclick: () => this.remove(d),
                         },
                         "Remove",
@@ -328,15 +354,18 @@ export class ModelSetup {
   }
 
   selectProvider(p) {
+    if (this.mutation || this.selectedProvider === p) return;
+    this.selectedProvider = p;
     this.provider = p;
     this.chosen[this.kind] = p.id;
-    this.loadToken++; // a list still loading for the previous provider must not land here
+    this.invalidateModelList();
     for (const b of this.dialog.querySelectorAll("[data-provider]")) {
       b.setAttribute("aria-checked", String(b.dataset.provider === p.id));
       b.tabIndex = b.dataset.provider === p.id ? 0 : -1;
     }
     this.hint.textContent = p.hint;
     this.urlRow.hidden = p.id !== "custom";
+    this.url.value = "";
     this.keyRow.hidden = p.local;
     this.key.value = "";
     this.key.type = "password";
@@ -349,6 +378,7 @@ export class ModelSetup {
         : "Only if your server needs one";
     this.keyLink.hidden = !p.key_url;
     if (p.key_url) this.keyLink.href = p.key_url;
+    else this.keyLink.removeAttribute("href");
     this.models = [];
     this.list.replaceChildren();
     this.model.value = "";
@@ -362,56 +392,89 @@ export class ModelSetup {
     else this.modelStatus.textContent = p.needs_key ? "Paste a key to load the model list, or type a model id." : "";
   }
 
+  invalidateModelList() {
+    this.modelRequest?.abort();
+    this.modelRequest = null;
+    this.models = [];
+    this.list.replaceChildren();
+    this.testButton.disabled = !!this.mutation;
+    this.modelStatus.textContent = "";
+    this.modelStatus.removeAttribute("aria-busy");
+    this.fillPrices();
+  }
+
   async loadModels(test = false) {
-    const p = this.provider,
-      token = ++this.loadToken;
-    if (p.id === "custom" && !this.url.value.trim()) {
-      this.modelStatus.textContent = "Enter the server URL first.";
+    if (this.mutation || !this.dialog.open) return;
+    const p = this.provider;
+    this.invalidateModelList();
+    if (p.id === "custom" && (!this.url.value.trim() || !this.url.reportValidity())) {
+      this.modelStatus.textContent = "Enter a valid server URL first.";
+      if (test) this.url.focus();
       return;
     }
+    const request = (this.modelRequest = new AbortController());
     this.modelStatus.textContent = test ? "Testing connection…" : "Loading models…";
+    this.modelStatus.setAttribute("aria-busy", "true");
+    this.testButton.disabled = true;
     try {
-      const res = await api(`${KINDS[this.kind].api}/models`, {
-        provider: p.id,
-        base_url: this.url.value.trim() || undefined,
-        api_key: this.key.value.trim() || undefined,
-      });
-      if (token !== this.loadToken) return;
-      this.models = res.models;
+      const res = await this.request(
+        `${KINDS[this.kind].api}/models`,
+        {
+          provider: p.id,
+          base_url: p.id === "custom" ? this.url.value.trim() : undefined,
+          api_key: this.key.value.trim() || undefined,
+        },
+        { signal: request.signal },
+      );
+      if (this.modelRequest !== request) return;
+      if (!Array.isArray(res?.models)) throw new Error("The provider returned an invalid model list.");
+      const models = new Map();
+      for (const model of res.models) {
+        if (typeof model?.id === "string" && model.id.trim() && !models.has(model.id)) models.set(model.id, model);
+      }
+      this.models = [...models.values()];
       this.list.replaceChildren(
-        ...res.models.map((m) =>
-          h("option", { value: m.id }, priceText(m) ? `${m.name || m.id} · ${priceText(m)}` : m.name || ""),
+        ...this.models.map((m) =>
+          h("option", { value: m.id }, [m.name || m.id, priceText(m)].filter(Boolean).join(" · ")),
         ),
       );
-      const priced = res.models.some((m) => m.price_per_mtok_input !== undefined);
+      const count = this.models.length;
+      const endpoint = res.endpoint || p.label;
       this.modelStatus.textContent =
-        (res.models.length
-          ? `${res.models.length} models from ${res.endpoint}${priced ? ", with prices" : ""}. Type to search.`
-          : `${res.endpoint} listed no models; type the model id.`) + (res.note ? ` ${res.note}` : "");
-      // TypeSafe: start on the built-in Jev's model, so pasting a key and saving turns Jev on.
+        (count
+          ? `${count} ${count === 1 ? "model" : "models"} from ${endpoint}${this.models.some(hasPrice) ? ", with prices" : ""}. Type to search.`
+          : `${endpoint} listed no models. Enter a model ID to continue.`) + (res.note ? ` ${res.note}` : "");
       if (this.kind === "decision" && p.id === "typesafe" && !this.model.value)
-        this.model.value = this.jevModel || res.models[0]?.id || "";
+        this.model.value = this.jevModel || this.models[0]?.id || "";
       this.fillPrices();
     } catch (error) {
-      if (token === this.loadToken) this.modelStatus.textContent = error.message;
+      if (this.modelRequest === request) this.modelStatus.textContent = `Could not list models. ${error.message}`;
+    } finally {
+      if (this.modelRequest === request) {
+        this.modelRequest = null;
+        this.modelStatus.removeAttribute("aria-busy");
+        this.testButton.disabled = !!this.mutation;
+      }
     }
   }
 
-  // Listed prices fill in; once the id no longer matches a priced model they clear again, so one
-  // model's prices (or a free model's $0) never stick to another. Prices typed by hand are kept.
+  // Prices edited by hand take precedence while the selected model stays the same.
   fillPrices() {
-    const m = this.models.find((x) => x.id === this.model.value.trim());
-    if (m?.price_per_mtok_input !== undefined) {
-      this.priceIn.value = money(m.price_per_mtok_input);
-      this.priceOut.value = money(m.price_per_mtok_output);
-      this.autoPrices = [this.priceIn.value, this.priceOut.value];
-    } else if (this.autoPrices) {
-      // field by field: a hand-edited input price must not keep the old output price
-      [this.priceIn, this.priceOut].forEach((field, i) => {
-        if (field.value === this.autoPrices[i]) field.value = "";
-      });
-      this.autoPrices = null;
+    const id = this.model.value.trim();
+    const model = this.models.find((entry) => entry.id === id);
+    if (this.priceModel !== id) {
+      this.priceModel = id;
+      this.priceEdited = [false, false];
     }
+    const prices = [model?.price_per_mtok_input, model?.price_per_mtok_output];
+    const fields = [this.priceIn, this.priceOut];
+    this.autoPrices ??= ["", ""];
+    fields.forEach((field, i) => {
+      if (this.priceEdited[i]) return;
+      const value = money(prices[i]);
+      if (!field.value || field.value === this.autoPrices[i]) field.value = value;
+      this.autoPrices[i] = value;
+    });
   }
 
   label(model, listed) {
@@ -420,46 +483,91 @@ export class ModelSetup {
     return listed?.name ? `${listed.name.slice(0, 40)} (${p.label})` : undefined;
   }
 
+  lock(action) {
+    this.mutation = action;
+    this.status.textContent = action;
+    this.dialog.setAttribute("aria-busy", "true");
+    this.locked = [...this.dialog.querySelectorAll("button:not(:disabled), input:not(:disabled)")].filter(
+      (control) => !control.closest(".dialog-header"),
+    );
+    for (const control of this.locked) control.disabled = true;
+  }
+
+  unlock() {
+    this.mutation = null;
+    this.dialog.removeAttribute("aria-busy");
+    for (const control of this.locked) control.disabled = false;
+    this.testButton.disabled = !!this.modelRequest;
+    this.renderSaved();
+  }
+
   async save() {
-    const p = this.provider,
-      kind = this.kind;
-    this.saveButton.disabled = true;
-    this.status.textContent = "Saving…";
+    if (this.mutation) return;
+    const p = this.provider;
+    const kind = this.kind;
+    const model = this.model.value.trim();
+    const listed = this.models.find((m) => m.id === model);
+    if (!model) {
+      this.status.textContent = "Enter a model ID before saving.";
+      this.model.focus();
+      return;
+    }
+    if (p.id === "custom" && (!this.url.value.trim() || !this.url.reportValidity())) {
+      this.status.textContent = "Enter a valid server URL before saving.";
+      this.url.focus();
+      return;
+    }
+    if (!this.priceIn.reportValidity() || (kind === "llm" && !this.priceOut.reportValidity())) return;
+    const payload = {
+      provider: p.id,
+      model,
+      label: this.label(model, listed),
+      base_url: p.id === "custom" ? this.url.value.trim() : undefined,
+      api_key: this.key.value.trim() || undefined,
+      price_per_mtok_input: this.priceIn.value === "" ? undefined : Number(this.priceIn.value),
+      price_per_mtok_output:
+        kind === "decision" || this.priceOut.value === "" ? undefined : Number(this.priceOut.value),
+    };
+    const session = this.session;
+    this.lock("Saving…");
+    this.modelRequest?.abort();
+    this.modelRequest = null;
+    this.modelStatus.removeAttribute("aria-busy");
+    this.modelStatus.textContent = "";
     try {
-      const model = this.model.value.trim(),
-        listed = this.models.find((m) => m.id === model);
-      const res = await api(`${KINDS[kind].api}/save`, {
-        provider: p.id,
-        model,
-        label: this.label(model, listed),
-        base_url: p.id === "custom" ? this.url.value.trim() : undefined,
-        api_key: this.key.value.trim() || undefined,
-        price_per_mtok_input: this.priceIn.value === "" ? undefined : Number(this.priceIn.value),
-        price_per_mtok_output:
-          kind === "decision" || this.priceOut.value === "" ? undefined : Number(this.priceOut.value),
-      });
-      this.key.value = "";
+      const res = await this.request(`${KINDS[kind].api}/save`, payload);
+      if (session === this.session) {
+        this.key.value = "";
+        this.key.type = "password";
+        this.showKey.textContent = "Show key";
+        this.showKey.setAttribute("aria-pressed", "false");
+      }
       await this.applied(res);
+      if (session !== this.session) return;
       this.provider = this.providers[kind].find((x) => x.id === p.id) || p;
       this.status.textContent = res.notes?.length ? res.notes.join(" ") : "Saved.";
-      if (!res.notes?.length) {
+      if (!res.notes?.length && res.id) {
         this.close();
         this.onUse(res.id);
       }
     } catch (error) {
-      this.status.textContent = error.message;
+      if (session === this.session) this.status.textContent = `Could not save the model. ${error.message}`;
     } finally {
-      this.saveButton.disabled = false;
+      this.unlock();
     }
   }
 
   async remove(definition) {
+    if (this.mutation) return;
+    this.lock(`Removing ${definition.label}…`);
     try {
-      const res = await api(`${KINDS[this.kind].api}/remove`, { name: endpointOf(definition).name });
+      const res = await this.request(`${KINDS[this.kind].api}/remove`, { name: endpointOf(definition).name });
       await this.applied(res);
       this.status.textContent = `Removed ${definition.label}.`;
     } catch (error) {
-      this.status.textContent = error.message;
+      this.status.textContent = `Could not remove ${definition.label}. ${error.message}`;
+    } finally {
+      this.unlock();
     }
   }
 
@@ -467,16 +575,14 @@ export class ModelSetup {
   async applied(res) {
     for (const kind of Object.keys(KINDS)) this.setStatus(kind, res[kind]);
     await this.onSaved(res);
-    this.renderSaved();
   }
 }
 
 function priceText(m) {
-  if (m.price_per_mtok_input === undefined) return "";
-  if (m.price_per_mtok_input === 0 && !m.price_per_mtok_output) return "free";
-  return m.price_per_mtok_output
-    ? `$${money(m.price_per_mtok_input)} / $${money(m.price_per_mtok_output)} per M`
-    : `$${money(m.price_per_mtok_input)} per M input`;
+  const input = money(m.price_per_mtok_input);
+  const output = money(m.price_per_mtok_output);
+  if (input === "0" && output === "0") return "free";
+  return [input && `$${input} per M input`, output && `$${output} per M output`].filter(Boolean).join(" / ");
 }
 
 // A ▾ menu: pick which model a pillar button drives with, or open the setup dialog.
@@ -492,6 +598,7 @@ export class ModelMenu {
     });
     this.menu.id = `${toggle.id}-menu`;
     toggle.setAttribute("aria-controls", this.menu.id);
+    toggle.setAttribute("aria-haspopup", "menu");
     toggle.after(this.menu);
     toggle.addEventListener("keydown", (ev) => {
       if (ev.ctrlKey || ev.metaKey || ev.altKey || !["ArrowDown", "ArrowUp"].includes(ev.key)) return;
@@ -507,6 +614,7 @@ export class ModelMenu {
       if (this.menu.hidden) toggle.focus();
     });
     this.menu.addEventListener("keydown", (ev) => {
+      if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.isComposing) return;
       const items = [...this.menu.querySelectorAll("[role^=menuitem]:not([disabled])")],
         i = items.indexOf(document.activeElement);
       if (ev.key === "Escape" || ev.key === "ArrowDown" || ev.key === "ArrowUp") ev.stopPropagation(); // not a drive shortcut
@@ -554,6 +662,7 @@ export class ModelMenu {
           {
             type: "button",
             role: "menuitemradio",
+            tabindex: "-1",
             "aria-checked": String(d.id === current),
             disabled: d.available === false,
             title: endpointOf(d) ? `${endpointOf(d).model} at ${endpointOf(d).endpoint}` : d.description || d.label,
@@ -567,6 +676,7 @@ export class ModelMenu {
         {
           type: "button",
           role: "menuitem",
+          tabindex: "-1",
           class: "llm-menu-setup",
           onclick: () => {
             this.setOpen(false);
