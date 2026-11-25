@@ -165,7 +165,7 @@ await test("prompt audit counts Unicode characters and omits prompt contents", (
   const audit = promptAudit();
   audit.observe({ questions: { vector: { instructions: "🚗".repeat(4000) }, motion: { instructions: "Stop" } } });
   audit.observe({ questions: { vector: { instructions: "🚗".repeat(4001) } } });
-  assert.deepEqual(audit.result(), {
+  assert.deepEqual(audit.result({ detailed: false }), {
     requests: 2,
     prompts: {
       vector: { samples: 2, max_chars: 4001, over_4000: 1 },
@@ -311,7 +311,7 @@ await test("a replay makes no model call, needs no registered endpoint and plays
   assert.equal(tape.stats.missing, 0);
   assert.equal(tape.stats.drift, 0);
   assert.equal(tape.stats.served, outcomes.length);
-  assert.deepEqual(audit.result(), {
+  assert.deepEqual(audit.result({ detailed: false }), {
     requests: outcomes.length,
     prompts: {
       llm_system: {
