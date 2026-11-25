@@ -1,5 +1,5 @@
-// Dynamic bicycle (Fiala tires, load transfer, yaw inertia), blended to kinematic below walking
-// speed. Same model for ego, NPCs, bikes, and candidate forward-sims so predictions match execution.
+// Dynamic bicycle (Fiala tires, load transfer, yaw inertia) at 3 m/s and above. The model switches
+// to kinematic below that threshold and for bicycles. Ego, NPCs and predictions use the same step.
 // State: rear-axle x,y (m); heading psi (rad); forward speed v and CG lateral speed vy (m/s);
 // yaw rate r (rad/s); steer delta (rad); actuator acceleration command a (m/s²).
 // Actuator lag + jerk limit; powertrain power/drag cap; per-axle friction circle after long force.
@@ -289,12 +289,89 @@ export const COLLECTION_TRUCK = {
 // `gripAt`: where grip varies from place to place (black ice, sim/black-ice.js), a function (x, y, spec)
 // giving the friction coefficient under a tyre at (x, y), or null where it is `mu`. It is null in every
 // world without such a surface, and then nothing about it is computed.
-export const ROAD = { mu: 0.9, gripAt: null };
+export const DRY_ROAD_MU = 0.9;
+export const ROAD = { mu: DRY_ROAD_MU, gripAt: null };
 export const G = 9.81;
 export const MAX_PHYSICS_STEP_S = 1; // a step integrates one tick, never time spent paused
 const LOAD_SENSITIVITY = 0.12; // a tire at twice its static load grips 12% less per newton
 const KINEMATIC_BELOW = 3.0; // m/s: below this the kinematic model is used
 const SUBSTEP = 0.01; // s, the dynamic model's integration step
+const FULL_TURN = 2 * Math.PI;
+const validatedSpecs = new WeakSet();
+
+// Only the built-in records are shared as read-only inputs. A caller may still supply an editable
+// spec, which is checked again after any edit because its identity is unchanged.
+for (const spec of [
+  CAR,
+  BIKE,
+  AMBULANCE,
+  FIRE_TRUCK,
+  BUS,
+  SCHOOL_BUS,
+  STREETCAR,
+  HERITAGE_STREETCAR,
+  TOW_TRUCK,
+  POLICE_CAR,
+  DELIVERY_VAN,
+  SNOW_PLOW,
+  COLLECTION_TRUCK,
+]) {
+  Object.freeze(spec);
+}
+
+function specRange(field, value, min, max = Infinity, { openMin = false, openMax = false } = {}) {
+  if (!Number.isFinite(value) || (openMin ? value <= min : value < min) || (openMax ? value >= max : value > max))
+    throw new RangeError(`Invalid vehicle spec field ${field}`);
+}
+
+function validateMotionSpec(spec) {
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw new TypeError("Vehicle spec must be an object");
+  if (validatedSpecs.has(spec)) return;
+  const positive = { openMin: true };
+  specRange("wheelbase", spec.wheelbase, 0, Infinity, positive);
+  specRange("maxSteer", spec.maxSteer, 0, Math.PI / 2, { openMax: true });
+  for (const key of ["steerRate", "maxAccel", "maxBrake", "maxSpeed", "maxReverse", "accelLag", "jerkMax"])
+    specRange(key, spec[key], 0);
+  specRange("mass", spec.mass ?? 0, 0);
+  if (spec.mass) {
+    specRange("cgToFront", spec.cgToFront, 0, spec.wheelbase, { openMin: true, openMax: true });
+    specRange("track", spec.track, 0, Infinity, positive);
+    specRange("yawInertia", spec.yawInertia, 0, Infinity, positive);
+    for (const key of ["cgHeight", "frontStiffness", "rearStiffness"]) specRange(key, spec[key], 0);
+    for (const key of ["brakeFront", "driveFront", "rollFront"]) specRange(key, spec[key], 0, 1);
+  } else if (spec.cgToFront != null) {
+    specRange("cgToFront", spec.cgToFront, 0, spec.wheelbase);
+  }
+  if (spec.power != null) {
+    specRange("power", spec.power, 0);
+    if (spec.power) {
+      if (!spec.mass) throw new RangeError("A powered vehicle spec requires positive mass");
+      specRange("cdA", spec.cdA, 0);
+      specRange("crr", spec.crr, 0);
+    }
+  }
+  // A frozen object can still contain getters. Cache only specs made of own data properties.
+  if (
+    Object.isFrozen(spec) &&
+    Object.getPrototypeOf(spec) === Object.prototype &&
+    Object.values(Object.getOwnPropertyDescriptors(spec)).every((descriptor) => Object.hasOwn(descriptor, "value"))
+  )
+    validatedSpecs.add(spec);
+}
+
+export function validateStepDuration(dt) {
+  if (!Number.isFinite(dt) || dt < 0 || dt > MAX_PHYSICS_STEP_S)
+    throw new RangeError("Invalid vehicle step duration (seconds)");
+}
+
+// Preserve the single-turn arithmetic used for ordinary headings. The remainder bounds the
+// work for a heading loaded from an unwrapped trace or supplied by an external driver.
+export function wrapHeading(angle) {
+  if (angle > 3 * Math.PI || angle <= -3 * Math.PI) angle %= FULL_TURN;
+  if (angle > Math.PI) angle -= FULL_TURN;
+  if (angle <= -Math.PI) angle += FULL_TURN;
+  return angle;
+}
 
 export class Vehicle {
   constructor(x = 0, y = 0, psi = 0, v = 0, spec = CAR) {
@@ -324,14 +401,52 @@ export class Vehicle {
     return c;
   }
 
-  // steer: desired steering angle (rad); accel: m/s^2. Both are clamped to the vehicle's limits.
-  step(dt, { steer = 0, accel = 0, reverse = false } = {}) {
-    if (!Number.isFinite(dt) || dt < 0 || dt > MAX_PHYSICS_STEP_S)
-      throw new RangeError("Invalid vehicle step duration");
+  // dt in seconds, steer in radians and accel in m/s². Positive steer turns left.
+  step(dt, command = {}) {
+    validateStepDuration(dt);
     if (dt === 0) return;
+    if (command === null || typeof command !== "object" || Array.isArray(command))
+      throw new TypeError("Vehicle command must be an object");
+    const { steer = 0, accel = 0, reverse = false } = command;
     if (!Number.isFinite(steer) || !Number.isFinite(accel)) throw new RangeError("Non-finite vehicle command");
+    if (typeof reverse !== "boolean") throw new TypeError("Vehicle reverse command must be a boolean");
     if (!Number.isFinite(this.x) || !Number.isFinite(this.y) || !Number.isFinite(this.psi) || !Number.isFinite(this.v))
       throw new RangeError("Invalid vehicle pose");
+    if (!Number.isFinite(this.delta) || !Number.isFinite(this.a))
+      throw new RangeError("Invalid vehicle actuator state");
+    if (!Number.isFinite(this.vy) || !Number.isFinite(this.r)) throw new RangeError("Invalid vehicle lateral motion");
+    if (!Number.isFinite(this.ax) || !Number.isFinite(this.latAccel))
+      throw new RangeError("Invalid vehicle load-transfer acceleration");
+    const mu = roadGrip();
+    if (ROAD.gripAt != null && typeof ROAD.gripAt !== "function")
+      throw new TypeError("ROAD.gripAt must be a function or null");
+    validateMotionSpec(this.spec);
+
+    const { x, y, psi, v, delta, a, vy, r, ax, latAccel, slipping } = this;
+    try {
+      this.#integrate(dt, steer, accel, reverse, mu);
+      if (
+        !Number.isFinite(this.x) ||
+        !Number.isFinite(this.y) ||
+        !Number.isFinite(this.psi) ||
+        !Number.isFinite(this.v) ||
+        !Number.isFinite(this.delta) ||
+        !Number.isFinite(this.a) ||
+        !Number.isFinite(this.vy) ||
+        !Number.isFinite(this.r) ||
+        !Number.isFinite(this.ax) ||
+        !Number.isFinite(this.latAccel) ||
+        !Number.isFinite(this.slipping)
+      )
+        throw new RangeError("Vehicle integration produced non-finite state");
+    } catch (error) {
+      // This also handles errors raised by a surface hook partway through a dynamic tick.
+      Object.assign(this, { x, y, psi, v, delta, a, vy, r, ax, latAccel, slipping });
+      throw error;
+    }
+  }
+
+  #integrate(dt, steer, accel, reverse, mu) {
     const P = this.spec;
     const target = Math.max(-P.maxSteer, Math.min(P.maxSteer, steer));
     const maxDelta = P.steerRate * dt;
@@ -346,11 +461,13 @@ export class Vehicle {
     this.a += Math.max(-P.jerkMax * dt, Math.min(P.jerkMax * dt, da));
 
     const v0 = this.v;
-    if (Math.abs(this.v) < KINEMATIC_BELOW || !P.mass) this.kinematic(dt);
+    if (Math.abs(this.v) < KINEMATIC_BELOW || !P.mass) this.#kinematic(dt, mu);
     else {
       const n = Math.max(1, Math.ceil(dt / SUBSTEP - 1e-9));
-      for (let i = 0; i < n; i++) this.dynamic(dt / n);
+      const h = dt / n;
+      for (let i = 0; i < n; i++) this.#dynamic(h, mu);
     }
+    if (!Number.isFinite(this.v)) throw new RangeError("Vehicle integration produced non-finite speed");
     // braking never reverses the car on its own; reversing is an explicit choice
     if (this.a < 0 && v0 >= 0 && this.v < 0 && !reverse) this.v = 0;
     if (this.a > 0 && v0 < 0 && this.v > 0) this.v = 0;
@@ -361,14 +478,14 @@ export class Vehicle {
       this.r = 0;
     }
     this.v = Math.max(-P.maxReverse, Math.min(P.maxSpeed, this.v));
-    wrapPsi(this);
+    this.psi = wrapHeading(this.psi);
   }
 
   // Walking pace: the car goes where its wheels point, limited by the friction circle.
-  kinematic(dt) {
+  #kinematic(dt, mu) {
     const P = this.spec;
     // (where grip varies, the slipperier axle's: ROAD.gripAt)
-    const grip = (ROAD.gripAt ? Math.min(...axleGrip(this)) : ROAD.mu) * G;
+    const grip = (ROAD.gripAt ? Math.min(...axleGrip(this, mu)) : mu) * G;
     const a = Math.max(-grip, Math.min(grip, this.a));
     let curvature = Math.tan(this.delta) / P.wheelbase;
     const latMax = Math.sqrt(Math.max(0, grip * grip - a * a));
@@ -385,13 +502,12 @@ export class Vehicle {
     this.v += a * dt;
   }
 
-  dynamic(h) {
+  #dynamic(h, mu) {
     const P = this.spec;
     const L = P.wheelbase,
       lf = P.cgToFront,
       lr = L - lf,
       m = P.mass;
-    const mu = ROAD.mu;
     // axle loads with longitudinal transfer (from the last step's acceleration)
     const Fzf = Math.max(0, (m * (G * lr - this.ax * P.cgHeight)) / L);
     const Fzr = Math.max(0, (m * (G * lf + this.ax * P.cgHeight)) / L);
@@ -400,7 +516,7 @@ export class Vehicle {
     // (where grip varies, each axle's own: ROAD.gripAt; elsewhere both are ROAD.mu, untouched)
     let muFront = mu,
       muRear = mu;
-    if (ROAD.gripAt) [muFront, muRear] = axleGrip(this);
+    if (ROAD.gripAt) [muFront, muRear] = axleGrip(this, mu);
     const muF = axleMu(muFront, Fzf, dFz * P.rollFront, (m * G * lr) / L);
     const muR = axleMu(muRear, Fzr, dFz * (1 - P.rollFront), (m * G * lf) / L);
     const vx = this.v,
@@ -459,16 +575,27 @@ export class Vehicle {
   }
 
   get center() {
-    const f = this.spec.length / 2 - this.spec.rearOverhang;
-    return [this.x + Math.cos(this.psi) * f, this.y + Math.sin(this.psi) * f];
+    return this.#pointAhead(bodyLength(this.spec) / 2 - this.spec.rearOverhang);
   }
   get front() {
-    const f = this.spec.length - this.spec.rearOverhang;
-    return [this.x + Math.cos(this.psi) * f, this.y + Math.sin(this.psi) * f];
+    return this.#pointAhead(bodyLength(this.spec) - this.spec.rearOverhang);
+  }
+
+  #pointAhead(metres) {
+    if (!Number.isFinite(this.psi)) throw new RangeError("Invalid heading for vehicle body projection");
+    const x = this.x + Math.cos(this.psi) * metres;
+    const y = this.y + Math.sin(this.psi) * metres;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new RangeError("Invalid projected vehicle position");
+    return [x, y];
   }
 
   obb() {
-    return { center: this.center, heading: this.psi, halfLength: this.spec.length / 2, halfWidth: this.spec.width / 2 };
+    return {
+      center: this.center,
+      heading: this.psi,
+      halfLength: this.spec.length / 2,
+      halfWidth: halfWidth(this.spec),
+    };
   }
 
   corners() {
@@ -476,43 +603,71 @@ export class Vehicle {
     const c = Math.cos(this.psi),
       s = Math.sin(this.psi);
     const hl = this.spec.length / 2,
-      hw = this.spec.width / 2;
+      hw = halfWidth(this.spec);
     return [
       [hl, hw],
       [hl, -hw],
       [-hl, -hw],
       [-hl, hw],
-    ].map(([lx, ly]) => [cx + lx * c - ly * s, cy + lx * s + ly * c]);
+    ].map(([lx, ly]) => {
+      const x = cx + lx * c - ly * s;
+      const y = cy + lx * s + ly * c;
+      if (!Number.isFinite(x) || !Number.isFinite(y))
+        throw new RangeError("Vehicle corner exceeds the coordinate range");
+      return [x, y];
+    });
   }
 
   // A point in the world expressed in the car's frame: ahead (+forward) and right (+right).
   toLocal(px, py) {
+    if (!Number.isFinite(px) || !Number.isFinite(py))
+      throw new RangeError("Invalid point for vehicle-local projection");
+    if (!Number.isFinite(this.x) || !Number.isFinite(this.y) || !Number.isFinite(this.psi))
+      throw new RangeError("Invalid pose for vehicle-local projection");
     const dx = px - this.x,
       dy = py - this.y;
     const c = Math.cos(this.psi),
       s = Math.sin(this.psi);
-    return { ahead: dx * c + dy * s, right: dx * s - dy * c };
+    const ahead = dx * c + dy * s;
+    const right = dx * s - dy * c;
+    if (!Number.isFinite(ahead) || !Number.isFinite(right)) throw new RangeError("Invalid vehicle-local projection");
+    return { ahead, right };
   }
 }
 
-function wrapPsi(v) {
-  if (v.psi > Math.PI) v.psi -= 2 * Math.PI;
-  if (v.psi <= -Math.PI) v.psi += 2 * Math.PI;
+function bodyLength(spec) {
+  const length = spec?.length;
+  if (!Number.isFinite(length) || length <= 0) throw new RangeError("Vehicle body length must be positive");
+  if (!Number.isFinite(spec.rearOverhang) || spec.rearOverhang < 0 || spec.rearOverhang > length)
+    throw new RangeError("Vehicle rear overhang must place the rear axle within the body");
+  return length;
+}
+
+function halfWidth(spec) {
+  const width = spec.width / 2;
+  if (!Number.isFinite(spec.width) || width <= 0) throw new RangeError("Vehicle body width must be positive");
+  return width;
 }
 
 const clampAbs = (x, lim) => Math.max(-lim, Math.min(lim, x));
 
 // The road's grip under a vehicle's front and rear axles, where it varies (ROAD.gripAt): [front, rear].
-function axleGrip(v) {
+function axleGrip(v, fallback) {
   const at = ROAD.gripAt,
     P = v.spec,
     wb = P.wheelbase;
   const front = at(v.x + Math.cos(v.psi) * wb, v.y + Math.sin(v.psi) * wb, P),
     rear = at(v.x, v.y, P);
-  return [validGrip(front), validGrip(rear)];
+  return [validGrip(front, fallback), validGrip(rear, fallback)];
 }
 
-const validGrip = (mu) => (Number.isFinite(mu) && mu >= 0 ? mu : ROAD.mu);
+const validGrip = (mu, fallback) => (Number.isFinite(mu) && mu >= 0 ? mu : fallback);
+
+function roadGrip() {
+  const mu = ROAD.mu;
+  if (!Number.isFinite(mu) || mu < 0) throw new RangeError("ROAD.mu must be a finite nonnegative friction coefficient");
+  return mu;
+}
 
 // Longitudinal force an axle may use: what its friction circle has left after the cornering force
 // it is being asked for, and never less than a quarter of its grip.
@@ -540,7 +695,12 @@ function fiala(alpha, C, Fmax) {
   const tSl = (3 * Fmax) / C;
   if (Math.abs(t) >= tSl) return -Fmax * Math.sign(alpha);
   const a = Math.abs(t);
-  return -Math.sign(alpha) * (C * a - (C * C * a * a) / (3 * Fmax) + (C * C * C * a * a * a) / (27 * Fmax * Fmax));
+  const force = C * a - (C * C * a * a) / (3 * Fmax) + (C * C * C * a * a * a) / (27 * Fmax * Fmax);
+  if (Number.isFinite(force)) return -Math.sign(alpha) * force;
+  // Extreme stiffness can overflow intermediate terms in the expanded cubic even at zero slip.
+  // Express the same force as a fraction of available grip in that case.
+  const u = a / tSl;
+  return -Math.sign(alpha) * Fmax * (u * (3 - u * (3 - u)));
 }
 
 // Slip angle at which the Fiala tire is fully sliding.
@@ -551,6 +711,7 @@ function slideAngle(C, Fmax) {
 // Comfortable limits a sensible driver keeps to on this surface: cornering and braking scale down
 // with grip, so a wet or snowy road means slower bends and earlier braking.
 export function comfort() {
-  const k = Math.min(1, ROAD.mu / 0.9);
-  return { lat: 2.2 * Math.max(0.35, k), decel: 2.5 * Math.max(0.35, k), hardDecel: Math.min(7, ROAD.mu * G * 0.8) };
+  const mu = roadGrip();
+  const scale = Math.max(0.35, Math.min(1, mu / DRY_ROAD_MU));
+  return { lat: 2.2 * scale, decel: 2.5 * scale, hardDecel: Math.min(7, mu * G * 0.8) };
 }
