@@ -644,4 +644,60 @@ await test("Check that deleting one duplicate fallback entry leaves the other co
 });
 // End lab validation additions
 
+await test("migration keeps an oversized fallback evaluation and existing IndexedDB history", async () => {
+  const idb = new FakeIndexedDB();
+  const database = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await database.save(at(1));
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([big(2)])]]);
+  const migrated = await openEvaluationHistory({ indexedDB: idb, storage, maxBytes: 1000 });
+  assert.equal(migrated.kind, "localStorage");
+  assert.equal((await migrated.list())[0].created_at, at(2).created_at);
+  assert.equal((await database.list())[0].created_at, at(1).created_at);
+  assert.ok(storage.getItem(EVALUATION_HISTORY_KEY));
+});
+
+await test("malformed IndexedDB limits use the real history budget", async () => {
+  const store = await openEvaluationHistory({
+    indexedDB: new FakeIndexedDB(),
+    storage: local(),
+    maxRuns: 0,
+    maxBytes: NaN,
+  });
+  assert.equal(store.limit, MAX_SAVED_RUNS);
+  assert.equal((await store.save(at(1))).length, 1);
+});
+
+await test("a corrupt ID counter cannot overwrite a valid evaluation", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  const metadata = idb.dbs.get(EVALUATION_DB).stores.get("metadata").records;
+  metadata.set("last-id", "invalid");
+  assert.equal(times(await store.save(at(2))).join("|"), minutes(2, 1).join("|"));
+  assert.equal(metadata.get("last-id"), 2);
+});
+
+await test("ID exhaustion leaves the existing history intact", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  idb.dbs.get(EVALUATION_DB).stores.get("metadata").records.set("last-id", Number.MAX_SAFE_INTEGER);
+  await assert.rejects(store.save(at(2)), /exhausted its record IDs/);
+  assert.equal((await store.list()).length, 1);
+});
+
+await test("an invalid migration ledger leaves a new migration possible", async () => {
+  const idb = new FakeIndexedDB();
+  const store = await openEvaluationHistory({ indexedDB: idb, storage: local() });
+  await store.save(at(1));
+  idb.dbs
+    .get(EVALUATION_DB)
+    .stores.get("metadata")
+    .records.set("migrated-fallback-copies", [null, ["bad", -2]]);
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2)])]]);
+  const migrated = await openEvaluationHistory({ indexedDB: idb, storage });
+  assert.equal(migrated.kind, "indexedDB");
+  assert.equal(times(await migrated.list()).join("|"), minutes(2, 1).join("|"));
+});
+
 console.log(`${checks} arena storage checks passed`);
