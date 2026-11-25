@@ -135,7 +135,11 @@ export function projectPoint(pts, cum, p, hint = null) {
       const t = seg2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / seg2));
       const qx = a[0] + dx * t,
         qy = a[1] + dy * t;
-      const d = Math.hypot(p[0] - qx, p[1] - qy);
+      const dxPoint = p[0] - qx;
+      const dyPoint = p[1] - qy;
+      // Either component alone rules out a point this far from the current best.
+      if (best && (Math.abs(dxPoint) > best.distance * 2 || Math.abs(dyPoint) > best.distance * 2)) continue;
+      const d = Math.hypot(dxPoint, dyPoint);
       if (best === null || d < best.distance) {
         const segLen = Math.sqrt(seg2);
         const lateral = segLen > 0 ? ((p[0] - qx) * dy - (p[1] - qy) * dx) / segLen : 0;
