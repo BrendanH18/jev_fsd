@@ -76,7 +76,7 @@ def _http(url: str, data: Optional[bytes], timeout: float) -> bytes:
 def read_xml(source: Path | bytes) -> OsmData:
     try:
         return parse_xml(source)
-    except (OSError, ValueError) as err:
+    except (OSError, EOFError, ValueError) as err:
         prefix = f"{source.name}: " if isinstance(source, Path) else ""
         raise FetchError(f"{prefix}{err}") from err
 
@@ -126,7 +126,10 @@ def fetch_osm_xml(
         raise FetchError("Bounding box is larger than 0.25 square degrees; pick a smaller area.")
     if not isfinite(timeout) or timeout <= 0:
         raise FetchError("OSM download timeout must be finite and positive.")
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as err:
+        raise FetchError(f"Could not open OSM cache directory {cache_dir}: {err}") from err
 
     attempts = []
     attempts.append(("osm main api", OSM_MAP_URL.format(w=w, s=s, e=e, n=n), None))
@@ -143,7 +146,7 @@ def fetch_osm_xml(
                 read_xml(raw)
             except urllib.error.HTTPError as err:
                 errors.append("%s: HTTP %s" % (name, err.code))
-                if err.code in (400, 404):  # our fault, no point retrying this source
+                if err.code in (400, 401, 403, 404, 405, 410, 413, 414, 422):  # retry other sources
                     break
             except (OSError, HTTPException, FetchError) as err:
                 errors.append("%s: %s" % (name, err))
@@ -156,4 +159,5 @@ def fetch_osm_xml(
                 return path
             if attempt < len(BACKOFF_S) - 1:
                 sleep(delay + random.random() * 0.5)
-    raise FetchError("Could not download map data. " + "; ".join(errors[-4:]))
+    unique = dict.fromkeys(errors)
+    raise FetchError("Could not download map data. " + "; ".join(unique))

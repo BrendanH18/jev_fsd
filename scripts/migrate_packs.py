@@ -15,7 +15,6 @@ crossing road's asphalt. Everything else in the pack is unchanged.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -23,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jev import geometry as g  # noqa: E402
 from jev.config import MAPS_DIR  # noqa: E402
-from jev.osm.cache import write_json  # noqa: E402
+from jev.osm.cache import decode_json, write_json  # noqa: E402
 from jev.osm.controls import CROSSWALK_CLEARANCE_M, CURB_CLEARANCE_M, STOP_LINE_SETBACK_M  # noqa: E402
 from jev.osm.graph import asphalt_span  # noqa: E402
 
@@ -59,6 +58,8 @@ def migrate(pack: dict) -> dict:
     if not isinstance(pack, dict) or pack.get("pack_version") != FROM_VERSION:
         raise ValueError("expected a v%s source pack" % FROM_VERSION)
     edges = {e["id"]: e for e in pack["edges"]}
+    if len(edges) != len(pack["edges"]):
+        raise ValueError("duplicate source edge identifier")
     before = crossing_half_widths(pack)
     widened = 0
     for e in pack["edges"]:
@@ -115,13 +116,17 @@ def main(argv: list[str]) -> int:
     try:
         for source in sources:
             stem = source.name.removesuffix(f".v{FROM_VERSION}.pack.json")
+            if not stem:
+                raise ValueError(f"source has no map identifier: {source.name}")
+            if not source.is_file() or source.is_symlink():
+                raise ValueError(f"expected a regular source pack: {source.name}")
             target = output_dir / f"{stem}.v{TO_VERSION}.pack.json"
             if target.exists() or target.is_symlink():
                 raise FileExistsError("migration destination already exists: %s" % target)
             try:
-                pack = json.loads(source.read_text(encoding="utf-8"))
+                pack = decode_json(source.read_bytes())
                 counts = migrate(pack)
-            except (ValueError, TypeError, KeyError, IndexError, RecursionError) as err:
+            except (OSError, ValueError, TypeError, KeyError, IndexError, RecursionError) as err:
                 raise ValueError(f"{source.name}: {err}") from err
             print("%s -> %s: %s" % (source, target, ", ".join("%s %d" % kv for kv in counts.items())))
             planned.append((source, target, pack))
@@ -132,7 +137,7 @@ def main(argv: list[str]) -> int:
                 for _, target, pack in planned:
                     write_json(target, pack, replace=False)
                     published.append(target)
-            except OSError as err:
+            except (OSError, ValueError) as err:
                 for path in reversed(published):
                     try:
                         path.unlink(missing_ok=True)

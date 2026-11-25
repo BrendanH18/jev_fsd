@@ -5,6 +5,7 @@ or school and playground areas (jev/osm/zones.py), or parks and water (jev/osm/p
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from gzip import open as gzip_open
 from math import isfinite
 from pathlib import Path
 from typing import Dict, List, Union
@@ -48,6 +49,9 @@ def parse_xml(source: Union[Path, str, bytes]) -> OsmData:
     try:
         if isinstance(source, bytes) or (isinstance(source, str) and source.lstrip("\ufeff \t\r\n").startswith("<")):
             root = ET.fromstring(source)
+        elif Path(source).suffix == ".gz":
+            with gzip_open(source, "rb") as stream:
+                root = ET.parse(stream).getroot()
         else:
             root = ET.parse(source).getroot()
     except (ET.ParseError, LookupError, ValueError) as err:
@@ -93,7 +97,14 @@ def parse_records(root: ET.Element) -> OsmData:
         if el.tag not in ("node", "way", "relation"):
             continue
         try:
-            tags = {_attribute(t, "k"): _attribute(t, "v") for t in el.findall("tag")}
+            tags = {}
+            for tag in el.findall("tag"):
+                key, value = _attribute(tag, "k"), _attribute(tag, "v")
+                if not key.strip():
+                    raise ValueError("tag key must not be empty")
+                if key in tags and tags[key] != value:
+                    raise ValueError(f"conflicting values for tag {key[:80]!r}")
+                tags[key] = value
             if el.tag == "node":
                 lat, lon = _number(el, "lat", float), _number(el, "lon", float)
                 if not (isfinite(lat) and isfinite(lon)):
@@ -102,7 +113,10 @@ def parse_records(root: ET.Element) -> OsmData:
                     raise ValueError("latitude must lie within [-90, 90]")
                 if not -180 <= lon <= 180:
                     raise ValueError("longitude must lie within [-180, 180]")
-                data.add_node(_number(el, "id", int), lat, lon, tags)
+                node_id = _number(el, "id", int)
+                if node_id in data.nodes and data.nodes[node_id] != (lat, lon, tags):
+                    raise ValueError("conflicting records for the same node ID")
+                data.add_node(node_id, lat, lon, tags)
             elif el.tag == "way":
                 refs = [_number(nd, "ref", int) for nd in el.findall("nd")]
                 data.add_way(_number(el, "id", int), refs, tags)
