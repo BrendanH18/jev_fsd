@@ -65,26 +65,35 @@ def allowed_origins(port: int) -> tuple:
     return tuple("http://%s:%d" % (name, port) for name in LOOPBACK_HOSTS)
 
 
+def _ambiguous(headers: Mapping[str, str], name: str) -> bool:
+    get_all = getattr(headers, "get_all", None)
+    return get_all is not None and len(get_all(name, [])) > 1
+
+
 def check_request(
     method: str, headers: Mapping[str, str], token: str, port: int, has_body: bool = False
 ) -> Optional[str]:
     """Return None when the request may proceed, otherwise a short reason for the 403."""
-    if not host_allowed(headers.get("Host"), port):
+    if _ambiguous(headers, "Host") or not host_allowed(headers.get("Host"), port):
         return "host"
     if method in SAFE_METHODS:
         return None
     site = (headers.get("Sec-Fetch-Site") or "").strip().lower()
-    if site and site not in ("same-origin", "none"):
+    if _ambiguous(headers, "Sec-Fetch-Site") or (site and site not in ("same-origin", "none")):
         return "sec-fetch-site"
     origin = (headers.get("Origin") or "").strip().lower()
-    if origin and origin != "null" and origin not in allowed_origins(port):
-        return "origin"
-    if origin == "null":
+    if _ambiguous(headers, "Origin") or (origin and origin not in allowed_origins(port)):
         return "origin"
     supplied = headers.get(TOKEN_HEADER) or ""
-    if not supplied or not secrets.compare_digest(supplied, token):
+    if (
+        _ambiguous(headers, TOKEN_HEADER)
+        or not supplied
+        or not supplied.isascii()
+        or not secrets.compare_digest(supplied, token)
+    ):
         return "token"
-    if has_body and not (headers.get("Content-Type") or "").lower().startswith("application/json"):
+    media_type = (headers.get("Content-Type") or "").partition(";")[0].strip().lower()
+    if has_body and (_ambiguous(headers, "Content-Type") or media_type != "application/json"):
         return "content-type"
     return None
 

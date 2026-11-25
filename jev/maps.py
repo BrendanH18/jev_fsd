@@ -12,7 +12,7 @@ from typing import Optional
 from .config import PRESET_BBOXES
 from .osm.pack import pack_path
 
-_META_CACHE: dict = {}  # str(path) -> ((mtime_ns, size), metadata)
+_META_CACHE: dict = {}  # str(path) -> (file signature, metadata)
 _META_LOCK = threading.Lock()
 
 MAP_CATALOG = (
@@ -151,7 +151,7 @@ def map_identity(bbox: tuple) -> dict:
 
 
 def _pack_metadata(path: Path) -> Optional[dict]:
-    """Cached stats, extent and road preview for a pack file, invalidated when mtime or size changes."""
+    """Cached stats, extent and road preview for a pack file, invalidated when the file changes."""
     key = str(path)
     try:
         st = path.stat()
@@ -161,30 +161,33 @@ def _pack_metadata(path: Path) -> Optional[dict]:
         return None
     if not stat.S_ISREG(st.st_mode):
         return None
-    stamp = (st.st_mtime_ns, st.st_size)
+    stamp = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
     with _META_LOCK:
         cached = _META_CACHE.get(key)
         if cached is not None and cached[0] == stamp:
             return cached[1]
-    pack = json.loads(path.read_text())
-    preview = []
-    seen = set()
-    for edge in pack["edges"]:
-        edge_key = tuple(sorted((edge["from"], edge["to"])))
-        if edge_key in seen:
-            continue
-        seen.add(edge_key)
-        preview.append({"pts": edge["pts"], "major": edge["cls"] in ("primary", "secondary", "tertiary", "trunk")})
-    meta = {
-        "stats": {
-            "roads": len(pack["edges"]),
-            "signals": len(pack["intersections"]),
-            "stops": len(pack["stops"]),
-            "buildings": len(pack["buildings"]),
-        },
-        "extent": pack["extent"],
-        "preview": preview,
-    }
+    try:
+        pack = json.loads(path.read_text(encoding="utf-8"))
+        preview = []
+        seen = set()
+        for edge in pack["edges"]:
+            edge_key = tuple(sorted((edge["from"], edge["to"])))
+            if edge_key in seen:
+                continue
+            seen.add(edge_key)
+            preview.append({"pts": edge["pts"], "major": edge["cls"] in ("primary", "secondary", "tertiary", "trunk")})
+        meta = {
+            "stats": {
+                "roads": len(pack["edges"]),
+                "signals": len(pack["intersections"]),
+                "stops": len(pack["stops"]),
+                "buildings": len(pack["buildings"]),
+            },
+            "extent": pack["extent"],
+            "preview": preview,
+        }
+    except (OSError, ValueError, KeyError, TypeError, RecursionError):
+        return None
     with _META_LOCK:
         _META_CACHE[key] = (stamp, meta)
     return meta

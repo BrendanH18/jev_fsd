@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import http.client
 import json
-import math
 import re
 import socket
 import time
@@ -81,7 +80,7 @@ class InvalidDecisionRequest(ValueError):
 
 def _path(value: Any, default: str) -> Optional[str]:
     path = default if value is None else value
-    if not isinstance(path, str) or not PATH_RE.match(path) or "/../" in path + "/" or "//" in path:
+    if not isinstance(path, str) or not PATH_RE.fullmatch(path) or "/../" in path + "/" or "//" in path:
         return None
     return path
 
@@ -135,7 +134,7 @@ def load_configs(settings: Settings) -> Tuple[List[DecisionConfig], List[str]]:
 
 
 def _probability(value: Any) -> Optional[float]:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return float(value) if 0 <= value <= 1 else None
 
