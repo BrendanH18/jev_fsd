@@ -16,8 +16,17 @@ browser's quota refuses a save. History saved in localStorage by earlier version
 first time the arena opens. Where IndexedDB is unavailable (some private windows, blocked storage)
 the arena keeps up to 10 runs in localStorage within 9 MiB. Export a run to keep a permanent copy.
 
-Copy `static/js/agents/cautious.js` to `static/js/agents/my-agent.js`. Change its default
-definition's id and label, then open **Settings → Local agent module** and load
+Generate a standalone starting module and check its factory without a server.
+
+```sh
+node --experimental-default-type=module scripts/check_driver.mjs --scaffold /tmp/my-agent.mjs \
+  --id my-driver --label "My driver"
+node --experimental-default-type=module scripts/check_driver.mjs --agent /tmp/my-agent.mjs --validate
+```
+
+The scaffold prefers clear candidates with forward progress and can fall back to the harness when
+no choice is available. For in-browser loading, copy the module to `static/js/agents/my-agent.js`,
+then open **Settings → Local agent module** and load
 `/js/agents/my-agent.js`. On a project-hosted Pages site use `./js/agents/my-agent.js` instead.
 The arena has the same loader. A loaded definition is scoped to that page; load it again in
 another tab. Modules are trusted JavaScript, not sandboxed plugins.
@@ -44,8 +53,9 @@ export default {
 };
 ```
 
-The harness rejects an invalid candidate or motion and falls back to Rules. The decision
-timeout is 1.5 seconds even if an agent ignores the abort signal; stale results cannot execute.
+The harness rejects an invalid candidate or motion and falls back to Rules. The default decision
+timeout is 1.5 seconds. A driver can supply a positive `timeoutMs` on its instance. The harness
+enforces the deadline even if an agent ignores the abort signal. Stale results cannot execute.
 The emergency brake and safety filtering remain shared. An agent can still choose a poor
 eligible manoeuvre, and the simulator still audits collisions and violations. On the
 [open track](reference/benchmarks.md#benchmarks-and-validation) `eligible` also holds the manoeuvres that
@@ -67,15 +77,21 @@ each run. Stateful agent internals are not rewound by the simulator's replay rec
 Start `uv run server.py`, then run the local module over the authored challenges on the guarded and
 open tracks. The check runs Rules and the cautious starter on the same drives and reads the dated
 published model verdicts from the committed leaderboard. The module and the simulator run locally,
-with no model calls from the runner.
+with no model calls from the runner. Use only trusted agent modules because Node runs their code.
 
 ```sh
 node --experimental-default-type=module scripts/check_driver.mjs --port 8322 --agent static/js/agents/my-agent.js
 ```
 
 Use `--only right-on-red,flagger` for a subset, or `--set all` to include the two road tests. Each
-published verdict matches the track, map and challenge. If a driver has multiple matching results,
-the check shows the latest one. The module runs as trusted JavaScript in Node.
+published verdict matches the track, map pack version and authored drive. The check also matches
+seed, weather and time where the published row provides them. If a driver has multiple matching
+results, the check shows the latest one.
+
+Use `--track guarded` or `--track open` to run one track, and `--expect-drives N` to detect a changed
+selection. `--check` exits with status 1 when your driver fails a drive. `--json` prints the
+comparison as JSON and `--out comparison.json.gz` saves it to a new gzip file. The open-track
+comparison includes flagged choices, emergency brake interventions and fallbacks where measured.
 
 ### Submit a verifiable drive
 
@@ -100,21 +116,28 @@ commit and use the Node version in the manifest. Replay requires no model creden
 does not import the agent's code. The same workflow supports model recordings created with
 `--brain`, `--record` and `--json` on a clean checkout.
 
+Use `inspect --bundle /tmp/drive-submission.json.gz --tape-info` to check internal metadata and
+count recorded answer outcomes offline. To inspect a tape directly, use
+`arena_node.mjs --replay /tmp/drive-tape.json.gz --tape-info`. Both inspection commands work without
+a server. Arena can also show the authored suite selection with `--list --details`.
+
 The verifier checks the suite, map layers and prompt hash against the simulator. Every recorded
 decision must match a replay request, and every replayed result must agree with the report,
 including failures, the driver and fallback shares, and the sum of recorded costs. A verified
 bundle attests to the replay of those answers and to the consistency of the recorded charges.
-Provider identity and actual billing require independent evidence.
+Provider identity and actual billing require independent evidence. `--timeout` sets the replay
+process limit in milliseconds (default 360,000). Start the server from the same checkout used by
+the verifier.
 
 ### Publish a verified submission
 
 For maintainers, check out the manifest's source commit from the project's trusted history, start
 its local server, and use the Node version named by the manifest. From the current project
 checkout, run the publication command with the clean replay checkout and the submitter's agreed
-public handle. It runs the same offline verifier before writing the report and its matching tape.
+public handle. It runs the same offline verifier before writing the report and its matching tape. The publication
+command creates the date directory and requires both output files to be new.
 
 ```sh
-mkdir -p data/submissions/2026-11-23
 node --experimental-default-type=module scripts/driver_submission.mjs publish \
   --port 8322 --checkout /tmp/jev-replay-checkout --bundle /tmp/drive-submission.json.gz \
   --submitter driving-team --out data/submissions/2026-11-23/my-driver-open.json
