@@ -57,21 +57,19 @@ export class CinematicCamera {
   }
 
   pose(ego, dt = 0, height = 1.45) {
+    if (this.index >= 0) this.elapsed += Math.max(0, dt);
     let cut = false;
     if (this.index < 0 || this.finished(ego)) {
       this.cut(ego);
       cut = true;
-    } else this.elapsed += Math.max(0, dt);
+    }
     const fx = Math.cos(ego.psi),
       fy = Math.sin(ego.psi);
     const rx = fy,
       ry = -fx; // the car's right-hand side
-    const len = ego.spec?.length || 4.5;
-    const center = [
-      ego.x + fx * (len / 2 - (ego.spec?.rearOverhang || 0.9)),
-      ego.y + fy * (len / 2 - (ego.spec?.rearOverhang || 0.9)),
-      height * 0.5,
-    ];
+    const len = ego.spec?.length ?? 4.5;
+    const axleToCenter = len / 2 - (ego.spec?.rearOverhang ?? 0.9);
+    const center = [ego.x + fx * axleToCenter, ego.y + fy * axleToCenter, height * 0.5];
     const at = (forward, right, z) => [center[0] + fx * forward + rx * right, center[1] + fy * forward + ry * right, z];
     const name = this.shot.name;
     let pose;

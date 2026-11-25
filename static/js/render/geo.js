@@ -28,6 +28,7 @@ export class GeoBuilder {
   // Triangle with a flat normal computed from its winding (counter-clockwise seen from the front).
   tri(a, b, c, uvs, color, flipTo = null) {
     let n = normalOf(a, b, c);
+    if (n[0] === 0 && n[1] === 0 && n[2] === 0) return;
     if (flipTo && n[0] * flipTo[0] + n[1] * flipTo[1] + n[2] * flipTo[2] < 0) {
       [b, c] = [c, b];
       uvs = uvs && [uvs[0], uvs[2], uvs[1]];
@@ -54,6 +55,8 @@ export class GeoBuilder {
   // (right of travel is positive). uv: "world" tiles in world meters / scale; "along" runs u
   // along the line and v across it.
   ribbon(pts, left, right, z = 0, { uv = "world", scale = 1, color = null, from = 0, to = Infinity } = {}) {
+    if (from >= to || left === right) return;
+    pts = pts.filter(([x, y], i) => i === 0 || x !== pts[i - 1][0] || y !== pts[i - 1][1]);
     const n = pts.length;
     if (n < 2) return;
     const segN = [];
@@ -111,9 +114,9 @@ export class GeoBuilder {
     const contour = pts.map(([x, y]) => new THREE.Vector2(x, y));
     const tris = THREE.ShapeUtils.triangulateShape(contour, []);
     for (const [i, j, k] of tris) {
-      const a = [...pts[i], z],
-        b = [...pts[j], z],
-        c = [...pts[k], z];
+      const a = [pts[i][0], pts[i][1], z],
+        b = [pts[j][0], pts[j][1], z],
+        c = [pts[k][0], pts[k][1], z];
       this.tri(
         a,
         b,

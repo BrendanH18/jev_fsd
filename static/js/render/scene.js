@@ -50,6 +50,7 @@ export const LAYER = {
   marking: -20,
   pool: -10,
 };
+const CAMERA_MODES = ["chase", "orbit", "hood", "top", "far", "cinematic"];
 
 // Only the base plane writes depth. Color layers use a small raster depth bias to pass the test
 // against that plane, retaining depth tests against other geometry without stacking depth errors.
@@ -253,7 +254,7 @@ export class SceneView {
   }
 
   setQuality(name) {
-    this.quality = QUALITY[name] ? name : "high";
+    this.quality = Object.hasOwn(QUALITY, name) ? name : "high";
     const q = QUALITY[this.quality];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
     if (this.sun.shadow.mapSize.x !== q.shadowMap) {
@@ -367,8 +368,8 @@ export class SceneView {
   }
 
   resize() {
-    const w = window.innerWidth,
-      h = window.innerHeight;
+    const w = Math.max(1, window.innerWidth),
+      h = Math.max(1, window.innerHeight);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -378,14 +379,15 @@ export class SceneView {
   }
 
   toggleCamera() {
-    const modes = ["chase", "orbit", "hood", "top", "far", "cinematic"];
-    return this.setCamera(modes[(modes.indexOf(this.mode) + 1) % modes.length]);
+    return this.setCamera(CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length]);
   }
 
   setCamera(mode) {
-    this.mode = mode;
+    this.mode = CAMERA_MODES.includes(mode) ? mode : "chase";
     this.camPos.set(0, 0, 0); // snap rather than swoop between very different views
-    if (mode === "cinematic") this.cinematic.reset();
+    this.cameraPitch = 0;
+    this.cameraRoll = 0;
+    if (this.mode === "cinematic") this.cinematic.reset();
     return this.mode;
   }
 
@@ -432,6 +434,9 @@ export class SceneView {
           (THREE.MathUtils.clamp((ego.latAccel || 0) * 0.005, -0.03, 0.03) - (this.cameraRoll || 0)) * smooth;
         look.y += this.cameraPitch * 30;
         up.set(Math.sin(ego.psi) * this.cameraRoll, 1, Math.cos(ego.psi) * this.cameraRoll).normalize();
+      } else {
+        this.cameraPitch = 0;
+        this.cameraRoll = 0;
       }
       lerp = 1;
     } else {
@@ -498,10 +503,12 @@ export class SceneView {
     const on = this.post ? this.post.sceneRT.samples > 0 : !!this.renderer.getContextAttributes?.()?.antialias;
     this.reflection?.setSamples(this.post ? this.post.sceneRT.samples : 0);
     this.scene.traverse((o) => {
-      const m = o.material;
-      if (m?.userData?.coverageEdges && m.alphaToCoverage !== on) {
-        m.alphaToCoverage = on;
-        m.needsUpdate = true;
+      if (!o.material) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (m.userData.coverageEdges && m.alphaToCoverage !== on) {
+          m.alphaToCoverage = on;
+          m.needsUpdate = true;
+        }
       }
     });
   }
