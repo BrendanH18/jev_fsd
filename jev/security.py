@@ -18,7 +18,7 @@ This mirrors Go 1.25's `http.CrossOriginProtection` plus the token as belt-and-b
 from __future__ import annotations
 
 import secrets
-from typing import Mapping, Optional
+from typing import Mapping
 
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
@@ -29,9 +29,12 @@ def new_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def split_host(host_header: str) -> tuple:
+def split_host(host_header: str) -> tuple[str, int | None]:
     """'localhost:8321' -> ('localhost', 8321); '[::1]:8321' -> ('[::1]', 8321); no port -> None; invalid -> -1."""
-    host = (host_header or "").strip().lower()
+    host = host_header.strip(" \t")
+    if not host.isascii() or not host.isprintable():
+        return "", -1
+    host = host.lower()
     if host.startswith("["):
         end = host.find("]")
         if end == -1:
@@ -40,6 +43,8 @@ def split_host(host_header: str) -> tuple:
     elif host.count(":") == 1:
         name, rest = host.split(":", 1)
         rest = ":" + rest
+    elif ":" in host:
+        return "", -1
     else:
         name, rest = host, ""
     if not rest:
@@ -52,7 +57,7 @@ def split_host(host_header: str) -> tuple:
     return name, -1
 
 
-def host_allowed(host_header: Optional[str], port: int) -> bool:
+def host_allowed(host_header: str | None, port: int) -> bool:
     if not host_header:
         return False
     name, host_port = split_host(host_header)
@@ -61,8 +66,11 @@ def host_allowed(host_header: Optional[str], port: int) -> bool:
     return name in LOOPBACK_HOSTS and (host_port is None or host_port == port)
 
 
-def allowed_origins(port: int) -> tuple:
-    return tuple("http://%s:%d" % (name, port) for name in LOOPBACK_HOSTS)
+def allowed_origins(port: int) -> tuple[str, ...]:
+    origins = tuple("http://%s:%d" % (name, port) for name in LOOPBACK_HOSTS)
+    if port == 80:
+        return (*origins, *(f"http://{name}" for name in LOOPBACK_HOSTS))
+    return origins
 
 
 def _ambiguous(headers: Mapping[str, str], name: str) -> bool:
@@ -71,19 +79,35 @@ def _ambiguous(headers: Mapping[str, str], name: str) -> bool:
 
 
 def check_request(
-    method: str, headers: Mapping[str, str], token: str, port: int, has_body: bool = False
-) -> Optional[str]:
+    method: str,
+    headers: Mapping[str, str],
+    token: str,
+    port: int,
+    has_body: bool = False,
+    *,
+    private_read: bool = False,
+) -> str | None:
     """Return None when the request may proceed, otherwise a short reason for the 403."""
     if _ambiguous(headers, "Host") or not host_allowed(headers.get("Host"), port):
         return "host"
-    if method in SAFE_METHODS:
+    safe = method in SAFE_METHODS
+    if safe and not private_read:
         return None
-    site = (headers.get("Sec-Fetch-Site") or "").strip().lower()
-    if _ambiguous(headers, "Sec-Fetch-Site") or (site and site not in ("same-origin", "none")):
+    site = headers.get("Sec-Fetch-Site")
+    if _ambiguous(headers, "Sec-Fetch-Site") or (
+        site is not None and site.strip(" \t").lower() not in ("same-origin", "none")
+    ):
         return "sec-fetch-site"
-    origin = (headers.get("Origin") or "").strip().lower()
-    if _ambiguous(headers, "Origin") or (origin and origin not in allowed_origins(port)):
+    origin = headers.get("Origin")
+    if _ambiguous(headers, "Origin"):
         return "origin"
+    if origin is not None:
+        origin = origin.strip(" \t").lower()
+        name, _ = split_host(headers["Host"])
+        if origin != f"http://{name}:{port}" and not (port == 80 and origin == f"http://{name}"):
+            return "origin"
+    if safe:
+        return None
     supplied = headers.get(TOKEN_HEADER) or ""
     if (
         _ambiguous(headers, TOKEN_HEADER)

@@ -19,21 +19,35 @@ import json
 import math
 import mimetypes
 import os
+import re
 import secrets
+import stat
 import sys
 import tempfile
 import threading
 import time
 import traceback
+import unicodedata
 import zlib
+from email.utils import formatdate, parsedate_to_datetime
 from functools import lru_cache
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from jev import VERSION, decide, decision, decision_setup, llm, llm_setup, security
 from jev.client import PRICE_PER_INPUT_TOKEN_USD, JevClient, JevError
-from jev.config import MAPS_DIR, PROJECT_ROOT, RECORDINGS_DIR, RUNS_DIR, SNAPSHOTS_DIR, Settings, parse_bbox
+from jev.config import (
+    DEFAULT_PORT,
+    MAPS_DIR,
+    PROJECT_ROOT,
+    RECORDINGS_DIR,
+    RUNS_DIR,
+    SNAPSHOTS_DIR,
+    Settings,
+    parse_bbox,
+)
 from jev.osm import fetch
 from jev.osm.pack import build_pack, synthetic_pack
 from jev.osm.bus_lanes import build_buslanes
@@ -69,8 +83,16 @@ MAX_RECORDING_BYTES = 32 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_RECORDING_HEADER_BYTES = 64 * 1024  # bounds what each cached recording listing holds
 MAX_RUN_BYTES = 16 * 1024 * 1024
+MAX_LISTING_METADATA_BYTES = 256 * 1024
+MAX_ARTIFACT_FILENAME_BYTES = 255
+MAX_SAVE_ATTEMPTS = 16
 MAX_QUERY_FIELDS = 64
+REQUEST_TIMEOUT_SECONDS = 15
+ASSET_CHUNK_BYTES = 64 * 1024
+MAX_CACHED_MAPS = 24
+MAP_RETRY_SECONDS = 60
 _save_lock = threading.Lock()
+_setup_write_lock = threading.Lock()
 RECORDING_FORMAT = "jev-model-recording/1"
 
 settings = Settings()
@@ -80,7 +102,7 @@ decision_registry = decision.DecisionRegistry(settings, client.guard)
 SESSION_TOKEN = security.new_token()
 _maps: dict = {}  # bbox key -> {"pack", "router", "error"}
 _maps_lock = threading.Lock()
-_map_locks: dict = {}  # bbox key -> threading.Lock
+_map_locks: dict = {}  # bbox key -> (threading.Lock, callers currently sharing it)
 _STARTED_AT = time.monotonic()
 
 
@@ -89,7 +111,8 @@ class BadRequest(Exception):
 
 
 def log(msg: str) -> None:
-    sys.stderr.write("  %s  %s\n" % (time.strftime("%H:%M:%S"), msg))
+    safe = "".join(ch if ch.isprintable() else repr(ch)[1:-1] for ch in msg)
+    sys.stderr.write("  %s  %s\n" % (time.strftime("%H:%M:%S"), safe))
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -123,7 +146,7 @@ def _atomic_write_text(path: Path, text: str) -> None:
                 raise
             # A server still serializes publication on filesystems without hard links.
             with _save_lock:
-                if path.exists():
+                if os.path.lexists(path):
                     raise FileExistsError(path) from error
                 os.replace(tmp_path, path)
                 tmp_path = None
@@ -131,33 +154,60 @@ def _atomic_write_text(path: Path, text: str) -> None:
         if tmp_path is not None:
             try:
                 os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
             except OSError as error:
                 log(f"Could not clean up temporary artifact {tmp_path}: {error}")
 
 
-def _save_artifact(path, encode):
+def _save_artifact(path, encode, limit=MAX_RUN_BYTES):
     destination = path
-    while True:
+    for _ in range(MAX_SAVE_ATTEMPTS):
         try:
-            _atomic_write_text(destination, encode(destination))
+            content = encode(destination)
+            size = len(content.encode("utf-8"))
+        except (ValueError, TypeError, RecursionError):
+            raise BadRequest("Artifact must contain valid UTF-8 JSON") from None
+        if size > limit:
+            raise BadRequest("Saved artifact would exceed its size limit")
+        try:
+            _atomic_write_text(destination, content)
         except FileExistsError:
             destination = path.with_name(f"{path.stem}-{secrets.token_hex(4)}{path.suffix}")
         else:
             return destination
+    raise BadRequest("Could not choose a unique name for the saved artifact. Try again.")
 
 
 def _read_json_file(path: Path, limit: int):
-    opener = gzip.open if path.name.endswith(".json.gz") else open
-    with opener(path, "rb") as fh:
-        data = fh.read(limit + 1)
+    with path.open("rb") as fh:
+        if path.name.endswith(".json.gz"):
+            with gzip.GzipFile(fileobj=fh) as archive:
+                data = archive.read(limit + 1)
+        else:
+            data = fh.read(limit + 1)
     if len(data) > limit:
         raise ValueError("Saved file exceeds the decoded size limit")
-    return json.loads(data.decode("utf-8"))
+    return json.loads(
+        data.decode("utf-8-sig"),
+        parse_constant=_reject_json_constant,
+        parse_float=_json_float,
+        object_pairs_hook=_json_object,
+    )
+
+
+def _artifact_stat(path: Path):
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    return info if stat.S_ISREG(info.st_mode) else None
 
 
 def _load_saved_object(path: Path, limit: int):
     try:
-        if not path.is_file():
+        info = _artifact_stat(path)
+        if info is None or (not path.name.endswith(".json.gz") and info.st_size > limit):
             return None
         data = _read_json_file(path, limit)
     except (OSError, ValueError, EOFError, RecursionError, zlib.error):
@@ -174,22 +224,33 @@ def _header_fits(header) -> bool:
 
 
 def _usable_recording(data) -> bool:
-    """A recording the catalog lists and lookup serves: current format with a bounded header and drives."""
-    return (
+    """The shape accepted for the current model recording format."""
+    if not (
         isinstance(data, dict)
         and data.get("format") == RECORDING_FORMAT
         and isinstance(data.get("header"), dict)
         and _header_fits(data["header"])
         and isinstance(data.get("drives"), dict)
         and _drive_answers_shaped(data["drives"])
+    ):
+        return False
+    results, scenarios = data.get("results", {}), data.get("scenarios", {})
+    return (
+        isinstance(results, dict) and _scenario_objects(scenarios) and _recording_suite_matches(data["header"], results)
     )
 
 
 def _drive_answers_shaped(drives: dict) -> bool:
     """Each drive maps request keys to lists of outcomes, as the browser's tape player expects."""
     return all(
-        isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()
+        isinstance(answers, dict)
+        and all(isinstance(v, list) and all(isinstance(item, dict) for item in v) for v in answers.values())
+        for answers in drives.values()
     )
+
+
+def _scenario_objects(scenarios):
+    return isinstance(scenarios, dict) and all(isinstance(value, dict) for value in scenarios.values())
 
 
 @lru_cache(maxsize=256)
@@ -201,20 +262,24 @@ def _artifact_metadata(path: Path, signature: tuple, recording: bool, limit: int
     if recording:
         if not _usable_recording(data):
             return None
-        return {"name": _recording_name(path), "header": data["header"], "drives": sorted(data["drives"])}
-    return {
-        "name": path.stem,
-        "saved_at": data.get("saved_at"),
-        "suite_version": data.get("suite_version", "legacy"),
-        "config": data.get("config"),
-        "summary": data.get("summary"),
-    }
+        item = {"name": _recording_name(path), "header": data["header"], "drives": sorted(data["drives"])}
+    else:
+        if not _usable_run(data):
+            return None
+        item = {
+            "name": path.stem,
+            "saved_at": data.get("saved_at"),
+            "suite_version": data.get("suite_version", "legacy"),
+            "config": data.get("config"),
+            "summary": data.get("summary"),
+        }
+    # An oversized repaired/imported file is still directly addressable by name.
+    return item if len(json.dumps(item)) <= MAX_LISTING_METADATA_BYTES else None
 
 
 def _listed_artifact(path: Path, recording: bool = False):
-    try:
-        info = path.stat()
-    except OSError:
+    info = _artifact_stat(path)
+    if info is None:
         return None
     signature = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
     return _artifact_metadata(path, signature, recording, MAX_ARCHIVE_BYTES if recording else MAX_RUN_BYTES)
@@ -234,79 +299,95 @@ def _recording_name(path: Path) -> str:
 def load_map(bbox_text: str = "") -> dict:
     bbox = parse_bbox(bbox_text) or settings.bbox
     key = "%.5f,%.5f,%.5f,%.5f" % bbox
-    entry = _maps.get(key)
-    if entry:
-        return entry
+    if tuple(map(float, key.split(","))) != bbox:
+        key = ",".join(format(value, ".17g") for value in bbox)
     with _maps_lock:
-        entry = _maps.get(key)
-        if entry:
+        if (entry := _cached_map(key)) is not None:
             return entry
-        lock = _map_locks.setdefault(key, threading.Lock())
-    with lock:
-        entry = _maps.get(key)
-        if entry:
+        lock, callers = _map_locks[key] if key in _map_locks else (threading.Lock(), 0)
+        _map_locks[key] = (lock, callers + 1)
+    try:
+        with lock:
+            with _maps_lock:
+                if (entry := _cached_map(key)) is not None:
+                    return entry
+            entry = _build_map(bbox)
+            with _maps_lock:
+                _maps[key] = entry
+                if len(_maps) > MAX_CACHED_MAPS:
+                    del _maps[next(iter(_maps))]
             return entry
-        entry = {"bbox": bbox, "pack": None, "router": None, "error": None}
-        try:
-            entry["pack"] = build_pack(bbox, MAPS_DIR, log=log)
-            # bus routes and stops, kept beside the pack (from the raw OSM download when there is one)
-            transit = build_transit(bbox, MAPS_DIR, entry["pack"], log=log)
-            if transit:
-                entry["pack"] = {**entry["pack"], "transit": transit}
-            # marked crosswalks between junctions, kept beside the pack in the same way
-            crossings = build_crossings(bbox, MAPS_DIR, entry["pack"], log=log)
-            if crossings:
-                entry["pack"] = {**entry["pack"], "crossings": crossings}
-            # school and playground zones, likewise
-            zones = build_zones(bbox, MAPS_DIR, entry["pack"], log=log)
-            if zones:
-                entry["pack"] = {**entry["pack"], "zones": zones}
-            # railway tracks and their level crossings with the streets, likewise
-            rail = build_rail(bbox, MAPS_DIR, entry["pack"], log=log)
-            if rail:
-                entry["pack"] = {**entry["pack"], "rail": rail}
-            # speed humps, tables, cushions and bumps, likewise
-            buslanes = build_buslanes(bbox, MAPS_DIR, entry["pack"], log=log)
-            if buslanes:
-                entry["pack"] = {**entry["pack"], "buslanes": buslanes}
-            calming = build_calming(bbox, MAPS_DIR, entry["pack"], log=log)
-            if calming:
-                entry["pack"] = {**entry["pack"], "calming": calming}
-            # and the signals with an all-walk scramble phase, likewise
-            scrambles = build_scrambles(bbox, MAPS_DIR, entry["pack"], log=log)
-            if scrambles:
-                entry["pack"] = {**entry["pack"], "scrambles": scrambles}
-            restriction_layer = build_restrictions(bbox, MAPS_DIR, entry["pack"], log=log)
-            if restriction_layer:
-                entry["pack"] = {**entry["pack"], "restrictions": restriction_layer}
-            # and the one-way streets cyclists may ride both ways, likewise
-            contraflow = build_contraflow(bbox, MAPS_DIR, entry["pack"], log=log)
-            if contraflow:
-                entry["pack"] = {**entry["pack"], "contraflow": contraflow}
-            # and the driveways cars back out of, likewise
-            driveways = build_driveways(bbox, MAPS_DIR, entry["pack"], log=log)
-            if driveways:
-                entry["pack"] = {**entry["pack"], "driveways": driveways}
-            # and the parks and water geese cross the street beside, likewise
-            parks = build_parks(bbox, MAPS_DIR, entry["pack"], log=log)
-            if parks:
-                entry["pack"] = {**entry["pack"], "parks": parks}
-            # and the bridges black ice forms on first, likewise
-            bridges = build_bridges(bbox, MAPS_DIR, entry["pack"], log=log)
-            if bridges:
-                entry["pack"] = {**entry["pack"], "bridges": bridges}
-            # (and the city's clock, for when the sun is up: playground zones are in effect dawn to dusk)
-            offset = map_identity(bbox).get("utc_offset")
-            if offset is not None:
-                entry["pack"] = {**entry["pack"], "utc_offset": offset}
-        except fetch.FetchError as err:
-            log("map: %s; using the synthetic grid" % err)
-            entry["error"] = str(err)
-            entry["pack"] = synthetic_pack()
-        entry["router"] = Router(entry["pack"])
+    finally:
         with _maps_lock:
-            _maps[key] = entry
-        return entry
+            _, callers = _map_locks[key]
+            if callers == 1:
+                del _map_locks[key]
+            else:
+                _map_locks[key] = (lock, callers - 1)
+
+
+def _cached_map(key: str):
+    """Look up and promote a map with _maps_lock held."""
+    entry = _maps.pop(key, None)
+    if entry is None or ("retry_at" in entry and time.monotonic() >= entry["retry_at"]):
+        return None
+    _maps[key] = entry
+    return entry
+
+
+def _build_map(bbox: tuple) -> dict:
+    error = None
+    try:
+        pack = dict(build_pack(bbox, MAPS_DIR, log=log))
+        for name, build_layer in (
+            ("transit", build_transit),
+            ("crossings", build_crossings),
+            ("zones", build_zones),
+            ("rail", build_rail),
+            ("buslanes", build_buslanes),
+            ("calming", build_calming),
+            ("scrambles", build_scrambles),
+            ("restrictions", build_restrictions),
+            ("contraflow", build_contraflow),
+            ("driveways", build_driveways),
+            ("parks", build_parks),
+            ("bridges", build_bridges),
+        ):
+            layer = build_layer(bbox, MAPS_DIR, pack, log=log)
+            if layer:
+                pack[name] = layer
+        offset = map_identity(bbox).get("utc_offset")
+        if offset is not None:
+            pack["utc_offset"] = offset
+    except fetch.FetchError as err:
+        log(f"map: {err}, using the synthetic grid")
+        error = str(err)
+        pack = synthetic_pack()
+    entry = {"bbox": bbox, "pack": pack, "router": Router(pack), "error": error}
+    if error is not None:
+        entry["retry_at"] = time.monotonic() + MAP_RETRY_SECONDS
+    return entry
+
+
+def _map_selector(value: str | None) -> str:
+    if value is None or value == "":
+        return ""
+    bbox = parse_bbox(value)
+    if bbox is None:
+        raise BadRequest("bbox must be a map preset or W,S,E,N in degrees")
+    return value
+
+
+def _map_query(query: dict) -> str:
+    values = query.get("bbox") or query.get("map") or [""]
+    if len(values) != 1:
+        raise BadRequest("Specify one bbox or map preset")
+    return _map_selector(values[0])
+
+
+def _heading(value: float) -> float:
+    # Router angle wrapping iterates over full turns. Preserve normal input exactly.
+    return math.remainder(value, math.tau) if abs(value) > 32 * math.tau else value
 
 
 def api_health(_body, _query):
@@ -339,7 +420,7 @@ def api_diagnostics(_body, _query):
 
 
 def api_status(_body, query):
-    entry = load_map((query.get("bbox") or query.get("map") or [""])[0])
+    entry = load_map(_map_query(query))
     pack = entry["pack"]
     return {
         "version": VERSION,
@@ -364,7 +445,7 @@ def api_status(_body, query):
 
 
 def api_map(_body, query):
-    entry = load_map((query.get("bbox") or query.get("map") or [""])[0])
+    entry = load_map(_map_query(query))
     return {**entry["pack"], "routing_bbox": list(entry["bbox"])}
 
 
@@ -382,7 +463,8 @@ def api_drives(body, _query):
             raise ValueError()
     except (KeyError, TypeError, ValueError, OverflowError):
         raise BadRequest("from {x, y, heading} with finite coordinates is required")
-    entry = load_map(str(body.get("bbox") or ""))
+    start["heading"] = _heading(start["heading"])
+    entry = load_map(_map_selector(body.get("bbox")))
     return {"drives": suggested_drives(entry["router"], start)}
 
 
@@ -425,6 +507,8 @@ def api_route(body, _query):
             raise ValueError("hour must be finite")
     except (TypeError, ValueError, OverflowError):
         raise BadRequest("hour must be a finite number")
+    if not 0 <= hour < 24:
+        raise BadRequest("hour must be from 0 up to 24")
     raw_weekday = body.get("weekday", 0)
     try:
         if isinstance(raw_weekday, bool) or (isinstance(raw_weekday, float) and not raw_weekday.is_integer()):
@@ -432,16 +516,24 @@ def api_route(body, _query):
         weekday = int(raw_weekday)
     except (TypeError, ValueError, OverflowError):
         raise BadRequest("weekday must be an integer")
+    if not 0 <= weekday <= 6:
+        raise BadRequest("weekday must be from 0 (Monday) to 6 (Sunday)")
     # (edges no route may enter: a block closed for an event, static/js/sim/road-closures.js)
     avoid = body.get("avoid")
     if avoid is None:
         avoid = []
-    if not isinstance(avoid, list) or len(avoid) > 200 or not all(isinstance(a, str) and len(a) <= 64 for a in avoid):
+    if (
+        not isinstance(avoid, list)
+        or len(avoid) > 200
+        or not all(isinstance(a, str) and 0 < len(a) <= 64 and a.isprintable() and a.strip() == a for a in avoid)
+    ):
         raise BadRequest("avoid must be a list of edge ids")
     restrictions = body.get("restrictions", False)
     if not isinstance(restrictions, bool):
         raise BadRequest("restrictions must be a boolean")
-    entry = load_map(str(body.get("bbox") or ""))
+    if start["heading"] is not None:
+        start["heading"] = _heading(start["heading"])
+    entry = load_map(_map_selector(body.get("bbox")))
     started = time.perf_counter()
     routes = entry["router"].routes(
         start,
@@ -505,6 +597,14 @@ def _saved(result):
         }
 
 
+def _mutate_setup(action, body, message, result_key):
+    # Include both reloads in the same transaction as the HTTP configuration edit.
+    with _setup_write_lock:
+        result = _setup(action, body)
+        log(message % result[result_key])
+        return _saved(result)
+
+
 def api_llm_models(body, _query):
     """The Connect a model dialog's model list: GET {base_url}/models for a provider (no spend)."""
     return _setup(lambda b: llm_setup.list_models(settings, b), body)
@@ -512,15 +612,13 @@ def api_llm_models(body, _query):
 
 def api_llm_save(body, _query):
     """Save a model from the dialog: key to .env, endpoint to the endpoints file, then reload."""
-    result = _setup(lambda b: llm_setup.save(settings, llm_registry, b), body)
-    log("llm setup: saved llm:%s" % result["saved"])
-    return _saved(result)
+    return _mutate_setup(lambda b: llm_setup.save(settings, llm_registry, b), body, "llm setup: saved llm:%s", "saved")
 
 
 def api_llm_remove(body, _query):
-    result = _setup(lambda b: llm_setup.remove(settings, llm_registry, b), body)
-    log("llm setup: removed llm:%s" % result["removed"])
-    return _saved(result)
+    return _mutate_setup(
+        lambda b: llm_setup.remove(settings, llm_registry, b), body, "llm setup: removed llm:%s", "removed"
+    )
 
 
 def api_decision_decide(body, _query):
@@ -541,19 +639,25 @@ def api_decision_models(body, _query):
 
 def api_decision_save(body, _query):
     """Save a decision model, or just the TypeSafe key for the built-in Jev driver."""
-    result = _setup(lambda b: decision_setup.save(settings, decision_registry, client, b), body)
-    log("decision setup: saved %s" % result["id"])
-    return _saved(result)
+    return _mutate_setup(
+        lambda b: decision_setup.save(settings, decision_registry, client, b), body, "decision setup: saved %s", "id"
+    )
 
 
 def api_decision_remove(body, _query):
-    result = _setup(lambda b: decision_setup.remove(settings, decision_registry, client, b), body)
-    log("decision setup: removed decision:%s" % result["removed"])
-    return _saved(result)
+    return _mutate_setup(
+        lambda b: decision_setup.remove(settings, decision_registry, client, b),
+        body,
+        "decision setup: removed decision:%s",
+        "removed",
+    )
 
 
 def api_snapshot_save(body, _query):
-    name = str(body.get("name") or "snapshot")
+    name = body.get("name")
+    if name is not None and not isinstance(name, str):
+        raise BadRequest("snapshot name must be text")
+    name = name or "snapshot"
     safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_")[:60] or "snapshot"
     try:
         req = decide.validate_request(body)
@@ -570,7 +674,7 @@ def api_snapshot_save(body, _query):
         "expect": expect or {},
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
-    path = _save_artifact(path, lambda dest: json.dumps({**payload, "name": dest.stem}, indent=2))
+    path = _save_artifact(path, lambda dest: json.dumps({**payload, "name": dest.stem}, indent=2, allow_nan=False))
     return {"saved": str(path.relative_to(PROJECT_ROOT))}
 
 
@@ -592,7 +696,10 @@ def api_bench_save(body, _query):
     config = body["config"]
     if not isinstance(config, dict):
         raise BadRequest("config must be an object")
-    brain = "".join(ch for ch in str(config.get("brain") or "run") if ch.isalnum())[:20] or "run"
+    label = config.get("brain")
+    if label is not None and not isinstance(label, str):
+        raise BadRequest("config.brain must be text")
+    brain = "".join(ch for ch in label or "run" if ch.isalnum())[:20] or "run"
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = RUNS_DIR / ("%s-%s.json" % (stamp, brain))
     payload = {
@@ -602,29 +709,100 @@ def api_bench_save(body, _query):
         "summary": body["summary"],
         "results": body["results"],
     }
-    path = _save_artifact(path, lambda dest: json.dumps({**payload, "name": dest.stem}, indent=1))
+    path = _save_artifact(
+        path, lambda dest: json.dumps({**payload, "name": dest.stem}, indent=1, allow_nan=False), MAX_RUN_BYTES
+    )
     return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
+
+
+def _usable_run(data):
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("config"), dict)
+        or not isinstance(data.get("summary"), dict)
+    ):
+        return False
+    results = data.get("results", [])
+    declared = data.get("suite_version")
+    return (
+        isinstance(results, list)
+        and ("suite_version" not in data or valid_suite_version(declared))
+        and all(isinstance(result, dict) and result.get("suite_version") == declared for result in results)
+    )
+
+
+def _run_name(name: str) -> bool:
+    return (
+        bool(name)
+        and all(ch.isalnum() or ch in "-_" for ch in unicodedata.normalize("NFC", name))
+        and len(name.encode("utf-8")) + len(".json") <= MAX_ARTIFACT_FILENAME_BYTES
+    )
+
+
+def _list_limit(query, default):
+    limits = query.get("limit", [])
+    if not limits:
+        return default
+    if len(limits) == 1:
+        value = limits[0]
+        if 0 < len(value) <= len(str(default)) and value.isascii() and value.isdecimal():
+            limit = int(value)
+            if 1 <= limit <= default:
+                return limit
+    raise BadRequest(f"limit must be an integer from 1 to {default}")
+
+
+def _artifact_query_name(query):
+    names = query.get("name") or [""]
+    if len(names) != 1:
+        raise BadRequest("Specify one artifact name")
+    return names[0]
+
+
+def _artifact_filters(query, name_is_valid):
+    def one(field):
+        values = query.get(field, [])
+        if len(values) > 1:
+            raise BadRequest(f"Specify one {field} filter")
+        return values[0] if values else None
+
+    before, suite, driver = one("before"), one("suite_version"), one("driver")
+    if before is not None and not name_is_valid(before):
+        raise BadRequest("before must be a valid artifact name")
+    if suite is not None and not valid_suite_version(suite):
+        raise BadRequest("suite_version must be legacy, custom, or a numbered version")
+    if driver is not None and (not driver or len(driver) > 128 or not driver.isprintable()):
+        raise BadRequest("driver must be a printable driver ID up to 128 characters")
+    return before, suite, driver
 
 
 def api_bench_runs(_body, query):
     """Recent runs, newest first: name, config, and summary (?name=<run> returns one in full)."""
-    name = (query.get("name") or [""])[0]
+    name = _artifact_query_name(query)
     if name:
-        if not all(ch.isalnum() or ch in "-_" for ch in name):
+        if not _run_name(name):
             raise BadRequest("Invalid run name")
         path = RUNS_DIR / ("%s.json" % name)
-        if not path.is_file():
+        if _artifact_stat(path) is None:
             raise BadRequest("No run named %s" % name)
         data = _load_saved_object(path, MAX_RUN_BYTES)
-        if data is None:
+        if not _usable_run(data):
             raise BadRequest("Run %s could not be read" % name)
         return data
+    limit = _list_limit(query, 30)
+    before, suite, driver = _artifact_filters(query, _run_name)
     runs = []
     for path in sorted(RUNS_DIR.glob("*.json"), reverse=True):
-        if len(runs) >= 30:
+        if len(runs) >= limit:
             break
+        if not _run_name(path.stem) or (before is not None and path.stem >= before):
+            continue
         item = _listed_artifact(path)
-        if item is not None:
+        if (
+            item is not None
+            and (suite is None or item["suite_version"] == suite)
+            and (driver is None or item["config"].get("brain") == driver)
+        ):
             runs.append(item)
     return {"runs": runs}
 
@@ -644,6 +822,23 @@ def valid_suite_version(version):
     )
 
 
+def _recording_suite_matches(header, results):
+    declared, manifest = header.get("suite_version"), header.get("manifest")
+    return (
+        ("suite_version" not in header or valid_suite_version(declared))
+        and all(isinstance(result, dict) and result.get("suite_version") == declared for result in results.values())
+        and (
+            manifest is None
+            or (
+                isinstance(manifest, dict)
+                and manifest.get("suite_version") == declared
+                and (manifest.get("format") != "jev-run-manifest/1" or declared is None)
+                and (manifest.get("format") != "jev-run-manifest/2" or declared is not None)
+            )
+        )
+    )
+
+
 def api_recording_save(body, _query):
     """Store a model recording (static/js/brain/recording.js) under data/recordings/."""
     if body.get("format") != RECORDING_FORMAT:
@@ -655,29 +850,18 @@ def api_recording_save(body, _query):
     if not _header_fits(header):
         raise BadRequest("a recording header must be under %d KiB" % (MAX_RECORDING_HEADER_BYTES // 1024))
     if not _drive_answers_shaped(drives):
-        raise BadRequest("each drive maps request keys to lists of outcomes")
-    declared, manifest = header.get("suite_version"), header.get("manifest")
-    if (
-        ("suite_version" in header and not valid_suite_version(declared))
-        or any(not isinstance(result, dict) or result.get("suite_version") != declared for result in results.values())
-        or (
-            manifest is not None
-            and (
-                not isinstance(manifest, dict)
-                or manifest.get("suite_version") != declared
-                or (manifest.get("format") == "jev-run-manifest/1" and declared is not None)
-                or (manifest.get("format") == "jev-run-manifest/2" and declared is None)
-            )
-        )
-    ):
+        raise BadRequest("each drive maps request keys to lists of outcome objects")
+    if not _scenario_objects(scenarios):
+        raise BadRequest("each recording scenario must be an object")
+    if not _recording_suite_matches(header, results):
         raise BadRequest("recording and results must agree on suite_version")
-    driver = (
-        "".join(ch if ch.isalnum() else "-" for ch in str(header.get("driver") or "model"))[:40].strip("-") or "model"
-    )
+    label = header.get("driver")
+    if label is not None and not isinstance(label, str):
+        raise BadRequest("recording header driver must be text")
+    driver = "".join(ch if ch.isalnum() else "-" for ch in label or "model")[:40].strip("-") or "model"
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = RECORDINGS_DIR / ("%s-%s.json" % (stamp, driver))
-    text = _recording_text(header, results, scenarios, drives)
-    path = _save_artifact(path, lambda _: text)
+    path = _save_artifact(path, lambda _: _recording_text(header, results, scenarios, drives), MAX_ARCHIVE_BYTES)
     return {"saved": str(path.relative_to(PROJECT_ROOT)), "name": path.stem}
 
 
@@ -686,7 +870,7 @@ def _recording_text(header, results, scenarios, drives):
     and each request."""
 
     def dumps(value):
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
     def lines(obj, indent, each):
         return ",\n".join("%s%s: %s" % (indent, json.dumps(k, ensure_ascii=False), each(v)) for k, v in obj.items())
@@ -705,28 +889,35 @@ def _recording_text(header, results, scenarios, drives):
 
 
 def _recording_candidates(name):
-    yield RECORDINGS_DIR / f"{name}.json"
-    yield RECORDINGS_DIR / f"{name}.json.gz"
+    for suffix in (".json", ".json.gz"):
+        if len(name.encode("utf-8")) + len(suffix) <= MAX_ARTIFACT_FILENAME_BYTES:
+            yield RECORDINGS_DIR / f"{name}{suffix}"
     if name.endswith((".json", ".json.gz")):
         yield RECORDINGS_DIR / name
     if name.endswith(".json"):
-        yield RECORDINGS_DIR / f"{name}.gz"
+        if len(name.encode("utf-8")) + len(".gz") <= MAX_ARTIFACT_FILENAME_BYTES:
+            yield RECORDINGS_DIR / f"{name}.gz"
 
 
 def _recording_basename(name):
-    return bool(name) and not name.startswith(".") and all(ch.isalnum() or ch in "-_." for ch in name)
+    return (
+        bool(name)
+        and not name.startswith(".")
+        and all(ch.isalnum() or ch in "-_." for ch in unicodedata.normalize("NFC", name))
+        and len(name.encode("utf-8")) <= MAX_ARTIFACT_FILENAME_BYTES
+    )
 
 
 def api_recordings(_body, query):
     """Recordings, newest first, with their headers (?name=<recording> returns one in full)."""
-    name = (query.get("name") or [""])[0]
+    name = _artifact_query_name(query)
     if name:
         if not _recording_basename(name):
             raise BadRequest("Invalid recording name")
         found = False
         fallback = None
         for path in _recording_candidates(name):
-            if not path.is_file():
+            if _artifact_stat(path) is None:
                 continue
             found = True
             data = _load_saved_object(path, MAX_ARCHIVE_BYTES)
@@ -740,6 +931,8 @@ def api_recordings(_body, query):
             raise BadRequest("Recording %s could not be read" % name)
         raise BadRequest("No recording named %s" % name)
     recordings = []
+    limit = _list_limit(query, 50)
+    before, suite, driver = _artifact_filters(query, _recording_basename)
     if RECORDINGS_DIR.is_dir():
         paths = sorted(
             list(RECORDINGS_DIR.glob("*.json")) + list(RECORDINGS_DIR.glob("*.json.gz")),
@@ -750,21 +943,26 @@ def api_recordings(_body, query):
         paths = []
     seen = set()
     for path in paths:
-        if len(recordings) >= 50:
+        if len(recordings) >= limit:
             break
         rec_name = _recording_name(path)
-        if rec_name in seen or not _recording_basename(rec_name):
+        if rec_name in seen or not _recording_basename(rec_name) or (before is not None and rec_name >= before):
             continue
         item = _listed_artifact(path, recording=True)
-        if item is not None:
-            seen.add(rec_name)
+        if item is None:
+            continue
+        seen.add(rec_name)
+        header = item["header"]
+        if (suite is None or header.get("suite_version", "legacy") == suite) and (
+            driver is None or header.get("driver") == driver
+        ):
             recordings.append(item)
     return {"recordings": recordings}
 
 
 def api_results(_body, _query):
     """The committed results (data/results.json), as the leaderboard page and the demo show them."""
-    if not RESULTS_FILE.is_file():
+    if _artifact_stat(RESULTS_FILE) is None:
         raise BadRequest("No results file: run uv run scripts/build_results.py")
     data = _load_saved_object(RESULTS_FILE, MAX_RUN_BYTES)
     if data is None:
@@ -818,102 +1016,277 @@ def _json_float(value):
     return number
 
 
+def _json_object(pairs):
+    obj = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError("Duplicate JSON property")
+        obj[key] = value
+    return obj
+
+
+def _valid_unicode(value):
+    # JSON escape sequences can create lone surrogates even after UTF-8 decoding.
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            item.encode("utf-8")
+        elif isinstance(item, dict):
+            pending.extend(item.keys())
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+
+
 class LocalServer(ThreadingHTTPServer):
     # Module graphs and map previews arrive in bursts. The default five-connection
     # backlog can reset parallel asset downloads on a cold browser load.
     request_queue_size = 128
 
+    def verify_request(self, request, address):
+        return address[0] == "127.0.0.1"
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "JevFSD/" + VERSION
-    port = 8322
+    sys_version = ""
+    port = DEFAULT_PORT
+    timeout = REQUEST_TIMEOUT_SECONDS
+
+    def version_string(self):
+        return self.server_version
 
     def log_message(self, fmt, *args):
-        if os.environ.get("JEV_FSD_QUIET") or any(
-            p in str(args[0]) for p in ("/api/decide", "/api/llm/decide", "/api/decision/decide")
-        ):
+        if settings.quiet:
             return
         log(fmt % args)
 
-    def _send(self, status, payload, content_type="application/json", nonce=""):
-        data = payload if isinstance(payload, bytes) else json.dumps(payload, allow_nan=False).encode()
-        # Header values must stay on one line, including types from the MIME registry.
-        safe_content_type = content_type.replace("\r", "").replace("\n", "")
-        if safe_content_type != content_type:
-            safe_content_type = "application/octet-stream"
+    def log_request(self, code="-", size="-"):
+        # URL queries may contain user data. Log only a path and the response status.
+        path = getattr(self, "_request_path", None)
+        if path in ("/api/decide", "/api/llm/decide", "/api/decision/decide"):
+            return
+        self.log_message("%.16s %.160s %s", self.command or "", path or "<invalid request>", code)
+
+    def send_error(self, code, message=None, explain=None):
+        # Parser errors may interpolate the raw request line. Keep it out of the
+        # response and access log, and issue the same envelope as application errors.
+        self.close_connection = True
+        if self.request_version == "HTTP/0.9":
+            self.request_version = "HTTP/1.0"
+        return self._send(code, {"error": HTTPStatus(code).phrase})
+
+    def _send_headers(self, status, length, content_type, nonce="", *, allow=(), asset=None):
+        if not content_type.isascii() or not content_type.isprintable():
+            content_type = "application/octet-stream"
         self.send_response(status)
-        self.send_header("Content-Type", safe_content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
+        if status not in (204, 304):
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(length))
+        if allow:
+            self.send_header("Allow", ", ".join(allow))
+        if asset is None:
+            self.send_header("Cache-Control", "no-store")
+        else:
+            etag, modified = asset
+            self.send_header("Cache-Control", "private, no-cache")
+            self.send_header("ETag", etag)
+            self.send_header("Last-Modified", formatdate(modified, usegmt=True))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("X-Frame-Options", "DENY")
         self.send_header("Content-Security-Policy", CSP % nonce if nonce else CSP.replace(" 'nonce-%s'", ""))
         self.end_headers()
-        self.wfile.write(data)
+
+    def _send(self, status, payload, content_type="application/json", nonce="", *, allow=()):
+        data = payload if isinstance(payload, bytes) else json.dumps(payload, allow_nan=False).encode()
+        self._send_headers(status, len(data), content_type, nonce, allow=allow)
+        if status not in (204, 304) and getattr(self, "command", "") != "HEAD":
+            self.wfile.write(data)
 
     def _handle(self, method):
+        self.close_connection = True
         try:
-            parsed = urlparse(self.path)
-            query = parse_qs(parsed.query, max_num_fields=MAX_QUERY_FIELDS)
-        except ValueError:
-            return self._send(400, {"error": "Invalid request URL"})
-        if parsed.scheme or parsed.netloc:
-            return self._send(400, {"error": "Expected a local request path"})
-        path = parsed.path.rstrip("/") or "/"
-        if self.headers.get("Transfer-Encoding") is not None:
-            return self._send(400, {"error": "Transfer-Encoding is not supported"})
-        raw_lengths = self.headers.get_all("Content-Length") if hasattr(self.headers, "get_all") else None
-        if raw_lengths and len(raw_lengths) > 1:
-            return self._send(400, {"error": "Invalid Content-Length"})
-        raw_length = self.headers.get("Content-Length")
-        if raw_length is None:
-            length = 0
-        else:
-            value = raw_length.strip()
-            if not value.isascii() or not value.isdecimal():
-                return self._send(400, {"error": "Invalid Content-Length"})
             try:
-                length = int(value)
-            except ValueError:
-                return self._send(400, {"error": "Invalid Content-Length"})
-        reason = security.check_request(method, self.headers, SESSION_TOKEN, self.port, has_body=length > 0)
+                return self._dispatch(method)
+            except (BadRequest, JevError) as err:
+                if isinstance(err, BadRequest):
+                    return self._send(400, {"error": str(err)})
+                status = err.status if err.status in (401, 402, 403, 422, 429, 504) else 502
+                return self._send(status, {"error": str(err), "jev_status": err.status})
+            except (ConnectionError, TimeoutError):
+                raise
+            except Exception as err:  # noqa: BLE001
+                path = getattr(self, "_request_path", "<invalid request>")
+                log(f"{method} {path[:160]} failed ({type(err).__name__})")
+                traceback.print_tb(err.__traceback__)
+                return self._send(500, {"error": "Internal server error"})
+        except (ConnectionError, TimeoutError):
+            return
+
+    def _target(self):
+        target = self.path
+        # BaseHTTPRequestHandler collapses leading slashes before dispatch. Check
+        # the original target as well so it cannot become a different local URL.
+        fields = getattr(self, "raw_requestline", b"").split(None, 2)
+        if not target.startswith("/") or target.startswith("//") or (len(fields) > 1 and fields[1].startswith(b"//")):
+            raise BadRequest("Expected a local request path")
+        if "#" in target or any(ord(ch) < 32 or ord(ch) == 127 for ch in target):
+            raise BadRequest("Invalid request URL")
+        parsed = urlsplit(target)
+        if re.search(r"%(?![a-fA-F0-9]{2})", parsed.path + "?" + parsed.query):
+            raise BadRequest("Invalid URL encoding")
+        if re.search(r"%2f|%5c", parsed.path, re.IGNORECASE):
+            raise BadRequest("Invalid encoded path separator")
+        try:
+            path = unquote(parsed.path, errors="strict")
+            query = parse_qs(parsed.query, errors="strict", max_num_fields=MAX_QUERY_FIELDS)
+        except ValueError:
+            raise BadRequest("Invalid request URL") from None
+        if not path.isprintable() or "\\" in path or path.startswith("//"):
+            raise BadRequest("Invalid request path")
+        return path.rstrip("/") or "/", query
+
+    def _body_length(self):
+        if self._header_values("Transfer-Encoding"):
+            raise BadRequest("Transfer-Encoding is not supported")
+        raw_lengths = self._header_values("Content-Length")
+        if len(raw_lengths) > 1:
+            raise BadRequest("Invalid Content-Length")
+        if not raw_lengths:
+            return 0
+        value = raw_lengths[0].strip(" \t")
+        if not value.isascii() or not value.isdecimal():
+            raise BadRequest("Invalid Content-Length")
+        digits = value.lstrip("0")
+        maximum = max(MAX_BODY_BYTES, MAX_RECORDING_BYTES)
+        # Anything wider is larger than either request limit.
+        return int(digits or "0") if len(digits) <= len(str(maximum)) else maximum + 1
+
+    def _dispatch(self, method):
+        path, query = self._target()
+        self._request_path = path
+        length = self._body_length()
+        reason = security.check_request(
+            method,
+            self.headers,
+            SESSION_TOKEN,
+            getattr(getattr(self, "server", None), "server_port", self.port),
+            has_body=length > 0,
+            private_read=path.startswith("/api/"),
+        )
         if reason:
             return self._send(403, {"error": security.REASONS[reason], "reason": reason})
-        route = ROUTES.get((method, path))
-        if route:
+        if self.headers.get("Expect") is not None:
+            return self._send(417, {"error": "Expect is not supported"})
+        if length and method in security.SAFE_METHODS:
+            raise BadRequest(f"{method} does not accept a request body")
+        if length:
+            encodings = self._header_values("Content-Encoding")
+            if len(encodings) > 1 or (encodings and encodings[0].strip(" \t").lower() != "identity"):
+                return self._send(415, {"error": "Content-Encoding is not supported"})
+        route = ROUTES.get(("GET" if method == "HEAD" else method, path))
+        if route is not None:
+            if length > (MAX_RECORDING_BYTES if path == "/api/recordings/save" else MAX_BODY_BYTES):
+                raise BadRequest("Request body too large")
             try:
-                if length > (MAX_RECORDING_BYTES if path == "/api/recordings/save" else MAX_BODY_BYTES):
-                    raise BadRequest("Request body too large")
                 body = self._read_body(length)
-                self._send(200, route(body, query))
-            except BadRequest as err:
-                self._send(400, {"error": str(err)})
-            except JevError as err:
-                status = err.status if err.status in (401, 402, 403, 422, 429, 504) else 502
-                self._send(status, {"error": str(err), "jev_status": err.status})
-            except (BrokenPipeError, ConnectionResetError):
-                return
-            except Exception:  # noqa: BLE001
-                traceback.print_exc()
-                self._send(500, {"error": "Internal server error"})
-            return
-        if method != "GET":
+            except TimeoutError:
+                return self._send(408, {"error": "Timed out reading the request body"})
+            return self._send(200, route(body, query))
+        methods = [verb for verb, target in ROUTES if target == path]
+        if path in PAGES:
+            methods.append("GET")
+        if "GET" in methods:
+            methods.append("HEAD")
+        if methods:
+            methods.append("OPTIONS")
+            if method == "OPTIONS":
+                return self._send(204, b"", allow=methods)
+            if method not in ("GET", "HEAD", "POST"):
+                return self._send(405, {"error": "Method not allowed"}, allow=methods)
+        if method not in ("GET", "HEAD") or path.startswith("/api/"):
             return self._send(404, {"error": "Not found"})
         if path in PAGES:
             nonce = secrets.token_urlsafe(16)
-            html = (STATIC / PAGES[path]).read_text()
+            page = self._static_file(PAGES[path])
+            if page is None:
+                return self._send(404, {"error": "Page file is missing"})
+            try:
+                html = page.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                return self._send(404, {"error": "Page file is missing"})
             html = html.replace("</head>", '<meta name="jev-csrf" content="%s">\n</head>' % SESSION_TOKEN, 1)
             html = html.replace('<script type="importmap">', '<script type="importmap" nonce="%s">' % nonce)
             return self._send(200, html.encode(), "text/html; charset=utf-8", nonce=nonce)
-        root = os.path.realpath(STATIC)
-        file = os.path.realpath(os.path.join(root, path.lstrip("/")))
-        # Include the separator so sibling directories such as static-private cannot pass.
-        if not file.startswith(root + os.sep) or not os.path.isfile(file):
+        file = self._static_file(path.lstrip("/"))
+        if file is None:
             return self._send(404, {"error": "Not found"})
-        ctype = mimetypes.guess_type(file)[0] or "application/octet-stream"
+        return self._send_asset(file)
+
+    @staticmethod
+    def _static_file(relative):
+        root = STATIC.resolve()
+        try:
+            path = (root / relative).resolve(strict=True)
+            if path.is_relative_to(root) and path.is_file():
+                return path
+        except (FileNotFoundError, NotADirectoryError, RuntimeError):
+            pass
+        return None
+
+    def _send_asset(self, file):
+        ctype = mimetypes.guess_type(str(file))[0] or "application/octet-stream"
         if ctype.startswith("text/") or ctype.endswith("javascript"):
             ctype += "; charset=utf-8"
-        self._send(200, Path(file).read_bytes(), ctype)
+        try:
+            handle = file.open("rb")
+        except FileNotFoundError:
+            return self._send(404, {"error": "Not found"})
+        with handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                return self._send(404, {"error": "Not found"})
+            etag = 'W/"%x-%x-%x-%x-%x"' % (
+                info.st_dev,
+                info.st_ino,
+                info.st_size,
+                info.st_mtime_ns,
+                info.st_ctime_ns,
+            )
+            modified = info.st_mtime_ns // 10**9
+            asset = etag, modified
+            status = 304 if self._asset_is_fresh(etag, modified) else 200
+            self._send_headers(status, info.st_size, ctype, asset=asset)
+            if status == 200 and self.command != "HEAD":
+                remaining = info.st_size
+                while remaining:
+                    try:
+                        data = handle.read(min(remaining, ASSET_CHUNK_BYTES))
+                    except OSError:
+                        # Headers are already sent. Close the incomplete response
+                        # rather than appending an error body to a static asset.
+                        log(f"Could not finish reading static asset {file.name}")
+                        break
+                    if not data:
+                        break
+                    self.wfile.write(data)
+                    remaining -= len(data)
+
+    def _asset_is_fresh(self, etag, modified):
+        tags = self._header_values("If-None-Match")
+        if tags:
+            return any(tag.strip().removeprefix("W/") in ("*", etag[2:]) for value in tags for tag in value.split(","))
+        dates = self._header_values("If-Modified-Since")
+        if len(dates) != 1:
+            return False
+        try:
+            since = parsedate_to_datetime(dates[0])
+            return since.tzinfo is not None and modified <= since.timestamp()
+        except (TypeError, ValueError, OverflowError, OSError):
+            return False
 
     def _read_body(self, length):
         if not length:
@@ -922,12 +1295,24 @@ class Handler(BaseHTTPRequestHandler):
         if len(raw) != length:
             raise BadRequest("Request body is incomplete")
         try:
-            body = json.loads(raw.decode("utf-8"), parse_constant=_reject_json_constant, parse_float=_json_float)
+            body = json.loads(
+                raw.decode("utf-8-sig"),
+                parse_constant=_reject_json_constant,
+                parse_float=_json_float,
+                object_pairs_hook=_json_object,
+            )
+            _valid_unicode(body)
         except (ValueError, RecursionError):
             raise BadRequest("Body must be valid UTF-8 JSON") from None
         if not isinstance(body, dict):
             raise BadRequest("Body must be a JSON object")
         return body
+
+    def _header_values(self, name):
+        if hasattr(self.headers, "get_all"):
+            return self.headers.get_all(name, [])
+        value = self.headers.get(name)
+        return [] if value is None else [value]
 
     def do_GET(self):
         self._handle("GET")
@@ -935,14 +1320,46 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._handle("POST")
 
+    def do_HEAD(self):
+        self._handle("HEAD")
+
+    def do_OPTIONS(self):
+        self._handle("OPTIONS")
+
+    def do_PUT(self):
+        self._handle("PUT")
+
+    def do_PATCH(self):
+        self._handle("PATCH")
+
+    def do_DELETE(self):
+        self._handle("DELETE")
+
 
 def main():
     port = settings.port
-    Handler.port = port
+    for problem in settings.problems():
+        log(f"settings: {problem}")
     try:
         httpd = LocalServer(("127.0.0.1", port), Handler)
     except OSError as err:
-        print("Could not listen on 127.0.0.1:%d (%s). Set PORT=<other port> and try again." % (port, err))
+        message = f"Could not listen on 127.0.0.1:{port} ({err})."
+        if err.errno == errno.EADDRINUSE:
+            message += " Close the other server or set PORT to an unused port."
+        elif err.errno == errno.EACCES:
+            message += " Set PORT to a port this account can bind."
+        print(message, file=sys.stderr)
+        return 1
+    with httpd:
+        return _serve(httpd)
+
+
+def _serve(httpd):
+    port = httpd.server_port
+    try:
+        entry = load_map()
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as err:
+        log(f"Could not load the startup map. Check data/maps or choose another JEV_FSD_BBOX ({type(err).__name__}).")
         return 1
     key_note = (
         ("API key from %s" % client.key_source)
@@ -966,7 +1383,6 @@ def main():
         print("  decision:%s  %s at %s%s . key %s" % (e["name"], e["model"], e["endpoint"], e["path"], e["key"]))
     for problem in decision_registry.problems:
         print("  decision config: %s" % problem)
-    entry = load_map()
     print(
         "  map: %d edges, %d signals, %d stops, %d buildings%s\n"
         % (
@@ -981,6 +1397,9 @@ def main():
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n  bye")
+    except OSError as err:
+        log(f"The listener stopped ({err.strerror or err}).")
+        return 1
     return 0
 
 
