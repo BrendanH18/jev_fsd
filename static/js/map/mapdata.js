@@ -91,6 +91,15 @@ function segIndex(cum, s) {
   return lo;
 }
 
+function appendLanes(cell, out, seen) {
+  if (!cell) return;
+  for (const lane of cell) {
+    if (seen.has(lane)) continue;
+    seen.add(lane);
+    out.push(lane);
+  }
+}
+
 export function pointAt(pts, cum, s) {
   if (!pts.length || Number.isNaN(s)) return undefined;
   if (cum.length !== pts.length) return undefined;
@@ -402,20 +411,14 @@ export class MapData {
       r = Math.ceil(radius / CELL);
     const seen = new Set();
     const out = [];
-    const visit = (cell) => {
-      if (!cell) return;
-      for (const lane of cell) {
-        if (seen.has(lane)) continue;
-        seen.add(lane);
-        out.push(lane);
-      }
-    };
+    // The ordinary 3×3 road query is cheap even on a small challenge map.
     if (
-      (2 * r + 1) ** 2 <= this.grid.size &&
+      (2 * r + 1) ** 2 <= Math.max(9, this.grid.size) &&
       Number.isSafeInteger(Math.abs(cx) + r) &&
       Number.isSafeInteger(Math.abs(cy) + r)
     ) {
-      for (let i = cx - r; i <= cx + r; i++) for (let j = cy - r; j <= cy + r; j++) visit(this.grid.get(`${i},${j}`));
+      for (let i = cx - r; i <= cx + r; i++)
+        for (let j = cy - r; j <= cy + r; j++) appendLanes(this.grid.get(`${i},${j}`), out, seen);
     } else {
       // Iterate populated cells for sparse or enormous windows. Sort the same way as the normal
       // traversal so nearest-lane ties keep their original winner.
@@ -425,7 +428,7 @@ export class MapData {
         if (Math.abs(i - cx) <= r && Math.abs(j - cy) <= r) cells.push({ i, j, lanes });
       }
       cells.sort((a, b) => a.i - b.i || a.j - b.j);
-      for (const cell of cells) visit(cell.lanes);
+      for (const cell of cells) appendLanes(cell.lanes, out, seen);
     }
     return out;
   }
