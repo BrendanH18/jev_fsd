@@ -20,6 +20,7 @@ import { officerStopLaw } from "../sim/traffic-officer.js";
 import { Route } from "../map/route.js";
 import { browserRoute } from "../demo/routing.js";
 import { createAgents, validAgentChoice, isDecisionAgent } from "./registry.js";
+import { DecisionTrace, decisionContext, startDecisionTrace } from "./decision-trace.js";
 import { DEFAULT_TRACK, openTrack, unflagged } from "./tracks.js";
 
 const INTERVAL_HAZARD_MS = 250;
@@ -39,9 +40,12 @@ const SPEND_KEYS = [
   "cost_known",
   "live_call",
 ];
+const MOTIONS = new Set(["drive", "stop", "reverse"]);
 const NONNEGATIVE_META = ["latency_ms", "input_tokens", "cost_usd"];
 function cleanMetrics(meta) {
   for (const key of NONNEGATIVE_META) if (!Number.isFinite(meta[key]) || meta[key] < 0) meta[key] = 0;
+  if (meta.output_tokens !== undefined && (!Number.isFinite(meta.output_tokens) || meta.output_tokens < 0))
+    meta.output_tokens = 0;
 }
 
 // A deadlock creep's law `law` (with its s0) where a police officer directing traffic at the junction ahead
@@ -66,6 +70,8 @@ const withoutVector = ({ vector: _vector, ...rest }) => rest;
 const REFERENCE_DRIVERS = new Set(["rules", "cautious"]);
 
 export class Autopilot {
+  #decisionTrace = null;
+
   constructor(world, { onDecision = () => {}, onEvent = () => {} } = {}) {
     this.world = world;
     this.brains = createAgents();
@@ -100,6 +106,18 @@ export class Autopilot {
     this.turnaroundRoute = null; // the route world.turnaround was planned on
     this.pausedTurnaround = null; // one set aside while autopilot is off
     this.parker = new ParkPlanner(); // parking at the destination (sim/parallel-park.js)
+  }
+
+  // Use window.__jev.autopilot.startDecisionTrace() while driving, then trace.latest,
+  // trace.entries({ reason: "invalid_vector" }), or trace.summarize(). Starting again or
+  // stopping discards pending observations from the previous capture.
+  startDecisionTrace(capacity) {
+    this.#decisionTrace = new DecisionTrace(capacity);
+    return this.#decisionTrace;
+  }
+
+  stopDecisionTrace() {
+    this.#decisionTrace = null;
   }
 
   get brain() {
@@ -409,9 +427,13 @@ export class Autopilot {
       // (the open track only: a guarded request is as before)
       ...(track === "open" ? { track } : {}),
     };
+    const context = this.#decisionTrace
+      ? startDecisionTrace(request, this.#decisionTrace, this.brainName, now, clear, this.executing?.hazard)
+      : null;
     // (on the open track, a choice among flagged manoeuvres alone is the driver's: Rules and the cautious agent,
     // the reference drivers, brake there as on the guarded track, where nothing would be left)
     if (!eligible.length || (!clear.length && (eligible.length < 2 || REFERENCE_DRIVERS.has(this.brainName)))) {
+      if (context) context.reason = eligible.length ? "flagged_only" : "no_eligible";
       this.apply(
         {
           motion: "stop",
@@ -428,7 +450,8 @@ export class Autopilot {
       return;
     }
     if ((!Object.keys(questions).length && this.brain?.questionDriven) || this.brainName === "rules") {
-      const r = this.rulesDecide(snap, clear);
+      const r = this.rulesDecide(snap, clear, context);
+      if (context) context.reason = this.brainName === "rules" ? "rules" : "questions_resolved";
       if (this.brainName !== "rules") {
         r.meta.source = "local";
         r.answers = { ...local };
@@ -451,6 +474,7 @@ export class Autopilot {
     this.inFlight = controller;
     const brain = this.brain;
     const driver = this.brainName;
+    const context = decisionContext(request);
     const timeoutMs = Number.isFinite(brain.timeoutMs) && brain.timeoutMs > 0 ? brain.timeoutMs : TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let result;
@@ -467,33 +491,47 @@ export class Autopilot {
       ]);
       if (epoch !== this.epoch) return;
       const decisionModel = isDecisionAgent(driver);
-      if ((!decisionModel || result?.candidateId !== null) && !validAgentChoice(result, eligible))
-        throw Object.assign(new Error("Agent returned a manoeuvre outside the eligible candidate set"), {
-          meta: result?.meta,
-          trace: result?.trace,
-        });
+      const validMotion = MOTIONS.has(result?.motion);
+      if (!validMotion || ((!decisionModel || result?.candidateId !== null) && !validAgentChoice(result, eligible))) {
+        const message = validMotion
+          ? "Agent returned a manoeuvre outside the eligible candidate set"
+          : "Agent returned an invalid motion";
+        if (context) context.reason = validMotion ? "ineligible_candidate" : "invalid_motion";
+        throw Object.assign(new Error(message), { meta: result?.meta, trace: result?.trace });
+      }
+      if (context) context.requestedId = result.candidateId;
       result = { ...result, meta: { ...result.meta } };
       result.meta.source ||= driver;
       cleanMetrics(result.meta);
       if (result.candidateId === null && eligible.length) {
-        const r = this.rulesDecide(snap, clear);
+        const r = this.rulesDecide(snap, clear, context);
         result.candidateId = r.candidateId;
+        if (context) context.reason = "invalid_vector";
         // (on the open track with nothing unflagged, the fallback is a stop: its motion too)
         if (!clear.length) result.motion = r.motion;
         result.meta.fallback = "invalid vector";
-        this.world.violations.fallbacks++;
       }
-      if (decisionModel || result.meta.live_call) this.totals.calls++;
+      if (decisionModel || result.meta.live_call) {
+        this.totals.calls++;
+        if (context) context.callCounted = true;
+      }
       by = result.meta.fallback ? "fallback" : "model";
+      if (context) context.reason ??= by === "fallback" ? "driver_reported_fallback" : "driver_choice";
+      if (by === "fallback") this.world.violations.fallbacks++;
     } catch (err) {
       if (epoch !== this.epoch) return;
-      const r = this.rulesDecide(snap, clear);
+      const r = this.rulesDecide(snap, clear, context);
+      if (context) {
+        context.requestedId = result?.candidateId ?? null;
+        context.reason ??= err?.name === "AbortError" ? "timeout" : err?.meta?.live_call ? "unusable_reply" : "error";
+      }
       // A call that happened but returned an unusable answer still counts its tokens, cost and latency.
       if (err?.meta?.live_call) {
         for (const key of SPEND_KEYS) if (err.meta[key] !== undefined) r.meta[key] = err.meta[key];
         cleanMetrics(r.meta);
         r.trace = err.trace;
         this.totals.calls++;
+        if (context) context.callCounted = true;
       }
       r.meta.source = "rules_fallback";
       r.meta.error = err?.name === "AbortError" ? `timeout after ${timeoutMs} ms` : err?.message || String(err);
@@ -512,8 +550,13 @@ export class Autopilot {
 
   // Rules' choice among `clear` (the unflagged manoeuvres). With none, only on the open track (a model
   // was offered flagged manoeuvres alone), it brakes, as the guarded track does with nothing eligible.
-  rulesDecide(snap, clear) {
-    if (clear.length) return this.brains.rules.decideSync(snap, clear);
+  rulesDecide(snap, clear, context) {
+    if (clear.length) {
+      const policy = context?.policy;
+      const result = this.brains.rules.decideSync(snap, clear, policy);
+      if (policy) Object.assign(policy, { candidateId: result.candidateId, motion: result.motion });
+      return result;
+    }
     return {
       motion: "stop",
       candidateId: "hard_brake",
@@ -526,6 +569,14 @@ export class Autopilot {
   // replay branch's alternate manoeuvre, picked by the person) counts as local: it is not the model's.
   apply(result, snap, candidates, request, by = "local") {
     const world = this.world;
+    let context = decisionContext(request);
+    if (!context && this.#decisionTrace && request.epoch === undefined) {
+      context = startDecisionTrace(request, this.#decisionTrace, this.brainName, world.t * 1000);
+      context.reason = "external_choice";
+    }
+    const offeredRoutes = context ? (this.pendingRoutes?.length ?? 0) : 0;
+    let routeDisposition = offeredRoutes ? "pending" : "none";
+    let installedRoute = null;
     // (a model answer that left a route or headlight question it was asked to the default is partial:
     // the car keeps the first route option, and the beam the sensing allows)
     const beam = result.headlights ?? result.answers?.headlights?.choice;
@@ -563,13 +614,18 @@ export class Autopilot {
       if (law.stopAtRoute !== undefined) law.stopAt = law.stopAtRoute - s0;
       this.executing = { candidate: chosen, law, s0, decidedAt: performance.now(), hazard: null };
     }
-    if (result.routeId && this.pendingRoutes) {
-      const pick = this.pendingRoutes.find((r) => r.id === result.routeId) || this.pendingRoutes[0];
+    if (result.routeId && this.pendingRoutes?.length) {
+      const offered = this.pendingRoutes.find((r) => r.id === result.routeId);
+      const pick = offered || this.pendingRoutes[0];
+      if (context) {
+        routeDisposition = offered ? "selected" : "first_option";
+        installedRoute = pick.id;
+      }
       world.route = new Route(pick, world.map, world.ego.spec);
       this.pendingRoutes = null;
       this.bumpEpoch();
     } else if (
-      this.pendingRoutes &&
+      this.pendingRoutes?.length &&
       request.questions?.route &&
       !["rules_fallback", "local"].includes(result.meta?.source)
     ) {
@@ -577,6 +633,7 @@ export class Autopilot {
       // follows, rather than paying to ask the same route question on every later decision. A
       // fallback or a local decision (an emergency stop) never asked the model, so it asks again.
       this.pendingRoutes = null;
+      if (context) routeDisposition = "kept_current";
     }
     // (a flagged manoeuvre chosen to go on with; holding still, or the brake a stop answer applies, is none)
     if (chosen?.flagged && result.motion !== "stop")
@@ -600,6 +657,26 @@ export class Autopilot {
       flags: request.flags,
       at: performance.now(),
     };
+    if (context && this.#decisionTrace === context.trace) {
+      context.trace.record(this.lastDecision, context, request, {
+        partial,
+        requestedId: Object.hasOwn(context, "requestedId") ? context.requestedId : result.candidateId,
+        selectedId: result.candidateId,
+        route: {
+          offered: offeredRoutes,
+          requested: typeof result.routeId === "string" ? result.routeId : null,
+          installed: installedRoute,
+          disposition: routeDisposition,
+        },
+        headlights: world.highBeams
+          ? {
+              requested: typeof beam === "string" ? beam : null,
+              applied: this.lastDecision.headlights,
+              defaulted: beam !== "high" && beam !== "low",
+            }
+          : null,
+      });
+    }
     this.onDecision(this.lastDecision);
   }
 

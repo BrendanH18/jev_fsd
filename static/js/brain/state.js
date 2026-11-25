@@ -117,7 +117,7 @@ const EV_FROM = { behind: "behind", ahead: "ahead, the other way", left: "the le
 const passing = (snap) =>
   snap.lane && Object.values(snap.lane.sides).find((side) => side.offer === "pass" && side.gap_ok);
 
-export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
+export function toJevState(snap, candidates, meta = {}, style = DEFAULT_STYLE) {
   const { ego, limit } = snap;
   const state = {
     driving_style: style,
@@ -541,7 +541,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
   if (snap.parking) state.parking = parkingState(snap.parking);
   if (snap.rear_follower && snap.rear_follower.gap_m < 12)
     state.rear_follower = { id: snap.rear_follower.id, gap_m: r1(snap.rear_follower.gap_m) };
-  if (snap.traffic.length) {
+  if (snap.traffic?.length) {
     state.traffic = snap.traffic.map((t) => ({
       id: t.id,
       ...(t.kind !== "car" ? { kind: t.kind } : {}),
@@ -590,7 +590,9 @@ const CYCLIST_NOT_HERE = {
   no_room_ahead: "there is no room to move back in ahead of it",
 };
 
-const passBlockReason = (why) => firstOf(PASS_BLOCK_REASON, why) ?? CYCLIST_NOT_HERE[why];
+const passBlockReason = (why) =>
+  firstOf(PASS_BLOCK_REASON, why) ??
+  (Object.hasOwn(CYCLIST_NOT_HERE, why) ? CYCLIST_NOT_HERE[why] : "the passing conditions are not met");
 
 function outcomeLabel(c, snap) {
   // (the open track: a manoeuvre the road-rule checks flagged, brain/tracks.js)
@@ -1189,7 +1191,7 @@ export function needsMotionQuestion(snap) {
     snap.cyclist_pass ||
     snap.parking ||
     snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) ||
-    snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) ||
+    snap.traffic?.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) ||
     snap.stuck ||
     (snap.nav && snap.nav.remaining_m < 30)
   );
@@ -1292,9 +1294,9 @@ export function buildQuestions(snap, eligible, meta = {}) {
     local.motion = { type: "choice", choice: "drive", probabilities: { drive: 1 }, confidence: 1, local: true };
   }
   if (eligible.length >= 2) {
-    const criteria = {};
-    for (const c of eligible)
-      criteria[c.id] = `${c.steer}, ${c.speed}, +${r1(c.sim.progress_m)} m, ${outcomeLabel(c, snap)}`;
+    const criteria = Object.fromEntries(
+      eligible.map((c) => [c.id, `${c.steer}, ${c.speed}, +${r1(c.sim.progress_m)} m, ${outcomeLabel(c, snap)}`]),
+    );
     // (the open track: a manoeuvre that failed a road-rule check is still offered, saying which, brain/tracks.js)
     const checks =
       meta.track === "open"

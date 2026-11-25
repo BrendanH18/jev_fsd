@@ -2,6 +2,7 @@
 // ones. Brains only pick among survivors. Other agents use constant-velocity predictions from
 // visible observations and can change behavior after a choice.
 
+import { assertCandidateBatch, assertPrediction } from "./candidate-validation.js";
 import { CAR, comfort } from "../sim/vehicle.js";
 import { behindInLane } from "../sim/following.js";
 import { applyLaw, detourAt, lateralAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
@@ -769,6 +770,7 @@ function dedupe(list) {
 
 // Forward-simulate every candidate. Mutates each candidate with `sim` (features) and `trace` (points).
 export function simulateAll(candidates, snap, world) {
+  assertCandidateBatch(candidates);
   const { route, map } = world;
   const FRONT = world.ego.spec.length - world.ego.spec.rearOverhang;
   // (an emergency vehicle coming up behind stops for what it cannot get past: it is not predicted
@@ -1118,6 +1120,7 @@ export function simulateAll(candidates, snap, world) {
       off_road_fraction: offSteps / Math.ceil(steps / 3),
       end: [car.x, car.y],
     };
+    assertPrediction(c);
     // A lane beside the route's lane must leave room to change back before it ends (a turn, a
     // junction where the lanes change, or the destination): one lane change for each lane between
     // it and the route's. Braking is always allowed, and so is a change toward the route's lane,
