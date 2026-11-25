@@ -7,7 +7,15 @@ import { decidedByTotals } from "../static/js/bench/metrics.js";
 import { driverScores, driveScores, SCORES_VERSION } from "../static/js/bench/scores.js";
 import { suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, driverKind, ModelRecording } from "../static/js/brain/recording.js";
-import { writeNewJson, isArenaSet, isCommit, isDateTime, isId, isRecord, readArtifactJson } from "./recording_artifacts.mjs";
+import {
+  writeNewJson,
+  isArenaSet,
+  isCommit,
+  isDateTime,
+  isId,
+  isRecord,
+  readArtifactJson,
+} from "./recording_artifacts.mjs";
 import { authoredDrive } from "./canonical_suite.mjs";
 import { runCost } from "./run_manifest.mjs";
 
@@ -49,8 +57,18 @@ const usage = [
   "Usage: node scripts/compare_repeats.mjs [--plan FILE] [--driver ID] [--json OUTPUT.json[.gz]] RECORDING RECORDING [...]",
   "       node scripts/compare_repeats.mjs --plan FILE --show-plan",
 ].join("\n");
-const DECISION_COUNTS = ["decisions", "flagged_choices", "safety_brakes", "fallbacks", "model_decisions",
-  "local_decisions", "fallback_decisions", "partial_decisions", "input_tokens", "output_tokens"];
+const DECISION_COUNTS = [
+  "decisions",
+  "flagged_choices",
+  "safety_brakes",
+  "fallbacks",
+  "model_decisions",
+  "local_decisions",
+  "fallback_decisions",
+  "partial_decisions",
+  "input_tokens",
+  "output_tokens",
+];
 const repeatCountValue = (value) => Number.isSafeInteger(value) && value >= 0;
 
 function validateMeasurements(drives, path) {
@@ -68,13 +86,11 @@ function validateMeasurements(drives, path) {
       throw new Error(`${path}: ${id} has more flagged choices than decisions.`);
     if (drive.model_decisions !== undefined && drive.partial_decisions > drive.model_decisions)
       throw new Error(`${path}: ${id} has more partial decisions than model decisions.`);
-    if (drive.simulation_error)
-      throw new Error(`${path}: ${id} ended with a simulation error.`);
+    if (drive.simulation_error) throw new Error(`${path}: ${id} ended with a simulation error.`);
   }
 }
-const validDriver = (value) => typeof value === "string" &&
-  /^(?:jev|(?:llm|decision):[a-z0-9][a-z0-9_-]{0,31})$/.test(value);
-
+const validDriver = (value) =>
+  typeof value === "string" && /^(?:jev|(?:llm|decision):[a-z0-9][a-z0-9_-]{0,31})$/.test(value);
 
 function providerOptions(request) {
   const { messages: _messages, system: _system, ...settings } = request;
@@ -92,13 +108,15 @@ function readPlan(path) {
     const plan = readArtifactJson(path);
     if (
       plan?.format !== "jev-arena-repeat-plan/1" ||
-      (typeof plan.suite_version !== "string" || !/^v[1-9]\d*$/.test(plan.suite_version)) ||
+      typeof plan.suite_version !== "string" ||
+      !/^v[1-9]\d*$/.test(plan.suite_version) ||
       !["guarded", "open"].includes(plan.track) ||
       !Number.isSafeInteger(plan.repeats_per_driver) ||
       plan.repeats_per_driver < 2 ||
       (plan.source_commit !== undefined && !isCommit(plan.source_commit)) ||
       (plan.engine_version !== undefined && !isId(plan.engine_version)) ||
-      (plan.engine !== undefined && (typeof plan.engine !== "string" || !/^node v[0-9]+\.[0-9]+\.[0-9]+$/.test(plan.engine))) ||
+      (plan.engine !== undefined &&
+        (typeof plan.engine !== "string" || !/^node v[0-9]+\.[0-9]+\.[0-9]+$/.test(plan.engine))) ||
       !plan.drivers ||
       typeof plan.drivers !== "object" ||
       Array.isArray(plan.drivers) ||
@@ -184,7 +202,8 @@ function readRepeat(path) {
   if (!header.arena) throw new Error(`${path} is a benchmark recording. Use arena recordings for this report.`);
   if (!isArenaSet(header.arena.set)) throw new Error(`${path} declares an unknown Arena set.`);
   if (!isDateTime(header.recorded_at)) throw new Error(`${path} has an invalid recorded_at timestamp.`);
-  if (Object.keys(recording.scenarios).length) throw new Error(`${path} contains seeded scenarios in an Arena recording.`);
+  if (Object.keys(recording.scenarios).length)
+    throw new Error(`${path} contains seeded scenarios in an Arena recording.`);
   if (!["guarded", "open"].includes(track)) throw new Error(`${path} declares an unknown arena track.`);
   if (
     Object.values(results).some(
@@ -201,9 +220,10 @@ function readRepeat(path) {
   const cost = runCost(drives);
   if (header.manifest?.cost_usd !== undefined && header.manifest.cost_usd !== cost)
     throw new Error(`${path} has a manifest cost that differs from its drives.`);
-  if (header.manifest?.maps && Object.keys(header.manifest.maps).some(
-    (id) => header.manifest.maps[id]?.fingerprint !== header.maps?.[id],
-  ))
+  if (
+    header.manifest?.maps &&
+    Object.keys(header.manifest.maps).some((id) => header.manifest.maps[id]?.fingerprint !== header.maps?.[id])
+  )
     throw new Error(`${path} has a manifest map fingerprint that differs from its tape.`);
   const plan = header.arena.ids;
   const planned = new Set(Array.isArray(plan) ? plan : []);
@@ -246,7 +266,7 @@ function readRepeat(path) {
   if (models.size !== 1) throw new Error(`${path} needs answers from exactly one model version.`);
   if (driverKind(header.driver) === "llm" && providerSettings.size !== 1)
     throw new Error(`${path} needs matching provider settings in its request traces.`);
-  const measure = (field) => drives.some((drive) => drive[field] !== undefined) ? sum(field) : null;
+  const measure = (field) => (drives.some((drive) => drive[field] !== undefined) ? sum(field) : null);
   return {
     content_sha: hash("sha256", canonicalJson(recording)),
     suite_version: suiteVersion(header),
@@ -312,7 +332,7 @@ function readRepeat(path) {
       score: driveScores(drive).score,
       safety_brakes: drive.safety_brakes ?? null,
       fallbacks: drive.fallbacks ?? null,
-      flagged_choices: track === "open" ? drive.flagged_choices ?? null : null,
+      flagged_choices: track === "open" ? (drive.flagged_choices ?? null) : null,
       failures: [...new Set(drive.failures)],
     })),
     path,
@@ -330,10 +350,14 @@ function spread(values) {
 }
 
 function compare(paths, planPath, selectedDriver) {
-  if (new Set(paths.map((path) => {
-    const { dev, ino } = statSync(realpathSync(path));
-    return `${dev}:${ino}`;
-  })).size !== paths.length)
+  if (
+    new Set(
+      paths.map((path) => {
+        const { dev, ino } = statSync(realpathSync(path));
+        return `${dev}:${ino}`;
+      }),
+    ).size !== paths.length
+  )
     throw new Error("List each recording once.");
   const runs = paths.map(readRepeat);
   if (new Set(runs.map((run) => run.content_sha)).size !== runs.length)
@@ -443,8 +467,13 @@ function compare(paths, planPath, selectedDriver) {
 
 try {
   const { positionals: paths, values } = parseArgs({
-    options: { plan: { type: "string" }, driver: { type: "string" }, json: { type: "string" },
-      "show-plan": { type: "boolean" }, help: { type: "boolean", short: "h" } },
+    options: {
+      plan: { type: "string" },
+      driver: { type: "string" },
+      json: { type: "string" },
+      "show-plan": { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
     allowPositionals: true,
   });
   if (values.help) console.log(usage);
@@ -453,13 +482,21 @@ try {
       throw new Error("--show-plan requires only --plan FILE.");
     const { suite, drivers, repeats_per_driver: repeats, ...plan } = readPlan(values.plan);
     const ids = Object.keys(suite.arena.drives);
-    console.log(JSON.stringify({
-      ...plan, drivers, repeats_per_driver: repeats,
-      recordings: Object.keys(drivers).length * repeats,
-      drives_per_recording: ids.length,
-      total_drives: Object.keys(drivers).length * repeats * ids.length,
-      ids,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          ...plan,
+          drivers,
+          repeats_per_driver: repeats,
+          recordings: Object.keys(drivers).length * repeats,
+          drives_per_recording: ids.length,
+          total_drives: Object.keys(drivers).length * repeats * ids.length,
+          ids,
+        },
+        null,
+        2,
+      ),
+    );
   } else {
     if (paths.length < 2) throw new Error(usage);
     if (values.driver !== undefined && !isId(values.driver)) throw new Error("--driver needs a driver ID.");

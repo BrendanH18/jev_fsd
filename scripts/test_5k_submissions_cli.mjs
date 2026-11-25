@@ -9,7 +9,8 @@ import { readArtifactJson } from "./recording_artifacts.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "jev-outside-driver-"));
 const run = (script, ...args) => {
-  const run = spawnSync(process.execPath,
+  const run = spawnSync(
+    process.execPath,
     ["--experimental-default-type=module", fileURLToPath(new URL(script, import.meta.url)), ...args],
     { encoding: "utf8", timeout: 5000 },
   );
@@ -102,14 +103,22 @@ try {
   const current = { map: "kitsilano", id: "door-zone", seed: 2, version: 1, weather: "dry", time: "day" };
   const selected = new Map([["kitsilano/door-zone", current]]);
   const row = { driver: "external", recording: "tape.json.gz", date: "2026-11-11", drives: [current] };
-  const candidates = [null, row, { ...row, date: "2026-11-18", mode: "realtime" },
+  const candidates = [
+    null,
+    row,
+    { ...row, date: "2026-11-18", mode: "realtime" },
     { ...row, date: "2026-11-24", drives: [{ ...current, seed: 3 }] },
     { ...row, date: "2026-11-26", drives: [{ ...current, weather: "snow" }] },
     { ...row, date: "2026-11-28", drives: [{ ...current, time: "night" }] },
-    { ...row, date: 55 }, { ...row, drives: {} }, { ...row, drives: [null] }];
+    { ...row, date: 55 },
+    { ...row, drives: {} },
+    { ...row, drives: [null] },
+  ];
   assert.throws(() => publishedDrives({}, "guarded", selected), /rows array/);
-  assert.equal(publishedDrives({ rows: candidates }, "guarded", selected).get("external").get("kitsilano/door-zone").date,
-    "2026-11-11");
+  assert.equal(
+    publishedDrives({ rows: candidates }, "guarded", selected).get("external").get("kitsilano/door-zone").date,
+    "2026-11-11",
+  );
   for (const name of ["jev-arena-2026-11-11.json.gz", "jev-open-2026-11-20.json.gz"]) {
     const file = fileURLToPath(new URL(`../data/recordings/${name}`, import.meta.url));
     assert.equal(readArtifactJson(file).header.driver, "jev");

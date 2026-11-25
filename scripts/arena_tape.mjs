@@ -9,7 +9,8 @@ export function parseArenaTape(value) {
   const { arena } = header;
   if (!isRecord(arena)) throw new Error("Expected an Arena recording.");
   if (!isArenaSet(arena.set)) throw new Error("The recording declares an unknown Arena set.");
-  if (arena.track !== undefined && !isTrack(arena.track)) throw new Error("The recording declares an unknown Arena track.");
+  if (arena.track !== undefined && !isTrack(arena.track))
+    throw new Error("The recording declares an unknown Arena track.");
   if (!Array.isArray(arena.ids) || !arena.ids.every(isId) || new Set(arena.ids).size !== arena.ids.length)
     throw new Error("The recording must declare distinct Arena drive IDs.");
   if (!isRecord(header.maps)) throw new Error("The Arena recording needs a map fingerprint table.");

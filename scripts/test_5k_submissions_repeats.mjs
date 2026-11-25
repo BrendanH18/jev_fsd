@@ -10,7 +10,10 @@ import { readArtifactJson } from "./recording_artifacts.mjs";
 const dir = mkdtempSync(join(tmpdir(), "jev-repeat-plan-"));
 const cli = fileURLToPath(new URL("./compare_repeats.mjs", import.meta.url));
 const compare = (...args) => {
-  const result = spawnSync(process.execPath, ["--experimental-default-type=module", cli, ...args], { encoding: "utf8", timeout: 5000 });
+  const result = spawnSync(process.execPath, ["--experimental-default-type=module", cli, ...args], {
+    encoding: "utf8",
+    timeout: 5000,
+  });
   if (result.error) throw result.error;
   return result;
 };
@@ -25,24 +28,74 @@ const save = (name, data) => {
 };
 const driver = "llm:fixture";
 const manifest = {
-  format: "jev-run-manifest/2", source_commit: "b".repeat(40), source_dirty: false,
-  engine: "node v22.23.5", engine_version: "12.4", driver, track: "open", suite_version: "v1", cost_usd: 0,
+  format: "jev-run-manifest/2",
+  source_commit: "b".repeat(40),
+  source_dirty: false,
+  engine: "node v22.23.5",
+  engine_version: "12.4",
+  driver,
+  track: "open",
+  suite_version: "v1",
+  cost_usd: 0,
 };
-const plan = { format: "jev-arena-repeat-plan/1", suite_version: "v1", track: "open",
-  engine: manifest.engine, repeats_per_driver: 2, drivers: { [driver]: { model: "test", provider_url: "https://example.net/v1", effort: "low" } } };
+const plan = {
+  format: "jev-arena-repeat-plan/1",
+  suite_version: "v1",
+  track: "open",
+  engine: manifest.engine,
+  repeats_per_driver: 2,
+  drivers: { [driver]: { model: "test", provider_url: "https://example.net/v1", effort: "low" } },
+};
 const makeRepeat = (n) => ({
   format: "jev-model-recording/1",
-  header: { driver, kind: "llm", engine: manifest.engine, suite_version: "v1", recorded_at: `2026-11-21T0${n}:00:00Z`,
-    manifest: structuredClone(manifest), arena: { set: "all", track: "open", ids: Object.keys(suite.arena.drives) }, maps: { ...suite.maps } },
-  results: Object.fromEntries(Object.entries(suite.arena.drives).map(([challenge, conditions], index) =>
-    [challenge, { challenge, ...conditions, suite_version: "v1", mode: "lockstep", track: "open",
-      pass: true, failures: [], decisions: 10, flagged_choices: index === 0 ? n : 0, input_tokens: n,
-      output_tokens: n * 2, model_decisions: 4, partial_decisions: n, local_decisions: 6,
-      fallbacks: index === 0 ? n - 1 : 0, safety_brakes: index === 0 ? n : 0 }],
-  )),
-  drives: Object.fromEntries(Object.keys(suite.arena.drives).map((id) => [id, { key: [{ response: {
-    meta: { model: "test" }, trace: { request: { url: "https://example.net/v1", output_config: { effort: "low" } } },
-  } }] }])),
+  header: {
+    driver,
+    kind: "llm",
+    engine: manifest.engine,
+    suite_version: "v1",
+    recorded_at: `2026-11-21T0${n}:00:00Z`,
+    manifest: structuredClone(manifest),
+    arena: { set: "all", track: "open", ids: Object.keys(suite.arena.drives) },
+    maps: { ...suite.maps },
+  },
+  results: Object.fromEntries(
+    Object.entries(suite.arena.drives).map(([challenge, conditions], index) => [
+      challenge,
+      {
+        challenge,
+        ...conditions,
+        suite_version: "v1",
+        mode: "lockstep",
+        track: "open",
+        pass: true,
+        failures: [],
+        decisions: 10,
+        flagged_choices: index === 0 ? n : 0,
+        input_tokens: n,
+        output_tokens: n * 2,
+        model_decisions: 4,
+        partial_decisions: n,
+        local_decisions: 6,
+        fallbacks: index === 0 ? n - 1 : 0,
+        safety_brakes: index === 0 ? n : 0,
+      },
+    ]),
+  ),
+  drives: Object.fromEntries(
+    Object.keys(suite.arena.drives).map((id) => [
+      id,
+      {
+        key: [
+          {
+            response: {
+              meta: { model: "test" },
+              trace: { request: { url: "https://example.net/v1", output_config: { effort: "low" } } },
+            },
+          },
+        ],
+      },
+    ]),
+  ),
 });
 
 try {
@@ -95,21 +148,96 @@ try {
 
   const id = "door-zone";
   for (const [mutate, diagnostic] of [
-    [(r) => { r.header.arena.set = "bad"; }, /unknown Arena set/],
-    [(r) => { r.header.recorded_at = null; }, /invalid recorded_at/],
-    [(r) => { r.scenarios = { a: {} }; }, /seeded scenarios/],
-    [(r) => { r.results[id].failures = [" "]; }, /invalid challenge result/],
-    [(r) => { r.results[id].flagged_choices = 11; }, /more flagged choices/],
-    [(r) => { r.results[id].partial_decisions = 5; }, /more partial decisions/],
-    [(r) => { r.results[id].input_tokens = -1; }, /invalid input_tokens count/],
-    [(r) => { r.results[id].decisions = "10"; }, /invalid decisions count/],
-    [(r) => { r.results[id].off_road_s = -0.2; }, /invalid off_road_s measurement/],
-    [(r) => { r.results[id].time_s = "slow"; }, /invalid time_s measurement/],
-    [(r) => { r.results[id].simulation_error = "test"; }, /ended with a simulation error/],
-    [(r) => { r.header.manifest.cost_usd = 0.01; }, /manifest cost/],
-    [(r) => { r.header.manifest.maps = { kitsilano: { fingerprint: "?" } }; }, /manifest map fingerprint/],
-    [(r) => { r.drives[id].key[0].response.meta.model = 1; }, /invalid answer model/],
-    [(r) => { r.drives[id].key[0].response.trace.request = []; }, /invalid provider request trace/],
+    [
+      (r) => {
+        r.header.arena.set = "bad";
+      },
+      /unknown Arena set/,
+    ],
+    [
+      (r) => {
+        r.header.recorded_at = null;
+      },
+      /invalid recorded_at/,
+    ],
+    [
+      (r) => {
+        r.scenarios = { a: {} };
+      },
+      /seeded scenarios/,
+    ],
+    [
+      (r) => {
+        r.results[id].failures = [" "];
+      },
+      /invalid challenge result/,
+    ],
+    [
+      (r) => {
+        r.results[id].flagged_choices = 11;
+      },
+      /more flagged choices/,
+    ],
+    [
+      (r) => {
+        r.results[id].partial_decisions = 5;
+      },
+      /more partial decisions/,
+    ],
+    [
+      (r) => {
+        r.results[id].input_tokens = -1;
+      },
+      /invalid input_tokens count/,
+    ],
+    [
+      (r) => {
+        r.results[id].decisions = "10";
+      },
+      /invalid decisions count/,
+    ],
+    [
+      (r) => {
+        r.results[id].off_road_s = -0.2;
+      },
+      /invalid off_road_s measurement/,
+    ],
+    [
+      (r) => {
+        r.results[id].time_s = "slow";
+      },
+      /invalid time_s measurement/,
+    ],
+    [
+      (r) => {
+        r.results[id].simulation_error = "test";
+      },
+      /ended with a simulation error/,
+    ],
+    [
+      (r) => {
+        r.header.manifest.cost_usd = 0.01;
+      },
+      /manifest cost/,
+    ],
+    [
+      (r) => {
+        r.header.manifest.maps = { kitsilano: { fingerprint: "?" } };
+      },
+      /manifest map fingerprint/,
+    ],
+    [
+      (r) => {
+        r.drives[id].key[0].response.meta.model = 1;
+      },
+      /invalid answer model/,
+    ],
+    [
+      (r) => {
+        r.drives[id].key[0].response.trace.request = [];
+      },
+      /invalid provider request trace/,
+    ],
   ]) {
     const broken = makeRepeat(2);
     mutate(broken);

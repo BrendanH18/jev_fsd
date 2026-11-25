@@ -1,5 +1,15 @@
 // Shared file handling for recorded answers and their offline reports.
-import { closeSync, constants, fstatSync, linkSync, mkdtempSync, openSync, readSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  linkSync,
+  mkdtempSync,
+  openSync,
+  readSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { writeArtifact } from "./cli_tools.mjs";
@@ -51,8 +61,7 @@ export function parseArtifactJson(path, bytes, max = MAX_ARTIFACT_BYTES) {
 export const readArtifactJson = (path) => parseArtifactJson(path, readArtifactBytes(path));
 
 export function artifactBytes(path, text) {
-  if (Buffer.byteLength(text) > MAX_ARTIFACT_BYTES)
-    throw new Error(`${path} exceeds 128 MiB before compression.`);
+  if (Buffer.byteLength(text) > MAX_ARTIFACT_BYTES) throw new Error(`${path} exceeds 128 MiB before compression.`);
   const bytes = path.endsWith(".gz") ? gzipSync(text, { level: 9 }) : Buffer.from(text);
   if (bytes.length > MAX_ARTIFACT_BYTES) throw new Error(`${path} exceeds 128 MiB after compression.`);
   return bytes;

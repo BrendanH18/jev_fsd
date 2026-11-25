@@ -12,7 +12,15 @@ import { parseArgs } from "node:util";
 import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording } from "../static/js/brain/recording.js";
 import { arenaSuiteVersion } from "./canonical_suite.mjs";
-import { isArenaSet, isDateTime, isId, isRecord, isTrack, readArtifactJson, writeJsonArtifact } from "./recording_artifacts.mjs";
+import {
+  isArenaSet,
+  isDateTime,
+  isId,
+  isRecord,
+  isTrack,
+  readArtifactJson,
+  writeJsonArtifact,
+} from "./recording_artifacts.mjs";
 import { runCost } from "./run_manifest.mjs";
 
 const usage = "Usage: merge_recordings.mjs [--dry-run] --out merged.json[.gz] part.json[.gz] ...";
@@ -98,7 +106,10 @@ recordings.forEach((r, i) => {
     fail(`${parts[i]} needs valid Arena map fingerprints.`);
   if (!isDateTime(recorded_at)) fail(`${parts[i]} needs a valid recorded_at timestamp.`);
   if (Object.keys(r.scenarios).length) fail(`${parts[i]} contains seeded scenarios in an Arena recording.`);
-  if (manifest && (manifest.suite?.kind !== "arena" || manifest.suite.set !== arena.set || !isRecord(manifest.suite.drives)))
+  if (
+    manifest &&
+    (manifest.suite?.kind !== "arena" || manifest.suite.set !== arena.set || !isRecord(manifest.suite.drives))
+  )
     fail(`${parts[i]} has an invalid Arena manifest suite.`);
   try {
     if (manifest && manifest.cost_usd !== runCost(Object.values(r.results)))
@@ -181,7 +192,16 @@ if (suiteVersion(first) !== LEGACY_SUITE)
     arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
   );
 if (values["dry-run"]) {
-  console.log(JSON.stringify({ out, parts, ids, maps, suite_version: suiteVersion(merged.header), cost_usd: merged.header.manifest?.cost_usd ?? null }));
+  console.log(
+    JSON.stringify({
+      out,
+      parts,
+      ids,
+      maps,
+      suite_version: suiteVersion(merged.header),
+      cost_usd: merged.header.manifest?.cost_usd ?? null,
+    }),
+  );
 } else {
   try {
     writeJsonArtifact(out, merged.serialize());

@@ -6,37 +6,144 @@ import { gzipSync } from "node:zlib";
 import { ModelRecording, canonicalJson, requestKey, sameResult } from "../static/js/brain/recording.js";
 import { parseArenaTape, tapeCounts } from "./arena_tape.mjs";
 import { LocalRecording, checkedLocalDefinition } from "./local_recording.mjs";
-import { parseArtifactJson, readArtifactBytes, readArtifactJson, writeJsonArtifact, writeNewJson } from "./recording_artifacts.mjs";
+import {
+  parseArtifactJson,
+  readArtifactBytes,
+  readArtifactJson,
+  writeJsonArtifact,
+  writeNewJson,
+} from "./recording_artifacts.mjs";
 
 const model = { driver: "jev" };
 const arena = { set: "all", ids: ["a", "b"] };
-const makeModel = () => new ModelRecording({
-  header: { ...model, kind: "jev", arena, maps: { kit: "fingerprint" } },
-  drives: { a: {}, b: {} },
-  results: { a: { challenge: "a", map: "kit", pass: true }, b: { challenge: "b", map: "kit", pass: false } },
-}).toJSON();
+const makeModel = () =>
+  new ModelRecording({
+    header: { ...model, kind: "jev", arena, maps: { kit: "fingerprint" } },
+    drives: { a: {}, b: {} },
+    results: { a: { challenge: "a", map: "kit", pass: true }, b: { challenge: "b", map: "kit", pass: false } },
+  }).toJSON();
 
 for (const [change, diagnostic] of [
-  [(r) => { r.header.kind = "llm"; }, /driver and kind/],
-  [(r) => { r.header.endpoint = []; }, /endpoint must be an object/],
-  [(r) => { r.header.endpoint = { id: "another" }; }, /endpoint and driver/],
-  [(r) => { r.drives[""] = {}; }, /empty drive ID/],
-  [(r) => { r.drives.a[" "] = [{ response: 1 }]; }, /empty request key/],
-  [(r) => { r.drives.a.key = []; }, /nonempty answer list/],
-  [(r) => { r.drives.a.key = [{ timeout: true, raw_response: true }]; }, /invalid outcome/],
-  [(r) => { r.header.arena = { ...arena, set: "invalid" }; }, /unknown Arena set/],
-  [(r) => { r.header.arena = { ...arena, track: "invalid" }; }, /unknown Arena track/],
-  [(r) => { r.header.arena = { ...arena, ids: ["a", "a"] }; }, /distinct Arena drive IDs/],
-  [(r) => { r.header.maps = []; }, /map fingerprint table/],
-  [(r) => { r.results = {}; }, /no finished drives/],
-  [(r) => { r.results.c = { challenge: "c", pass: true }; }, /outside.*drive plan/],
-  [(r) => { r.results.a.challenge = "b"; }, /different challenge/],
-  [(r) => { r.results.a.pass = 0; }, /boolean verdict/],
-  [(r) => { delete r.drives.a; }, /no decision tape/],
-  [(r) => { r.results.a.map = "missing"; }, /unrecorded map/],
-  [(r) => { r.results.a.track = "open"; }, /different track/],
-  [(r) => { r.drives.c = {}; }, /has no result/],
-  [(r) => { r.scenarios.c = {}; }, /seeded benchmark scenarios/],
+  [
+    (r) => {
+      r.header.kind = "llm";
+    },
+    /driver and kind/,
+  ],
+  [
+    (r) => {
+      r.header.endpoint = [];
+    },
+    /endpoint must be an object/,
+  ],
+  [
+    (r) => {
+      r.header.endpoint = { id: "another" };
+    },
+    /endpoint and driver/,
+  ],
+  [
+    (r) => {
+      r.drives[""] = {};
+    },
+    /empty drive ID/,
+  ],
+  [
+    (r) => {
+      r.drives.a[" "] = [{ response: 1 }];
+    },
+    /empty request key/,
+  ],
+  [
+    (r) => {
+      r.drives.a.key = [];
+    },
+    /nonempty answer list/,
+  ],
+  [
+    (r) => {
+      r.drives.a.key = [{ timeout: true, raw_response: true }];
+    },
+    /invalid outcome/,
+  ],
+  [
+    (r) => {
+      r.header.arena = { ...arena, set: "invalid" };
+    },
+    /unknown Arena set/,
+  ],
+  [
+    (r) => {
+      r.header.arena = { ...arena, track: "invalid" };
+    },
+    /unknown Arena track/,
+  ],
+  [
+    (r) => {
+      r.header.arena = { ...arena, ids: ["a", "a"] };
+    },
+    /distinct Arena drive IDs/,
+  ],
+  [
+    (r) => {
+      r.header.maps = [];
+    },
+    /map fingerprint table/,
+  ],
+  [
+    (r) => {
+      r.results = {};
+    },
+    /no finished drives/,
+  ],
+  [
+    (r) => {
+      r.results.c = { challenge: "c", pass: true };
+    },
+    /outside.*drive plan/,
+  ],
+  [
+    (r) => {
+      r.results.a.challenge = "b";
+    },
+    /different challenge/,
+  ],
+  [
+    (r) => {
+      r.results.a.pass = 0;
+    },
+    /boolean verdict/,
+  ],
+  [
+    (r) => {
+      delete r.drives.a;
+    },
+    /no decision tape/,
+  ],
+  [
+    (r) => {
+      r.results.a.map = "missing";
+    },
+    /unrecorded map/,
+  ],
+  [
+    (r) => {
+      r.results.a.track = "open";
+    },
+    /different track/,
+  ],
+  [
+    (r) => {
+      r.drives.c = {};
+    },
+    /has no result/,
+  ],
+  [
+    (r) => {
+      r.scenarios.c = {};
+    },
+    /seeded benchmark scenarios/,
+  ],
 ]) {
   const recording = makeModel();
   change(recording);
@@ -50,8 +157,7 @@ assert.equal(tapeCounts(parseArenaTape(partial)).drives, 1);
 const counts = makeModel();
 counts.drives.a.key = [{ response: null }, { timeout: true }, { cancelled: true }, { error: { message: "failed" } }];
 const tally = tapeCounts(parseArenaTape(counts));
-for (const field of ["requests", "responses", "timeouts", "cancellations", "errors"])
-  assert.equal(tally[field], 1);
+for (const field of ["requests", "responses", "timeouts", "cancellations", "errors"]) assert.equal(tally[field], 1);
 assert.equal(tally.answers, 4);
 
 const request = { tick: 4, epoch: 1, state: { lane: 2 }, messages: [] };
@@ -60,7 +166,10 @@ const recording = modelRecording.tape("test", "record");
 const autopilot = { epoch: 1 };
 const path = "/api/decide";
 const key = requestKey(model, path, request);
-const response = { trace: { request: { state: "$body" }, meta: "$meta", anthropic_prompt: ["messages"] }, meta: { model: "stub" } };
+const response = {
+  trace: { request: { state: "$body" }, meta: "$meta", anthropic_prompt: ["messages"] },
+  meta: { model: "stub" },
+};
 await recording.record(autopilot, async () => response, path, request);
 assert.equal(modelRecording.drives.test[key][0].raw_response, true);
 const firstReplay = ModelRecording.parse(modelRecording.serialize()).tape("test", "replay");
@@ -77,7 +186,15 @@ assert.equal(recording.remainingAnswers(), null);
 
 const inFlight = modelRecording.tape("parallel", "record");
 let resolveFirst;
-const slow = inFlight.record(autopilot, () => new Promise((resolve) => { resolveFirst = resolve; }), path, request);
+const slow = inFlight.record(
+  autopilot,
+  () =>
+    new Promise((resolve) => {
+      resolveFirst = resolve;
+    }),
+  path,
+  request,
+);
 await inFlight.record(autopilot, async () => ({ order: 2 }), path, request);
 resolveFirst({ order: 1 });
 await slow;
@@ -96,19 +213,84 @@ const freshLocal = () => ({
   results: { a: { challenge: "a" } },
 });
 for (const [change, diagnostic] of [
-  [(r) => { r.format = "other"; }, /jev-local-recording/],
-  [(r) => { r.header = null; }, /header, results and driver behavior/],
-  [(r) => { r.header.driver = "rules"; }, /reserved/],
-  [(r) => { r.results = []; }, /results and driver behavior/],
-  [(r) => { r.drives.a.key = false; }, /answer list/],
-  [(r) => { r.header.behaviors.a = null; }, /questionDriven/],
-  [(r) => { r.header.behaviors.a.timeoutMs = 0; }, /timeoutMs/],
-  [(r) => { r.header.behaviors.a.timeoutMs = 2 ** 31; }, /timeoutMs/],
-  [(r) => { r.drives.a.key[0].response = null; }, /answer or a failure/],
-  [(r) => { r.drives.a.key[0].response.failure = {}; }, /answer or a failure/],
-  [(r) => { r.drives.a.key[0].response = { failure: {} }; }, /without a message/],
-  [(r) => { r.header.behaviors.b = r.header.behaviors.a; }, /without a tape/],
-  [(r) => { r.results.a = "bad"; }, /invalid result/],
+  [
+    (r) => {
+      r.format = "other";
+    },
+    /jev-local-recording/,
+  ],
+  [
+    (r) => {
+      r.header = null;
+    },
+    /header, results and driver behavior/,
+  ],
+  [
+    (r) => {
+      r.header.driver = "rules";
+    },
+    /reserved/,
+  ],
+  [
+    (r) => {
+      r.results = [];
+    },
+    /results and driver behavior/,
+  ],
+  [
+    (r) => {
+      r.drives.a.key = false;
+    },
+    /answer list/,
+  ],
+  [
+    (r) => {
+      r.header.behaviors.a = null;
+    },
+    /questionDriven/,
+  ],
+  [
+    (r) => {
+      r.header.behaviors.a.timeoutMs = 0;
+    },
+    /timeoutMs/,
+  ],
+  [
+    (r) => {
+      r.header.behaviors.a.timeoutMs = 2 ** 31;
+    },
+    /timeoutMs/,
+  ],
+  [
+    (r) => {
+      r.drives.a.key[0].response = null;
+    },
+    /answer or a failure/,
+  ],
+  [
+    (r) => {
+      r.drives.a.key[0].response.failure = {};
+    },
+    /answer or a failure/,
+  ],
+  [
+    (r) => {
+      r.drives.a.key[0].response = { failure: {} };
+    },
+    /without a message/,
+  ],
+  [
+    (r) => {
+      r.header.behaviors.b = r.header.behaviors.a;
+    },
+    /without a tape/,
+  ],
+  [
+    (r) => {
+      r.results.a = "bad";
+    },
+    /invalid result/,
+  ],
 ]) {
   const raw = freshLocal();
   change(raw);
@@ -124,7 +306,9 @@ delete local.drives.empty;
 const error = new Error("circular");
 error.meta = { self: error };
 const localRecord = local.tape("broken", "record").brainFor(autopilot, "custom-driver", {
-  async decide() { throw error; },
+  async decide() {
+    throw error;
+  },
 });
 await assert.rejects(localRecord.decide({}, [], request, undefined), { message: "circular", name: "Error" });
 const savedLocal = LocalRecording.parse(JSON.parse(local.serialize()));
@@ -168,8 +352,19 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
-assert.equal(canonicalJson([undefined, , Infinity]), "[null,null,null]");
+const sparse = new Array(3);
+sparse[0] = undefined;
+sparse[2] = Infinity;
+assert.equal(canonicalJson(sparse), "[null,null,null]");
 assert.equal(canonicalJson({ z: undefined, b: 2, a: 1 }), '{"a":1,"b":2}');
 assert.equal(sameResult({ pass: true, wall_ms: 1 }, { wall_ms: 2, pass: true }), true);
 assert.equal(sameResult({ pass: true }, { pass: false }), false);
+// Existing artifacts can remain on historical source revisions, but their encodings must still parse.
+const savedTapes = new URL("../data/recordings/", import.meta.url);
+for (const name of readdirSync(savedTapes)) {
+  if (!/\.json(?:\.gz)?$/.test(name)) continue;
+  const artifact = readArtifactJson(new URL(name, savedTapes).pathname);
+  const tape = artifact.header.arena ? parseArenaTape(artifact) : ModelRecording.parse(artifact);
+  assert.ok(Object.keys(tape.results).length > 0, name);
+}
 console.log("Model and local tapes validate, preserve outcomes and read bounded artifacts.");

@@ -2,10 +2,15 @@
 export function publishedDrives(leaderboard, track, selected) {
   if (!Array.isArray(leaderboard?.rows)) throw new Error("The published leaderboard needs a rows array.");
   const rows = leaderboard.rows
-    .filter((row) =>
-      row?.recording && !row.map && (row.track ?? "guarded") === track &&
-      typeof row.date === "string" && typeof row.driver === "string" && Array.isArray(row.drives) &&
-      (row.mode === undefined || row.mode === "lockstep")
+    .filter(
+      (row) =>
+        row?.recording &&
+        !row.map &&
+        (row.track ?? "guarded") === track &&
+        typeof row.date === "string" &&
+        typeof row.driver === "string" &&
+        Array.isArray(row.drives) &&
+        (row.mode === undefined || row.mode === "lockstep"),
     )
     .sort((a, b) => b.date.localeCompare(a.date));
   const drivers = new Map();

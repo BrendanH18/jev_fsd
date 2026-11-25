@@ -89,10 +89,14 @@ if (values.scaffold !== undefined || values.validate) {
       const first = checked.create();
       const second = checked.create();
       if (first === second) throw new Error("create() must return a fresh driver instance.");
-      console.log(JSON.stringify({
-        id: checked.id, label: checked.label,
-        questionDriven: first.questionDriven ?? false, timeoutMs: first.timeoutMs ?? null,
-      }));
+      console.log(
+        JSON.stringify({
+          id: checked.id,
+          label: checked.label,
+          questionDriven: first.questionDriven ?? false,
+          timeoutMs: first.timeoutMs ?? null,
+        }),
+      );
     }
   } catch (error) {
     console.error(error.message);
@@ -153,7 +157,8 @@ function evaluate(track, label, ...options) {
       killSignal: "SIGKILL",
     });
   } catch (error) {
-    if (error.code === "ETIMEDOUT") throw new Error(`${label} on ${track} exceeded --timeout ${timeout} ms.`, { cause: error });
+    if (error.code === "ETIMEDOUT")
+      throw new Error(`${label} on ${track} exceeded --timeout ${timeout} ms.`, { cause: error });
     throw new Error(`Arena could not evaluate ${label} on ${track}. See its diagnostic above.`, { cause: error });
   }
   const { summary, results } = JSON.parse(readFileSync(output, "utf8"));
@@ -178,7 +183,8 @@ function verdict(drive) {
 try {
   const leaderboard = values["no-published"]
     ? { rows: [] }
-    : values.published ? readArtifactJson(values.published)
+    : values.published
+      ? readArtifactJson(values.published)
       : JSON.parse(readFileSync(new URL("../data/results.json", import.meta.url), "utf8"));
   let anyFailed = false;
   const jsonTracks = {};

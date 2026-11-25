@@ -20,7 +20,8 @@
 import { benchPage, checkFiles, commaList, parseOptions, wholeNumber } from "./cli_tools.mjs";
 import { writeJsonArtifact } from "./recording_artifacts.mjs";
 
-const usage = "Usage: driver_latitude.mjs [--only ID,ID] [--every SECONDS] [--force SECONDS] [--horizon SECONDS] [--port PORT] [--limit N] [--json FILE.json[.gz]] [--quiet] [--check]";
+const usage =
+  "Usage: driver_latitude.mjs [--only ID,ID] [--every SECONDS] [--force SECONDS] [--horizon SECONDS] [--port PORT] [--limit N] [--json FILE.json[.gz]] [--quiet] [--check]";
 const fail = (message) => {
   console.error(message);
   process.exit(1);
@@ -56,7 +57,8 @@ if (FORCE > HORIZON) fail("--force must not exceed --horizon.");
 const { base, token } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
 globalThis.document = { querySelector: (sel) => (sel.includes("jev-csrf") ? { content: token } : null) };
 const nativeFetch = globalThis.fetch;
-globalThis.fetch = (path, opts) => nativeFetch(String(path).startsWith("/") ? base + path : path, { ...opts, redirect: "error" });
+globalThis.fetch = (path, opts) =>
+  nativeFetch(String(path).startsWith("/") ? base + path : path, { ...opts, redirect: "error" });
 
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
@@ -174,7 +176,8 @@ async function latitude(challenge) {
   if (recorder.frames.length > 1) {
     const b = await branch(0, null);
     const p = positions.get(b.tick);
-    exact = !!p && !b.error && Math.abs(p.t - b.t) < DT / 2 && Math.hypot(p.x - b.x, p.y - b.y) < 1e-6 && !b.added.length;
+    exact =
+      !!p && !b.error && Math.abs(p.t - b.t) < DT / 2 && Math.hypot(p.x - b.x, p.y - b.y) < 1e-6 && !b.added.length;
   }
   const points = [];
   let decisionIndex = 0;
@@ -228,15 +231,20 @@ const out = [];
 for (const challenge of drives) {
   const r = await latitude(challenge);
   out.push(r);
-  if (!args.quiet) console.log(
-    `${r.challenge} pass=${r.pass} points=${r.points} with_alternatives=${r.with_alternatives} room_to_fail=${r.room_to_fail} branches=${r.branches} diverged=${r.diverged_branches} failing=${r.failing_branches} kinds=${r.failure_kinds.join("|") || "-"} exact=${r.exact_replay} wall=${r.wall_s}s`,
-  );
+  if (!args.quiet)
+    console.log(
+      `${r.challenge} pass=${r.pass} points=${r.points} with_alternatives=${r.with_alternatives} room_to_fail=${r.room_to_fail} branches=${r.branches} diverged=${r.diverged_branches} failing=${r.failing_branches} kinds=${r.failure_kinds.join("|") || "-"} exact=${r.exact_replay} wall=${r.wall_s}s`,
+    );
   if (args.json) {
     try {
-      writeJsonArtifact(args.json, JSON.stringify(
-        { every_s: EVERY, force_s: FORCE, horizon_s: HORIZON, engine: `node ${process.version}`, results: out },
-        null, 1,
-      ));
+      writeJsonArtifact(
+        args.json,
+        JSON.stringify(
+          { every_s: EVERY, force_s: FORCE, horizon_s: HORIZON, engine: `node ${process.version}`, results: out },
+          null,
+          1,
+        ),
+      );
     } catch (error) {
       fail(error.message);
     }
@@ -244,7 +252,8 @@ for (const challenge of drives) {
 }
 const total = (k) => out.reduce((a, r) => a + r[k], 0);
 const replayFailures = out.filter((r) => r.exact_replay !== true).map((r) => r.challenge);
-if (args.check && replayFailures.length) console.error(`Latitude baseline replay could not be verified for ${replayFailures.join(", ")}.`);
+if (args.check && replayFailures.length)
+  console.error(`Latitude baseline replay could not be verified for ${replayFailures.join(", ")}.`);
 process.stdout.write(
   `${JSON.stringify({ challenges: out.length, points: total("points"), room_to_fail: total("room_to_fail"), none_left_to_driver: out.filter((r) => !r.room_to_fail).map((r) => r.challenge) })}\n`,
   () => process.exit(args.check && replayFailures.length ? 1 : 0),

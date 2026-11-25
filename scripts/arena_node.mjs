@@ -116,7 +116,14 @@ const fail = (message) => {
 };
 let parsed;
 try {
-  parsed = parseOptions(process.argv.slice(2), OPTIONS, ["list", "quiet", "progress", "parking-only", "details", "tape-info"]);
+  parsed = parseOptions(process.argv.slice(2), OPTIONS, [
+    "list",
+    "quiet",
+    "progress",
+    "parking-only",
+    "details",
+    "tape-info",
+  ]);
 } catch (error) {
   fail(error.message);
 }
@@ -169,12 +176,14 @@ if (args["tape-info"]) {
   try {
     const { parseArenaTape, tapeCounts } = await import("./arena_tape.mjs");
     const tape = parseArenaTape(readArtifactJson(args.replay));
-    console.log(JSON.stringify({
-      driver: tape.header.driver,
-      planned: tape.header.arena.ids.length,
-      track: tape.header.arena.track ?? "guarded",
-      ...tapeCounts(tape),
-    }));
+    console.log(
+      JSON.stringify({
+        driver: tape.header.driver,
+        planned: tape.header.arena.ids.length,
+        track: tape.header.arena.track ?? "guarded",
+        ...tapeCounts(tape),
+      }),
+    );
     process.exit(0);
   } catch (error) {
     fail(`Cannot inspect ${args.replay}: ${error.message}`);
@@ -298,8 +307,17 @@ if (args.list) {
         drives: drives.map((drive) => {
           const { id, title, map, weather, hazard, difficulty, park } = drive;
           return {
-            id, title, map, region: challengeProvince(drive), weather, hazard, difficulty, park: Boolean(park),
-            ...(args.details ? { seed: drive.seed, time: drive.time, version: drive.version, limit_s: drive.limit_s ?? 180 } : {}),
+            id,
+            title,
+            map,
+            region: challengeProvince(drive),
+            weather,
+            hazard,
+            difficulty,
+            park: Boolean(park),
+            ...(args.details
+              ? { seed: drive.seed, time: drive.time, version: drive.version, limit_s: drive.limit_s ?? 180 }
+              : {}),
           };
         }),
       })}\n`,
@@ -511,7 +529,9 @@ for (const [index, challenge] of drives.entries()) {
     if (!r.model_recording.exact) {
       const { calls, served, missing, drift } = tape.stats;
       const remaining = Object.values(tape.remainingAnswers()).reduce((sum, count) => sum + count, 0);
-      console.error(`  tape ${challenge.id}: calls=${calls} served=${served} missing=${missing} cancellation_drift=${drift} unused=${remaining}`);
+      console.error(
+        `  tape ${challenge.id}: calls=${calls} served=${served} missing=${missing} cancellation_drift=${drift} unused=${remaining}`,
+      );
     }
     if (!r.model_recording.same_result || !r.model_recording.exact) drifted.push(challenge.id);
     else if (recorded.comparison_score_inputs) r.comparison_score_inputs = recorded.comparison_score_inputs;

@@ -1,18 +1,42 @@
 import assert from "node:assert/strict";
 import { comparableResult } from "../static/js/brain/recording.js";
-import { preflightSubmission, readSubmission, SUBMISSION_FORMAT, verifyPublishedRows, verifySubmissionManifest, verifySubmissionReport } from "./submission_bundle.mjs";
+import {
+  preflightSubmission,
+  readSubmission,
+  SUBMISSION_FORMAT,
+  verifyPublishedRows,
+  verifySubmissionManifest,
+  verifySubmissionReport,
+} from "./submission_bundle.mjs";
 
 const id = "door-zone";
 const fingerprint = "0123456789abcdef";
 const arena = { set: "challenges", ids: [id], track: "open" };
 const row = {
-  challenge: id, map: "kitsilano", seed: 17, version: 2, pass: true, track: "open",
-  suite_version: "custom", failures: [], flagged_choices: 0, cost_usd: 0.1, model_share: 0.3,
+  challenge: id,
+  map: "kitsilano",
+  seed: 17,
+  version: 2,
+  pass: true,
+  track: "open",
+  suite_version: "custom",
+  failures: [],
+  flagged_choices: 0,
+  cost_usd: 0.1,
+  model_share: 0.3,
 };
 const manifest = {
-  format: "jev-run-manifest/2", source_commit: "f".repeat(40), source_dirty: false,
-  engine: "node v22", engine_version: "12", driver: "outside", model: null, track: "open",
-  suite_version: "custom", prompt_hash: "questions", cost_usd: 0.1,
+  format: "jev-run-manifest/2",
+  source_commit: "f".repeat(40),
+  source_dirty: false,
+  engine: "node v22",
+  engine_version: "12",
+  driver: "outside",
+  model: null,
+  track: "open",
+  suite_version: "custom",
+  prompt_hash: "questions",
+  cost_usd: 0.1,
   suite: { kind: "arena", set: arena.set, drives: { [id]: { map: row.map, seed: row.seed, version: row.version } } },
   maps: { [row.map]: { fingerprint } },
 };
@@ -20,14 +44,28 @@ const create = () => {
   const report = {
     manifest: structuredClone(manifest),
     suite_version: "custom",
-    summary: { brain: "outside", set: arena.set, engine: "node v22", track: "open", drives: 1, passed: 1, flagged_choices: 0, cost_usd: 0.1 },
+    summary: {
+      brain: "outside",
+      set: arena.set,
+      engine: "node v22",
+      track: "open",
+      drives: 1,
+      passed: 1,
+      flagged_choices: 0,
+      cost_usd: 0.1,
+    },
     results: [structuredClone(row)],
   };
   const recording = {
     format: "jev-local-recording/1",
     header: {
-      driver: manifest.driver, model: null, engine: manifest.engine, manifest: report.manifest,
-      arena: structuredClone(arena), suite_version: "custom", maps: { [row.map]: fingerprint },
+      driver: manifest.driver,
+      model: null,
+      engine: manifest.engine,
+      manifest: report.manifest,
+      arena: structuredClone(arena),
+      suite_version: "custom",
+      maps: { [row.map]: fingerprint },
       behaviors: { [id]: { questionDriven: false, timeoutMs: null } },
     },
     drives: { [id]: {} },
@@ -41,33 +79,168 @@ assert.equal(preflightSubmission(readSubmission(bundle)).header.driver, "outside
 verifyPublishedRows(bundle.report, bundle.recording, comparableResult);
 
 for (const [change, diagnostic] of [
-  [(b) => { b.report.stopped = "budget"; }, /Arena run was stopped/],
-  [(b) => { b.report.manifest.suite.set = "all"; }, /agree on the Arena set/],
-  [(b) => { b.report.manifest.driver = "other"; }, /recording drivers/],
-  [(b) => { b.report.manifest.model = "other"; }, /recording models/],
-  [(b) => { b.report.manifest.engine = "other"; }, /recording engines/],
-  [(b) => { b.report.manifest.track = "guarded"; }, /recording tracks/],
-  [(b) => { b.report.suite_version = "v1"; }, /suite version/],
-  [(b) => { b.report.manifest.suite.drives = {}; }, /authored drives differ/],
-  [(b) => { b.report.manifest.maps = {}; }, /map list differs/],
-  [(b) => { b.report.manifest.maps.kitsilano.fingerprint = "different"; }, /different fingerprint/],
-  [(b) => { b.report.results[0].stopped = true; }, /stopped or encountered a simulation error/],
-  [(b) => { b.recording.results[id].simulation_error = "error"; }, /stopped or encountered a simulation error/],
-  [(b) => { b.report.results[0].map = "other"; }, /authored map/],
-  [(b) => { b.report.results[0].seed++; }, /authored seed/],
-  [(b) => { b.report.results[0].version++; }, /authored version/],
-  [(b) => { b.report.results[0].track = "guarded"; }, /report track/],
-  [(b) => { b.recording.results[id].mode = "realtime"; }, /recorded in lockstep/],
-  [(b) => { delete b.recording.results[id].result_sha; }, /result fingerprint/],
-  [(b) => { b.report.results[0].failures = "timeout"; }, /list of failure reasons/],
-  [(b) => { b.report.results[0].failures = ["time limit"]; }, /inconsistent verdict/],
-  [(b) => { b.report.results[0].model_share = 2; }, /invalid model_share/],
-  [(b) => { b.report.results[0].fallback_share = "0"; }, /invalid fallback_share/],
-  [(b) => { b.report.summary.set = "all"; }, /summary disagrees/],
-  [(b) => { b.report.summary.drives = 2; }, /wrong drive count/],
-  [(b) => { b.report.summary.passed = 0; }, /wrong pass count/],
-  [(b) => { b.report.summary.flagged_choices = 1; }, /wrong flagged choice count/],
-  [(b) => { b.recording.results[id].cost_usd = 1; }, /costs disagree/],
+  [
+    (b) => {
+      b.report.stopped = "budget";
+    },
+    /Arena run was stopped/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.suite.set = "all";
+    },
+    /agree on the Arena set/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.driver = "other";
+    },
+    /recording drivers/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.model = "other";
+    },
+    /recording models/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.engine = "other";
+    },
+    /recording engines/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.track = "guarded";
+    },
+    /recording tracks/,
+  ],
+  [
+    (b) => {
+      b.report.suite_version = "v1";
+    },
+    /suite version/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.suite.drives = {};
+    },
+    /authored drives differ/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.maps = {};
+    },
+    /map list differs/,
+  ],
+  [
+    (b) => {
+      b.report.manifest.maps.kitsilano.fingerprint = "different";
+    },
+    /different fingerprint/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].stopped = true;
+    },
+    /stopped or encountered a simulation error/,
+  ],
+  [
+    (b) => {
+      b.recording.results[id].simulation_error = "error";
+    },
+    /stopped or encountered a simulation error/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].map = "other";
+    },
+    /authored map/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].seed++;
+    },
+    /authored seed/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].version++;
+    },
+    /authored version/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].track = "guarded";
+    },
+    /report track/,
+  ],
+  [
+    (b) => {
+      b.recording.results[id].mode = "realtime";
+    },
+    /recorded in lockstep/,
+  ],
+  [
+    (b) => {
+      delete b.recording.results[id].result_sha;
+    },
+    /result fingerprint/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].failures = "timeout";
+    },
+    /list of failure reasons/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].failures = ["time limit"];
+    },
+    /inconsistent verdict/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].model_share = 2;
+    },
+    /invalid model_share/,
+  ],
+  [
+    (b) => {
+      b.report.results[0].fallback_share = "0";
+    },
+    /invalid fallback_share/,
+  ],
+  [
+    (b) => {
+      b.report.summary.set = "all";
+    },
+    /summary disagrees/,
+  ],
+  [
+    (b) => {
+      b.report.summary.drives = 2;
+    },
+    /wrong drive count/,
+  ],
+  [
+    (b) => {
+      b.report.summary.passed = 0;
+    },
+    /wrong pass count/,
+  ],
+  [
+    (b) => {
+      b.report.summary.flagged_choices = 1;
+    },
+    /wrong flagged choice count/,
+  ],
+  [
+    (b) => {
+      b.recording.results[id].cost_usd = 1;
+    },
+    /costs disagree/,
+  ],
 ]) {
   const candidate = create();
   change(candidate);

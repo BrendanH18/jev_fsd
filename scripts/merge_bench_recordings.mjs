@@ -100,7 +100,8 @@ function writePair(outputs) {
   }
 }
 
-const usage = "Usage: merge_bench_recordings.mjs --json RUN.json --record RUN.json.gz [--suite ROUTES.json] [--dry-run] PART.json PART.json [...]";
+const usage =
+  "Usage: merge_bench_recordings.mjs --json RUN.json --record RUN.json.gz [--suite ROUTES.json] [--dry-run] PART.json PART.json [...]";
 
 function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
   if (!reportPath?.endsWith(".json") || !recordingPath?.endsWith(".json.gz") || paths.length < 2)
@@ -108,15 +109,22 @@ function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
   if ([reportPath, recordingPath].some((path) => lstatSync(path, { throwIfNoEntry: false })))
     throw new Error("The merged output files must be new.");
   checkFiles(
-    Object.fromEntries([...paths.flatMap((path) => [path, `${path}.gz`]), ...(suitePath ? [suitePath] : [])]
-      .map((path, index) => [`input ${index + 1}`, path])),
+    Object.fromEntries(
+      [...paths.flatMap((path) => [path, `${path}.gz`]), ...(suitePath ? [suitePath] : [])].map((path, index) => [
+        `input ${index + 1}`,
+        path,
+      ]),
+    ),
     { json: reportPath, record: recordingPath },
   );
   const parts = paths.map(readPart);
   const first = parts[0];
   const { config } = first.report;
   const reference = suitePath ? readArtifactJson(suitePath) : null;
-  if (suitePath && (!Array.isArray(reference) || reference.some((scenario) => !isRecord(scenario) || !isId(scenario.id))))
+  if (
+    suitePath &&
+    (!Array.isArray(reference) || reference.some((scenario) => !isRecord(scenario) || !isId(scenario.id)))
+  )
     throw new Error("--suite must name a regenerated scenario array with drive IDs.");
   const routeSha = reference ? benchRouteFingerprint(reference) : first.report.manifest.suite.route_sha;
   if (!routeSha) throw new Error("These parts need --suite with the regenerated seeded scenarios.");
@@ -130,7 +138,8 @@ function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
     if (part.identity !== first.identity)
       throw mismatched(part.path, "the parts must share source, engine, driver, map and suite");
     const partSha = report.manifest.suite.route_sha;
-    if (partSha ? partSha !== routeSha : !reference) throw mismatched(part.path, "a part generated a different seeded suite");
+    if (partSha ? partSha !== routeSha : !reference)
+      throw mismatched(part.path, "a part generated a different seeded suite");
     const generatedIds = report.manifest.suite.generated_ids;
     if (generatedIds && canonicalJson(generatedIds) !== canonicalJson(ids))
       throw mismatched(part.path, "a part generated a different drive list");
@@ -191,7 +200,9 @@ function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
     manifest,
   };
   if (dryRun) {
-    console.log(JSON.stringify({ report: reportPath, recording: recordingPath, ids, suite_version, cost_usd: summary.cost_usd }));
+    console.log(
+      JSON.stringify({ report: reportPath, recording: recordingPath, ids, suite_version, cost_usd: summary.cost_usd }),
+    );
     return;
   }
   writePair([
@@ -203,8 +214,13 @@ function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
 
 try {
   const { values, positionals, tokens } = parseArgs({
-    options: { json: { type: "string" }, record: { type: "string" }, suite: { type: "string" },
-      help: { type: "boolean", short: "h" }, "dry-run": { type: "boolean" } },
+    options: {
+      json: { type: "string" },
+      record: { type: "string" },
+      suite: { type: "string" },
+      help: { type: "boolean", short: "h" },
+      "dry-run": { type: "boolean" },
+    },
     allowPositionals: true,
     tokens: true,
   });

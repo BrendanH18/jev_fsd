@@ -10,7 +10,9 @@ const dictionary = (value) => Object.assign(Object.create(null), value);
 
 export function checkLocalDriverId(id) {
   if (typeof id !== "string" || !/^[a-z][a-z0-9_-]{0,39}$/.test(id))
-    throw new Error("A local driver id needs 1–40 lowercase letters, digits, hyphens or underscores, starting with a letter.");
+    throw new Error(
+      "A local driver id needs 1–40 lowercase letters, digits, hyphens or underscores, starting with a letter.",
+    );
   if (RESERVED.includes(id)) throw new Error(`The driver id "${id}" is reserved for a built-in driver.`);
 }
 
@@ -41,8 +43,10 @@ export class LocalRecording {
           if (response === undefined) continue;
           if (!isRecord(response) || Object.hasOwn(response, "answer") === Object.hasOwn(response, "failure"))
             throw new Error(`Local drive ${id} must record an answer or a failure.`);
-          if (Object.hasOwn(response, "failure") &&
-            (!isRecord(response.failure) || typeof response.failure.message !== "string"))
+          if (
+            Object.hasOwn(response, "failure") &&
+            (!isRecord(response.failure) || typeof response.failure.message !== "string")
+          )
             throw new Error(`Local drive ${id} has a failure without a message.`);
         }
       }

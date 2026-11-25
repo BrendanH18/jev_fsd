@@ -61,10 +61,12 @@ export function preflightSubmission(bundle) {
   if (manifest.engine !== header.engine) throw new Error("The manifest and recording engines disagree.");
   if (!isTrack(manifest.track) || manifest.track !== (header.arena.track ?? "guarded"))
     throw new Error("The manifest and recording tracks disagree.");
-  if (report.suite_version !== manifest.suite_version ||
+  if (
+    report.suite_version !== manifest.suite_version ||
     header.suite_version !== manifest.suite_version ||
     report.results.some((drive) => drive.suite_version !== manifest.suite_version) ||
-    Object.values(results).some((drive) => drive.suite_version !== manifest.suite_version))
+    Object.values(results).some((drive) => drive.suite_version !== manifest.suite_version)
+  )
     throw new Error("The submission disagrees on its suite version.");
   if (!isRecord(manifest.suite.drives) || !same(keys(manifest.suite.drives), keys(results)))
     throw new Error("The manifest's authored drives differ from the finished recording.");
@@ -80,8 +82,12 @@ export function preflightSubmission(bundle) {
     const authored = manifest.suite.drives[id];
     if (drive.stopped || recorded.stopped || drive.simulation_error || recorded.simulation_error)
       throw new Error(`Drive ${id} stopped or encountered a simulation error.`);
-    if (!isRecord(authored) || !Object.hasOwn(manifest.maps, authored.map) ||
-      drive.map !== authored.map || recorded.map !== authored.map)
+    if (
+      !isRecord(authored) ||
+      !Object.hasOwn(manifest.maps, authored.map) ||
+      drive.map !== authored.map ||
+      recorded.map !== authored.map
+    )
       throw new Error(`Drive ${id} disagrees with its authored map.`);
     if (!Number.isSafeInteger(authored.seed) || drive.seed !== authored.seed || recorded.seed !== authored.seed)
       throw new Error(`Drive ${id} disagrees with its authored seed.`);
@@ -99,17 +105,27 @@ export function preflightSubmission(bundle) {
         throw new Error(`Drive ${id} has an invalid ${share}.`);
     }
   }
-  if (!isRecord(summary) || summary.brain !== manifest.driver || summary.set !== manifest.suite.set ||
-    summary.engine !== manifest.engine || (summary.track ?? "guarded") !== manifest.track)
+  if (
+    !isRecord(summary) ||
+    summary.brain !== manifest.driver ||
+    summary.set !== manifest.suite.set ||
+    summary.engine !== manifest.engine ||
+    (summary.track ?? "guarded") !== manifest.track
+  )
     throw new Error("The report summary disagrees with its run manifest.");
   if (summary.drives !== report.results.length) throw new Error("The summary has the wrong drive count.");
   if (summary.passed !== report.results.filter((drive) => drive.pass).length)
     throw new Error("The summary has the wrong pass count.");
-  if (manifest.track === "open" &&
-    summary.flagged_choices !== report.results.reduce((sum, drive) => sum + (drive.flagged_choices ?? 0), 0))
+  if (
+    manifest.track === "open" &&
+    summary.flagged_choices !== report.results.reduce((sum, drive) => sum + (drive.flagged_choices ?? 0), 0)
+  )
     throw new Error("The summary has the wrong flagged choice count.");
-  if (summary.cost_usd !== manifest.cost_usd ||
-    runCost(report.results) !== manifest.cost_usd || runCost(Object.values(results)) !== manifest.cost_usd)
+  if (
+    summary.cost_usd !== manifest.cost_usd ||
+    runCost(report.results) !== manifest.cost_usd ||
+    runCost(Object.values(results)) !== manifest.cost_usd
+  )
     throw new Error("The reported costs disagree with the manifest.");
   return tape;
 }

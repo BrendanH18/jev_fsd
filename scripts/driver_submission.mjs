@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,11 +9,21 @@ import { driverScores } from "../static/js/bench/scores.js";
 import { comparableResult } from "../static/js/brain/recording.js";
 import { benchPage, loopbackPort } from "./cli_tools.mjs";
 import {
-  isCommit, isSha256, parseArtifactJson, readArtifactBytes, readArtifactJson,
-  writeNewJson
+  isCommit,
+  isSha256,
+  parseArtifactJson,
+  readArtifactBytes,
+  readArtifactJson,
+  writeNewJson,
 } from "./recording_artifacts.mjs";
 import { tapeCounts } from "./arena_tape.mjs";
-import { preflightSubmission, readSubmission, SUBMISSION_FORMAT, verifyPublishedRows, verifySubmissionReport } from "./submission_bundle.mjs";
+import {
+  preflightSubmission,
+  readSubmission,
+  SUBMISSION_FORMAT,
+  verifyPublishedRows,
+  verifySubmissionReport,
+} from "./submission_bundle.mjs";
 
 const PUBLISHED_FORMAT = "jev-published-submission/1";
 const DEFAULT_TIMEOUT_MS = 360_000;
@@ -63,7 +73,8 @@ function inspect({ bundle: bundlePath, json, "tape-info": showTape, "expect-sha2
     format = PUBLISHED_FORMAT;
     submitter = parsed.submitter;
     if (!validHandle(submitter)) throw new Error("Invalid published submission: invalid submitter handle.");
-    if (!isSha256(parsed.recording_sha256)) throw new Error("Invalid published submission: expected a recording SHA-256 checksum.");
+    if (!isSha256(parsed.recording_sha256))
+      throw new Error("Invalid published submission: expected a recording SHA-256 checksum.");
     report = parsed.report;
     manifest = report?.manifest;
     if (manifest?.format !== "jev-run-manifest/2" || !Array.isArray(report?.results)) {
@@ -139,7 +150,9 @@ function inspect({ bundle: bundlePath, json, "tape-info": showTape, "expect-sha2
     `Cost: $${Number(info.cost_usd ?? 0).toFixed(6)}`,
     `File SHA-256: ${info.file_sha256}`,
     `Tape SHA-256: ${info.tape_sha256} (${info.tape_sha256_verified ? "verified" : "no stored checksum"})`,
-    ...(info.tape ? [`Tape answers: ${info.tape.answers} across ${info.tape.requests} request keys and ${info.tape.drives} drives`] : []),
+    ...(info.tape
+      ? [`Tape answers: ${info.tape.answers} across ${info.tape.requests} request keys and ${info.tape.drives} drives`]
+      : []),
     `Manifest: ${manifest.format} (prompt=${manifest.prompt_hash ?? "none"}, maps=${Object.keys(manifest.maps ?? {}).join(",") || "none"})`,
   ];
   console.log(lines.join("\n"));
@@ -189,7 +202,8 @@ async function verify(bundle, { checkout, port, timeout }) {
     console.log(`Verified ${report.results.length} drives from ${recording.header.driver}.`);
   } catch (error) {
     if (error.code === "ETIMEDOUT") throw new Error(`Replay exceeded --timeout ${timeoutMs} ms.`, { cause: error });
-    if (error.status != null) throw new Error(`Arena replay exited with status ${error.status}. See its diagnostic above.`, { cause: error });
+    if (error.status != null)
+      throw new Error(`Arena replay exited with status ${error.status}. See its diagnostic above.`, { cause: error });
     if (error.signal) throw new Error(`Arena replay terminated by ${error.signal}.`, { cause: error });
     throw error;
   } finally {

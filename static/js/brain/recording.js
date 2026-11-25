@@ -107,8 +107,7 @@ function validOutcome(outcome) {
   const types = OUTCOME_TYPES.filter((type) => Object.hasOwn(outcome, type));
   if (types.length !== 1) return false;
   const [type] = types;
-  if (Object.hasOwn(outcome, "raw_response") && (type !== "response" || outcome.raw_response !== true))
-    return false;
+  if (Object.hasOwn(outcome, "raw_response") && (type !== "response" || outcome.raw_response !== true)) return false;
   if (type === "timeout" || type === "cancelled") return outcome[type] === true;
   if (type === "response") return outcome.response !== undefined;
   return isObject(outcome.error) && typeof outcome.error.message === "string";
@@ -267,10 +266,7 @@ export const sameResult = (a, b) => canonicalJson(comparableResult(a)) === canon
 
 export function validateTapeRequest(driveId, mode) {
   if (!["record", "replay"].includes(mode)) throw new Error(`Unknown tape mode "${mode}".`);
-  if (
-    (typeof driveId !== "string" && !Number.isSafeInteger(driveId)) ||
-    !String(driveId).trim()
-  )
+  if ((typeof driveId !== "string" && !Number.isSafeInteger(driveId)) || !String(driveId).trim())
     throw new Error("A tape needs a drive ID.");
 }
 
@@ -431,10 +427,12 @@ function storedOutcome(res, body) {
   if (
     (kept.trace?.meta === META && kept.meta) ||
     Object.hasOwn(kept.trace ?? {}, "anthropic_prompt") ||
-    (isObject(request) && Object.entries(request).some(([key, value]) =>
-      value === BODY && Object.hasOwn(body, key) && body[key] && typeof body[key] === "object",
-    ))
-  ) return { response: kept, raw_response: true };
+    (isObject(request) &&
+      Object.entries(request).some(
+        ([key, value]) => value === BODY && Object.hasOwn(body, key) && body[key] && typeof body[key] === "object",
+      ))
+  )
+    return { response: kept, raw_response: true };
   if (request && typeof request === "object") {
     for (const [k, v] of Object.entries(request)) {
       if (Object.hasOwn(body, k) && v !== null && typeof v === "object" && canonicalJson(v) === canonicalJson(body[k]))
