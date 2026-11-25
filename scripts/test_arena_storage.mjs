@@ -416,6 +416,17 @@ await test("migration keeps the newest runs by creation time, not by when they m
     const listed = await reopened.list();
     assert.deepEqual(times(await reopened.remove(listed[1])), times([listed[0], ...listed.slice(2)]));
   }
+  // (an older run imported into IndexedDB after a newer one is placed by when it was created)
+  const imported = new FakeIndexedDB();
+  const importing = await openEvaluationHistory({ indexedDB: imported, storage: local() });
+  await importing.save(at(3));
+  await importing.save(at(1));
+  const moved = await openEvaluationHistory({
+    indexedDB: imported,
+    storage: local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2)])]]),
+    maxRuns: 2,
+  });
+  assert.deepEqual(times(await moved.list()), minutes(3, 2));
   // (repeated moves into the same gap keep the order)
   const gap = new FakeIndexedDB();
   const tabs = await openEvaluationHistory({ indexedDB: gap, storage: local() });

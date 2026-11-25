@@ -533,9 +533,9 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
 }
 
 // Moves the localStorage history into the database, leaving out runs already there (a move interrupted
-// before the key was removed), then removes the key. The fallback runs join the saved ones in the order
-// they were created, so the limits drop the oldest runs, not the moved ones. Each kept run's `order`
-// records its place, leaving every saved run's id as it is; later saves take higher ids.
+// before the key was removed), then removes the key. The fallback runs and the saved ones are put in the
+// order they were created, so the limits drop the oldest runs, not the moved ones. Each kept run's
+// `order` records its place, leaving every saved run's id as it is; later saves take higher ids.
 async function migrate(db, storage, { maxRuns, maxBytes }) {
   let raw;
   try {
@@ -591,19 +591,15 @@ async function migrate(db, storage, { maxRuns, maxBytes }) {
         }
         moving.push({ run, entry });
       }
-      // Oldest first: the saved runs in their order and the fallback runs in theirs, merged by creation
-      // time (a tie keeps the saved run first, where it already is).
-      const created = (entry) => {
-        const time = Date.parse(entry.created_at);
+      // Oldest first by creation time (a tie keeps the saved runs' order, then the fallback runs' order).
+      const created = (item) => {
+        const time = Date.parse((item.saved ?? item.entry).created_at);
         return Number.isFinite(time) ? time : -Infinity;
       };
       const saved = old.sort((a, b) => position(a) - position(b) || a.id - b.id);
-      const combined = [];
-      for (let i = 0, j = 0; i < saved.length || j < moving.length; ) {
-        if (j < moving.length && (i === saved.length || created(moving[j].entry) < created(saved[i])))
-          combined.push(moving[j++]);
-        else combined.push({ saved: saved[i++] });
-      }
+      const combined = [...saved.map((entry) => ({ saved: entry })), ...moving].sort(
+        (a, b) => created(a) - created(b) || 0,
+      );
       let bytes = combined.reduce((total, item) => total + (item.saved ?? item.entry).bytes, 0);
       let first = 0;
       while (first < combined.length && (combined.length - first > maxRuns || bytes > maxBytes)) {

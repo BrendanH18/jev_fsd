@@ -84,10 +84,12 @@ function saveRun(body, storage, now = Date.now()) {
   let name = base;
   for (let suffix = 2; runs.some((run) => run.name === name); suffix++) name = `${base}-${suffix}`;
   const next = [{ ...record, name, saved_at: new Date(now).toISOString() }, ...runs].slice(0, RUNS_LIMIT);
-  const removed = [];
+  let popped = false;
   while (next.length) {
     try {
       storage.setItem(RUNS_KEY, JSON.stringify(next));
+      // (after removing runs for room, name every saved run that is gone, the one past the cap too)
+      const removed = popped ? runs.filter((run) => !next.includes(run)).map((run) => run.name) : [];
       return removed.length ? { saved: name, name, removed } : { saved: name, name };
     } catch (error) {
       if (error?.name === "SecurityError")
@@ -101,7 +103,7 @@ function saveRun(body, storage, now = Date.now()) {
         full.code = "storage_full";
         throw full;
       }
-      if (next.length > 1) removed.push(next.at(-1).name);
+      popped = true;
       next.pop();
     }
   }
