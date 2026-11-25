@@ -83,7 +83,14 @@ class DecisionRequests(unittest.TestCase):
         self.assertTrue(question["criteria"])
 
     def test_builtin_answers(self):
-        picked = FakeClient(picker=lambda _s, _q: {"motion": "reverse", "vector": "hard_brake", "extra": "a"})
+        # A model can answer with a choice that was never offered: build that reply by hand, since the
+        # shared fake only produces offered choices.
+        answers = FakeClient().system_one(GOOD["state"], GOOD["questions"]).response["answers"]
+        answers["vector"]["choice"] = "hard_brake"
+        answers["motion"] = {"type": "choice", "choice": "reverse", "confidence": 0.9}
+        answers["extra"] = {"type": "choice", "choice": "a", "confidence": 0.9}
+        picked = Mock()
+        picked.system_one.return_value = client.JevResult(GOOD, {"answers": answers}, 1)
         result = decide.jev_decide(picked, GOOD)
         self.assertEqual(set(result["answers"]), {"vector"})
         self.assertIn("motion", result["trace"]["response"]["answers"])
