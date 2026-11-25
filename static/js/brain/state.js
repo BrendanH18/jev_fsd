@@ -1364,8 +1364,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
     };
   }
   if (meta.routeOptions && meta.routeOptions.length > 1) {
-    const criteria = {};
-    for (const r of meta.routeOptions) criteria[r.id] = r.summary;
+    const criteria = Object.fromEntries(meta.routeOptions.map((r) => [r.id, r.summary]));
     questions.route = {
       type: "choice",
       instructions: "The car has left its planned route. Choose which route to follow from the car's current position.",

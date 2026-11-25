@@ -20,7 +20,7 @@ export class JevBrain {
       { signal },
     );
     return decisionResult(res, request, eligible, {
-      ...res.meta,
+      ...res?.meta,
       source: "jev",
       round_trip_ms: Math.round(performance.now() - started),
     });
@@ -31,10 +31,29 @@ export class JevBrain {
 // no motion question) keep their local answers; a vector outside the eligible set becomes null, which
 // the autopilot replaces with the Rules choice and reports as a fallback.
 export function decisionResult(res, request, eligible, meta) {
-  const answers = { ...request.local, ...res.answers };
-  const motion = answers.motion ? answers.motion.choice : "drive";
-  let candidateId = answers.vector ? answers.vector.choice : null;
-  if (candidateId && !eligible.some((c) => c.id === candidateId)) candidateId = null;
-  const routeId = answers.route ? answers.route.choice : null;
-  return { motion, candidateId, routeId, answers, meta, trace: res.trace };
+  const raw = res?.answers;
+  const fail = (message) => {
+    throw Object.assign(new Error(`invalid answer: ${message}`), {
+      meta: { ...meta, live_call: true },
+      trace: res?.trace,
+    });
+  };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("missing answers object");
+  const { questions = {}, local = {} } = request;
+  const answers = { ...local };
+  for (const id of ["motion", "vector", "route", "headlights"]) {
+    const criteria = questions[id]?.criteria;
+    const answer = raw[id];
+    if (
+      criteria &&
+      typeof answer?.choice === "string" &&
+      Object.hasOwn(criteria, answer.choice) &&
+      !Object.hasOwn(local, id)
+    )
+      answers[id] = answer;
+  }
+  if (questions.motion && !answers.motion) fail("missing or invalid motion");
+  const motion = answers.motion?.choice ?? "drive";
+  const candidateId = eligible.find((c) => c.id === answers.vector?.choice)?.id ?? null;
+  return { motion, candidateId, routeId: answers.route?.choice ?? null, answers, meta, trace: res.trace };
 }
