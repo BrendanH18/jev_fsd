@@ -37,7 +37,7 @@ import { CAR, comfort } from "./vehicle.js";
 import { behindInLane, FOLLOWING_STANDSTILL_M } from "./following.js";
 import { amberStoppingDistance } from "./amber.js";
 import { approachPhase, movementSignal } from "./signals.js";
-import { controlAt } from "./outage.js";
+import { controlAt } from "./features/index.js";
 import { isEmergency, isEmergencyVehicle } from "./emergency.js";
 import { isPlow } from "./snow-plow.js";
 

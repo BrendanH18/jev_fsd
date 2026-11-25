@@ -53,7 +53,6 @@ export class RulesBrain {
     if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
     if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
     if (FEATURE_STOP.some((shouldStop) => shouldStop(snap, eligible))) stop = true;
-    if (snap.work_zone?.wait && snap.work_zone.bumper_to_stop_m < 1.5) stop = true;
     if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) stop = true;
     // (parking, the space is the destination: sim/parallel-park.js)
     if (snap.nav?.arrived && snap.parking?.mode !== "in") stop = true;
@@ -120,7 +119,6 @@ export class RulesBrain {
         c.id === "stop_for_streetcar" ||
         c.id === "stop_before_tracks" ||
         c.id === "wait_short_of_junction" ||
-        c.id === "stop_for_flagger" ||
         c.id === "wait_to_merge" ||
         c.id === "let_merge_in"
       )

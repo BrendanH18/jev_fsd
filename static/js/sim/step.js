@@ -9,6 +9,7 @@ import { MAX_PHYSICS_STEP_S } from "./vehicle.js";
 // after it, before the people on foot.
 const FIRST = hooks("stepBeforeTraffic", "first");
 const AFTER_PARKED = hooks("stepBeforeTraffic", "afterParked");
+const AFTER_MERGE = hooks("stepBeforeTraffic", "afterMerge");
 const AFTER_OUTAGES = hooks("stepBeforeTraffic", "afterOutages");
 const BEFORE_TRAFFIC = hooks("stepBeforeTraffic");
 const AFTER_TRAFFIC = hooks("stepAfterTraffic");
@@ -27,9 +28,8 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
     throw new RangeError("Invalid ego pose after driver step");
   world.parked.step(dt, world);
   for (const step of AFTER_PARKED) step(world, fleet, dt);
-  world.workZones.step(dt);
   world.laneClosures.step(dt);
-  world.outages.step(dt);
+  for (const step of AFTER_MERGE) step(world, fleet, dt);
   for (const step of AFTER_OUTAGES) step(world, fleet, dt);
   world.stepOuts.step(dt);
   for (const step of BEFORE_TRAFFIC) step(world, fleet, dt);

@@ -32,7 +32,7 @@ centre, no one on foot crossing at the junction, and no vehicle waved on still s
 
 `officerDirection(world, vehicle, edge)` is the one test: for a vehicle on an approach to a junction an
 officer governs, "go" while its group is waved or it was waved on as the officer turned, else "stop";
-null where no officer governs. While an officer stands there, `controlAt` (`sim/outage.js`) keeps the
+null where no officer governs. While an officer stands there, `controlAt` (`sim/features/index.js`) keeps the
 junction a signal even in a power cut or overnight flashing, so nobody treats it as an all-way or
 two-way stop; the lights themselves keep cycling (or stay dark) and are drawn as before. Traffic and
 cyclists (`sim/npc.js`) stop at the line when held, on any light, and never give up waiting there

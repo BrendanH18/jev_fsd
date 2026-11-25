@@ -15,8 +15,11 @@ import { flagText } from "./tracks.js";
 
 // The registered features' decision state and wording (sim/features/index.js), each where that feature's
 // own code used to be.
+const INTERSECTION_MODEL_FIELDS = hooks("intersectionModelFields", "beforeCrossTraffic");
+const PASS_BLOCK_REASON = hooks("passBlockReason");
 const GREEN_SIGNAL_CLAUSES = hooks("greenSignalClause");
 const STATE = {
+  beforeMerge: hooks("state", "beforeMerge"),
   signal: hooks("state", "signal"),
   afterFollowing: hooks("state", "afterFollowing"),
   beforePlow: hooks("state", "beforePlow"),
@@ -35,6 +38,7 @@ const OUTCOME_BY_ID = hooks("outcome", "ids"),
   SLOW_OUTCOME = hooks("slowOutcome", "lane"),
   SLOW_OUTCOME_LAST = hooks("slowOutcome");
 const CLAUSE = {
+  stopStart: hooks("clause", "stopStart"),
   signal: hooks("clause", "signal"),
   afterJunctionBox: hooks("clause", "afterJunctionBox"),
   afterClosure: hooks("clause", "afterClosure"),
@@ -50,6 +54,7 @@ const CLAUSE = {
   parking: hooks("clause", "parking"),
 };
 const HOLD_STILL = {
+  beforeMerge: hooks("holdStill", "beforeMerge"),
   afterFlagger: hooks("holdStill", "afterFlagger"),
   driveways: hooks("holdStill", "driveways"),
   beforeRunner: hooks("holdStill", "beforeRunner"),
@@ -197,7 +202,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       distance: distLabel(i.bumper_to_line_m),
       entered: i.entered,
       ...(i.control === "stop" ? { stop_completed: i.stop_completed, all_way: i.all_way } : {}),
-      ...(i.dark ? { lights_out: true } : {}),
+      ...Object.assign({}, ...INTERSECTION_MODEL_FIELDS.map((fields) => fields(i))),
       ...(i.control === "yield"
         ? { roundabout: true, ring_traffic: i.cross_traffic_moving }
         : { cross_traffic_moving: i.cross_traffic_moving }),
@@ -249,14 +254,6 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
     if (i.advance)
       state.intersection.advance = { light: i.advance.light, ...(i.advance.protected ? { protected_left: true } : {}) };
     for (const add of STATE.signal) add(snap, state);
-    if (i.scramble)
-      state.intersection.scramble = {
-        all_walk: i.scramble.phase !== "dont",
-        ...(i.scramble.phase === "dont"
-          ? { all_walk_in_s: i.scramble.walk_in_s }
-          : { ends_in_s: i.scramble.ends_in_s }),
-        right_on_red: false,
-      };
     if (i.left_on_red) {
       const r = i.left_on_red;
       state.intersection.left_on_red = {
@@ -434,20 +431,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
       wait_in_m: r1(Math.max(0, b.bumper_to_stop_m)),
     };
   }
-  if (snap.work_zone) {
-    const w = snap.work_zone;
-    state.work_zone = {
-      id: w.id,
-      lane: w.side === "closed" ? "closed: go round through the other lane" : "open",
-      flagger: w.paddle === "stop" ? "STOP" : "SLOW",
-      ...(w.bumper_to_stop_m > 0 ? { stop_line_m: r1(w.bumper_to_stop_m) } : {}),
-      one_lane: w.in_one_lane
-        ? "car is in it"
-        : `starts ${r1(Math.max(0, w.one_lane.from_s - snap.routeProj.s - snap.ego.front_m))} m ahead`,
-      pass_at: r1(w.limit_mps),
-      ...(w.wait ? { stop: true, wait_in_m: r1(Math.max(0, w.bumper_to_stop_m)) } : {}),
-    };
-  }
+  for (const add of STATE.beforeMerge) add(snap, state);
   if (snap.lane_closure) {
     const l = snap.lane_closure,
       closed = l.side === "closed";
@@ -487,7 +471,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
           ? "car is passing"
           : "falling back in behind: the way is no longer clear"
         : !c.possible
-          ? `not here: ${CYCLIST_NOT_HERE[c.why]}`
+          ? `not here: ${passBlockReason(c.why)}`
           : c.queued
             ? "wait in turn"
             : c.too_close
@@ -599,13 +583,14 @@ const CYCLIST_NOT_HERE = {
   junction: "the pass would not be over before the junction ahead",
   crosswalk: "a marked crosswalk is ahead",
   level_crossing: "a level crossing is ahead",
-  work_zone: "a work zone is on the street",
   lane_closure: "a lane is closed on the street",
   double_parked: "a van is double-parked on the street",
   school_bus: "a school bus is stopped with its red lights flashing",
   streetcar: "a streetcar is stopped ahead",
   no_room_ahead: "there is no room to move back in ahead of it",
 };
+
+const passBlockReason = (why) => firstOf(PASS_BLOCK_REASON, why) ?? CYCLIST_NOT_HERE[why];
 
 function outcomeLabel(c, snap) {
   // (the open track: a manoeuvre the road-rule checks flagged, brain/tracks.js)
@@ -637,8 +622,6 @@ function outcomeLabel(c, snap) {
     return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of the merge point, to wait for the car's turn`;
   if (c.id === "let_merge_in" && snap.lane_closure)
     return `clear, stops ${Math.max(0, r1(snap.lane_closure.bumper_to_stop_m - c.sim.progress_m))} m short of where it lets \`${snap.lane_closure.let_in_for}\` in`;
-  if (c.id === "stop_for_flagger" && snap.work_zone)
-    return `clear, stops ${Math.max(0, r1(snap.work_zone.bumper_to_stop_m - c.sim.progress_m))} m short of the flagger, at the line`;
   if (c.id === "stop_before_tracks" && snap.level_crossing)
     return `clear, stops ${Math.max(0, r1(snap.level_crossing.bumper_to_stop_m - c.sim.progress_m))} m short of the level crossing, 7 m back from the nearest rail`;
   if (c.id === "stop_for_school_bus" && snap.school_bus)
@@ -717,7 +700,6 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
       );
     if (i.advance) out.push(advanceClause(i));
     pushClauses(out, CLAUSE.signal, snap);
-    if (i.scramble) out.push(scrambleClause(i));
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
@@ -725,10 +707,10 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
       out.push(
         "Flashing red: make a full stop, then yield to the main street until clear. This is a two-way stop, not an all-way stop.",
       );
-    if (i.dark)
-      out.push(
-        `The traffic lights at the junction ${i.entered ? "the car is in" : `${m} m ahead`} are out: treat it as an all-way stop. Every driver stops at the line, then goes in turn.`,
-      );
+    for (const clause of CLAUSE.stopStart) {
+      const line = clause(snap, m);
+      if (line) out.push(line);
+    }
     if (!i.stop_completed) {
       if (!p)
         out.push(
@@ -874,7 +856,6 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
     );
   }
   pushClauses(out, CLAUSE.afterJunctionBox, snap);
-  if (snap.work_zone) out.push(workZoneClause(snap));
   if (snap.lane_closure) out.push(closureClause(snap.lane_closure));
   pushClauses(out, CLAUSE.afterClosure, snap);
   pushClauses(out, CLAUSE.parking, snap);
@@ -1035,15 +1016,6 @@ function advanceClause(i) {
 }
 
 // A red light where the car turns right and a right turn on red is allowed after a full stop.
-// A scramble crossing (sim/signals.js): an all-walk phase, and no right turn on red.
-function scrambleClause(i) {
-  const sc = i.scramble,
-    right = i.turn === "right";
-  if (sc.phase !== "dont")
-    return `This junction is a scramble crossing, and its all-walk is on: every light is red, and people are crossing every way, diagonally too, for the next ${Math.round(sc.ends_in_s)} s. Wait at the line until the car's own light turns green, and then let anyone still crossing clear the car's path.`;
-  return `This junction is a scramble crossing: every light turns red together while people cross every way${right ? ", and there is no right turn on red here: wait at the line for the green, even to turn right" : ", and nobody walks alongside a green"}.`;
-}
-
 function turnOnRedClause(i, m, atLine, left = false) {
   const r = left ? i.left_on_red : i.right_on_red,
     w = r.wait_for;
@@ -1079,23 +1051,6 @@ function blindClause(b) {
   const kmh = Math.round(b.limit_mps * 3.6),
     where = b.from_m > 0 ? `from ${Math.round(b.from_m)} m ahead` : "beside the car";
   return `Cars parked along the ${b.side} ${where}, ${r1(b.gap_m)} m from the car's side, hide the sidewalk${b.why === "quiet street" ? " on this quiet street" : ` in this ${b.why}`}: someone could step out from between them, unseen until they do. Keep to ${kmh} km/h beside them, a speed from which the car can stop for someone who steps out ${STEP_OUT_M} m ahead (\`car.target_speed\` already does).`;
-}
-
-// A work zone with a flagger on the route ahead (sim/work-zone.js).
-function workZoneClause(snap) {
-  const w = snap.work_zone,
-    at = Math.max(0, Math.round(w.bumper_to_stop_m)),
-    kmh = Math.round(w.limit_mps * 3.6);
-  const lead = `A road crew has closed ${w.side === "closed" ? "the car's lane" : "the oncoming lane"} ahead (work zone \`${w.id}\`), leaving one lane for both directions in turn; a flagger ${w.bumper_to_stop_m > 0 ? `${at} m ahead` : "at the line"} holds a paddle that shows ${w.paddle === "stop" ? "STOP" : "SLOW"} to the car.`;
-  const round =
-    w.side === "closed"
-      ? " The car's candidates already take it round the work through the other lane, and back into its own past it."
-      : "";
-  if (w.wait)
-    return `${lead} Stop at the line and do not go on until the paddle turns to SLOW: traffic coming the other way has the one lane now. ${at < 2 ? "Hold still where the car is." : `Slow down and stop ${at} m ahead (\`stop_for_flagger\`).`}${round}`;
-  if (w.paddle === "stop")
-    return `${lead} The car was too close to stop for it when it turned: keep going through the one lane at ${kmh} km/h, with care.${round}`;
-  return `${lead} Go on with care at no more than ${kmh} km/h (\`car.target_speed\` already does): the crew works beside the lane.${round}`;
 }
 
 // A lane closed ahead by a road crew, where the two lanes zipper merge (sim/lane-closure.js).
@@ -1151,7 +1106,7 @@ function cyclistClause(c) {
   const behind = ` Stay behind it, ${c.follow_gap_m} m back (\`follow_cyclist\`).`;
   if (c.going)
     return `${lead} The car had started round it, but the oncoming lane is no longer clear: fall back in behind it.${behind}`;
-  if (!c.possible) return `${lead} It cannot be passed here: ${CYCLIST_NOT_HERE[c.why]}.${behind}`;
+  if (!c.possible) return `${lead} It cannot be passed here: ${passBlockReason(c.why)}.${behind}`;
   if (c.queued) return `${lead} \`${c.queued}\` is behind it, ahead of the car: wait in turn.${behind}`;
   if (c.too_close) return `${lead} The car is too close behind it to pull out with room: drop back first.${behind}`;
   if (!w.clear) {
@@ -1230,7 +1185,6 @@ export function needsMotionQuestion(snap) {
     snap.level_crossing?.wait ||
     snap.level_crossing?.on_tracks ||
     snap.junction_box ||
-    snap.work_zone?.wait ||
     snap.lane_closure?.stop_s_route != null ||
     snap.cyclist_pass ||
     snap.parking ||
@@ -1309,10 +1263,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const boxWait = snap.junction_box
       ? ", when traffic past the junction ahead leaves no room for the car and it has stopped at the line (`junction_box.wait_in_m` under 2), even on a green"
       : "";
-    // And waiting at a work zone's flagger showing STOP.
-    const flaggerWait = snap.work_zone?.wait
-      ? ", when a work zone's flagger shows STOP to the car and it has stopped at the line (`work_zone.wait_in_m` under 2)"
-      : "";
+    const beforeMergeWait = HOLD_STILL.beforeMerge.map((h) => h(snap)).join("");
     const afterFlaggerWait = HOLD_STILL.afterFlagger.map((h) => h(snap)).join("");
     // And waiting at a lane closure's merge point for the car's turn, or letting one in there.
     const mergeWait = snap.lane_closure?.wait
@@ -1334,7 +1285,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${snap.cyclist_pass ? " Staying behind a cyclist (`follow_cyclist`), at its speed, and passing it (`pass_cyclist`) are driving too." : ""}`,
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${beforeRunnerWait}${featureWait}${featureWaitLater}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${flaggerWait}${afterFlaggerWait}${mergeWait}${featureParkingWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${beforeRunnerWait}${featureWait}${featureWaitLater}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${beforeMergeWait}${afterFlaggerWait}${mergeWait}${featureParkingWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
       },
     };
   } else {

@@ -29,10 +29,8 @@ import {
 } from "./sim/streetcar.js";
 import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
 import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
-import { workZoneNotice } from "./sim/work-zone.js";
 import { createLaneClosureMesh, syncLaneClosure } from "./render/lane-closure.js";
 import { laneClosureNotice } from "./sim/lane-closure.js";
-import { outageNotice } from "./sim/outage.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
 import { isPlow, plowNotice } from "./sim/snow-plow.js";
 import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
@@ -92,7 +90,7 @@ import { DriveMetrics, decidedByCounts } from "./bench/metrics.js";
 import { challengeScoreInputs } from "./lab/score-inputs.js";
 import { WeatherView } from "./render/weather.js";
 import { setWeather } from "./sim/weather.js";
-import { advanceNotice, approachPhase, pedPhase, scrambleNotice } from "./sim/signals.js";
+import { advanceNotice, approachPhase, pedPhase } from "./sim/signals.js";
 import { atmosphereFor, parseHour, TIME_PRESETS, lighting } from "./render/atmosphere.js";
 import { buildSurroundings, tintSurroundings, inVancouver } from "./render/surroundings.js";
 import { DriveScore, saveDrive } from "./sim/drive-score.js";
@@ -1424,16 +1422,13 @@ export async function boot() {
     announcedCrossing = null,
     announcedBox = null,
     announcedAdvance = null,
-    announcedWorkZone = null,
     announcedClosure = null,
-    announcedOutage = null,
     announcedNightFlash = null,
     announcedPlow = null,
     announcedPark = null,
     announcedHazard = null,
     announcedTraffic = null,
     announcedCyclist = null,
-    announcedScramble = null,
     announcedLeftRed = null;
   let lastConditions = "",
     skyAt = world.t;
@@ -1758,13 +1753,7 @@ export async function boot() {
       hud.badge(advance.text, advance.protected ? "stop" : "safety", 2500);
     }
     if (!advance) announcedAdvance = null;
-    // a work zone ahead: what its flagger shows the car, said once each time the paddle turns
-    const workZone = workZoneNotice(world);
-    if (workZone && workZone.key !== announcedWorkZone) {
-      announcedWorkZone = workZone.key;
-      hud.badge(workZone.text, workZone.stop ? "safety" : "", 2500);
-    }
-    if (!workZone) announcedWorkZone = null;
+    announceFeatureNotices("beforeMerge", world, autopilot, featureViews, announcedFeatures, hud);
     // a lane closed ahead: use both lanes to the merge point, then take turns (said again as the turn changes)
     const closure = laneClosureNotice(world);
     if (closure && closure.key !== announcedClosure) {
@@ -1779,12 +1768,6 @@ export async function boot() {
       hud.badge(nightNotice.text, "stop", 2500);
     }
     if (!nightNotice) announcedNightFlash = null;
-    const outage = outageNotice(world);
-    if (outage && outage.key !== announcedOutage) {
-      announcedOutage = outage.key;
-      hud.badge(outage.text, outage.stop ? "safety" : "stop", 2500);
-    }
-    if (!outage) announcedOutage = null;
     announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
     // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
     const plowLine = plowNotice(world);
@@ -1838,12 +1821,6 @@ export async function boot() {
         2500,
       );
     announcedLeftRed = leftRedKey;
-    const scrambleLine = scrambleNotice(world);
-    if (scrambleLine && scrambleLine.key !== announcedScramble) {
-      announcedScramble = scrambleLine.key;
-      hud.badge(scrambleLine.text, "safety", 2500);
-    }
-    if (!scrambleLine) announcedScramble = null;
     announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
     const ringing = (fleet.trains || [])
       .filter((n) => n.rail.gong)

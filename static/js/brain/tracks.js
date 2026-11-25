@@ -75,7 +75,6 @@ export const FLAG_TEXT = {
   crosses_in_front_of_train: "it crosses the level crossing with a train coming",
   no_room_past_tracks: "it stops on the level crossing, with no room past the tracks",
   blocks_junction: "it enters a junction it has no room to clear",
-  runs_flagger_stop: "it goes past a work zone flagger showing STOP",
   merges_out_of_turn: "it merges at the lane closure out of turn",
   takes_merge_turn: "it takes the turn of the car merging at the lane closure",
   into_closed_lane: "it moves into a closed lane",

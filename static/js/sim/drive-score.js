@@ -4,6 +4,8 @@ import { STEP_OUT_M, blindSpot } from "./blind-spot.js";
 import { egoPlow } from "./snow-plow.js";
 import {
   featureCoachCap,
+  featureCoachCorridor,
+  featureCoachCorridorFrame,
   featureCoachDeduct,
   featureCoachDirectionExempt,
   featureCoachEvent,
@@ -53,13 +55,6 @@ export class DriveScore {
     // (standing in a signal's junction with no room past it, sim/junction-box.js: how often, and where)
     this.blockedJunctions = 0;
     this.boxCounted = null;
-    // (through a work zone, sim/work-zone.js: too fast, the zones that was counted for, and going past
-    // a flagger's STOP paddle, which the audit counts as a missed stop)
-    this.workZoneSpeeding = 0;
-    this.workZoneCounted = new Set();
-    this.flaggerStops = 0;
-    // (a missed stop, or going out of turn, at a signal whose lights are out: sim/outage.js)
-    this.darkSignals = 0;
     // (parking at the destination, sim/parallel-park.js: how it ended, and the kerb strikes on the way in
     // or out; reported only for a drive with parking)
     this.parking = null;
@@ -93,8 +88,6 @@ export class DriveScore {
     this.closePasses = 0;
     this.cyclistCutoffs = 0;
     this.busLanesSeen = false;
-    // (turning right on red at a scramble crossing, which the audit counts as a red light: sim/signals.js)
-    this.scrambleReds = 0;
     this.closeFollowing = 0;
     this.danger = 0;
     this.offRoad = 0;
@@ -165,14 +158,13 @@ export class DriveScore {
     const speeding = !!road && speed > road.limit + SPEED_GRACE_MPS;
     const offRoad = road?.on_road === false;
     const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
-    // A work zone can explicitly direct traffic to use the opposing lane.
-    const zonePass =
-      world.workZones?.passing(road?.limit ?? 11.2) || world.laneClosures?.passing(road?.limit ?? 11.2) || null;
+    const corridor =
+      featureCoachCorridor(world, road?.limit ?? 11.2) || world.laneClosures?.passing(road?.limit ?? 11.2) || null;
     const wrongWay =
       !!road?.on_road &&
       speed > 2 &&
       Math.cos(headingError) < 0 &&
-      zonePass?.side !== "closed" &&
+      corridor?.side !== "closed" &&
       !featureCoachDirectionExempt(world) &&
       !(this.cyclists && world.passingCyclist?.());
     if (speeding) this.speeding += dt;
@@ -204,17 +196,7 @@ export class DriveScore {
       this.blockedJunctions++;
       this.incident("blocked_junction", "Stopped in the junction", { junction: box.id });
     }
-    // a work zone (sim/work-zone.js): its limit holds from the stop line to the end of the one-lane
-    // section
-    const workZoneFast = !!zonePass && speed > zonePass.limit + SPEED_GRACE_MPS;
-    if (workZoneFast) {
-      this.workZoneSpeeding += dt;
-      if (!speeding) this.speeding += dt;
-      if (!this.workZoneCounted.has(zonePass.zone.id)) {
-        this.workZoneCounted.add(zonePass.zone.id);
-        this.incident("work_zone_speeding", "Too fast through a work zone", { zone: zonePass.zone.id });
-      }
-    }
+    const corridorGuidance = featureCoachCorridorFrame(this, corridor, coachContext);
     // cars parked at the kerb that hide the sidewalk (sim/hidden-hazards.js): within STEP_OUT_M of them,
     // the blind-spot speed holds
     const blind = this.hazards ? blindSpot(world, ego, road) : null;
@@ -272,14 +254,11 @@ export class DriveScore {
         this.plowCutIns++;
         this.incident("plow_cut_in", "Moved back in too close in front of a snow plow", { plow: ev.plow });
       }
-      if (ev.type === "stop_sign" && ev.flagger) this.flaggerStops++;
-      if ((ev.type === "stop_sign" || ev.type === "failed_to_yield") && ev.dark) this.darkSignals++;
       if (ev.type === "amber_light")
         this.incident(
           "amber_light",
           ev.reason === "sped_up" ? "Sped up to beat an amber light" : "Passed amber when a safe stop was possible",
         );
-      if (ev.type === "red_light" && ev.scramble) this.scrambleReds++;
       if (ev.type === "close_pass") {
         this.closePasses++;
         this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", {
@@ -324,13 +303,12 @@ export class DriveScore {
           ? "Clear the tracks. Never stop on them."
           : blocking
             ? "You’re blocking the junction. Next time, wait at the line until there’s room past it."
-            : workZoneFast
-              ? `Slow to ${Math.round(zonePass.limit * 3.6)}. You’re in a work zone.`
-              : plowClose
+            : corridorGuidance ||
+              (plowClose
                 ? `Drop back. Stay ${plow.keep} m behind the snow plow.`
                 : blindFast
                   ? `Slow to ${Math.round(blind.limit_mps * 3.6)}. Parked cars hide the sidewalk: someone could step out.`
-                  : featureCoachMessage("afterBlind", this, coachContext));
+                  : featureCoachMessage("afterBlind", this, coachContext)));
     this.coach =
       featureCoachMessage("beforeSample", this, coachContext) ||
       immediate ||
@@ -525,10 +503,7 @@ export class DriveScore {
       tips.push(
         "Beside cars parked at the kerb on quiet streets and in school zones, slow to a speed you can stop from in about 15 m. Someone can step out from between them before you can see them.",
       );
-    if (this.darkSignals)
-      tips.push(
-        "Where a signal’s lights are out, treat the junction as an all-way stop: stop at the line, then go in turn. Whoever stopped first goes first.",
-      );
+    featureCoachTips("afterBlind", this, tips);
     if (this.hiddenCutoffs)
       tips.push(
         "A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.",
@@ -571,12 +546,7 @@ export class DriveScore {
       tips.push(
         "Choose a space at least one and a half times your car's length, and start with your rear bumper level with the car in front, about a door's width from it.",
       );
-    if (this.flaggerStops)
-      tips.push(
-        "At a work zone, stop for the flagger’s STOP paddle and wait for it to turn to SLOW. Traffic coming the other way has the one lane until then.",
-      );
-    if (this.workZoneSpeeding > 0.5)
-      tips.push("Keep to 30 km/h through a work zone. The crew works right beside the lane.");
+    featureCoachTips("beforeJunction", this, tips);
     if (this.blockedJunctions)
       tips.push(
         "Even on a green, don’t enter a junction unless there is room for all of your car past it. Wait at the line, or you’ll block the cross street when the light changes.",
@@ -592,10 +562,6 @@ export class DriveScore {
           : "Aim for at least a two-second following gap when conditions allow.",
       );
     featureCoachTips("afterFollowing", this, tips);
-    if (this.scrambleReds)
-      tips.push(
-        "At a scramble crossing there is no right turn on red: every light turns red together while people cross every way, diagonally too. Wait at the line for your green.",
-      );
     if (delta("bus_lane_driving") > 1)
       tips.push(
         "Keep the bus lane clear while its hours apply. Enter only in the last 50 m before a right turn or to reach the curb to park.",
@@ -632,8 +598,6 @@ export class DriveScore {
       speeding_s: round(this.speeding),
       zone_speeding_s: round(this.zoneSpeeding),
       ...featureCoachReport("afterSpeed", this, round),
-      work_zone_speeding_s: round(this.workZoneSpeeding),
-      flagger_stops_run: this.flaggerStops,
       ...featureCoachReport("afterFlagger", this, round),
       stopped_on_tracks: this.onTracks,
       blocked_junction: this.blockedJunctions,
