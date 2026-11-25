@@ -32,6 +32,13 @@
   brain, rendering, the driving app, the lab and leaderboard, and benchmark tooling. Register
   scramble crossings, work zones and power cuts through the feature interface
   ([inventory](docs/validation/thousand/README.md)).
+- Add 5000 improvements in 25 areas: the server and model backends, map tooling and routing,
+  published results, offline analysis, the benchmark and submission tools, physics, traffic, people,
+  transit, sensing, planning and prompting, rendering, the app, input and accessibility, the lab, the
+  arena and leaderboard, the demo and docs, and CI. Register overnight flashing, left on red, steady
+  amber, bus lanes, snow plows, lane closures and passing cyclists through the feature interface
+  (34 of 41), and draw vehicles and pedestrians through the feature adapter
+  ([inventory](docs/validation/five-thousand/README.md)).
 - Watch four published model drives and replay a retained manual incident beside Jev.
 - Run CI on GitHub-hosted standard runners, free for this public repository, instead of Namespace.
 - Trace where the same tuned Rules drive first differs across JavaScript engines.

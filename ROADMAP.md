@@ -326,6 +326,11 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   Scramble crossings, work zones and power cuts bring the total to **27 of 41**. Their bare and city
   suites, all 62 Rules and cautious drives and the stub recording matched before and after
   ([thousand-improvement batch](docs/validation/thousand/04-registry.md)).
+  Overnight flashing, left on red, steady amber and bus lanes, then snow plows, lane closures and
+  passing cyclists, bring the total to **34 of 41**, each in a commit of its own with the same
+  before-and-after record, adding city rain, snow and 23:30 drives
+  ([five-thousand batch](docs/validation/five-thousand/README.md)). Left: transit buses, emergency
+  vehicles, school buses, streetcars, trains, destination parking and hidden hazards.
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
   under about 150 lines, with the same before-and-after record as 3.2.
@@ -375,6 +380,10 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   AI Eyes text. Feature scenery and frame updates have a
   [browser adapter](static/js/render/feature-views.js). Finish moving feature-specific vehicle
   meshes and per-frame effects using the same before-and-after proof as 3.2.
+  *25 November:* vehicle and pedestrian meshes, their lifecycle and feature-specific frame effects
+  now go through the adapter (`mountActorViews`); three mixed-traffic scene graphs, one of them a
+  replay frame, matched before the change
+  ([inventory](docs/validation/five-thousand/19-render-actors.md)).
 - [ ] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in
   `tests/fixtures/parity_cases.json`, and the exact-130° U-turn comparison, in one change that
   re-baselines routes, so the Python router and NPC paths join lanes the same way.
@@ -465,7 +474,8 @@ New scenarios resume here, one at a time, each passing the rule below, and not b
 - Season as a benchmark condition beside weather and `--hour` (1.7).
 - More Canadian cities, only where a city brings a rule or a road layout the eleven lack. The
   [provincial coverage and gap analysis](docs/reference/provincial-rules.md) is ready for choosing
-  the next city or rule.
+  the next city or rule. The [map gap evidence](docs/reference/phase-six-map-gaps.md) lists what
+  each of 17 map and provincial-rule gaps needs before it is chosen.
 - ~~Driving with a gamepad or on a touch screen.~~ Done 14 November: `ui/gamepad.js`, `ui/touch.js`
   (input only; see [Gamepad and touch](docs/drive-experience.md#gamepad-and-touch)).
 - ~~Longer drives that string several situations together, like the road tests.~~ Moved to 9.3.
@@ -587,6 +597,8 @@ past an agreed amount.
   separate numbers. The [open-track repeat plan](docs/validation/arena-repeat-plan.md) fixes the
   drives and repeat count. The comparison checks the plan and reports the score spread and
   recurring failures per drive. The repeated live runs and their results are still due.
+  *25 November:* the offline tools validate a repeat plan, report each drive's spread on a fixed
+  panel and attribute matched route changes; the live runs are unchanged.
 - [ ] **7.6 Models on the held-out routes.** (S) Jev and Claude Haiku on the held-out Kitsilano
   city routes (`bench/heldout.js`), reported apart and never debugged against.
 - [ ] **7.7 The eight drifted tapes.** (S) Record Jev's eight drifted 11 November drives again on main,
@@ -654,7 +666,8 @@ ordinary manoeuvre that fails) and that most open-track flags never became viola
   conditions (night, unprotected lefts in fog, snow narrowings, parking). Rules' failures there are
   results under 4.5; the slice becomes blocking once Rules passes it.
   [Hard city v1](docs/reference/benchmarks.md#hard-city-slice) pins five tuned Kitsilano drives.
-  Rules passed all five on Node 22 and the slice contributes to the benchmark gate.
+  Rules passed all five on Node 22 and the slice contributes to the benchmark gate. The slice's
+  report now checks shard coverage and run conditions and combines into one JSON or Markdown report.
 
 Exit: on a set built for it, Rules, Jev and Claude Haiku differ by a stated margin over repeated runs
 (7.5), for reasons the report names.
@@ -720,3 +733,4 @@ documented path, and adding it grows the repository by a stated, small amount.
 | 14 Nov | Results table and leaderboard, scores beyond pass or fail, held-out routes, the feature registry, one file per challenge, arena storage in IndexedDB, the README rewrite, the reference split |
 | 16 to 19 Nov | Ruff and Biome with blocking CI, pinned actions, each major lab's own API, faster browser CI |
 | 20 Nov | The open track, Jev and Claude Haiku results, 0.3.0, Boat sandboxes for agent work, 100 offline reports and run comparison, a keyless model replay in the demo, the registry at nine features |
+| 25 Nov | 5000 improvements in 25 areas ([inventory](docs/validation/five-thousand/README.md)); the registry at 34 of 41 features; actor meshes through the feature adapter |
