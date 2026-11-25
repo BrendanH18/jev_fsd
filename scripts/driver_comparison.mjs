@@ -1,5 +1,6 @@
 // Keep published benchmarks comparable to the version and street pack used for the driver check.
-export function publishedDrives(leaderboard, track, selected) {
+export function publishedDrives(leaderboard, track, selected, authored = []) {
+  const conditions = new Map(authored.map((drive) => [`${drive.map}/${drive.id}`, drive]));
   if (!Array.isArray(leaderboard?.rows)) throw new Error("The published leaderboard needs a rows array.");
   const rows = leaderboard.rows
     .filter(
@@ -23,8 +24,9 @@ export function publishedDrives(leaderboard, track, selected) {
       const current = selected.get(key);
       if (!current || drives.has(key) || drive.version !== current.version || drive.pack !== current.pack) continue;
       if (drive.seed !== undefined && current.seed !== undefined && drive.seed !== current.seed) continue;
-      if (drive.weather !== undefined && current.weather !== undefined && drive.weather !== current.weather) continue;
-      if (drive.time !== undefined && current.time !== undefined && drive.time !== current.time) continue;
+      const { weather, time } = conditions.get(key) ?? current;
+      if (drive.weather !== undefined && weather !== undefined && drive.weather !== weather) continue;
+      if (drive.time !== undefined && time !== undefined && drive.time !== time) continue;
       drives.set(key, { ...drive, date: row.date });
     }
   }
