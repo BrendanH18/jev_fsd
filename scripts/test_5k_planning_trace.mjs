@@ -177,7 +177,8 @@ const reported = await run("custom", (s, eligible) => ({
 }));
 assert.equal(reported.entry.reason, "driver_reported_fallback");
 assert.equal(reported.pilot.decidedBy.fallback, 1);
-assert.equal(reported.pilot.world.violations.fallbacks, 1);
+// (as before: only an invalid vector or a failed call counts against the drive's audit)
+assert.equal(reported.pilot.world.violations.fallbacks, 0);
 const timed = await run(
   "custom",
   () => new Promise(() => {}),

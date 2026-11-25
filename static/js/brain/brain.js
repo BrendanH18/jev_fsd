@@ -509,6 +509,7 @@ export class Autopilot {
         // (on the open track with nothing unflagged, the fallback is a stop: its motion too)
         if (!clear.length) result.motion = r.motion;
         result.meta.fallback = "invalid vector";
+        this.world.violations.fallbacks++;
       }
       if (decisionModel || result.meta.live_call) {
         this.totals.calls++;
@@ -516,7 +517,6 @@ export class Autopilot {
       }
       by = result.meta.fallback ? "fallback" : "model";
       if (context) context.reason ??= by === "fallback" ? "driver_reported_fallback" : "driver_choice";
-      if (by === "fallback") this.world.violations.fallbacks++;
     } catch (err) {
       if (epoch !== this.epoch) return;
       const r = this.rulesDecide(snap, clear, context);
