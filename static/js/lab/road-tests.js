@@ -69,9 +69,9 @@ export const ROAD_TESTS = [
     startS: 20,
     spaceS: 70,
     description:
-      "About 1.7 km of Kitsilano at 9 in the morning: stop signs, a school zone, two signalled left turns, a lane change on West 4th Avenue and a parallel park to finish. An examiner marks every manoeuvre.",
+      "Drive about 1.7 km through Kitsilano at 9 a.m. The examiner calls the turns and a lane change on West 4th Avenue, then directs you to a parking gap on West 7th Avenue.",
     lesson:
-      "Follow the examiner's directions. Stop fully at every stop sign and behind the line, keep to 30 km/h in the school zone, signal and check before every turn and lane change, and finish parked parallel within 30 cm of the kerb. One dangerous action or violation ends the test.",
+      "Brake to 30 km/h before entering the school zone. Stop fully behind each stop line. Check the mirror and blind spot before changing lanes on West 4th Avenue, and finish parked parallel within 30 cm of the kerb.",
   },
   {
     id: "road-test-toronto",
@@ -101,9 +101,9 @@ export const ROAD_TESTS = [
     startS: 150,
     spaceS: 50,
     description:
-      "About 1.2 km of the Annex at 9 in the morning: a school zone with all-way stops, a right and two left turns at the lights, a lane change on Spadina Avenue and a parallel park to finish. An examiner marks every manoeuvre.",
+      "Drive about 1.2 km through the Annex at 9 a.m. The route starts on Huron Street, includes a lane change on Spadina Avenue and ends at a parallel-parking gap on Sussex Avenue.",
     lesson:
-      "Follow the examiner's directions. At an all-way stop, stop fully behind the line and go in turn. Keep to the school zone limit, signal and check your mirrors and blind spot before every turn and lane change, and finish parked parallel within 30 cm of the kerb. One dangerous action or violation ends the test.",
+      "At each all-way stop, stop fully behind the line and check who stopped first. Keep to the school-zone limit, signal and check your blind spot before changing lanes on Spadina, and finish parked parallel within 30 cm of the kerb.",
   },
 ];
 
@@ -123,7 +123,9 @@ function chainLanes(map, ids) {
 
 // The gap left for the car on the last street: SPACE_M from `spaceS` along it, inside a legal stretch.
 export function roadTestSpace(map, test) {
-  const e = map.edges.get(test.edges.at(-1));
+  const edge = test.edges.at(-1);
+  const e = map.edges.get(edge);
+  if (!e) throw new Error(`Road test ${test.id} parking edge ${edge} is missing from the map.`);
   const a = test.spaceS,
     b = a + SPACE_M,
     row = ROW_CARS * (CAR.length + ROW_GAP_M);
@@ -133,9 +135,12 @@ export function roadTestSpace(map, test) {
 }
 
 export function roadTestScenario(map, test) {
+  if (!test.edges?.length) throw new Error(`Road test ${test.id} needs an authored edge chain.`);
   const chain = chainLanes(map, test.edges),
     first = chain[0],
     last = chain.at(-1);
+  if (!Number.isFinite(test.startS) || test.startS < 0 || test.startS >= first.length)
+    throw new Error(`Road test ${test.id} starts outside its first lane.`);
   const space = roadTestSpace(map, test),
     k = last.length / last.edgeRef.length;
   const route = routeFromLanes(map, chain, test.startS, Math.min(last.length - 3, (space.b + PAST_M) * k));

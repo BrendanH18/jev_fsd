@@ -19,11 +19,11 @@
 import { projectPoint } from "../map/mapdata.js";
 import { FEATURE_METRICS, hooks } from "../sim/features/index.js";
 
-const BEFORE_TRACKS_FAIL = hooks("examinerFail", "beforeTracks");
 import { CATEGORIES } from "./examiner-categories.js";
 import { challengeFailures } from "./practice.js";
 
 export { CATEGORIES };
+const BEFORE_TRACKS_FAIL = hooks("examinerFail", "beforeTracks");
 export const EXAMINER_VERSION = 1;
 export const MAX_REPEAT = 3;
 
@@ -282,7 +282,7 @@ export function examinerScript(route) {
         c.control.type === "signal"
           ? "Carry straight on at the lights."
           : c.control.all_way
-            ? "At the all-way stop, stop behind the line, then go in turn, straight on."
+            ? "Stop fully behind the line. When it's your turn, go straight through."
             : "At the stop sign, come to a complete stop, then carry straight on.",
     });
   }
@@ -297,8 +297,8 @@ export function examinerScript(route) {
         t.control === "signal"
           ? `At the lights, ${way}.`
           : t.control === "stop"
-            ? `At the stop sign, stop, then ${way}.`
-            : `Take the next ${t.dir === "uturn" ? "chance to make a U-turn" : `${t.dir}${onto}`}.`,
+            ? `Stop fully behind the line, yield, then ${way} when clear.`
+            : `At the next junction, ${way}.`,
     });
   }
   for (const sh of route.laneShifts?.() || []) {
@@ -308,7 +308,7 @@ export function examinerScript(route) {
       kind: "lane",
       from: sh.at - SAY_M,
       at: sh.at,
-      text: `When it's safe, move into the ${side} lane${turn?.dir === side ? `, ready to turn ${side}` : ""}.`,
+      text: `Check your mirror and blind spot, then signal and move into the ${side} lane when safe${turn?.dir === side ? `, ready to turn ${side}` : ""}.`,
     });
   }
   const zones = new Set();
@@ -333,8 +333,14 @@ export function examinerScript(route) {
   return lines.sort((a, b) => a.at - b.at);
 }
 // The line to show `s` metres along the route: the nearest manoeuvre already announced and not yet past.
-export const instructionAt = (script, s) =>
-  script.filter((l) => s >= l.from && s <= l.at + 5).sort((a, b) => a.at - b.at)[0] || null;
+export function instructionAt(script, s) {
+  if (!Number.isFinite(s)) return null;
+  let nearest = null;
+  for (const line of script) {
+    if (s >= line.from && s <= line.at + 5 && (!nearest || line.at < nearest.at)) nearest = line;
+  }
+  return nearest;
+}
 
 // How each failure reason and examiner remark is grouped. Failure reasons are the strings
 // bench/metrics.js `failures()` returns; one this does not know goes under "other".
@@ -369,7 +375,21 @@ const FAIL_REMARK = {
   "failed to yield": "Failed to yield the right of way",
   "off road": "Left the road",
   "not parked": "Did not finish parked within 30 cm of the kerb",
+  "simulation error": "The simulator stopped before the test could be completed",
+  "failed to stop safely for amber": "Continued on amber when there was room to stop safely",
+  "drove in a reserved bus lane": "Used the reserved bus lane outside the permitted turn approach",
+  "passed plow on the right": "Passed an operating snow plow on the side that throws snow and debris",
+  "merged out of turn": "Moved into the queue ahead of the vehicle whose turn it was",
 };
+const FAIL_INCIDENT = new Map([
+  ["collision", "collisions"],
+  ["red light", "red_lights_run"],
+  ["stop sign", "stop_signs_run"],
+  ["failed to yield", "failed_to_yield"],
+  ["passed plow on the right", "plow_right_pass"],
+  ["merged out of turn", "merge_cut_in"],
+  ["passed a cyclist too close", "close_pass"],
+]);
 // Minor errors from the incident stream: the observer's and the coaching report's own.
 const MINOR = {
   turn_no_signal: "right_of_way",
@@ -412,22 +432,14 @@ export function examine(test, report) {
       minors: [],
       categories: [],
     };
+  const incidents = Array.isArray(report.incidents) ? report.incidents : [];
+  const incidentOf = (type) => (type ? (incidents.find((i) => i?.type === type) ?? null) : null);
   const fails = reasons.map((reason) => ({
     category: failureCategory(reason),
-    remark: FAIL_REMARK[reason] || capital(reason),
+    remark: Object.hasOwn(FAIL_REMARK, reason) ? FAIL_REMARK[reason] : capital(reason),
     reason,
-    incident:
-      report.incidents?.find(
-        (i) =>
-          ({
-            collision: "collisions",
-            "red light": "red_lights_run",
-            "stop sign": "stop_signs_run",
-            "failed to yield": "failed_to_yield",
-          })[reason] === i.type,
-      ) || null,
+    incident: incidentOf(FAIL_INCIDENT.get(reason)),
   }));
-  const incidentOf = (type) => report.incidents?.find((i) => i.type === type) || null;
   if (report.zone_speeding_s > 1)
     fails.push({
       category: "speed",
@@ -481,9 +493,11 @@ export function examine(test, report) {
     counts[key] = (counts[key] || 0) + 1;
     if (counts[key] <= MAX_REPEAT) minors.push({ key, category, remark, incident, points });
   };
-  for (const i of report.incidents || []) {
-    if (!MINOR[i.type] || (i.type === "kerb" && !report.parking)) continue;
-    mark(i.type, MINOR[i.type], MINOR_REMARK[i.type] || i.message, i);
+  for (const i of incidents) {
+    const type = i?.type;
+    if (typeof type !== "string" || !Object.hasOwn(MINOR, type) || (type === "kerb" && !report.parking)) continue;
+    const remark = MINOR_REMARK[type] || i.message || capital(type.replaceAll("_", " "));
+    mark(type, MINOR[type], remark, i);
   }
   if (report.speeding_s >= 0.5 && report.speeding_s <= 10)
     mark(

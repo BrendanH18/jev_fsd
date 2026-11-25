@@ -1,4 +1,5 @@
 import { failures } from "../bench/metrics.js";
+import { challengeConfig } from "./challenge-config.js";
 
 export const PRACTICE_KEY = "jev-fsd-practice-v1";
 export const PRACTICE_BACKUP_FORMAT = "jev-practice-backup/1";
@@ -48,22 +49,26 @@ const normalize = (value) =>
   String(value || "")
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
+    .replace(/[‘’ʼ]/g, "'")
+    .replace(/[–—‑]/g, "-")
     .toLowerCase();
 const finite = (value) => Number.isFinite(value) && value >= 0;
 const date = (value) => typeof value === "string" && Number.isFinite(Date.parse(value));
 const version = (challenge) => challenge.version || 1;
-const counterKeys = ["collisions", "red_lights", "stop_signs", "failed_to_yield", "off_road_s", "resets"];
+const driveId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const mapLabel = (challenge) => challenge.map?.replaceAll("_", " ") ?? "";
+const auditCounts = ["collisions", "red_lights", "stop_signs", "failed_to_yield", "resets"];
 
 export function challengeCity(challenge) {
-  return CITIES[challenge.map] || challenge.map.replaceAll("_", " ");
+  return Object.hasOwn(CITIES, challenge.map) ? CITIES[challenge.map] : mapLabel(challenge);
 }
 
 export function challengeNeighbourhood(challenge) {
-  return NEIGHBOURHOODS[challenge.map] || challenge.map.replaceAll("_", " ");
+  return Object.hasOwn(NEIGHBOURHOODS, challenge.map) ? NEIGHBOURHOODS[challenge.map] : mapLabel(challenge);
 }
 
 export function challengeProvince(challenge) {
-  return PROVINCES[challenge.map] || "";
+  return Object.hasOwn(PROVINCES, challenge.map) ? PROVINCES[challenge.map] : "";
 }
 
 export function practiceStatus(challenge, records = {}) {
@@ -75,9 +80,20 @@ export function practiceStatus(challenge, records = {}) {
 export function filterChallenges(challenges, filters = {}, records = {}) {
   const terms = normalize(filters.query).trim().split(/\s+/).filter(Boolean);
   return challenges.filter((c) => {
+    if (
+      (filters.city && challengeCity(c) !== filters.city) ||
+      (filters.province && challengeProvince(c) !== filters.province) ||
+      (filters.skill && c.difficulty !== filters.skill) ||
+      (filters.weather && c.weather !== filters.weather) ||
+      (filters.time && c.time !== filters.time) ||
+      (filters.progress && practiceStatus(c, records) !== filters.progress)
+    )
+      return false;
+    if (!terms.length) return true;
     const haystack = normalize(
       [
         c.id,
+        c.id?.replaceAll("-", " "),
         c.title,
         c.description,
         c.lesson,
@@ -91,31 +107,24 @@ export function filterChallenges(challenges, filters = {}, records = {}) {
         c.time,
       ].join(" "),
     );
-    return (
-      terms.every((term) => haystack.includes(term)) &&
-      (!filters.city || challengeCity(c) === filters.city) &&
-      (!filters.province || challengeProvince(c) === filters.province) &&
-      (!filters.skill || c.difficulty === filters.skill) &&
-      (!filters.weather || c.weather === filters.weather) &&
-      (!filters.progress || practiceStatus(c, records) === filters.progress)
-    );
+    return terms.every((term) => haystack.includes(term));
   });
 }
 
 function sanitizePracticeRecords(parsed) {
   const valid = (r) =>
     r &&
-    Number.isInteger(r.version) &&
+    Number.isSafeInteger(r.version) &&
     r.version > 0 &&
-    Number.isInteger(r.attempts) &&
+    Number.isSafeInteger(r.attempts) &&
     r.attempts > 0 &&
     typeof r.completed === "boolean" &&
-    (r.best_score === null || (finite(r.best_score) && r.best_score <= 100)) &&
+    (r.best_score === null || (r.completed && finite(r.best_score) && r.best_score <= 100)) &&
     date(r.last_at);
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? Object.fromEntries(
         Object.entries(parsed)
-          .filter(([id, r]) => /^[a-z0-9-]+$/.test(id) && valid(r))
+          .filter(([id, r]) => driveId.test(id) && valid(r))
           .map(([id, r]) => [
             id,
             {
@@ -132,9 +141,13 @@ function sanitizePracticeRecords(parsed) {
 
 // Progress is compact and independent of the last twenty full drive reports.
 export function readPractice(storage) {
+  return readRecords(storage, PRACTICE_KEY, sanitizePracticeRecords);
+}
+
+function readRecords(storage, key, sanitize) {
   let raw;
   try {
-    raw = (storage || globalThis.localStorage).getItem(PRACTICE_KEY);
+    raw = (storage || globalThis.localStorage).getItem(key);
   } catch {
     return { records: {}, available: false };
   }
@@ -144,13 +157,17 @@ export function readPractice(storage) {
   } catch {
     parsed = {};
   }
-  return { records: sanitizePracticeRecords(parsed), available: true };
+  return { records: sanitize(parsed), available: true };
+}
+
+function hasAuditCounters(report) {
+  return finite(report.off_road_s) && auditCounts.every((key) => Number.isSafeInteger(report[key]) && report[key] >= 0);
 }
 
 // Reports and manual progress use the same arrival, safety and parking verdict.
 // Older reports without the required audit counters cannot establish a clean arrival.
 export function challengeFailures(challenge, report) {
-  if (!report || !counterKeys.every((key) => finite(report[key]))) return null;
+  if (!report || !hasAuditCounters(report)) return null;
   return failures({
     ...report,
     arrived: report.status === "arrived",
@@ -162,32 +179,34 @@ export function challengeFailures(challenge, report) {
 export function practiceEligible(challenge, report) {
   if (
     report?.driver !== "manual" ||
+    !driveId.test(challenge.id) ||
     report.branched !== false ||
     report.modified !== false ||
     !["arrived", "finished"].includes(report.status) ||
     !date(report.started_at) ||
-    !counterKeys.every((key) => finite(report[key])) ||
+    !hasAuditCounters(report) ||
     report.resets !== 0
   )
     return false;
-  const expected = {
-    version: version(challenge),
-    challenge: challenge.id,
-    map: challenge.map,
-    seed: challenge.seed,
-    weather: challenge.weather,
-    time: challenge.time,
-    traffic: 0,
-    car: "compact",
-    clock: 0,
-  };
-  return Object.entries(expected).every(([key, value]) => report.config?.[key] === value);
+  return Object.entries(challengeConfig(challenge)).every(([key, value]) => report.config?.[key] === value);
 }
 
 // A coaching grade is not a pass.
 export function practiceOutcome(challenge, report) {
   if (!practiceEligible(challenge, report)) return null;
   return challengeFailures(challenge, report).length ? "attempted" : "completed";
+}
+
+export function practiceReportNote(practice) {
+  if (practice?.outcome === "completed")
+    return practice.saved === false
+      ? "Clean manual arrival. Browser storage is unavailable."
+      : "Clean manual arrival. Challenge completed.";
+  if (practice?.outcome === "attempted")
+    return practice.saved === false
+      ? "Manual attempt was not saved because browser storage is unavailable."
+      : "Manual attempt recorded. Retry for a clean arrival.";
+  return "AI, mixed-driver, modified and replay drives do not change your manual practice progress.";
 }
 
 export function savePractice(challenge, report, storage) {
@@ -199,7 +218,7 @@ export function savePractice(challenge, report, storage) {
   const score = outcome === "completed" && finite(report.score) && report.score <= 100 ? report.score : null;
   state.records[challenge.id] = {
     version: version(challenge),
-    attempts: (previous?.attempts || 0) + 1,
+    attempts: Math.min(Number.MAX_SAFE_INTEGER, (previous?.attempts || 0) + 1),
     completed: outcome === "completed" || !!previous?.completed,
     best_score: score === null ? (previous?.best_score ?? null) : Math.max(score, previous?.best_score ?? 0),
     last_at:
@@ -222,28 +241,30 @@ export const ROAD_TEST_KEY = "jev-fsd-road-tests-v1";
 const validBest = (b) =>
   b &&
   typeof b.pass === "boolean" &&
-  Number.isInteger(b.demerits) &&
+  Number.isSafeInteger(b.demerits) &&
   b.demerits >= 0 &&
-  Number.isInteger(b.fails) &&
+  Number.isSafeInteger(b.fails) &&
   b.fails >= 0 &&
   date(b.at);
 
 function sanitizeRoadTestRecords(parsed) {
   const valid = (r) =>
     r &&
-    Number.isInteger(r.version) &&
+    Number.isSafeInteger(r.version) &&
     r.version > 0 &&
-    Number.isInteger(r.attempts) &&
+    Number.isSafeInteger(r.attempts) &&
     r.attempts > 0 &&
-    Number.isInteger(r.passes) &&
+    Number.isSafeInteger(r.passes) &&
     r.passes >= 0 &&
     r.passes <= r.attempts &&
     validBest(r.best) &&
-    date(r.last_at);
+    r.best.pass === r.passes > 0 &&
+    date(r.last_at) &&
+    Date.parse(r.best.at) <= Date.parse(r.last_at);
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? Object.fromEntries(
         Object.entries(parsed)
-          .filter(([id, r]) => /^[a-z0-9-]+$/.test(id) && valid(r))
+          .filter(([id, r]) => driveId.test(id) && valid(r))
           .map(([id, r]) => [
             id,
             {
@@ -259,19 +280,7 @@ function sanitizeRoadTestRecords(parsed) {
 }
 
 export function readRoadTests(storage) {
-  let raw;
-  try {
-    raw = (storage || globalThis.localStorage).getItem(ROAD_TEST_KEY);
-  } catch {
-    return { records: {}, available: false };
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(raw || "{}");
-  } catch {
-    parsed = {};
-  }
-  return { records: sanitizeRoadTestRecords(parsed), available: true };
+  return readRecords(storage, ROAD_TEST_KEY, sanitizeRoadTestRecords);
 }
 export function roadTestRecord(test, records = {}) {
   const record = Object.hasOwn(records, test.id) ? records[test.id] : null;
@@ -292,15 +301,17 @@ const better = (a, b) =>
 // `sheet` is the examiner's sheet for the report (lab/examiner.js `examine`).
 export function saveRoadTest(test, report, sheet, storage) {
   const state = readRoadTests(storage);
-  if (!practiceEligible(test, report) || !sheet?.available) return { ...state, outcome: null };
+  if (!practiceEligible(test, report) || !sheet?.available || !Array.isArray(sheet.fails))
+    return { ...state, outcome: null };
+  const attempt = { pass: sheet.pass, demerits: sheet.demerits, fails: sheet.fails.length, at: report.started_at };
+  if (!validBest(attempt)) return { ...state, outcome: null };
   const outcome = sheet.pass ? "passed" : "failed";
   const previous = roadTestRecord(test, state.records);
   if (previous && Date.parse(previous.last_at) === Date.parse(report.started_at)) return { ...state, outcome };
-  const attempt = { pass: sheet.pass, demerits: sheet.demerits, fails: sheet.fails.length, at: report.started_at };
   state.records[test.id] = {
     version: version(test),
-    attempts: (previous?.attempts || 0) + 1,
-    passes: (previous?.passes || 0) + (sheet.pass ? 1 : 0),
+    attempts: Math.min(Number.MAX_SAFE_INTEGER, (previous?.attempts || 0) + 1),
+    passes: Math.min(Number.MAX_SAFE_INTEGER, (previous?.passes || 0) + (sheet.pass ? 1 : 0)),
     best: previous && !better(attempt, previous.best) ? previous.best : attempt,
     last_at:
       previous && Date.parse(previous.last_at) > Date.parse(report.started_at) ? previous.last_at : report.started_at,
@@ -341,21 +352,27 @@ export function importPracticeBackup(data, storage, confirmReplace = () => false
   }
   const practiceRecords = sanitizePracticeRecords(data.practice);
   const roadTestRecords = sanitizeRoadTestRecords(data.road_tests);
-  const rawPracticeCount = Object.keys(data.practice).length;
-  const rawRoadTestCount = Object.keys(data.road_tests).length;
-  if (
-    rawPracticeCount > Object.keys(practiceRecords).length ||
-    rawRoadTestCount > Object.keys(roadTestRecords).length
-  ) {
-    throw new Error("Backup contains invalid practice or road-test entries.");
+  for (const [field, records] of [
+    ["practice", practiceRecords],
+    ["road_tests", roadTestRecords],
+  ]) {
+    const invalid = Object.keys(data[field]).find((id) => !Object.hasOwn(records, id));
+    if (invalid !== undefined) throw new Error(`Backup field ${field} has an invalid entry for "${invalid}".`);
   }
   const store = storage || globalThis.localStorage;
   const keys = [PRACTICE_KEY, ROAD_TEST_KEY];
   const previous = keys.map((key) => store.getItem(key));
-  if (previous.some((raw) => raw !== null && raw !== "{}") && !confirmReplace()) return null;
+  const next = [JSON.stringify(practiceRecords), JSON.stringify(roadTestRecords)];
+  // Do not rewrite identical backups or prompt when the only stored data belongs to an empty record set.
+  if (
+    previous.some((raw, i) => raw !== next[i] && raw !== null && !/^(?:\s*|\s*\{\s*\}\s*)$/.test(raw)) &&
+    !confirmReplace()
+  )
+    return null;
   try {
-    store.setItem(PRACTICE_KEY, JSON.stringify(practiceRecords));
-    store.setItem(ROAD_TEST_KEY, JSON.stringify(roadTestRecords));
+    for (const [i, key] of keys.entries()) {
+      if (next[i] !== previous[i]) store.setItem(key, next[i]);
+    }
   } catch (error) {
     // A failed Web Storage write leaves its own key intact. Restore any key that changed.
     for (const [i, key] of keys.entries()) {

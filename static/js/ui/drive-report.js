@@ -2,7 +2,13 @@ import { $, api, h } from "../common.js";
 import { HISTORY_KEY, readHistory } from "../sim/drive-score.js";
 import { exportDriveCard, copyDriveLink, driveLink, exportFilename } from "../lab/share.js";
 import { CHALLENGES, challengeById, challengeConfig } from "../lab/challenges.js";
-import { readPractice, practiceStatus, practiceEligible, challengeFailures } from "../lab/practice.js";
+import {
+  readPractice,
+  practiceStatus,
+  practiceEligible,
+  challengeFailures,
+  practiceReportNote,
+} from "../lab/practice.js";
 import { examinerSheet, roadTestNote } from "./road-test.js";
 import { decidedByText } from "../bench/metrics.js";
 
@@ -173,6 +179,7 @@ export class DriveReport {
           timeout: "Destination not reached.",
           stuck: "Destination not reached: the car got stuck.",
           "not parked": "Not parked within 30 cm of the kerb at the destination.",
+          "simulation error": "The simulator stopped before this drive could be completed.",
         })[reason] || reason,
     );
     if (report.resets > 0)
@@ -190,7 +197,13 @@ export class DriveReport {
       reasons === null
         ? h("p", {}, "This saved report does not contain enough information to confirm a clean arrival.")
         : clean
-          ? h("p", {}, "Reached the destination with no challenge failures. The coaching grade is separate.")
+          ? h(
+              "p",
+              {},
+              challenge.park
+                ? "Parked within 30 cm of the kerb with no challenge failures. The coaching grade is separate."
+                : "Reached the destination with no challenge failures. The coaching grade is separate.",
+            )
           : h(
               "div",
               {},
@@ -411,12 +424,6 @@ export class DriveReport {
     const next =
       remaining.find((c) => practiceStatus(c, records) === "attempted") ||
       remaining.find((c) => practiceStatus(c, records) === "untried");
-    const practiceNote =
-      report.practice?.outcome === "completed"
-        ? "Clean manual arrival. Challenge completed."
-        : report.practice?.outcome === "attempted"
-          ? "Manual attempt recorded. Retry for a clean arrival."
-          : "AI, mixed-driver, modified and replay drives do not change your manual practice progress.";
     // (a road test, lab/road-tests.js, is marked on the examiner's sheet instead: ui/road-test.js)
     const roadTest = !!challenge?.roadTest;
     // (sections a report does not have are null: left out, not shown as "null")
@@ -481,12 +488,7 @@ export class DriveReport {
           ? h(
               "p",
               { class: "challenge-practice-note" },
-              roadTest ? roadTestNote(challenge, report) : practiceNote,
-              report.practice?.outcome
-                ? report.practice.saved
-                  ? " Progress saved in this browser."
-                  : " Browser storage is unavailable; progress could not be saved."
-                : "",
+              roadTest ? roadTestNote(challenge, report) : practiceReportNote(report.practice),
             )
           : null,
         (this.shareStatus = h("p", { class: "report-share-status", role: "status" })),
