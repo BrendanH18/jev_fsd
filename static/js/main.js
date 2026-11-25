@@ -1439,6 +1439,8 @@ export async function boot() {
     // Schedule before stepping: a failed simulation must not permanently stop rendering or controls.
     if (!manual) requestAnimationFrame(frame);
     if (simulationError) world.paused = true;
+    // A pulse queued while driving was suspended never reaches physics, even if this poll resumes it.
+    if (simulationError || world.paused || photo.active) input.stepped();
     input.poll();
     touch?.setAutopilot(autopilot.enabled);
     lab.update(recorder, now);

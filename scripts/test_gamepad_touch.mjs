@@ -224,6 +224,22 @@ assert.equal(steerFromDrag(NaN), 0);
   assert.equal(input.left, 1, "two sources steering the same way clamp at full lock");
   near(input.throttle, 0.8);
   assert.equal(input.hardBrake, true);
+  let pulse = 1;
+  input.addSource({
+    get state() {
+      return { steer: 0, throttle: pulse, brake: 0, hardBrake: false };
+    },
+    stepped() {
+      const had = pulse > 0;
+      pulse = 0;
+      return had;
+    },
+  });
+  input.poll();
+  near(input.throttle, 1);
+  input.stepped();
+  near(input.throttle, 0.8); // consuming a pulse keeps the poll-only source's sample
+  assert.equal(input.hardBrake, true);
   dialogOpen = true;
   input.poll();
   dialogOpen = false;

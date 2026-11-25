@@ -21,6 +21,7 @@ export class Input {
     this.sources = []; // analog sources, each with a `state` (see poll)
     this.analog = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
     this.blocked = false;
+    this.samples = null; // this frame's sample from each source (poll)
     window.addEventListener("keydown", (ev) => {
       if (ev.defaultPrevented) return;
       if (ev.isComposing || editing(ev.target) || document.querySelector("dialog[open]")) {
@@ -96,12 +97,12 @@ export class Input {
   poll() {
     const blocked = typeof document !== "undefined" && (document.hidden || document.querySelector?.("dialog[open]"));
     if (blocked) this.keys.clear();
-    const states = this.sources.map((source) => {
+    this.samples = this.sources.map((source) => {
       if (blocked) source.release?.();
       return source.poll ? source.poll() : source.state;
     });
     this.blocked = !!blocked;
-    this.analog = this.combine(states);
+    this.analog = this.combine(this.samples);
     return this.analog;
   }
   combine(states) {
@@ -117,12 +118,16 @@ export class Input {
     return sum;
   }
   // Called after each physics step (and while live driving is suspended), so a one-step pulse from a
-  // source drives exactly one step. Sources keep their latest sample in `state` (the gamepad caches
-  // its poll), so the merged input is rebuilt without polling again.
+  // source drives exactly one step. Only a source whose stepped() consumed something is re-read
+  // (from its `state`); every other source keeps this frame's polled sample.
   stepped() {
     let changed = false;
-    for (const source of this.sources) changed = source.stepped?.() || changed;
-    if (changed) this.analog = this.combine(this.sources.map((source) => source.state));
+    this.sources.forEach((source, i) => {
+      if (!source.stepped?.()) return;
+      changed = true;
+      if (this.samples) this.samples[i] = source.state;
+    });
+    if (changed && this.samples) this.analog = this.combine(this.samples);
   }
   get throttle() {
     return Math.max(Number(this.keys.has("w") || this.keys.has("arrowup")), this.analog.throttle);
