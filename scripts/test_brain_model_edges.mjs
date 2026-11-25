@@ -319,6 +319,18 @@ await test("Decision diagnostics identify the applied driver and fallback paths 
   await fire(autopilot);
   assert.equal(autopilot.lastDecision.decidedBy, "local");
 });
+await test("A local Rules decision failure fails the step it happens in", async () => {
+  const ctx = makeDrive(valid);
+  const { autopilot, world } = ctx;
+  autopilot.setBrain("rules");
+  autopilot.onDecision = () => {
+    throw new Error("local decision failed");
+  };
+  assert.throws(() => stepWorld(ctx, 1 / 60, 0), /local decision failed/);
+  assert.equal(autopilot.totals.decisions, 1);
+  assert.equal(world.violations.fallbacks, 0);
+  assert.equal(autopilot.stepFailure, undefined);
+});
 await test("A decision observer failure reaches the next live step and also rejects in lockstep", async () => {
   const ctx = makeDrive(valid);
   const { autopilot, world } = ctx;

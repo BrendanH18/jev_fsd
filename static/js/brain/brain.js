@@ -368,15 +368,18 @@ export class Autopilot {
     const flags = hazardFlags(snap);
     const interval = flags.length ? INTERVAL_HAZARD_MS : INTERVAL_CLEAR_MS;
     if (!this.inFlight && now - this.lastStart >= interval) {
-      this.firing = this.fire(snap, now, flags);
-      // The live loop has no await. Hand its next step the error and keep firing rejectable for lockstep.
+      // A failure before any request (sampling, Rules or a local decision) throws here, in this step.
+      // A failure after the request is latched for the next step, since the live loop has no await,
+      // and `firing` stays rejectable for lockstep.
+      this.firing = Promise.resolve(this.fire(snap, now, flags));
       this.firing.catch((error) => {
-        this.stepFailure = { error };
+        this.stepFailure ??= { error };
       });
     }
   }
 
-  async fire(snap, now, flags) {
+  // The synchronous part of a decision: it returns the request's promise when a driver must be asked.
+  fire(snap, now, flags) {
     const world = this.world;
     this.lastStart = now;
     const epoch = this.epoch;
@@ -440,6 +443,10 @@ export class Autopilot {
       this.apply(r, snap, candidates, request, "local");
       return;
     }
+    return this.ask(snap, epoch, eligible, request, clear, local, candidates);
+  }
+
+  async ask(snap, epoch, eligible, request, clear, local, candidates) {
     const controller = new AbortController();
     this.inFlight = controller;
     const brain = this.brain;
