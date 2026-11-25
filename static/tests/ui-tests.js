@@ -873,3 +873,30 @@ export async function checkPhotoRoutes(app) {
     window.fetch = originalFetch;
   }
 }
+
+export function checkQualityFallback(app) {
+  const originalWrite = Storage.prototype.setItem;
+  const select = document.getElementById("quality");
+  const originalQuality = app.view.quality;
+  const originalUrl = location.href;
+  const url = new URL(originalUrl);
+  url.searchParams.delete("quality");
+  history.replaceState(history.state, "", url);
+  Storage.prototype.setItem = () => {
+    throw new DOMException("Storage is blocked", "SecurityError");
+  };
+  try {
+    select.value = originalQuality === "low" ? "high" : "low";
+    select.dispatchEvent(new Event("change"));
+    return {
+      name: "With storage blocked, a graphics selection adds a URL override for reload",
+      ok:
+        app.view.quality !== originalQuality && new URL(location.href).searchParams.get("quality") === app.view.quality,
+    };
+  } finally {
+    Storage.prototype.setItem = originalWrite;
+    app.view.setQuality(originalQuality);
+    select.value = originalQuality;
+    history.replaceState(history.state, "", originalUrl);
+  }
+}

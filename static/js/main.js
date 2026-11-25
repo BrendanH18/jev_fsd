@@ -395,7 +395,7 @@ export async function boot() {
     hud.setQuality(view.quality);
     const saved = qualitySetting.write(view.quality);
     const next = new URL(location.href);
-    if (next.searchParams.has("quality")) {
+    if (!saved || next.searchParams.has("quality")) {
       if (saved) next.searchParams.delete("quality");
       else next.searchParams.set("quality", view.quality);
       history.replaceState(history.state, "", next);
