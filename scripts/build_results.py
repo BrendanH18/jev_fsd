@@ -27,12 +27,16 @@ import gzip
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import sys
+import tempfile
 import zlib
 from datetime import date as calendar_date
+from datetime import datetime
 from pathlib import Path
+from stat import S_IMODE
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "data" / "runs"
@@ -45,7 +49,6 @@ README = ROOT / "README.md"
 FORMAT = "jev-results/1"
 LEGACY_MANIFEST_FORMAT = "jev-run-manifest/1"
 MANIFEST_FORMAT = "jev-run-manifest/2"
-CANONICAL = {path.stem: json.loads(path.read_text()) for path in sorted((ROOT / "data" / "suites").glob("v*.json"))}
 LEGACY_SUITE = "legacy"
 CUSTOM_SUITE = "custom"
 LEGACY_RESULTS_THROUGH = "2026-11-20"
@@ -53,6 +56,47 @@ START, END = "<!-- results:start -->", "<!-- results:end -->"
 HOME_MAP = "kitsilano"
 LEADERBOARD = "https://brendanh18.github.io/jev_fsd/results.html"
 WEATHERS = ("dry", "fog", "rain", "snow")
+
+
+def nonblank(value) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def nonnegative_integer(value) -> bool:
+    return type(value) is int and 0 <= value <= 2**53 - 1
+
+
+def fingerprint(value) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{16}", value) is not None
+
+
+def distinct_ids(value, *, allow_empty=False) -> bool:
+    return (
+        isinstance(value, list)
+        and (value or allow_empty)
+        and all(nonblank(item) for item in value)
+        and len(value) == len(set(value))
+    )
+
+
+def read_json(path: Path):
+    def unique_keys(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key {key!r}")
+            result[key] = value
+        return result
+
+    def invalid_constant(value):
+        raise ValueError(f"invalid JSON number {value}")
+
+    try:
+        return json.loads(
+            path.read_text(encoding="utf-8-sig"), object_pairs_hook=unique_keys, parse_constant=invalid_constant
+        )
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{rel(path)}: {error}") from error
 
 
 def _load_map_names() -> dict[str, str]:
@@ -131,6 +175,89 @@ def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
 
 
+def calendar_day(value: str) -> bool:
+    try:
+        return isinstance(value, str) and calendar_date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
+
+
+def load_suite_definitions(directory: Path) -> dict:
+    """Check frozen definitions before using them to qualify a publication."""
+    definitions = {}
+    for path in sorted(directory.glob("v*.json")):
+        version = path.stem
+        definition = read_json(path)
+
+        def require(ok, detail, source=path):
+            if not ok:
+                raise ValueError(f"{rel(source)}: {detail}")
+
+        require(re.fullmatch(r"v[1-9][0-9]*", version), "expected a numbered suite filename")
+        require(isinstance(definition, dict), "expected a suite object")
+        require(definition.get("version") == version, "suite version disagrees with filename")
+        commit = definition.get("defined_from")
+        require(isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit), "invalid defined_from commit")
+        maps = definition.get("maps")
+        require(isinstance(maps, dict) and maps, "missing suite map fingerprints")
+        for key, sha in maps.items():
+            require(key in MAP_NAMES and fingerprint(sha), f"invalid suite map fingerprint for {key!r}")
+        arena = definition.get("arena")
+        drives = arena.get("drives") if isinstance(arena, dict) else None
+        require(isinstance(drives, dict) and drives, "missing suite arena drives")
+        for key, drive in drives.items():
+            require(nonblank(key) and isinstance(drive, dict), f"invalid suite arena drive {key!r}")
+            require(isinstance(drive.get("map"), str) and drive["map"] in maps, f"unknown suite map for {key!r}")
+            require(nonnegative_integer(drive.get("seed")), f"invalid suite arena seed for {key!r}")
+            require(
+                nonnegative_integer(drive.get("version")) and drive["version"] > 0,
+                f"invalid suite arena version for {key!r}",
+            )
+        bench = definition.get("bench")
+        config = bench.get("config") if isinstance(bench, dict) else None
+        require(isinstance(config, dict), "missing suite benchmark config")
+        require(isinstance(config.get("map"), str) and config["map"] in maps, "unknown suite benchmark map")
+        require(config.get("features") in ("bare", "city"), "invalid suite benchmark preset")
+        require(config.get("mode") == "lockstep", "suite benchmark must be lockstep")
+        require(nonnegative_integer(config.get("seed")), "invalid suite benchmark seed")
+        require(nonnegative_integer(config.get("npcs")), "invalid suite benchmark traffic count")
+        require(nonnegative_integer(config.get("count")) and config["count"] > 0, "invalid suite benchmark route count")
+        weathers = bench.get("weathers")
+        require(
+            distinct_ids(weathers) and all(weather in WEATHERS for weather in weathers), "invalid suite weather list"
+        )
+        ids = bench.get("ids")
+        require(distinct_ids(ids) and len(ids) == config["count"], "invalid suite benchmark route IDs")
+        require(fingerprint(bench.get("route_sha")), "invalid suite benchmark route fingerprint")
+        heldout = bench.get("heldout")
+        require(isinstance(heldout, dict), "missing suite held-out plan")
+        seeds = heldout.get("seeds")
+        require(
+            isinstance(seeds, list)
+            and seeds
+            and all(nonnegative_integer(seed) for seed in seeds)
+            and len(seeds) == len(set(seeds))
+            and config["seed"] not in seeds,
+            "invalid suite held-out seed list",
+        )
+        require(
+            nonnegative_integer(heldout.get("count")) and heldout["count"] > 0, "invalid suite held-out route count"
+        )
+        require(fingerprint(heldout.get("route_sha")), "invalid suite held-out route fingerprint")
+        definitions[version] = definition
+    if "v1" not in definitions:
+        raise ValueError(f"{rel(directory)}: suite v1 is required for legacy arena coverage")
+    return definitions
+
+
+try:
+    CANONICAL = load_suite_definitions(ROOT / "data" / "suites")
+except ValueError as error:
+    if __name__ == "__main__":
+        sys.exit(f"Could not load frozen suites: {error}")
+    raise
+
+
 def round_share(value):
     return None if value is None else round(value, 4)
 
@@ -151,7 +278,7 @@ def shares(results: list[dict]) -> dict:
     out = {"decisions": decisions}
     for name in ("model", "local", "fallback"):
         if all(f"{name}_decisions" in r for r in results):
-            count = sum(r[f"{name}_decisions"] for r in results)
+            count = sum(r[f"{name}_decisions"] or 0 for r in results)
             out[f"{name}_decisions"] = count
             out[f"{name}_share"] = round_share(count / decisions)
         else:
@@ -162,11 +289,11 @@ def shares(results: list[dict]) -> dict:
 
 
 def read_recording(path: Path) -> dict:
-    with gzip.open(path, "rt") if path.suffix == ".gz" else open(path) as f:
+    with (gzip.open if path.suffix == ".gz" else open)(path, "rt", encoding="utf-8-sig") as f:
         return json.load(f)
 
 
-_FACTS: dict[tuple, dict] = {}
+_FACTS: dict[Path, tuple[tuple, dict]] = {}
 
 
 def recording_facts(path: Path) -> dict:
@@ -174,31 +301,71 @@ def recording_facts(path: Path) -> dict:
     answered_by() of them under "answered". Cached by file, modification time and size, since the
     tests build many times and the drives come to over a gigabyte once parsed. Callers must not
     change what it returns."""
-    stat = path.stat()
-    key = (path.resolve(), stat.st_mtime_ns, stat.st_size)
-    if key not in _FACTS:
+    try:
+        resolved = path.resolve()
+        stat = path.stat()
+        key = (stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+        cached = _FACTS.get(resolved)
+        if cached is not None and cached[0] == key:
+            return cached[1]
         full = read_recording(path)
-        _FACTS[key] = {**{k: v for k, v in full.items() if k != "drives"}, "answered": answered_by(full)}
-    return _FACTS[key]
+        if not isinstance(full, dict):
+            raise ValueError("recording must be an object")
+        for field in ("header", "results", "drives"):
+            if not isinstance(full.get(field), dict):
+                raise ValueError(f"recording needs a {field} object")
+        if any(not nonblank(drive_id) or not isinstance(row, dict) for drive_id, row in full["results"].items()):
+            raise ValueError("recording results need drive IDs and result objects")
+        facts = {**{k: v for k, v in full.items() if k != "drives"}, "answered": answered_by(full)}
+        _FACTS[resolved] = (key, facts)
+        return facts
+    except _ARTIFACT_ERRORS as error:
+        raise ValueError(f"{rel(path)}: {error}") from error
 
 
 def answered_by(recording: dict) -> tuple[list[str], float | None, int]:
     """The model ids that answered (from each reply's meta), the cost billed by the provider when
     every reply carries `usage.cost`, and the number of replies."""
     models, billed, replies, with_cost = {}, 0.0, 0, 0
-    for drive in recording["drives"].values():
-        for calls in drive.values():
-            for call in calls:
+    for drive_id, drive in recording["drives"].items():
+        if not nonblank(drive_id) or not isinstance(drive, dict):
+            raise ValueError(f"invalid recording drive {drive_id!r}")
+        for channel, calls in drive.items():
+            label = f"recording drive {drive_id!r}, {channel}"
+            if not isinstance(calls, list):
+                raise ValueError(f"{label}: expected a call array")
+            for index, call in enumerate(calls, 1):
+                if not isinstance(call, dict):
+                    raise ValueError(f"{label} call {index}: expected an object")
                 reply = call.get("response")
-                if not reply:
+                if reply is None or reply == {}:
                     continue
+                if not isinstance(reply, dict):
+                    raise ValueError(f"{label} call {index}: expected a response object")
+                meta = reply.get("meta")
+                if meta is not None and not isinstance(meta, dict):
+                    raise ValueError(f"{label} call {index}: expected response metadata")
                 replies += 1
-                model = (reply.get("meta") or {}).get("model")
+                model = (meta or {}).get("model")
+                if model is not None and not isinstance(model, str):
+                    raise ValueError(f"{label} call {index}: invalid responding model ID")
                 if model:
                     models[model] = models.get(model, 0) + 1
-                usage = ((reply.get("trace") or {}).get("response") or {}).get("usage") or {}
-                if "cost" in usage:
+                trace = reply.get("trace")
+                if trace is not None and not isinstance(trace, dict):
+                    raise ValueError(f"{label} call {index}: expected a response trace object")
+                wire = (trace or {}).get("response")
+                if wire is not None and not isinstance(wire, dict):
+                    raise ValueError(f"{label} call {index}: expected a provider response object")
+                usage = (wire or {}).get("usage")
+                if usage is not None and not isinstance(usage, dict):
+                    raise ValueError(f"{label} call {index}: expected a provider usage object")
+                if usage and "cost" in usage:
+                    if not nonnegative_number(usage["cost"]):
+                        raise ValueError(f"{label} call {index}: invalid provider usage cost")
                     billed += usage["cost"]
+                    if not finite_number(billed):
+                        raise ValueError(f"{label} call {index}: total provider cost is out of range")
                     with_cost += 1
     ranked = sorted(models, key=lambda m: -models[m])
     return ranked, (round(billed, 6) if replies and with_cost == replies else None), replies
@@ -235,66 +402,89 @@ def bench_route_fingerprint(scenarios: list[dict]) -> str:
         console.log(benchRouteFingerprint(JSON.parse(readFileSync(0, "utf8"))));
     """
     try:
-        return subprocess.run(
+        sha = subprocess.run(
             ["node", "--experimental-default-type=module", "--input-type=module", "-e", script],
             cwd=ROOT,
             input=json.dumps(scenarios, allow_nan=False),
             check=True,
             capture_output=True,
             text=True,
+            timeout=30,
         ).stdout.strip()
-    except (FileNotFoundError, subprocess.CalledProcessError) as error:
+    except FileNotFoundError as error:
         raise ValueError("Node 22 is required to fingerprint numbered benchmark tape scenarios") from error
+    except subprocess.TimeoutExpired as error:
+        raise ValueError("Node timed out fingerprinting benchmark tape scenarios") from error
+    except subprocess.CalledProcessError as error:
+        detail = next((line for line in error.stderr.splitlines() if "Error:" in line), f"status {error.returncode}")
+        raise ValueError(f"Node could not fingerprint benchmark tape scenarios ({detail})") from error
+    if not fingerprint(sha):
+        raise ValueError("Node returned an invalid benchmark route fingerprint")
+    return sha
 
 
-def canonical_member(run: dict, manifest: dict, definition: dict) -> bool:
-    """Whether the complete run is one of the frozen suite's members."""
+def canonical_mismatch(run: dict, manifest: dict, definition: dict) -> str | None:
+    """The first mismatch with the applicable frozen suite, if any."""
     suite, maps = manifest["suite"], manifest["maps"]
     results = run["results"]
-    if run.get("stopped") or suite.get("only") or any(result.get("stopped") for result in results):
-        return False
+    if run.get("stopped"):
+        return "report stopped early"
+    if suite.get("only"):
+        return "route selection is partial"
+    if any(result.get("stopped") for result in results):
+        return "a drive stopped early"
     if suite["kind"] == "arena":
         drives = definition["arena"]["drives"]
-        return (
-            suite["set"] == "all"
-            and suite["drives"] == drives
-            and len(results) == len(drives)
-            and {r["challenge"]: (r["map"], r.get("seed"), r.get("version")) for r in results}
-            == {key: (d["map"], d["seed"], d["version"]) for key, d in drives.items()}
-            and {key: value["fingerprint"] for key, value in maps.items()} == definition["maps"]
-            and manifest["track"] in ("guarded", "open")
-        )
+        if suite["set"] != "all":
+            return "arena set must be all"
+        if suite["drives"] != drives:
+            return "authored drive definitions differ"
+        if len(results) != len(drives) or {r["challenge"] for r in results} != drives.keys():
+            return "arena report does not contain the complete drive set"
+        if {key: value["fingerprint"] for key, value in maps.items()} != definition["maps"]:
+            return "arena map fingerprints differ"
+        return None
     config, bench = run["config"], definition["bench"]
-    if any(
-        config.get(key) != value and not (config.get("heldout") and key in ("seed", "count"))
-        for key, value in bench["config"].items()
-    ):
-        return False
-    if (
-        config.get("weather") not in bench["weathers"]
-        or maps[config["map"]]["fingerprint"] != definition["maps"][config["map"]]
-        or config.get("park")
-        or "hour" in config
-        or "cover" in config
-        or config.get("without")
-        or (config.get("track") or "guarded") != "guarded"
-    ):
-        return False
+    for key, value in bench["config"].items():
+        if config.get("heldout") and key in ("seed", "count"):
+            continue
+        if type(config.get(key)) is not type(value) or config[key] != value:
+            return f"benchmark config {key} differs from the definition"
+    if config.get("weather") not in bench["weathers"]:
+        return "benchmark weather is outside the suite"
+    if maps[config["map"]]["fingerprint"] != definition["maps"][config["map"]]:
+        return "benchmark map fingerprint differs"
+    if config.get("park"):
+        return "destination parking is outside the suite"
+    if "hour" in config:
+        return "a custom hour is outside the suite"
+    if "cover" in config:
+        return "a feature covering row is outside the suite"
+    if config.get("without"):
+        return "omitting features is outside the suite"
+    if manifest["track"] != "guarded":
+        return "benchmark track must be guarded"
     if config.get("heldout"):
         seeds, count = bench["heldout"]["seeds"], bench["heldout"]["count"]
         expected = [f"s{seed}-{i + 1}" for seed in seeds for i in range(count)]
-        if (
-            config.get("seeds") != seeds
-            or config["seed"] != seeds[0]
-            or config["count"] != len(expected)
-            or suite.get("route_sha") != bench["heldout"]["route_sha"]
-        ):
-            return False
+        planned = config.get("seeds")
+        if not isinstance(planned, list) or not all(nonnegative_integer(seed) for seed in planned) or planned != seeds:
+            return "held-out seed list differs"
+        if not nonnegative_integer(config.get("seed")) or config["seed"] != seeds[0]:
+            return "first held-out seed differs"
+        if not nonnegative_integer(config.get("count")) or config["count"] != len(expected):
+            return "held-out route count differs"
+        if suite.get("route_sha") != bench["heldout"]["route_sha"]:
+            return "held-out route fingerprint differs"
     else:
         expected = bench["ids"]
         if suite.get("route_sha") != bench["route_sha"]:
-            return False
-    return suite["ids"] == expected and suite.get("generated_ids") == expected
+            return "benchmark route fingerprint differs"
+    if suite["ids"] != expected:
+        return "reported routes differ from the frozen order"
+    if suite.get("generated_ids") != expected:
+        return "generated routes differ from the frozen order"
+    return None
 
 
 def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = None) -> dict | None:
@@ -304,13 +494,15 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         if not ok:
             raise ValueError(f"{rel(path)}: {message}")
 
-    def fingerprint(value):
-        return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{16}", value)
-
     manifest = run.get("manifest")
-    header = recording["header"] if recording is not None else {}
+    header = recording.get("header") if recording is not None else {}
+    if recording is not None:
+        require(isinstance(header, dict), "recording needs a header object")
+        require(isinstance(recording.get("results"), dict), "recording needs a results object")
+        require(all(isinstance(row, dict) for row in recording["results"].values()), "invalid recorded drive result")
+
     version = run.get("suite_version", LEGACY_SUITE)
-    require(version in (LEGACY_SUITE, CUSTOM_SUITE, *CANONICAL), "unknown suite_version")
+    require(version in (LEGACY_SUITE, CUSTOM_SUITE, *CANONICAL), f"unknown suite_version {version!r}")
     require(
         all(r.get("suite_version") == run.get("suite_version") for r in run["results"]),
         "run and results disagree on suite_version",
@@ -329,6 +521,7 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         "run manifest is required",
     )
     if manifest["format"] == MANIFEST_FORMAT:
+        require(version != LEGACY_SUITE, "manifest version 2 requires a custom or numbered suite")
         require(
             run.get("suite_version") == manifest.get("suite_version") == version,
             "report and manifest disagree on suite_version",
@@ -337,28 +530,35 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
         require(version == LEGACY_SUITE and "suite_version" not in manifest, "legacy manifests have no suite version")
     commit = manifest.get("source_commit")
     require(
-        isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit) and manifest.get("source_dirty") is False,
-        "the manifest must identify a clean source commit",
+        isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit),
+        "the manifest must identify a clean source commit (invalid source_commit)",
+    )
+    require(
+        manifest.get("source_dirty") is False,
+        "the manifest must identify a clean source commit (source_dirty must be false)",
     )
     config, summary, results = run.get("config"), run["summary"], run["results"]
     settings = config if config is not None else summary
-    driver, engine, track = settings["brain"], settings.get("engine"), settings.get("track") or "guarded"
-    require(
-        manifest.get("driver") == driver and manifest.get("engine") == engine and manifest.get("track") == track,
-        "driver, engine or track disagrees with the manifest",
-    )
-    require(isinstance(manifest.get("engine_version"), str) and manifest["engine_version"], "missing V8 version")
-    cost = round(sum(r.get("cost_usd") or 0 for r in results), 6)
-    require(manifest.get("cost_usd") == summary.get("cost_usd") == cost, "cost disagrees with the manifest")
+    driver, engine, track = settings.get("brain"), settings.get("engine"), settings.get("track") or "guarded"
+    require(nonblank(driver) and manifest.get("driver") == driver, "driver disagrees with the manifest")
+    require(nonblank(engine) and manifest.get("engine") == engine, "engine disagrees with the manifest")
+    require(track in ("guarded", "open") and manifest.get("track") == track, "track disagrees with the manifest")
+    require(nonblank(manifest.get("engine_version")), "missing V8 version")
+    verify_cost(results, summary, manifest, require)
     maps, suite = manifest.get("maps"), manifest.get("suite")
-    require(isinstance(maps, dict) and isinstance(suite, dict), "missing map or suite provenance")
-    for data in maps.values():
-        require(isinstance(data, dict) and fingerprint(data.get("fingerprint")), "invalid map fingerprint")
+    require(isinstance(maps, dict) and maps, "missing map provenance")
+    require(isinstance(suite, dict), "missing suite provenance")
+    for key, data in maps.items():
+        require(nonblank(key) and isinstance(data, dict), f"invalid map provenance for {key!r}")
+        require(fingerprint(data.get("fingerprint")), f"invalid map fingerprint for {key!r}")
+        pack = data.get("pack_version")
+        require(pack is None or nonblank(pack) or nonnegative_integer(pack), f"invalid pack version for {key!r}")
         components = data.get("components")
-        require(
-            isinstance(components, dict) and components and all(fingerprint(v) for v in components.values()),
-            "invalid map component fingerprints",
-        )
+        require(isinstance(components, dict) and components, f"missing map component fingerprints for {key!r}")
+        for component, sha in components.items():
+            require(
+                nonblank(component) and fingerprint(sha), f"invalid map component fingerprint for {key!r}.{component}"
+            )
     if config is None:
         drives = suite.get("drives")
         require(
@@ -366,38 +566,67 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
             "arena set disagrees with the manifest",
         )
         require(
-            all(isinstance(d, dict) and d.get("map") in maps and type(d.get("seed")) is int for d in drives.values()),
+            all(
+                nonblank(key)
+                and isinstance(d, dict)
+                and isinstance(d.get("map"), str)
+                and d["map"] in maps
+                and nonnegative_integer(d.get("seed"))
+                for key, d in drives.items()
+            ),
             "invalid authored map or seed",
         )
         require(
             all(r["challenge"] in drives and drives[r["challenge"]]["map"] == r["map"] for r in results),
             "arena drives disagree with the manifest",
         )
+        require(len({r["challenge"] for r in results}) == len(results), "arena report repeats a drive ID")
+        for row in results:
+            if "pack" in row:
+                require(
+                    row["pack"] == maps[row["map"]].get("pack_version"),
+                    f"arena pack version disagrees for {row['challenge']!r}",
+                )
         if version != LEGACY_SUITE:
+            for drive_id, drive in drives.items():
+                require(
+                    nonnegative_integer(drive.get("version")) and drive["version"] > 0,
+                    f"invalid challenge version for {drive_id!r}",
+                )
             require(
                 all(all(r.get(key) == drives[r["challenge"]].get(key) for key in ("version", "seed")) for r in results),
                 "arena versions or seeds disagree with the manifest",
             )
     else:
         key = config.get("map")
+        require(suite.get("kind") == "bench", "expected a benchmark manifest suite")
+        require(suite.get("config") == config, "benchmark settings disagree with the manifest")
+        ids = [r["id"] for r in results]
         require(
-            suite.get("kind") == "bench"
-            and suite.get("config") == config
-            and suite.get("ids") == [r["id"] for r in results]
-            and (suite.get("only") is True or suite.get("generated_ids", suite["ids"]) == suite["ids"]),
-            "benchmark settings or routes disagree with the manifest",
+            distinct_ids(suite.get("ids"), allow_empty=True) and suite["ids"] == ids,
+            "benchmark routes disagree with the manifest",
         )
+        generated = suite.get("generated_ids", ids)
+        require(distinct_ids(generated, allow_empty=True), "invalid generated benchmark route IDs")
+        require("only" not in suite or type(suite["only"]) is bool, "benchmark only must be a boolean")
+        selected = set(ids)
         require(
-            set(maps) == {key} and maps[key].get("pack_version") == config.get("pack"),
-            "map disagrees with the manifest",
+            ids == [route for route in generated if route in selected]
+            and (suite.get("only") is True or generated == ids or run.get("stopped")),
+            "benchmark selection differs from the generated route order",
         )
+        require("route_sha" not in suite or fingerprint(suite["route_sha"]), "invalid benchmark route fingerprint")
+        require(isinstance(key, str) and set(maps) == {key}, "benchmark map disagrees with the manifest")
+        require(maps[key].get("pack_version") == config.get("pack"), f"map pack version disagrees for {key!r}")
     if version in CANONICAL:
-        require(canonical_member(run, manifest, CANONICAL[version]), f"run is outside the canonical {version} suite")
+        mismatch = canonical_mismatch(run, manifest, CANONICAL[version])
+        require(mismatch is None, f"run is outside the canonical {version} suite ({mismatch})")
     model, prompt = manifest.get("model"), manifest.get("prompt_hash")
     is_model = driver == "jev" or driver.startswith(("decision:", "llm:"))
     is_local = recording is not None and recording.get("format") == "jev-local-recording/1"
     if is_model:
-        require(isinstance(model, str) and model and fingerprint(prompt), "invalid model id or prompt fingerprint")
+        require(nonblank(model), "invalid model id in the manifest")
+        require(fingerprint(prompt), "invalid prompt fingerprint in the manifest")
         require(recording is not None, "model runs need a corresponding recording")
         require(not is_local, "model runs need a model recording")
     elif is_local:
@@ -407,9 +636,11 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
     if is_model or is_local:
         require(header.get("manifest") == manifest, "recording and results disagree on their manifest")
         require(header.get("driver") == driver, "recording driver disagrees with the manifest")
-        require(header.get("model") == model and header.get("engine") == engine, "recording model or engine disagrees")
+        require(header.get("model") == model, "recording model disagrees with the manifest")
+        require(header.get("engine") == engine, "recording engine disagrees with the manifest")
         if driver.startswith("llm:"):
-            require(header.get("versions", {}).get("llm_prompt") == prompt, "recording prompt disagrees")
+            versions = header.get("versions")
+            require(isinstance(versions, dict) and versions.get("llm_prompt") == prompt, "recording prompt disagrees")
         fingerprints = {key: data["fingerprint"] for key, data in maps.items()}
         recorded_maps = header.get("maps") if config is None else {config["map"]: header.get("map_sha")}
         require(fingerprints == recorded_maps, "recording map data disagrees with the manifest")
@@ -420,13 +651,15 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
             "recording and report have different drives",
         )
         if config is None:
-            recorded_arena = header.get("arena") or {}
+            recorded_arena = header.get("arena")
+            require(isinstance(recorded_arena, dict), "recording needs an arena header")
             require(
                 (recorded_arena.get("track") or "guarded") == track, "arena recording track disagrees with the manifest"
             )
             require(
                 recorded_arena.get("set") == suite["set"]
-                and set(recorded_arena.get("ids", [])) == suite["drives"].keys(),
+                and distinct_ids(recorded_arena.get("ids"))
+                and set(recorded_arena["ids"]) == suite["drives"].keys(),
                 "arena recording set or drive list disagrees with the manifest",
             )
             if version in CANONICAL:
@@ -435,18 +668,24 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
                     "canonical arena recording contains a stopped drive",
                 )
             # The arena report exports only a subset of the fields kept in the tape.
-            require(
-                all(
-                    all(
-                        key in recorded[result[id_key]] and recorded[result[id_key]][key] == value
+            for result in results:
+                drive = result[id_key]
+                tape_row = recorded[drive]
+                difference = next(
+                    (
+                        key
                         for key, value in result.items()
-                        if key != "suite_version"
-                    )
-                    and recorded[result[id_key]].get("seed") == suite["drives"][result[id_key]]["seed"]
-                    for result in results
-                ),
-                "arena report and recording disagree on per-drive data",
-            )
+                        if key != "suite_version" and (key not in tape_row or tape_row[key] != value)
+                    ),
+                    None,
+                )
+                require(
+                    difference is None, f"arena report and recording disagree on per-drive data ({drive}: {difference})"
+                )
+                require(
+                    tape_row.get("seed") == suite["drives"][drive]["seed"],
+                    f"arena recording seed disagrees for {drive!r}",
+                )
         else:
             if version in CANONICAL:
                 scenarios = recording.get("scenarios", {})
@@ -458,18 +697,52 @@ def checked_manifest(path: Path, run: dict, date: str, recording: dict | None = 
                     bench_route_fingerprint(list(scenarios.values())) == suite["route_sha"],
                     "benchmark recording routes disagree with the canonical suite",
                 )
-            require(
-                all(
-                    comparable_bench_result(result) == comparable_bench_result(recorded[result[id_key]])
-                    for result in results
-                ),
-                "benchmark report and recording disagree on per-drive data",
-            )
+            for result in results:
+                drive = result[id_key]
+                report_row, tape_row = comparable_bench_result(result), comparable_bench_result(recorded[drive])
+                if report_row != tape_row:
+                    different = sorted(
+                        key
+                        for key in report_row.keys() | tape_row.keys()
+                        if key not in report_row or key not in tape_row or report_row[key] != tape_row[key]
+                    )
+                    require(
+                        False,
+                        f"benchmark report and recording disagree on per-drive data ({drive}: {', '.join(different)})",
+                    )
     return manifest
+
+
+def verify_cost(results, summary, manifest, require):
+    total = 0.0
+    for index, result in enumerate(results, 1):
+        cost = result.get("cost_usd")
+        require(
+            cost is None or nonnegative_number(cost),
+            f"invalid cost_usd for drive {result.get('challenge', result.get('id', index))!r}",
+        )
+        total += cost or 0
+    require(nonnegative_number(total) and total <= (2**53 - 1) / 1e6, "run cost is out of range")
+    # Match Math.round at six decimals rather than Python's ties-to-even rounding.
+    scaled = total * 1e6
+    whole = math.floor(scaled)
+    cost = (whole + (scaled - whole >= 0.5)) / 1e6
+    require(
+        nonnegative_number(summary.get("cost_usd")) and summary["cost_usd"] == cost,
+        "summary cost disagrees with drive costs",
+    )
+    require(
+        nonnegative_number(manifest.get("cost_usd")) and manifest["cost_usd"] == cost,
+        "cost disagrees with the manifest",
+    )
 
 
 def finite_number(value) -> bool:
     return type(value) is int or (type(value) is float and math.isfinite(value))
+
+
+def nonnegative_number(value) -> bool:
+    return finite_number(value) and 0 <= value <= sys.float_info.max
 
 
 SCORE_NUMERIC = ("progress", "distance_m", "rms_jerk", "hard_brakes", "max_lat_accel", "collisions", "safety_brakes")
@@ -511,6 +784,8 @@ def published_drive(result: dict, map_sha: str | None = None, comparison: dict |
     if comparison is not None:
         if not result.get("result_sha") or comparison.get("result_sha") != result["result_sha"] or inputs is not None:
             raise ValueError(f"{result['challenge']}: comparison measurements disagree with the recording")
+        if not isinstance(comparison.get("score_inputs"), dict):
+            raise ValueError(f"{result['challenge']}: missing comparison score inputs")
         inputs = comparison["score_inputs"]
     if inputs is not None:
         shared = (
@@ -524,7 +799,8 @@ def published_drive(result: dict, map_sha: str | None = None, comparison: dict |
             "safety_brakes",
         )
         if (
-            inputs.get("method") != "driven-corridor-v1"
+            not isinstance(inputs, dict)
+            or inputs.get("method") != "driven-corridor-v1"
             or not has_score_inputs(inputs)
             or any(inputs[k] != result.get(k) for k in shared)
         ):
@@ -534,24 +810,20 @@ def published_drive(result: dict, map_sha: str | None = None, comparison: dict |
 
 
 def _read_submission_source(path: Path) -> tuple[Path, dict, Path, str]:
-    entry = json.loads(path.read_text())
+    entry = read_json(path)
+
+    def require(ok, detail):
+        if not ok:
+            raise ValueError(f"{rel(path)}: invalid published submission ({detail})")
+
+    require(isinstance(entry, dict), "expected an object")
     submitter, digest = entry.get("submitter"), entry.get("recording_sha256")
-    day = path.parent.name
-    try:
-        valid_date = day == calendar_date.fromisoformat(day).isoformat()
-    except ValueError:
-        valid_date = False
-    if (
-        entry.get("format") != "jev-published-submission/1"
-        or not isinstance(submitter, str)
-        or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,38}", submitter)
-        or not isinstance(digest, str)
-        or not re.fullmatch(r"[0-9a-f]{64}", digest)
-        or not valid_date
-        or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", path.stem)
-        or not isinstance(entry.get("report"), dict)
-    ):
-        raise ValueError(f"{rel(path)}: invalid published submission")
+    require(entry.get("format") == "jev-published-submission/1", "unsupported format")
+    require(isinstance(submitter, str) and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,38}", submitter), "invalid submitter ID")
+    require(isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest), "invalid recording SHA-256")
+    require(calendar_day(path.parent.name), "submission date must be YYYY-MM-DD")
+    require(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", path.stem), "invalid submission filename")
+    require(isinstance(entry.get("report"), dict), "missing report object")
     tape = path.with_suffix(".json.gz")
     if not tape.is_file():
         raise ValueError(f"{rel(path)}: the submitted recording is missing")
@@ -567,7 +839,7 @@ def _read_submission_source(path: Path) -> tuple[Path, dict, Path, str]:
 def challenge_sources():
     for path in sorted(RESULTS.glob("*/*.json")):
         name = f"{path.stem}-{path.parent.name}"
-        yield path, json.loads(path.read_text()), RECORDINGS / f"{name}.json.gz", None
+        yield path, read_json(path), RECORDINGS / f"{name}.json.gz", None
     for path in sorted(SUBMISSIONS.glob("*/*.json")):
         yield _read_submission_source(path)
 
@@ -602,11 +874,9 @@ def _build_challenge_row(
     path: Path, published: dict, recording_path: Path, submitter: str | None, drivers: dict
 ) -> dict:
     date, name = path.parent.name, path.stem
-    summary, results = published["summary"], published["results"]
-    if not isinstance(results, list) or any(
-        not isinstance(row, dict) or not isinstance(row.get("pass"), bool) for row in results
-    ):
-        raise ValueError(f"{rel(path)} needs a results list with boolean verdicts")
+    if not calendar_day(date):
+        raise ValueError(f"{rel(path)}: arena results date must be YYYY-MM-DD")
+    summary, results = check_arena_shape(published)
     driver = summary["brain"]
     # (the guarded track, every earlier record's, or the open one: static/js/brain/tracks.js)
     track = summary.get("track") or "guarded"
@@ -627,6 +897,7 @@ def _build_challenge_row(
         if ((header.get("arena") or {}).get("track") or "guarded") != track:
             raise ValueError(f"{rel(recording_path)} and {rel(path)} were driven on different tracks")
         row_results = list(recording["results"].values())
+        check_result_rows(row_results, "challenge")
         mine = {r["challenge"]: r["pass"] for r in results}
         theirs = {r["challenge"]: r["pass"] for r in row_results}
         if mine != theirs:
@@ -644,7 +915,9 @@ def _build_challenge_row(
                 cost, cost_basis = billed, "billed by the provider (usage.cost in each recorded reply)"
             drivers.setdefault(driver, model_driver(header, model))
     if not submitter and comparison_path.is_file():
-        comparisons = json.loads(comparison_path.read_text())
+        comparisons = read_json(comparison_path)
+        if not isinstance(comparisons, dict) or any(not isinstance(value, dict) for value in comparisons.values()):
+            raise ValueError(f"{rel(comparison_path)}: expected comparison measurement objects keyed by drive")
         if track != "guarded" or recording is None or comparisons.keys() - recording["results"].keys():
             raise ValueError(f"{rel(comparison_path)} must match its guarded source recording")
         sources.append(rel(comparison_path))
@@ -653,7 +926,12 @@ def _build_challenge_row(
     # (the whole set, every challenge and road test: a run of some of them, or one stopped part way,
     # is a pilot, never the full set)
     version = published.get("suite_version", LEGACY_SUITE)
-    full = summary.get("set") == "all" and {r["challenge"] for r in row_results} == full_set_ids(version)
+    full = (
+        summary.get("set") == "all"
+        and not published.get("stopped")
+        and not any(result.get("stopped") for result in row_results)
+        and {r["challenge"] for r in row_results} == full_set_ids(version)
+    )
     failed = [{"id": r["challenge"], "map": r["map"], "failures": r["failures"]} for r in row_results if not r["pass"]]
     return {
         "driver": row_driver,
@@ -694,10 +972,13 @@ def _build_challenge_row(
 
 
 def challenge_rows(drivers: dict) -> list[dict]:
-    return [
-        _build_challenge_row(path, published, recording_path, submitter, drivers)
-        for path, published, recording_path, submitter in challenge_sources()
-    ]
+    rows = []
+    for path, published, recording_path, submitter in challenge_sources():
+        try:
+            rows.append(_build_challenge_row(path, published, recording_path, submitter, drivers))
+        except _ARTIFACT_ERRORS as error:
+            raise ValueError(_format_validation_error(path, error)) from error
+    return rows
 
 
 def full_set_ids(version: str = LEGACY_SUITE) -> set[str]:
@@ -723,40 +1004,117 @@ def committed_runs() -> list[Path]:
 VARIANT_KEYS = ("heldout", "park", "hour", "cover", "without", "track")
 
 
+def check_result_rows(results: list, id_key: str) -> None:
+    seen = set()
+    for index, row in enumerate(results, 1):
+        if not isinstance(row, dict) or not nonblank(row.get(id_key)) or type(row.get("pass")) is not bool:
+            raise ValueError(
+                f"result {index} needs a {'route' if id_key == 'id' else 'challenge'} ID and boolean verdict"
+            )
+        drive = row[id_key]
+        if drive in seen:
+            raise ValueError(f"run repeats {'route' if id_key == 'id' else 'challenge'} ID {drive!r}")
+        seen.add(drive)
+        if id_key == "challenge" and not nonblank(row.get("map")):
+            raise ValueError(f"{drive}: missing arena map ID")
+        failures = row.get("failures")
+        if (failures is not None or (id_key == "challenge" and not row["pass"])) and (
+            not isinstance(failures, list) or any(not nonblank(item) for item in failures)
+        ):
+            raise ValueError(f"{drive}: failures must be an array of labels")
+        for field in ("time_s", "cost_usd"):
+            if field in row and row[field] is not None and not nonnegative_number(row[field]):
+                raise ValueError(f"{drive}: {field} must be a finite nonnegative number")
+        for field in (
+            "fallbacks",
+            "hard_brakes",
+            "safety_brakes",
+            "collisions",
+            "flagged_choices",
+            "decisions",
+            "model_decisions",
+            "local_decisions",
+            "fallback_decisions",
+        ):
+            if field in row and row[field] is not None and not nonnegative_integer(row[field]):
+                raise ValueError(f"{drive}: {field} must be a nonnegative integer")
+        for field in ("model_share", "local_share", "fallback_share"):
+            if field in row and row[field] is not None and (not nonnegative_number(row[field]) or row[field] > 1):
+                raise ValueError(f"{drive}: {field} must be between zero and one")
+        if row["pass"] and row.get("simulation_error"):
+            raise ValueError(f"{drive}: a simulation error cannot pass")
+
+
+def check_summary_cost(summary):
+    if summary.get("cost_usd") is not None and not nonnegative_number(summary["cost_usd"]):
+        raise ValueError("summary cost_usd must be a finite nonnegative number")
+
+
+def check_arena_shape(report):
+    if not isinstance(report, dict) or not isinstance(report.get("summary"), dict):
+        raise ValueError("arena report needs a summary object")
+    summary, results = report["summary"], report.get("results")
+    if not nonblank(summary.get("brain")):
+        raise ValueError("arena summary needs a driver ID")
+    if summary.get("track") not in (None, "guarded", "open"):
+        raise ValueError("arena summary has an invalid track")
+    if not isinstance(results, list):
+        raise ValueError("arena report needs a results array")
+    check_result_rows(results, "challenge")
+    for key, expected in (("drives", len(results)), ("passed", sum(r["pass"] for r in results))):
+        if key in summary and (not nonnegative_integer(summary[key]) or summary[key] != expected):
+            raise ValueError(f"arena summary {key} disagrees with results")
+    check_summary_cost(summary)
+    return summary, results
+
+
 def _check_run_shape(run):
     if not isinstance(run, dict):
         raise ValueError("benchmark run must be an object")
     config, summary, results = run.get("config"), run.get("summary"), run.get("results")
     if not isinstance(config, dict) or not isinstance(summary, dict):
         raise ValueError("benchmark run needs config and summary objects")
-    required_strings = (run.get("name"), run.get("saved_at"), config.get("brain"), config.get("map"))
-    if any(not isinstance(value, str) or not value.strip() for value in required_strings):
-        raise ValueError("benchmark run needs a name, saved_at, driver and map")
-    calendar_date.fromisoformat(run["saved_at"][:10])
-    stop_reason = run.get("stopped")
-    if not isinstance(results, list) or (not results and not (isinstance(stop_reason, str) and stop_reason.strip())):
-        raise ValueError("benchmark run needs a results list with drives or a stop reason")
-    if any(
-        not isinstance(row, dict)
-        or not isinstance(row.get("id"), str)
-        or not row["id"].strip()
-        or not isinstance(row.get("pass"), bool)
-        for row in results
+    for key, value in (
+        ("name", run.get("name")),
+        ("saved_at", run.get("saved_at")),
+        ("driver", config.get("brain")),
+        ("map", config.get("map")),
     ):
-        raise ValueError("benchmark result needs a route ID and boolean verdict")
-    seen = set()
-    for result in results:
-        route = result["id"]
-        if route in seen:
-            raise ValueError(f"benchmark run repeats route ID {route!r}")
-        seen.add(route)
+        if not nonblank(value):
+            raise ValueError(f"benchmark run needs a {key}")
+    try:
+        datetime.fromisoformat(run["saved_at"].removesuffix("Z"))
+    except ValueError as error:
+        raise ValueError("benchmark saved_at must be an ISO date or timestamp") from error
+    if not calendar_day(run["saved_at"][:10]):
+        raise ValueError("benchmark saved_at date must be YYYY-MM-DD")
+    stop_reason = run.get("stopped")
+    if stop_reason is not None and not nonblank(stop_reason):
+        raise ValueError("benchmark stopped must be a nonblank stop reason")
+    if not isinstance(results, list) or (not results and not nonblank(stop_reason)):
+        raise ValueError("benchmark run needs a results list with drives or a stop reason")
+    check_result_rows(results, "id")
+    check_summary_cost(summary)
+    if summary.get("km") is not None and not nonnegative_number(summary["km"]):
+        raise ValueError("benchmark summary km must be a finite nonnegative number")
+    for field, minimum in (("seed", 0), ("count", 1), ("npcs", 0)):
+        if field in config and (not nonnegative_integer(config[field]) or config[field] < minimum):
+            raise ValueError(f"benchmark config {field} must be an integer >= {minimum}")
+    if config.get("track") not in (None, "guarded", "open"):
+        raise ValueError("benchmark config has an invalid track")
 
 
 def _validated_run(path: Path, *, validate_filtered=False):
-    run = json.loads(path.read_text())
+    run = read_json(path)
+    if not isinstance(run, dict):
+        raise ValueError("benchmark run must be an object")
+    config = run.get("config")
+    if not isinstance(config, dict):
+        raise ValueError("benchmark run needs a config object")
+    if config.get("map") is not None and not isinstance(config["map"], str):
+        raise ValueError("benchmark map must be a string")
     if validate_filtered:
         _check_run_shape(run)
-    config = run.get("config") or {}
     key = map_key(config)
     if not validate_filtered and (not key or not run.get("results")):
         return None
@@ -766,9 +1124,8 @@ def _validated_run(path: Path, *, validate_filtered=False):
     )
     version = run.get("suite_version", LEGACY_SUITE)
     manifest_data = run.get("manifest")
-    partial = isinstance(manifest_data, dict) and (
-        run.get("stopped") or (manifest_data.get("suite") or {}).get("only") is True
-    )
+    manifest_suite = manifest_data.get("suite") if isinstance(manifest_data, dict) else None
+    partial = bool(run.get("stopped")) or (isinstance(manifest_suite, dict) and manifest_suite.get("only") is True)
     excluded = (
         not key
         or not run.get("results")
@@ -777,6 +1134,8 @@ def _validated_run(path: Path, *, validate_filtered=False):
     )
     if excluded and not validate_filtered:
         return None
+    if not validate_filtered:
+        _check_run_shape(run)
     recording_path = RECORDINGS / f"{path.stem}.json.gz"
     recording = recording_facts(recording_path) if recording_path.is_file() else None
     manifest = checked_manifest(path, run, run["saved_at"][:10], recording)
@@ -784,8 +1143,6 @@ def _validated_run(path: Path, *, validate_filtered=False):
     skip = excluded or (variant and version != CUSTOM_SUITE)
     if skip and not validate_filtered:
         return None
-    if not validate_filtered:
-        _check_run_shape(run)
     if recording is not None:
         header = recording["header"]
         published_verdicts = {r["id"]: r["pass"] for r in run["results"]}
@@ -815,7 +1172,10 @@ def _validated_run(path: Path, *, validate_filtered=False):
 def run_rows(drivers: dict) -> list[dict]:
     newest = {}
     for path in committed_runs():
-        entry = _validated_run(path)
+        try:
+            entry = _validated_run(path)
+        except _ARTIFACT_ERRORS as error:
+            raise ValueError(_format_validation_error(path, error)) from error
         if entry is None:
             continue
         group, value = entry
@@ -1048,16 +1408,27 @@ def readme_with(text: str, block: str) -> str:
         raise ValueError(f"README.md has no {START} ... {END} block")
     if text.count(START) != 1 or text.count(END) != 1:
         raise ValueError("README.md must contain exactly one pair of results markers")
-    return pattern.sub(lambda _: f"{START}\n{block}\n{END}", text, count=1)
+    newline = "\r\n" if "\r\n" in text else "\n"
+    return pattern.sub(lambda _: newline.join((START, block.replace("\n", newline), END)), text, count=1)
 
 
 def _format_validation_error(path: Path, err: Exception) -> str:
     label = rel(path)
     text = str(err)
-    return text if text.startswith(label) else f"{label}: {text}"
+    return text if text.startswith(f"{label}:") else f"{label}: {text}"
 
 
-_ARTIFACT_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError, EOFError, zlib.error)
+_ARTIFACT_ERRORS = (
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+    AttributeError,
+    EOFError,
+    OverflowError,
+    RecursionError,
+    zlib.error,
+)
 
 
 def validate_all() -> list[str]:
@@ -1066,7 +1437,7 @@ def validate_all() -> list[str]:
     drivers: dict = {k: dict(v) for k, v in BUILT_IN.items()}
     for path in sorted(RESULTS.glob("*/*.json")):
         try:
-            published = json.loads(path.read_text())
+            published = read_json(path)
             name = f"{path.stem}-{path.parent.name}"
             _build_challenge_row(path, published, RECORDINGS / f"{name}.json.gz", None, drivers)
         except _ARTIFACT_ERRORS as err:
@@ -1083,6 +1454,24 @@ def validate_all() -> list[str]:
         except _ARTIFACT_ERRORS as err:
             errors.append(_format_validation_error(path, err))
     return errors
+
+
+def write_publication(files: tuple[tuple[Path, str], ...]) -> None:
+    pending = []
+    try:
+        for path, text in files:
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=path.parent, prefix=f".{path.name}.", delete=False
+            ) as stream:
+                stage = Path(stream.name)
+                pending.append((stage, path))
+                stream.write(text.encode("utf-8"))
+            stage.chmod(S_IMODE(path.stat().st_mode) if path.exists() else 0o644)
+        for stage, path in pending:
+            os.replace(stage, path)
+    finally:
+        for stage, _ in pending:
+            stage.unlink(missing_ok=True)
 
 
 def main(argv=None) -> int:
@@ -1119,20 +1508,26 @@ def main(argv=None) -> int:
             return 0
     try:
         data = build()
-        output, readme = render(data), readme_with(README.read_text(), readme_block(data))
+        output, readme = render(data), readme_with(README.read_bytes().decode("utf-8"), readme_block(data))
     except _ARTIFACT_ERRORS as err:
         print(f"Could not generate published results: {err}", file=sys.stderr)
         return 1
     if args.check or args.diff:
         stale = []
         for p, want in ((OUTPUT, output), (README, readme)):
-            current = p.read_text() if p.is_file() else ""
-            if not p.is_file() or current != want:
+            try:
+                current = p.read_bytes()
+            except FileNotFoundError:
+                current = None
+            except OSError as error:
+                print(f"Could not check {rel(p)}: {error}", file=sys.stderr)
+                return 1
+            if current != want.encode("utf-8"):
                 stale.append(p.name)
                 if args.diff:
                     label = rel(p)
                     diff = difflib.unified_diff(
-                        current.splitlines(keepends=True),
+                        (current or b"").decode("utf-8", errors="replace").splitlines(keepends=True),
                         want.splitlines(keepends=True),
                         fromfile=f"a/{label}",
                         tofile=f"b/{label}",
@@ -1143,8 +1538,11 @@ def main(argv=None) -> int:
             return 1
         print(f"data/results.json and the README results table are up to date ({len(data['rows'])} rows).")
         return 0
-    OUTPUT.write_text(output)
-    README.write_text(readme)
+    try:
+        write_publication(((OUTPUT, output), (README, readme)))
+    except OSError as error:
+        print(f"Could not write published results: {error}", file=sys.stderr)
+        return 1
     print(f"Wrote {rel(OUTPUT)} ({len(data['rows'])} rows) and the README results table.")
     return 0
 
