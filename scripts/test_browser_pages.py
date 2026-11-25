@@ -187,6 +187,21 @@ def check_published_replay(page, url):
         page.keyboard.press("Enter")
         assert driver_header.get_attribute("aria-sort") == direction
         assert sort_button.evaluate("button => button === document.activeElement")
+    city = page.locator("#results-city")
+    coverage = city.get_by_role("combobox", name="Coverage")
+    coverage.select_option("complete")
+    assert city.locator("tbody tr").count() == 1
+    assert "not run" not in city.locator("tbody").inner_text()
+    coverage.select_option("missing")
+    assert city.locator("tbody tr").count() > 1
+    assert all("not run" in row for row in city.locator("tbody tr").all_inner_texts())
+    coverage.select_option("")
+    # Lab item: Preserve the active suite in the leaderboard URL when its picker changes.
+    page.locator("#results-version").evaluate("(select) => { select.dispatchEvent(new Event('change')); }")
+    assert (
+        page.evaluate("new URL(location.href).searchParams.get('suite')")
+        == page.locator("#results-version").input_value()
+    )
     replay = page.locator("#published-replay")
     canvas = replay.get_by_role("img", name="Overhead street map of the recorded drive")
     play = replay.get_by_role("button", name="Play replay", exact=True)
@@ -409,6 +424,33 @@ def check_incident_comparison(page):
     assert negatives[-1][1:] == [0, False] and len(replay_requests) == 2
 
 
+def check_library_progress(page):
+    page.evaluate("""async () => {
+      const { PRACTICE_KEY, ROAD_TEST_KEY } = await import('/js/lab/practice.js');
+      const last_at = '2026-11-24T00:00:00Z';
+      localStorage.setItem(PRACTICE_KEY, JSON.stringify({
+        'door-zone': { version: 1, attempts: 2, completed: true, best_score: 92, last_at },
+        'pothole-season': { version: 1, attempts: 1, completed: true, best_score: 75, last_at },
+      }));
+      localStorage.setItem(ROAD_TEST_KEY, JSON.stringify({
+        'road-test-kitsilano': {
+          version: 1, attempts: 3, passes: 2, last_at,
+          best: { pass: true, demerits: 1, fails: 0, at: last_at },
+        },
+      }));
+      window.__jev.lab.challenges();
+    }""")
+    # Lab item: See the best clean coaching score on a completed challenge card.
+    assert "Best: 92/100" in page.locator('[data-challenge="door-zone"]').inner_text()
+    # Lab item: See the pass count and attempt count together on each road-test card.
+    assert "2/3 attempts passed" in page.locator('[data-road-test="road-test-kitsilano"]').inner_text()
+    # Lab item: Sort challenges by best clean score with unscored attempts last.
+    page.get_by_role("combobox", name="Sort challenges").select_option("score")
+    cards = page.locator(".challenge-grid [data-challenge]")
+    assert cards.nth(0).get_attribute("data-challenge") == "door-zone"
+    assert cards.nth(1).get_attribute("data-challenge") == "pothole-season"
+
+
 GROUPS = ["pages", "practice", "parking"]
 # Practice finish fixtures by the challenge they drive; the parking ones end in Squeeze in.
 PRACTICE_KINDS = ["early", "arrived", "rules", "modified", "branched", "resume"]
@@ -480,6 +522,10 @@ def check(url, chromium=None, groups=GROUPS):
             page.close()
 
         if "practice" in groups:
+            page = open_page("/?challenge=road-test-kitsilano&drive=manual&quality=low", render=False)
+            check_library_progress(page)
+            page.close()
+
             page = open_page("/?challenge=flagger&drive=manual&quality=low", render=False)
             check_incident_comparison(page)
             page.close()

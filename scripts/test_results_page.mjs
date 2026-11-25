@@ -17,6 +17,12 @@ const {
   percentText,
   moneyText,
   WEATHERS,
+  RESULTS_FORMAT,
+  resultVersions,
+  suiteLabel,
+  selectedSuite,
+  matchesCoverage,
+  fraction,
 } = await import("../static/js/lab/results.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
@@ -206,5 +212,153 @@ test("formatting agrees with scripts/build_results.py", () => {
   assert.equal(moneyText(0), "$0");
   assert.throws(() => checkResults({ rows: [] }));
 });
+
+// Lab validation additions
+test("Reject a results file whose driver catalog is a list or scalar", () => {
+  for (const drivers of [[], 1, "driver", true]) {
+    assert.throws(() => checkResults({ format: RESULTS_FORMAT, rows: [], drivers }), /Not a results file/);
+  }
+});
+test("Label unknown driver IDs literally even when they are inherited object keys", () => {
+  assert.equal(
+    driverDisplayName({ drivers: { __proto__: { constructor: { label: "Wrong" } } } }, "constructor"),
+    "constructor",
+  );
+});
+test("Select an available leaderboard suite by its shareable URL value", () => {
+  assert.equal(selectedSuite(["v2", "v1", "legacy"], "v1"), "v1");
+  assert.equal(selectedSuite(["v2", "v1", "legacy"], "v3"), "v2");
+  assert.equal(selectedSuite([], null), "legacy");
+});
+test("Filter leaderboard rows by whether every driver has a result", () => {
+  const pass = { pass: true },
+    fail = { pass: false };
+  assert.equal(matchesCoverage([pass, fail], "complete"), true);
+  assert.equal(matchesCoverage([pass, null], "complete"), false);
+  assert.equal(matchesCoverage([fail, null], "missing"), true);
+  assert.equal(matchesCoverage([null, fail], ""), true);
+});
+test("Sort unknown maps and weather after the catalogued conditions", () => {
+  const rows = [
+    ["new-b", "dry"],
+    ["kitsilano", "other"],
+    ["new-a", "dry"],
+    ["kitsilano", "snow"],
+  ].map(([map, weather]) => ({ map, weather, driver: "rules", suite: "city" }));
+  assert.deepEqual(
+    cityGrid({ rows, maps: { kitsilano: "Kitsilano" } }).rows.map(({ map, weather }) => [map, weather]),
+    [
+      ["kitsilano", "snow"],
+      ["kitsilano", "other"],
+      ["new-a", "dry"],
+      ["new-b", "dry"],
+    ],
+  );
+});
+test("Quote recording paths with spaces and apostrophes in copyable shell commands", () => {
+  const [item] = recordings({ rows: [{ recording: "data/recordings/A driver's run.json.gz" }] });
+  assert.ok(item.command.endsWith("'data/recordings/A driver'\\''s run.json.gz' --check replay"));
+});
+test("Show unavailable model decision share when a measurement is nonnumeric", () => {
+  for (const value of [Infinity, NaN, "0.5"]) assert.equal(percentText(value), "n/a");
+});
+test("Leave missing leaderboard challenge results blank and keep the other drivers aligned", () => {
+  const rows = [
+    { suite: "challenges", driver: "rules", drives: [{ id: "first", map: "kitsilano", pass: true }] },
+    {
+      suite: "challenges",
+      driver: "cautious",
+      drives: [{ id: "second", map: "edmonton", pass: false }],
+      failed: [{ id: "second", failures: ["collision"] }],
+    },
+  ];
+  const matrix = challengeMatrix({ rows });
+  assert.deepEqual(
+    matrix.rows.map((r) => r.id),
+    ["first", "second"],
+  );
+  assert.deepEqual(
+    matrix.rows[0].cells.map((cell) => cell?.pass ?? null),
+    [true, null],
+  );
+  assert.deepEqual(
+    matrix.rows[1].cells.map((cell) => cell?.failures ?? null),
+    [null, ["collision"]],
+  );
+});
+test("Return no published debrief baseline when driving conditions are unavailable", () => {
+  assert.equal(compatibleChallengeDrive(data, "rules", null), null);
+});
+test("Check numeric ordering of double-digit suite versions", () => {
+  const rows = ["v2", "v10", "v2", "v1"].map((suite_version) => ({ suite_version }));
+  assert.deepEqual(resultVersions({ rows }), ["v10", "v2", "v1"]);
+});
+test("Check that each suite provenance label is human-readable", () => {
+  assert.deepEqual(["v1", "legacy", "custom"].map(suiteLabel), ["Suite v1", "Legacy results", "Custom runs"]);
+});
+test("Check that open-only drivers retain their recorded cost and appear beyond the pilot section", () => {
+  const open = { suite: "open", driver: "only-open", cost_usd: 0.75, model: "model" };
+  const [entry] = summary({ drivers: { "only-open": { label: "Only open" } }, rows: [open] }).drivers;
+  assert.deepEqual([entry.challenges, entry.cost, entry.costTrack, entry.model], [null, 0.75, "open", "model"]);
+});
+test("Check that an unmeasured weather occupies an empty cell instead of inheriting a dry result", () => {
+  const city = { suite: "city", driver: "rules", map: "kitsilano", weather: "dry", total: 12, passed: 12 };
+  const home = summary({ drivers: { rules: { label: "Rules" } }, rows: [city] }).drivers[0].home;
+  assert.deepEqual(home, { dry: city, fog: null, rain: null, snow: null });
+});
+test("Check that summary totals for other maps use their dry conditions", () => {
+  const rows = [
+    ["kitsilano", "dry", 12],
+    ["ottawa", "dry", 10],
+    ["ottawa", "rain", 7],
+    ["toronto", "dry", 8],
+  ].map(([map, weather, passed]) => ({ driver: "rules", map, weather, passed, total: 12, suite: "city" }));
+  const others = summary({ drivers: { rules: {} }, rows }).drivers[0].others;
+  assert.deepEqual(
+    { passed: others.passed, total: others.total, maps: others.maps },
+    { passed: 18, total: 24, maps: 2 },
+  );
+});
+test("Check that pass fractions aggregate numerators and denominators instead of averaging rates", () => {
+  assert.deepEqual(
+    fraction([
+      { passed: 1, total: 1 },
+      { passed: 4, total: 9 },
+    ]),
+    { passed: 5, total: 10 },
+  );
+  assert.equal(fractionText({ passed: 0, total: 2 }), "0/2");
+});
+test("Check that a numbered suite has no fallback ranking from a legacy cohort", () => {
+  assert.deepEqual(summary(data, "v99"), { drivers: [], pilots: [] });
+  assert.deepEqual(cityGrid(data, "v99"), { drivers: [], rows: [] });
+});
+test("Check that an older guarded drive can supply a debrief when the newest pack differs", () => {
+  const published = data.rows.find((r) => r.suite === "challenges" && r.driver === "rules");
+  const drive = published.drives[0];
+  const newer = { ...published, drives: [{ ...drive, pack: "another pack" }] };
+  const config = { ...drive, challenge: drive.id };
+  assert.equal(compatibleChallengeDrive({ rows: [newer, published] }, "rules", config).pack, drive.pack);
+});
+test("Check that a published failure reason survives into a challenge debrief comparison", () => {
+  const published = data.rows.find((r) => r.suite === "challenges" && r.driver === "llm:deepseek");
+  const drive = published.drives.find((d) => d.id === "double-parked");
+  const match = compatibleChallengeDrive(data, published.driver, { ...drive, challenge: drive.id });
+  assert.deepEqual(match.failures, published.failed.find((f) => f.id === drive.id).failures);
+});
+test("Check that a manifest replay source and engine override legacy metadata", () => {
+  const [item] = recordings({
+    rows: [
+      {
+        recording: "data/recordings/drive.json",
+        manifest: { source_commit: "current", engine: "recorded engine" },
+        replay_source_commit: "legacy",
+        engine: "legacy engine",
+      },
+    ],
+  });
+  assert.deepEqual([item.sourceCommit, item.engine, item.legacyReplay], ["current", "recorded engine", false]);
+});
+// End lab validation additions
 
 console.log(`${checks} checks passed`);

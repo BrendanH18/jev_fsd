@@ -17,6 +17,8 @@ def check(url, chromium=None, output=None):
         browser = p.chromium.launch(headless=True, executable_path=chromium, args=["--no-sandbox"])
         page = browser.new_page(viewport={"width": 1440, "height": 1050})
         errors = []
+        map_requests = []
+        page.on("request", lambda request: map_requests.append(request.url) if "/api/map?" in request.url else None)
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(url)
         expect(page.locator("#arena-status")).to_contain_text("Ready")
@@ -31,16 +33,36 @@ def check(url, chromium=None, output=None):
         assert page.evaluate("localStorage.getItem('jev-fsd-evaluations-v2')") is None, "saved runs belong in IndexedDB"
         expect(page.locator("#arena-results tr")).to_have_count(n)
         expect(page.locator("#arena-results .pass")).to_have_count(n)
+        # Lab item: Fetch each map once per Arena evaluation even when several drives share it.
+        if not page.locator('meta[name="jev-demo"]').count():
+            assert map_requests and len(map_requests) == len(set(map_requests)), map_requests
+        # Lab item: Announce the visible attempt count when Arena search changes.
+        search = page.locator("#arena-search")
+        search.fill("no such drive")
+        expect(page.locator("#arena-match-count")).to_have_text(f"0 of {n} attempts")
+        search.clear()
+        expect(page.locator("#arena-match-count")).to_have_text(f"{n} of {n} attempts")
         expect(page.locator("#arena-summary .agent-summary")).to_have_count(2)
         page.locator("#arena-baseline").select_option("0")
         page.locator("#arena-baseline-agent").select_option("cautious")
         expect(page.locator("#comparison-status")).to_contain_text(f"{n}/{n} attempts match")
+        # Lab item: Show duration deltas on matching Arena attempts.
+        time_cell = page.locator("#arena-results tr").first.locator("td").nth(4)
+        expect(time_cell.locator("small")).to_contain_text(" s vs baseline")
         page.locator(".result-button").first.click()
         expect(page.locator("#arena-details")).to_be_visible()
         expect(page.locator("#details-content")).to_contain_text("Authored hazard triggered")
         assert "nullnull" not in page.locator("#details-content").inner_text()
+        event_type = page.locator("#details-content").get_by_role("combobox", name="Event type")
+        event_type.select_option("hazard")
+        expect(page.locator("#details-content .timeline > li")).to_have_count(1)
+        event_type.select_option("")
         page.locator("#details-content .timeline details summary").first.click()
         expect(page.locator("#details-content .candidate-list").first).to_be_visible()
+        # Lab item: Close Arena details and return keyboard focus to the inspected row.
+        page.locator("#arena-close-details").click()
+        expect(page.locator("#arena-details")).to_be_hidden()
+        expect(page.locator(".result-button").first).to_be_focused()
         if output:
             Path(output).mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(Path(output) / "arena-comparison.png"), full_page=True)
@@ -123,6 +145,33 @@ def check(url, chromium=None, output=None):
         expect(page.locator("#arena-status")).to_contain_text("Stopped", timeout=10000)
         expect(page.locator("#arena-results")).to_contain_text("STOPPED")
         expect(page.locator("#arena-results .pass")).to_have_count(0)
+        guarded_and_open = json.loads(export.read_text())
+        guarded, opened = guarded_and_open["results"][:2]
+        opened.update(track="open", flagged_choices=1, flagged_by_check={"red light": 1})
+        guarded_and_open["results"] = [guarded, opened]
+        tracks = Path(directory) / "mixed-tracks.json"
+        tracks.write_text(json.dumps(guarded_and_open))
+        page.locator("#arena-import").set_input_files(tracks)
+        expect(page.locator("#arena-status")).to_contain_text("Imported 2 attempts")
+        # Lab item: Show tracks explicitly when viewing a mixed imported run.
+        expect(page.locator("#arena-results tr").first.locator("td").nth(5)).to_have_text("guarded")
+        expect(page.locator("#arena-results tr").last.locator("td").nth(5)).to_have_text("open")
+        # Lab item: Keep a measured Open Track flag count distinct from an unmeasured Guarded count.
+        expect(page.locator("#arena-results tr").first.locator("td").nth(6)).to_have_text("—")
+        expect(page.locator("#arena-results tr").last.locator("td").nth(6)).to_have_text("1")
+        # Lab item: Export the current Arena track selection in CSV.
+        page.locator("#arena-filter-track").select_option("open")
+        with page.expect_download() as filtered_csv:
+            page.locator("#arena-csv").click()
+        csv = filtered_csv.value.path().read_text()
+        assert "Track,Flagged choices" in csv
+        assert len(csv.splitlines()) == 2 and ",open,1," in csv, csv
+        # Lab item: Clear the Arena filters together and resume keyboard search.
+        page.locator("#arena-clear-filters").click()
+        expect(page.locator("#arena-filter-track")).to_have_value("")
+        expect(page.locator("#arena-results tr")).to_have_count(2)
+        expect(page.locator("#arena-search")).to_be_focused()
+        expect(page.locator("#arena-clear-filters")).to_be_disabled()
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), "Arena overflows a narrow viewport"
         if output:

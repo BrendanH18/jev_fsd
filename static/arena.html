@@ -10,13 +10,13 @@
     <header><a class="brand" href="/">JEV / DRIVE LAB</a><nav class="arena-nav"><a href="/results">Results</a><a href="https://github.com/BrendanH18/jev_fsd" target="_blank" rel="noopener">GitHub ↗</a></nav></header>
     <p class="eyebrow">REPEATABLE STREETS / MEASURABLE DECISIONS</p>
     <h1>Bring your own driver.</h1>
-    <p class="intro">All 60 challenges, and the road tests if you choose. Shared physics, sensing and safety checks. Save a run, compare drivers and inspect the decisions around each incident.</p>
+    <p class="intro">Choose challenges or road tests. Shared physics, sensing and safety checks. Save a run, compare drivers and inspect the decisions around each incident.</p>
     <section class="arena-controls panel" aria-label="Evaluation controls">
       <fieldset><legend>Agents to compare</legend><div id="agents"></div><p id="llm-status" class="llm-status"></p></fieldset>
       <label>Decision clock <select id="arena-mode"><option value="lockstep">Lockstep · compare choices</option><option value="realtime">Realtime · include latency</option></select></label>
       <label title="Guarded: the safety filter removes every manoeuvre that fails a road-rule check. Open: it flags them instead, and the driver's own judgment decides">Track <select id="arena-track"><option value="guarded">Guarded · the filter removes rule breaks</option><option value="open">Open · the filter flags them, the driver decides</option></select></label>
       <label><input type="checkbox" id="arena-road-tests"> Include road tests (longer drives)</label>
-      <label>Challenge subset <select id="arena-subset"><option value="">All challenges</option><option value="custom">Choose individual drives</option></select></label>
+      <label>Challenge subset <select id="arena-subset"><option value="">All challenges</option><option value="road-tests">Road tests only</option><option value="custom">Choose individual drives</option></select></label>
       <label id="arena-custom-wrap" hidden>Drives <select id="arena-custom" multiple size="5"></select></label>
       <button id="arena-run" class="toggle on">Run evaluation</button><button id="arena-export" class="toggle" disabled>Export results</button>
       <p id="arena-status" role="status">Loading the arena…</p>
@@ -40,16 +40,21 @@
     </section>
     <section aria-label="Evaluation results">
       <div class="arena-table-tools">
-        <label>Search <input type="search" id="arena-search" placeholder="Agent or challenge"></label>
+        <label>Search <input type="search" id="arena-search" placeholder="Agent, challenge or map"></label>
         <label>Agent <select id="arena-filter-agent"><option value="">All agents</option></select></label>
-        <label>Outcome <select id="arena-filter-outcome"><option value="">All outcomes</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="stopped">Stopped</option></select></label>
+        <label>Outcome <select id="arena-filter-outcome"><option value="">All outcomes</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="stopped">Stopped</option><option value="error">Simulation error</option></select></label>
+        <label>Track <select id="arena-filter-track"><option value="">Both tracks</option><option value="guarded">Guarded</option><option value="open">Open</option></select></label>
+        <span id="arena-match-count" role="status"></span>
+        <button id="arena-clear-filters" class="toggle" disabled>Clear filters</button>
         <button id="arena-csv" class="toggle" disabled>Export CSV</button>
       </div>
-      <div class="table-wrap panel"><table><thead id="arena-columns"></thead><tbody id="arena-results"><tr><td colspan="9">Run an evaluation to see measured results.</td></tr></tbody></table></div>
+      <div class="table-wrap panel"><table><thead id="arena-columns"></thead><tbody id="arena-results"><tr><td colspan="11">Run an evaluation to see measured results.</td></tr></tbody></table></div>
     </section>
     <p class="arena-note">These are local simulator results, not a verified public leaderboard. A pass requires arrival with no collision, red light, missed stop or failed yield, and less than one second off-road. The coaching score is a separate measure. Exported runs include challenge, map-pack and clock versions.</p>
     <section id="arena-details" class="panel run-details" aria-labelledby="details-heading" hidden>
-      <h2 id="details-heading" tabindex="-1">Run details</h2><div id="details-content"></div>
+      <h2 id="details-heading" tabindex="-1">Run details</h2>
+      <button id="arena-close-details" class="toggle" type="button">Close details</button>
+      <div id="details-content"></div>
     </section>
     <section class="panel manual-attempts"><h2>Your challenge drives</h2><div id="manual-attempts"></div><p>Saved on this browser. Manual attempts use realtime driving; compare them with realtime agent evaluations. Replay branches are labelled.</p></section>
   </main>

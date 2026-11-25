@@ -6,9 +6,17 @@ import {
   readEvaluations,
   saveEvaluation,
   compareResult,
+  conditionDifferences,
   summarizeResults,
   openEvaluationHistory,
 } from "../static/js/lab/history.js";
+import {
+  arenaDrives,
+  arenaOutcome,
+  filterArenaResults,
+  filterTimeline,
+  timelineTypes,
+} from "../static/js/lab/arena-view.js";
 import { EvaluationTrace } from "../static/js/lab/trace.js";
 
 const result = {
@@ -446,4 +454,225 @@ test("trace limits explicitly label missing later context", () => {
   checks++;
   console.log("✓ without IndexedDB the arena's history is this localStorage history");
 }
+// Lab validation additions
+const withResult = (override) => ({ ...run, results: [{ ...result, ...override }] });
+const choices = [
+  { id: "rain-drive", map: "montreal" },
+  { id: "ice-drive", map: "halifax" },
+];
+const exams = [
+  { id: "road-test-1", map: "montreal" },
+  { id: "road-test-2", map: "toronto" },
+];
+const pool = (subset, includeRoadTests = false, selected = []) =>
+  arenaDrives(choices, exams, { subset, includeRoadTests, selected: new Set(selected) }).map((c) => c.id);
+
+test("Run a road-tests-only Arena evaluation without running any short challenges", () => {
+  assert.deepEqual(pool("road-tests"), ["road-test-1", "road-test-2"]);
+  assert.deepEqual(pool("road-tests", true), ["road-test-1", "road-test-2"]);
+});
+test("Check that city selections honor the optional road-test setting", () => {
+  assert.deepEqual(pool("montreal", true), ["rain-drive", "road-test-1"]);
+  assert.deepEqual(pool("montreal"), ["rain-drive"]);
+});
+test("Check that an individual-drive selection can combine road tests and challenges in authored order", () => {
+  assert.deepEqual(pool("custom", false, ["road-test-2", "what", "ice-drive"]), ["ice-drive", "road-test-2"]);
+  assert.deepEqual(pool("custom", true, []), []);
+});
+const mixedResults = [
+  { ...result, challenge: "rain-drive", map: "montreal" },
+  { ...result, challenge: "rain-drive", map: "montreal", brain: "cautious", track: "open", pass: false },
+  { ...result, challenge: "ice-drive", map: "halifax", track: "open", stopped: true, pass: false },
+  { ...result, challenge: "ice-drive", map: "halifax", simulation_error: "tire error", pass: false },
+];
+const labels = {
+  challenge: (id) => (id === "rain-drive" ? "Rue Sainte-Catherine" : "Over the ice"),
+  agent: (id) => (id === "rules" ? "Rule follower" : "Cautious starter"),
+};
+const filtered = (options) => filterArenaResults(mixedResults, options, labels);
+test("Search Arena attempts by multiple accent-insensitive terms across map, challenge and driver", () => {
+  assert.deepEqual(filtered({ query: "SAINTÉ  montreal cautious " }), [mixedResults[1]]);
+  assert.deepEqual(filtered({ query: "ice follower" }), mixedResults.slice(2));
+});
+test("Filter Arena rows by track while preserving older guarded results", () => {
+  assert.deepEqual(filtered({ track: "guarded" }), [mixedResults[0], mixedResults[3]]);
+  assert.deepEqual(filtered({ track: "open" }), mixedResults.slice(1, 3));
+  assert.deepEqual(filtered({ track: "open", verdict: "fail", agent: "cautious" }), [mixedResults[1]]);
+});
+test("Distinguish a simulation error from a driving failure in Arena verdicts and filters", () => {
+  assert.deepEqual(mixedResults.map(arenaOutcome), ["pass", "fail", "stopped", "error"]);
+  assert.deepEqual(filtered({ verdict: "error" }), [mixedResults[3]]);
+});
+test("Filter Arena incident timelines by event type without reordering their entries", () => {
+  const events = [
+    { type: "collision", at_s: 12 },
+    { type: "fallback", at_s: 14 },
+    { type: "collision", at_s: 18 },
+  ];
+  assert.deepEqual(timelineTypes(events), ["collision", "fallback"]);
+  assert.deepEqual(
+    filterTimeline(events, "collision").map((e) => e.at_s),
+    [12, 18],
+  );
+  assert.equal(filterTimeline(events, "").length, 3);
+});
+test("Reject invalid map-pack versions while reading older named versions", () => {
+  for (const pack of ["", -1, 0.5, Infinity, {}])
+    assert.throws(() => validateEvaluation(withResult({ pack })), /invalid evaluation result/);
+  assert.equal(validateEvaluation(withResult({ pack: "5" })).results[0].pack, "5");
+});
+test("Reject impossible coaching model versions on imported results", () => {
+  for (const model_version of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])
+    assert.throws(
+      () => validateEvaluation(withResult({ report: { ...result.report, model_version } })),
+      /invalid evaluation result/,
+    );
+});
+test("Reject oversized repeat counts that cannot represent an exact count", () => {
+  const choice = {
+    id: 1,
+    at_s: 0,
+    chosen_id: "wait",
+    motion: "stop",
+    source: "rules",
+    repeats: Number.MAX_SAFE_INTEGER + 1,
+    until_s: 1,
+  };
+  assert.throws(() => validateEvaluation(withResult({ decisions_trace: [choice] })), /invalid decision trace/);
+});
+test("Reject nontext errors in event-linked decision records", () => {
+  const trace = new EvaluationTrace();
+  trace.decision({ chosenId: "wait", motion: "stop" }, 1);
+  trace.event("collision", "Collision", 2);
+  const stored = trace.export();
+  stored.decisions_trace[0].error = {};
+  assert.throws(() => validateEvaluation(withResult(stored)), /invalid decision trace/);
+});
+test("Validate a full incident timeline indexed by stable decision IDs", () => {
+  const trace = new EvaluationTrace();
+  for (let i = 0; i < 600; i++) {
+    trace.decision({ chosenId: "wait", motion: "stop" }, i);
+    trace.event("collision", "Collision", i);
+  }
+  for (let i = 600; i < 1000; i++) trace.event("collision", "Collision", i);
+  const stored = trace.export();
+  assert.equal(validateEvaluation(withResult(stored)).results[0].events.length, 1000);
+  stored.events[0].decision_id = 600;
+  assert.throws(() => validateEvaluation(withResult(stored)), /invalid incident timeline/);
+});
+test("Decline to compare attempts interrupted by a simulation error", () => {
+  const bad = { ...result, simulation_error: "simulation halted" };
+  assert.deepEqual(compareResult(result, { results: [bad] }, result.brain).reasons, ["simulation error"]);
+  assert.deepEqual(compareResult(bad, run, result.brain).reasons, ["simulation error"]);
+});
+test("Check that absent conditions block comparison even when both exports omit them", () => {
+  const noCar = { ...result, car: undefined };
+  assert.deepEqual(conditionDifferences(noCar, noCar), ["vehicle"]);
+});
+test("Check that comparison reports the closest mismatch if several baseline attempts differ", () => {
+  const wrongConditions = { ...result, seed: 4, map: "toronto" };
+  const nearest = { ...result, mode: "realtime" };
+  assert.deepEqual(compareResult(result, { results: [wrongConditions, nearest] }, "rules").reasons, ["decision clock"]);
+});
+test("Check that lockstep timing exports keep zero latency distinct from unmeasured latency", () => {
+  const first = validateEvaluation(withResult({ latency_p50_ms: null })).results[0];
+  const second = validateEvaluation(withResult({ latency_p50_ms: 0 })).results[0];
+  assert.equal(first.latency_p50_ms, null);
+  assert.equal(summarizeResults([first, second]).latency_p50_ms, 0);
+});
+test("Check that an unknown imported run status becomes imported without changing its timestamp", () => {
+  const loaded = validateEvaluation({ ...run, status: "unknown" });
+  assert.equal(loaded.status, "imported");
+  assert.equal(loaded.created_at, run.created_at);
+});
+test("Check that an interrupted result remains in the attempt denominator", () => {
+  const stopped = { ...result, stopped: true };
+  assert.equal(summarizeResults([result, stopped]).pass_rate, 0.5);
+});
+test("Check that timeline exports clip an extended event message to the import limit", () => {
+  const trace = new EvaluationTrace();
+  trace.event("warning", "a".repeat(300), 1);
+  const saved = validateEvaluation(withResult(trace.export()));
+  assert.equal(saved.results[0].events[0].message.length, 240);
+});
+test("Check that a capped event timeline keeps its previous full decision context intact", () => {
+  const trace = new EvaluationTrace();
+  trace.decision({ chosenId: "wait", motion: "stop" }, 0);
+  for (let i = 0; i < 1000; i++) trace.event("warning", "Warning", i);
+  trace.decision({ chosenId: "hold", motion: "stop" }, 1000);
+  trace.event("more", "Exceeded limit", 1001);
+  const stored = trace.export();
+  assert.equal(stored.events.length, 1000);
+  assert.equal(stored.decisions_trace[0].context_recorded, true);
+  assert.equal(stored.decisions_trace[1].context_recorded, undefined);
+  assert.equal(stored.trace_truncated, true);
+});
+test("Check that previewing a compact trace does not prevent its latest decision from gaining context", () => {
+  const trace = new EvaluationTrace();
+  trace.decision({ chosenId: "wait", motion: "stop", state: { limit_kmh: 30 } }, 1);
+  const before = trace.export();
+  assert.equal(before.decisions_trace[0].state, undefined);
+  trace.event("warning", "Warning", 2);
+  const after = trace.export();
+  assert.equal(after.decisions_trace[0].state.limit_kmh, 30);
+  assert.equal(after.events[0].decision_id, after.decisions_trace[0].id);
+});
+test("Check that different fallback reasons remain distinguishable in the compact decision trace", () => {
+  const trace = new EvaluationTrace();
+  for (const [at, error] of ["timed out", "bad answer"].entries())
+    trace.decision({ chosenId: "keep_lane", motion: "drive", meta: { source: "rules_fallback", error } }, at);
+  assert.deepEqual(
+    trace.export().decisions_trace.map((d) => d.error),
+    ["timed out", "bad answer"],
+  );
+});
+test("Check that identical manoeuvres with different hazard warnings do not fold together", () => {
+  const trace = new EvaluationTrace();
+  trace.decision({ chosenId: "keep_lane", motion: "drive", flags: ["cyclist"] }, 1);
+  trace.decision({ chosenId: "keep_lane", motion: "drive", flags: ["pothole"] }, 2);
+  assert.deepEqual(
+    trace.export().decisions_trace.map((d) => d.flags),
+    [["cyclist"], ["pothole"]],
+  );
+});
+test("Check that compact traces preserve who made a decision when the manoeuvre stays the same", () => {
+  const trace = new EvaluationTrace();
+  for (const [at, source] of ["rules", "model", "rules_fallback"].entries())
+    trace.decision({ chosenId: "wait", motion: "stop", meta: { source } }, at);
+  assert.deepEqual(
+    trace.export().decisions_trace.map((d) => d.source),
+    ["rules", "model", "rules_fallback"],
+  );
+});
+test("Check that an incident before the first decision has no invented age or decision ID", () => {
+  const trace = new EvaluationTrace();
+  trace.event("collision", "Collision", 0.01);
+  const event = trace.export().events[0];
+  assert.deepEqual([event.decision_id, event.decision_age_s], [null, null]);
+});
+test("Check that consecutive measurements report only newly observed hard braking", () => {
+  const trace = new EvaluationTrace();
+  const world = { t: 1, violations: {} };
+  trace.measurements(world, { hardBrakes: 2 });
+  trace.measurements(world, { hardBrakes: 2 });
+  trace.measurements(world, { hardBrakes: 3 });
+  assert.deepEqual(
+    trace.events.map(({ type, count }) => [type, count]),
+    [
+      ["hard_brake", 2],
+      ["hard_brake", 1],
+    ],
+  );
+});
+test("Check that the off-road threshold records exactly one evaluation event", () => {
+  const trace = new EvaluationTrace();
+  for (const off_road_s of [0.9, 1, 1.1])
+    trace.measurements({ t: off_road_s, violations: { off_road_s } }, { hardBrakes: 0 });
+  assert.deepEqual(
+    trace.events.map(({ type, at_s }) => [type, at_s]),
+    [["off_road", 1]],
+  );
+});
+// End lab validation additions
+
 console.log(`${checks} arena history checks passed`);
