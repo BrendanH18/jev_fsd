@@ -131,7 +131,12 @@ await test("the tracks, and every check the filter can fail has words for a mode
   // (what the scrape also finds: candidate ids, law and collision kinds, rider relations, event and metric names)
   const notChecks =
     /^(?:stop|wait|keep|change|creep|pull|let|ease|slow|go|yield|follow|pass|move|turn|hold|reverse)_|^(?:hard_brake|rear_end|turning_in|turning_off)$|_(?:conflicts|hits|entries|overspeed|splashed|violation)$/;
-  const auditIds = new Set(FEATURES.flatMap(({ metric }) => (metric ? [metric.name, metric.eventType] : [])));
+  // (a metric's name, its event and the examiner's incident id are audit words, not rejections)
+  const auditIds = new Set(
+    FEATURES.flatMap(({ metric }) =>
+      [metric ?? []].flat().flatMap((m) => [m.name, m.eventType, m.examinerIncident]),
+    ),
+  );
   const missing = [...ids].filter(
     (id) => id !== "collision" && !FLAG_TEXT[id] && !auditIds.has(id) && !notChecks.test(id),
   );
