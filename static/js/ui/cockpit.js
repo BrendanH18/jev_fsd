@@ -71,11 +71,20 @@ export class Cockpit {
 
   update(mode, weather, t, enabled = true) {
     const hood = mode === "hood";
-    this.root.style.display = hood ? "block" : "none";
+    if (this.hood !== hood) {
+      this.hood = hood;
+      this.root.style.display = hood ? "block" : "none";
+    }
     if (!hood) return;
     const raining = weather === "rain";
-    this.drops.style.display = raining ? "block" : "none";
+    if (this.raining !== raining) {
+      this.raining = raining;
+      this.drops.style.display = raining ? "block" : "none";
+    }
     const angle = raining && enabled ? -20 + (0.5 - 0.5 * Math.cos((t * Math.PI * 2) / 1.8)) * 96 : -20;
-    for (const blade of this.blades) blade.g.setAttribute("transform", `rotate(${angle.toFixed(2)} ${blade.x} 990)`);
+    const transform = angle.toFixed(2);
+    if (this.lastAngle === transform) return;
+    this.lastAngle = transform;
+    for (const blade of this.blades) blade.g.setAttribute("transform", `rotate(${transform} ${blade.x} 990)`);
   }
 }

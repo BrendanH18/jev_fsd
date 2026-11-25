@@ -213,7 +213,7 @@ select option { background: var(--panel-solid); color: var(--text); }
 .indicator.active { color: #71e69e; text-shadow: 0 0 12px #71e69e88; }
 
 /* Toasts */
-.badge { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; max-width: min(560px, calc(100vw - 600px)); padding: 9px 16px 9px 12px; border-radius: 999px; font-weight: 600; letter-spacing: 0.04em; font-size: 12.5px; color: var(--text); background: rgba(12, 17, 25, 0.88); border: 1px solid var(--border-strong); backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); animation: toast-in 0.18s ease-out; }
+.badge { overflow-wrap: anywhere; pointer-events: none; position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; max-width: min(560px, calc(100vw - 600px)); padding: 9px 16px 9px 12px; border-radius: 999px; font-weight: 600; letter-spacing: 0.04em; font-size: 12.5px; color: var(--text); background: rgba(12, 17, 25, 0.88); border: 1px solid var(--border-strong); backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); animation: toast-in 0.18s ease-out; }
 .badge::before { content: ""; flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .badge.safety::before { background: var(--warn); }
 .badge.safety { border-color: rgba(242, 184, 75, 0.5); }
@@ -458,7 +458,7 @@ body.photo-mode canvas#view { cursor: grab; }
 .photo-slider input[type="range"] { width: 100%; accent-color: var(--accent); }
 .photo-value { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; }
 .photo-status { margin: 0; font-size: 11px; color: var(--muted); }
-.photo-actions { display: flex; gap: 8px; align-items: center; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .photo-actions .photo-capture { margin-left: auto; border-color: var(--accent); color: var(--accent); }
 .photo-reveal { position: fixed; right: var(--gap); bottom: var(--gap); z-index: 30; background: var(--panel); }
 @media (max-width: 520px) { .photo-panel { left: var(--gap); width: auto; } }

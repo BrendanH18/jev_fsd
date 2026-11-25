@@ -696,6 +696,74 @@ def check_startup_recovery(page, url):
     )
 
 
+def check_startup_preferences(page, url):
+    base = url.rstrip("/")
+    page.add_init_script("""() => {
+      localStorage.setItem('jev-fsd-quality', 'low');
+      localStorage.removeItem('jev-fsd-replay');
+    }""")
+    page.goto(base + "/?drive=manual&quality=unknown&time=11:12", wait_until="domcontentloaded")
+    page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+    ok = report(
+        "startup preferences",
+        page.evaluate("""async () => {
+      const app = window.__jev, $ = (id) => document.getElementById(id);
+      const initial = app.view.quality === 'low' && $('time').selectedOptions[0]?.textContent === '11:12';
+      app.view.render = () => {};
+      history.replaceState({ retained: true }, '', location.href);
+      app.setTime('11:16');
+      const time = history.state.retained && $('time').selectedOptions[0]?.textContent === '11:16';
+      const weather = $('weather');
+      weather.value = 'rain'; weather.dispatchEvent(new Event('change'));
+      $('quality').dispatchEvent(new Event('change'));
+      const quality = !new URL(location.href).searchParams.has('quality') && localStorage.getItem('jev-fsd-quality') === 'low';
+      const before = app.world.tick;
+      const originalFetch = window.fetch;
+      let pendingRoute;
+      window.fetch = (url, options) => String(url).endsWith('/api/route')
+        ? new Promise((_resolve, reject) => {
+            pendingRoute = options.signal;
+            pendingRoute.addEventListener('abort', () => reject(pendingRoute.reason), { once: true });
+          })
+        : originalFetch(url, options);
+      let routeCancelled;
+      try {
+        const lookup = app.setDestination([2, 3]);
+        $('view').dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+        await lookup;
+        routeCancelled = pendingRoute?.aborted && $('minimap').getAttribute('aria-busy') === 'false';
+      } finally {
+        window.fetch = originalFetch;
+      }
+      app.advance(0.1);
+      return [
+        { name: 'An invalid quality override uses saved graphics and keeps the exact clock time', ok: initial },
+        { name: 'Reflecting conditions in the URL preserves history state', ok: time && history.state.retained },
+        { name: 'A graphics selection replaces the old URL override', ok: quality },
+        { name: 'Losing graphics pauses stepping and offers recovery', ok: app.world.paused
+          && app.world.tick === before && !document.querySelector('.simulation-error').hidden },
+        { name: 'Losing graphics cancels pending routes', ok: routeCancelled },
+      ];
+    }"""),
+    )
+    page.goto(base + "/?replay=1&bbox=kitsilano&quality=low&weather=rain", wait_until="domcontentloaded")
+    page.locator("#retry-start").wait_for(timeout=TIMEOUT_MS)
+    ok &= report(
+        "watch link recovery",
+        page.evaluate("""() => {
+      const url = new URL(document.querySelector('#start-free-drive').href);
+      return [
+        { name: 'A missing Watch hand-off gives recovery instructions', ok: document.querySelector('#loading-text')
+          .textContent.includes('no saved drive') && document.querySelector('#view').inert },
+        { name: 'Free drive recovery retains display and weather parameters', ok: !url.searchParams.has('replay')
+          && !url.searchParams.has('bbox') && url.searchParams.get('quality') === 'low'
+          && url.searchParams.get('weather') === 'rain' && url.searchParams.get('drive') === 'manual' },
+      ];
+    }"""),
+    )
+    return ok
+
+
 def check(url, chromium=None, groups=GROUPS):
     ok = True
     with sync_playwright() as p:
@@ -760,6 +828,9 @@ def check(url, chromium=None, groups=GROUPS):
             page.close()
             page = open_page(None)
             ok &= check_startup_recovery(page, url)
+            page.close()
+            page = open_page(None)
+            ok &= check_startup_preferences(page, url)
             page.close()
 
         kinds = (PRACTICE_KINDS if "practice" in groups else []) + (PARKING_KINDS if "parking" in groups else [])

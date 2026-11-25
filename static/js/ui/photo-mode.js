@@ -4,6 +4,7 @@
 
 import { h } from "../common.js";
 import { formatClock } from "../sim/world-clock.js";
+import { preference } from "./preferences.js";
 
 export const LOOK_RANGES = {
   exposure: { min: -2, max: 2, step: 0.1, label: "Exposure", unit: " EV" },
@@ -28,7 +29,9 @@ export function photoFilename(place, date = new Date()) {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "drive";
+      .slice(0, 48)
+      .replace(/-+$/, "") || "drive";
+  if (!Number.isFinite(date.getTime())) return `jev-${slug}.png`;
   const pad = (n) => String(n).padStart(2, "0");
   const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
   return `jev-${slug}-${stamp}.png`;
@@ -38,6 +41,7 @@ export class PhotoMode {
   constructor({ view, place, getHour, setHour, getWeather, setWeather, onEnter, onExit }) {
     Object.assign(this, { view, place, getHour, setHour, getWeather, setWeather, onEnter, onExit });
     this.active = false;
+    this.session = 0;
     this.inputs = {};
     const sliders = Object.entries(LOOK_RANGES).map(([key, range]) => {
       const output = h("output", { class: "photo-value" }, this.describe(key, 0));
@@ -51,7 +55,7 @@ export class PhotoMode {
         oninput: (ev) => {
           const value = clampLook(key, ev.target.value);
           this.view.setLook({ [key]: value });
-          output.textContent = this.describe(key, value);
+          this.updateLookLabel(key, value);
         },
       });
       this.inputs[key] = { input, output };
@@ -78,7 +82,15 @@ export class PhotoMode {
         )
       : null;
     this.grid = h("div", { class: "photo-grid", "aria-hidden": "true", hidden: true });
-    this.gridToggle = h("input", { type: "checkbox", onchange: (ev) => (this.grid.hidden = !ev.target.checked) });
+    const gridPreference = preference("photo-grid", false);
+    this.gridToggle = h("input", {
+      type: "checkbox",
+      checked: gridPreference.read(),
+      onchange: (ev) => {
+        this.grid.hidden = !ev.target.checked;
+        gridPreference.write(ev.target.checked);
+      },
+    });
     this.cameraButtons = ["orbit", "cinematic", "chase", "hood"].map((mode) =>
       h(
         "button",
@@ -92,11 +104,7 @@ export class PhotoMode {
         { orbit: "Free", cinematic: "Cinematic", chase: "Chase", hood: "Hood" }[mode],
       ),
     );
-    this.status = h(
-      "p",
-      { class: "photo-status", role: "status", "aria-live": "polite" },
-      "Drag to orbit · scroll to zoom",
-    );
+    this.status = h("p", { class: "photo-status", role: "status", "aria-live": "polite" });
     this.panel = h(
       "section",
       {
@@ -106,8 +114,9 @@ export class PhotoMode {
         "aria-label": "Photo mode",
         hidden: true,
         onkeydown: (ev) => {
-          if (ev.key === "Escape") {
+          if (ev.key === "Escape" && !ev.isComposing) {
             ev.preventDefault();
+            ev.stopPropagation();
             this.exit();
           }
         },
@@ -138,11 +147,21 @@ export class PhotoMode {
       ),
       this.weather && h("label", { class: "photo-weather" }, "Weather ", this.weather),
       h("label", { class: "check" }, this.gridToggle, "Composition grid"),
+      (this.hint = h("p", { class: "photo-status" })),
       this.status,
       h(
         "div",
         { class: "photo-actions" },
         h("button", { type: "button", class: "chip-button", onclick: () => this.resetLook() }, "Reset look"),
+        h(
+          "button",
+          {
+            type: "button",
+            class: "chip-button",
+            onclick: () => this.resetConditions(),
+          },
+          "Reset conditions",
+        ),
         h("button", { type: "button", class: "toggle", onclick: () => this.exit() }, "Done"),
         (this.captureButton = h(
           "button",
@@ -172,6 +191,9 @@ export class PhotoMode {
   enter() {
     if (this.active) return;
     this.active = true;
+    this.session++;
+    this.status.textContent = "";
+    this.previousLook = { ...this.view.look };
     this.returnFocus = document.activeElement;
     this.previousCamera = this.view.mode;
     this.previousHour = this.getHour();
@@ -180,20 +202,17 @@ export class PhotoMode {
     document.body.classList.add("photo-mode");
     this.panel.hidden = false;
     this.collapse(false);
-    const hour = this.previousHour;
-    if (this.weather) this.weather.value = this.previousWeather;
     this.grid.hidden = !this.gridToggle.checked;
-    this.timeInput.value = String(Math.round(hour * 4) / 4);
-    this.updateTimeLabel(Number(this.timeInput.value));
+    this.syncConditions();
+    this.syncLook(this.previousLook);
     this.setCamera(this.previousCamera === "cinematic" ? "cinematic" : "orbit");
   }
 
   exit() {
     if (!this.active) return;
     this.active = false;
-    this.setHour(String(this.previousHour));
-    if (this.previousWeather) this.setWeather?.(this.previousWeather);
-    this.resetLook();
+    this.session++;
+    this.view.setLook(this.previousLook);
     this.grid.hidden = true;
     this.panel.hidden = true;
     this.reveal.hidden = true;
@@ -212,7 +231,7 @@ export class PhotoMode {
   collapse(hidden) {
     this.panel.hidden = hidden || !this.active;
     this.reveal.hidden = !hidden || !this.active;
-    (hidden ? this.view.renderer.domElement : this.panel).focus({ preventScroll: true });
+    (hidden ? this.reveal : this.panel).focus({ preventScroll: true });
   }
 
   handleKey(key) {
@@ -233,41 +252,77 @@ export class PhotoMode {
         : mode === "cinematic"
           ? "The director cuts between shots"
           : "Fixed to the car";
-    this.status.textContent = this.view.post
+    this.hint.textContent = this.view.post
       ? hint
       : `${hint}. Contrast, saturation and vignette need High or Ultra graphics.`;
+    for (const [key, { input }] of Object.entries(this.inputs)) input.disabled = key !== "exposure" && !this.view.post;
+  }
+
+  syncConditions() {
+    if (this.weather) this.weather.value = this.previousWeather;
+    this.timeInput.value = String(Math.round(this.previousHour * 4) / 4);
+    this.updateTimeLabel(this.previousHour);
+  }
+
+  resetConditions() {
+    this.setHour(String(this.previousHour));
+    if (this.previousWeather) this.setWeather?.(this.previousWeather);
+    this.syncConditions();
+  }
+
+  updateLookLabel(key, value) {
+    const { input, output } = this.inputs[key];
+    const text = this.describe(key, value);
+    output.textContent = text;
+    input.setAttribute("aria-valuetext", text);
+  }
+
+  syncLook(look) {
+    for (const [key, { input }] of Object.entries(this.inputs)) {
+      const value = clampLook(key, look[key]);
+      input.value = String(value);
+      this.updateLookLabel(key, value);
+    }
   }
 
   resetLook() {
-    this.view.setLook({ exposure: 0, contrast: 0, saturation: 0, vignette: 0 });
-    for (const [key, { input, output }] of Object.entries(this.inputs)) {
-      input.value = "0";
-      output.textContent = this.describe(key, 0);
-    }
+    const defaults = this.view.setLook({ exposure: 0, contrast: 0, saturation: 0, vignette: 0 });
+    this.syncLook(defaults);
   }
 
   // Render a fresh frame and read it back in the same task, before the browser clears the buffer.
   capture() {
     const canvas = this.view.renderer.domElement;
     if (!this.active || this.captureButton.disabled) return;
+    const session = this.session;
     this.captureButton.disabled = true;
     this.status.textContent = "Saving photo…";
     const failed = () => {
       this.captureButton.disabled = false;
-      this.status.textContent = "This browser could not save the frame.";
+      if (session === this.session) this.status.textContent = "This browser could not save the frame. Try again.";
     };
     try {
       this.view.render(0, true);
+      const width = canvas.width;
+      const height = canvas.height;
       canvas.toBlob((blob) => {
-        if (!blob) return failed();
+        if (!blob?.size) return failed();
         this.captureButton.disabled = false;
-        const url = URL.createObjectURL(blob);
-        const link = h("a", { href: url, download: photoFilename(this.place) });
-        document.body.append(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        this.status.textContent = `Saved ${canvas.width} × ${canvas.height} photo`;
+        if (session !== this.session) return;
+        let url;
+        let link;
+        try {
+          url = URL.createObjectURL(blob);
+          link = h("a", { href: url, download: photoFilename(this.place) });
+          document.body.append(link);
+          link.click();
+          this.status.textContent = `Saved ${width} × ${height} photo`;
+        } catch {
+          failed();
+        } finally {
+          link?.remove();
+          if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
       }, "image/png");
     } catch {
       failed();

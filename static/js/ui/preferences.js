@@ -1,22 +1,41 @@
 // Display and input preferences are independent of the saved world and its URL.
-export function preference(name, fallback, storage = undefined) {
-  const key = `jev-fsd-ui-${name}`;
+export function preference(name, fallback, storage = undefined, { valid, legacy = false } = {}) {
+  const key = `jev-fsd-${legacy ? "" : "ui-"}${name}`;
+  const accepts = (value) =>
+    typeof value === typeof fallback &&
+    (typeof value !== "number" || Number.isFinite(value)) &&
+    (valid?.(value) ?? true);
+
   return {
     read() {
       try {
         const raw = (storage ?? globalThis.localStorage)?.getItem(key);
         if (raw == null) return fallback;
-        const value = JSON.parse(raw);
-        return typeof value === typeof fallback ? value : fallback;
+        const value = legacy ? raw : JSON.parse(raw);
+        return accepts(value) ? value : fallback;
       } catch {
         return fallback;
       }
     },
     write(value) {
       try {
-        (storage ?? globalThis.localStorage)?.setItem(key, JSON.stringify(value));
+        if ((valid || legacy) && !accepts(value)) return false;
+        const store = storage ?? globalThis.localStorage;
+        if (!store) return false;
+        store.setItem(key, legacy ? value : JSON.stringify(value));
+        return true;
       } catch {
-        // The control still works for the current page.
+        return false;
+      }
+    },
+    reset() {
+      try {
+        const store = storage ?? globalThis.localStorage;
+        if (!store) return false;
+        store.removeItem(key);
+        return true;
+      } catch {
+        return false;
       }
     },
   };

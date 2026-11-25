@@ -17,12 +17,26 @@ export async function api(path, body, { signal } = {}) {
           body: JSON.stringify(body),
           signal,
         };
-  const res = await fetch(path, opts);
-  const data = await res.json().catch(() => ({ error: "Invalid response from server" }));
+  let res;
+  try {
+    res = await fetch(path, opts);
+  } catch (error) {
+    if (signal?.aborted || error?.name === "AbortError") throw error;
+    throw new Error("Could not reach the simulator server. Check the connection and try again.", { cause: error });
+  }
+  let data;
+  try {
+    data = await res.json();
+  } catch (error) {
+    if (signal?.aborted || error?.name === "AbortError") throw error;
+    if (res.ok) throw new Error("The simulator server returned unreadable JSON.", { cause: error });
+  }
   if (!res.ok) {
-    const err = new Error(data.error || `Request failed (${res.status})`);
+    const message =
+      typeof data?.error === "string" && data.error.trim() ? data.error : `Request failed (${res.status})`;
+    const err = new Error(message);
     err.status = res.status;
-    err.jevStatus = data.jev_status;
+    err.jevStatus = data?.jev_status;
     throw err;
   }
   return data;
