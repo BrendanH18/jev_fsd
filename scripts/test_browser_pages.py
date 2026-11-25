@@ -540,7 +540,31 @@ def check_driving_ui(page):
           $('left-handed-touch').checked = true; change($('left-handed-touch'));
           check('Swapping controls puts the accelerator side before the steering pad', app.touch.pedalEls.throttle.getBoundingClientRect().x
             < app.touch.wheel.getBoundingClientRect().x);
+          const touchAction = name => app.touch.buttons.find(button => button.dataset.action === name);
+          check('Touch-only actions expose the matching keyboard shortcuts',
+            touchAction('horn').getAttribute('aria-keyshortcuts') === 'H'
+            && touchAction('reset').getAttribute('aria-keyshortcuts') === 'R'
+            && touchAction('camera').getAttribute('aria-keyshortcuts') === 'C');
+          shortcuts.checked = false; change(shortcuts);
+          check('Unavailable shortcuts are removed from main and touch controls',
+            !$('camera-view').hasAttribute('aria-keyshortcuts') && !touchAction('horn').hasAttribute('aria-keyshortcuts'));
+          shortcuts.checked = true; change(shortcuts);
+          check('Re-enabling character keys restores touch shortcut hints',
+            touchAction('signalLeft').getAttribute('aria-keyshortcuts') === 'Q'
+            && touchAction('signalRight').getAttribute('aria-keyshortcuts') === 'E');
+          app.advance(0.02);
+          check('The touch pause button reflects the live paused state', touchAction('pause').getAttribute('aria-pressed') === 'true');
+          touchAction('signalLeft').click(); app.advance(0.02);
+          check('The left indicator reports its current state before manual driving resumes',
+            touchAction('signalLeft').getAttribute('aria-pressed') === 'true');
+          touchAction('signalRight').click(); app.advance(0.02);
+          check('Switching to the right indicator updates both touch controls',
+            touchAction('signalLeft').getAttribute('aria-pressed') === 'false'
+            && touchAction('signalRight').getAttribute('aria-pressed') === 'true');
+          touchAction('signalRight').click(); app.advance(0.02);
+          touchAction('horn').focus();
           touchSetting.value = 'hide'; change(touchSetting);
+          check('Hiding the touch controls restores focus to the setting', document.activeElement === touchSetting);
           check('Touch controls can be hidden without changing the driving mode', app.touch.el.hidden && !document.body.classList.contains('touch-driving'));
           check('The touch setting persists independently of the world URL', localStorage.getItem('jev-fsd-ui-touch') === '"hide"');
 
@@ -743,6 +767,46 @@ def check(url, chromium=None, groups=GROUPS):
             page.goto(url.rstrip("/") + "/?drive=manual&quality=low", wait_until="domcontentloaded")
             page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
             ok &= check_driving_ui(page)
+            for skip_id, target_id in (("skip-drive-settings", "settings-toggle"), ("skip-drive-map", "minimap")):
+                skip_link = page.locator(f"#{skip_id}")
+                skip_link.focus()
+                skip_link.press("Enter")
+                ok &= report(
+                    "keyboard bypass",
+                    [
+                        {
+                            "name": f"{skip_id} moves keyboard focus",
+                            "ok": page.locator(f"#{target_id}:focus").count() == 1,
+                        }
+                    ],
+                )
+            if "ui" in groups:
+                ok &= report("UI fixtures", page.evaluate("import('/tests/ui-tests.js').then(m => m.runUiTests())"))
+            page.set_viewport_size({"width": 320, "height": 360})
+            page.emulate_media(contrast="more", forced_colors="active")
+            ok &= report(
+                "compact and high-contrast controls",
+                page.evaluate("""() => {
+                  const app = window.__jev, setting = document.querySelector('#touch-setting');
+                  setting.value = 'show';
+                  setting.dispatchEvent(new Event('change'));
+                  const touch = app.touch;
+                  const elementBounds = [touch.wheel, ...touch.buttons, ...Object.values(touch.pedalEls)]
+                    .map(element => element.getBoundingClientRect());
+                  const inside = elementBounds.every(rect => rect.width > 0 && rect.top >= 0
+                    && rect.left >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight);
+                  const contrast = getComputedStyle(document.body).getPropertyValue('--muted').trim() === '#c9d1df';
+                  const cursor = getComputedStyle(document.querySelector('#minimap-cursor')).forcedColorAdjust;
+                  setting.value = 'hide';
+                  setting.dispatchEvent(new Event('change'));
+                  return [
+                    { name: 'The narrow touch layout fits a 320 by 360 viewport', ok: inside },
+                    { name: 'The HUD honours higher contrast', ok: contrast },
+                    { name: 'The minimap cursor retains its contrasting outline in forced colours', ok: cursor === 'none' },
+                  ];
+                }"""),
+            )
+            page.emulate_media(contrast="no-preference", forced_colors="none")
             page.set_viewport_size({"width": 420, "height": 360})
             ok &= report(
                 "short photo viewport",

@@ -187,7 +187,7 @@ export async function runUiTests() {
   hud.toggleKeys(true);
   check(
     "Shortcut help synchronizes its button state",
-    !hud.el.keysHelp.hidden && hud.el.keysToggle.getAttribute("aria-pressed") === "true",
+    !hud.el.keysHelp.hidden && hud.el.keysToggle.getAttribute("aria-expanded") === "true",
   );
 
   const state = {
@@ -394,6 +394,87 @@ export async function runUiTests() {
     input.poll();
     modal.close();
     check("A modal clears the touch pedal state before driving resumes", !touch.state.throttle);
+    const point = (element, type, init = {}) =>
+      element.dispatchEvent(
+        new PointerEvent(type, { pointerId: 19, pointerType: "mouse", button: 0, clientX: 100, ...init }),
+      );
+    point(touch.wheel, "pointerdown");
+    point(touch.wheel, "pointermove", { clientX: 145, buttons: 1 });
+    check(
+      "Touch steering announces its direction and percentage",
+      touch.wheel.getAttribute("aria-valuetext") === "50% right",
+    );
+    point(touch.wheel, "pointermove", { clientX: 170 });
+    check("A mouse move with no held button ends a steering drag", touch.state.steer === 0);
+    check(
+      "The steering pad announces when it recovers to centre",
+      touch.wheel.getAttribute("aria-valuetext") === "Centred",
+    );
+    point(touch.wheel, "pointerdown");
+    point(touch.wheel, "pointermove", { clientX: 55, buttons: 1 });
+    point(touch.wheel, "pointerleave");
+    check("Leaving the steering pad after capture fails releases the drag", touch.state.steer === 0);
+    point(go, "pointerdown");
+    point(go, "pointerleave");
+    check("Leaving a pedal after capture fails releases it", touch.state.throttle === 0);
+    point(brake, "pointerdown");
+    point(brake, "pointercancel");
+    check("Cancelling a pointer releases the touch brake", touch.state.brake === 0);
+    point(hard, "pointerdown");
+    point(hard, "lostpointercapture");
+    check("Losing capture releases the hard brake", !touch.state.hardBrake);
+    key(hard, "keydown", " ", { ctrlKey: true });
+    check("A browser chord cannot engage the touch hard brake", !touch.state.hardBrake);
+    key(go, "keydown", " ", { isComposing: true });
+    check("A composition key cannot engage the touch accelerator", touch.state.throttle === 0);
+    key(brake, "keydown", "Enter", { repeat: true });
+    check("A stale key repeat cannot re-engage a released touch pedal", touch.state.brake === 0);
+    key(touch.wheel, "keydown", "ArrowLeft", { repeat: true });
+    check("A stale steering key repeat cannot re-engage the steering pad", touch.state.steer === 0);
+    key(touch.wheel, "keydown", "ArrowLeft");
+    check("Keyboard steering shows an active steering control", touch.wheel.classList.contains("active"));
+    check("Keyboard steering announces leftward input", touch.wheel.getAttribute("aria-valuetext") === "50% left");
+    touch.release();
+    let captured = 0;
+    const capture = (element) => {
+      element.setPointerCapture = () => captured++;
+      element.hasPointerCapture = () => true;
+      element.releasePointerCapture = () => captured--;
+    };
+    capture(touch.wheel);
+    capture(go);
+    point(touch.wheel, "pointerdown", { pointerId: 20 });
+    point(go, "pointerdown", { pointerId: 21 });
+    touch.release();
+    check("Suspending touch driving relinquishes both pointer captures", captured === 0);
+    const auto = touch.buttons.find((b) => b.dataset.action === "autopilot");
+    check("The touch autopilot has an initial off state", auto.getAttribute("aria-pressed") === "false");
+    const initialCaption = auto.textContent;
+    touch.setAutopilot(true);
+    check(
+      "The touch autopilot caption stays stable as its pressed state changes",
+      auto.textContent === initialCaption && auto.getAttribute("aria-pressed") === "true",
+    );
+    const steeringHelp = touch.wheel.getAttribute("aria-describedby");
+    check(
+      "The steering pad is described by its own keyboard and pointer instructions",
+      fixture.querySelector(`#${steeringHelp}`)?.textContent.includes("Hold Shift"),
+    );
+    const brakeHelp = brake.getAttribute("aria-describedby");
+    check(
+      "The brake points to instructions for holding a pedal",
+      fixture.querySelector(`#${brakeHelp}`)?.textContent.includes("Space"),
+    );
+
+    check(
+      "The brake exposes that holding it at a stop reverses",
+      brake.getAttribute("aria-description")?.includes("reverse"),
+    );
+    touch.el.hidden = true;
+    go.click();
+    point(go, "pointerdown");
+    touch.el.hidden = false;
+    check("Hidden pedals cannot queue input to drive later", touch.state.throttle === 0);
     fixture.remove();
   }
   check("Exposure rejects a nonnumeric edit", clampLook("exposure", "oops") === 0);

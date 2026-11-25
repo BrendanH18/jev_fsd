@@ -216,7 +216,7 @@ export class Hud {
     const wasOpen = !this.el.keysHelp.hidden;
     const open = force === undefined ? !wasOpen : !!force;
     this.el.keysHelp.hidden = !open;
-    this.el.keysToggle.setAttribute("aria-pressed", String(open));
+    this.el.keysToggle.setAttribute("aria-expanded", String(open));
     if (open && !wasOpen) {
       this._keysReturnFocus = document.activeElement;
       this.el.keysClose?.focus?.({ preventScroll: true });

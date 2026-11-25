@@ -6,26 +6,30 @@
   <title>Jev FSD Benchmark</title>
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/bench.css">
+  <link rel="stylesheet" href="/css/a11y.css">
 </head>
 <body class="bench">
+  <a id="skip-bench-controls" class="skip-link" href="#benchmark-controls">Skip to benchmark controls</a>
+  <a id="skip-bench-results" class="skip-link" href="#benchmark-results">Skip to benchmark results</a>
   <header>
     <h1>Benchmark</h1>
-    <span id="map-note" class="muted"></span>
+    <span id="map-note" class="muted" role="status"></span>
     <a href="/" class="toggle">back to the sim</a>
   </header>
 
-  <section class="controls panel">
+  <main id="benchmark-main">
+  <section id="benchmark-controls" class="controls panel" aria-label="Benchmark controls" tabindex="-1">
     <label>brain
-      <select id="brain">
+      <select id="brain" aria-describedby="brain-help">
         <option value="rules">Rules (code only)</option>
         <option value="cautious">Cautious agent</option>
         <option value="jev">Jev (TypeSafe)</option>
       </select>
     </label>
-    <label>map <select id="bench-map"></select></label>
-    <label>scenarios <input id="count" type="number" min="1" max="60" value="12"></label>
-    <label>traffic <input id="npcs" type="number" min="0" max="120" value="40"></label>
-    <label>suite seed <input id="seed" type="number" min="0" value="1"></label>
+    <label>map <select id="bench-map" aria-describedby="bench-map-help"></select></label>
+    <label>scenarios <input id="count" type="number" min="1" max="60" value="12" aria-describedby="count-help"></label>
+    <label>traffic <input id="npcs" type="number" min="0" max="120" value="40" aria-describedby="npcs-help"></label>
+    <label>suite seed <input id="seed" type="number" min="0" value="1" aria-describedby="seed-help"></label>
     <label>weather
       <select id="weather">
         <option value="dry">dry</option>
@@ -35,55 +39,78 @@
       </select>
     </label>
     <label>world
-      <select id="features">
+      <select id="features" aria-describedby="features-help">
         <option value="bare">bare (every opt-in feature off)</option>
         <option value="city">city (the free drive's features)</option>
       </select>
     </label>
     <label title="Guarded: the safety filter removes every manoeuvre that fails a road-rule check. Open: it flags them instead, and the driver decides (brain/tracks.js)">track
-      <select id="track">
+      <select id="track" aria-describedby="track-help">
         <option value="guarded">guarded (the filter removes rule breaks)</option>
         <option value="open">open (the filter flags them; the driver decides)</option>
       </select>
     </label>
-    <label>park at destination <input id="park" type="checkbox"></label>
-    <label>hour <input id="hour" type="number" min="0" max="23.99" step="any" placeholder="default"></label>
-    <label>without (city) <input id="without" type="text" placeholder="geese,ice"></label>
-    <label>covering row (city) <input id="cover" type="number" min="0" placeholder="none"></label>
-    <label><input id="bench-diagnostics" type="checkbox"> Incident diagnostics</label>
-    <label><input id="bench-save" type="checkbox" checked> Save run</label>
-    <label title="The map's held-out routes, which no fix was tuned against (docs/rules-baseline.md); they replace the scenario count and suite seed">held-out routes <input id="heldout" type="checkbox"></label>
+    <label>park at destination <input id="park" type="checkbox" aria-describedby="park-help"></label>
+    <label>hour <input id="hour" type="number" min="0" max="23.99" step="any" placeholder="default" aria-describedby="hour-help"></label>
+    <label>without (city) <input id="without" type="text" placeholder="geese,ice" aria-describedby="without-help" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+    <label>covering row (city) <input id="cover" type="number" min="0" placeholder="none" aria-describedby="cover-help"></label>
+    <label><input id="bench-diagnostics" type="checkbox" aria-describedby="bench-diagnostics-help"> Incident diagnostics</label>
+    <label><input id="bench-save" type="checkbox" checked aria-describedby="bench-save-help"> Save run</label>
+    <label title="The map's held-out routes, which no fix was tuned against (docs/rules-baseline.md); they replace the scenario count and suite seed">held-out routes <input id="heldout" type="checkbox" aria-describedby="heldout-help"></label>
     <label>clock
-      <select id="mode">
+      <select id="mode" aria-describedby="mode-help">
         <option value="lockstep">lockstep (waits for each decision)</option>
         <option value="realtime">realtime (latency counts)</option>
       </select>
     </label>
-    <label>compare with <select id="compare"><option value="">none</option></select></label>
-    <label>view saved run <select id="saved-run"><option value="">choose a run</option></select></label>
-    <button id="run" class="toggle on" disabled>Run</button>
+    <label>compare with <select id="compare" aria-describedby="compare-help"><option value="">none</option></select></label>
+    <label>view saved run <select id="saved-run" aria-describedby="saved-run-help"><option value="">choose a run</option></select></label>
+    <button id="run" class="toggle on" disabled aria-controls="status benchmark-results">Run</button>
     <span id="status" class="muted" role="status"></span>
   </section>
 
-  <section id="summary" class="cards"></section>
+  <section id="benchmark-results" aria-label="Benchmark results" tabindex="-1">
+  <section id="summary" class="cards" aria-label="Run summary"></section>
   <p id="comparison-note" class="muted" role="status" hidden></p>
   <div class="bench-table-tools">
-    <label>Find routes <input id="bench-search" type="search" placeholder="Route ID or failure"></label>
-    <label><input id="bench-failures" type="checkbox"> Failures only</label>
-    <button id="bench-csv" class="toggle" disabled>Export CSV</button>
-    <button id="bench-json" class="toggle" disabled>Export JSON</button>
+    <label>Find routes <input id="bench-search" type="search" placeholder="Route ID or failure" aria-controls="results"></label>
+    <label><input id="bench-failures" type="checkbox" aria-controls="results"> Failures only</label>
+    <button id="bench-csv" class="toggle" disabled aria-describedby="bench-csv-help">Export CSV</button>
+    <button id="bench-json" class="toggle" disabled aria-describedby="bench-json-help">Export JSON</button>
   </div>
-  <section class="panel table-wrap">
-    <table id="results">
+  <section id="benchmark-table-wrap" class="panel table-wrap" aria-label="Scrollable route table" tabindex="0">
+    <table id="results" aria-label="Route results">
       <thead></thead>
       <tbody><tr><td class="muted">No run yet. Pick a brain and press Run.</td></tr></tbody>
     </table>
+  </section>
   </section>
   <p class="muted foot">The result lists any failed driving checks, including arrival, collisions and road rules.
     Comfort measurements help compare drives. Score, comfort, margin and time lost rank drivers that both pass; they are
     computed from the saved results when shown (formulas in bench/scores.js and docs/rules-baseline.md). Lockstep with the Rules brain is fully reproducible: the same
     suite seed gives the same numbers until the sim changes.</p>
 
+  </main>
+
   <script type="module" src="/js/bench/main.js"></script>
+  <span id="brain-help" hidden>Rules and the cautious agent run locally. Jev needs a configured key and makes live requests.</span>
+  <span id="bench-map-help" hidden>Routes are sampled from the selected neighbourhood.</span>
+  <span id="count-help" hidden>Choose 1 to 60 routes. Held-out routes supply their own count.</span>
+  <span id="npcs-help" hidden>Choose up to 120 traffic cars per route.</span>
+  <span id="seed-help" hidden>Reuse this seed with the same map and options to select the same routes. Held-out routes supply their own seeds.</span>
+  <span id="features-help" hidden>Bare leaves driving features off. City uses the free-drive feature options.</span>
+  <span id="track-help" hidden>Guarded removes manoeuvres that fail a road-rule check. Open flags them for the driver. Both filter predicted collisions.</span>
+  <span id="park-help" hidden>Require parking at the destination in addition to following the route.</span>
+  <span id="hour-help" hidden>Use local hours from midnight, with a fraction for minutes. Leave blank for the preset’s default.</span>
+  <span id="without-help" hidden>Enter comma-separated city feature names, such as geese,ice.</span>
+  <span id="cover-help" hidden>Enter a zero-based city covering-array row or leave blank to use the other city settings.</span>
+  <span id="bench-diagnostics-help" hidden>Record details surrounding driving incidents.</span>
+  <span id="bench-save-help" hidden>Store this run on the server so it can be selected again.</span>
+  <span id="heldout-help" hidden>Use the map’s held-out routes instead of the scenario count and suite seed.</span>
+  <span id="mode-help" hidden>Lockstep waits for each decision. Realtime counts response delay in the drive.</span>
+  <span id="compare-help" hidden>Use a saved run to compare matching route conditions.</span>
+  <span id="saved-run-help" hidden>Load a previous run for inspection without driving its routes again.</span>
+  <span id="bench-csv-help" hidden>Download the visible route results as CSV.</span>
+  <span id="bench-json-help" hidden>Download the entire run, including rows hidden by filters.</span>
 </body>
 </html>

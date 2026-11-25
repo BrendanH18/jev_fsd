@@ -615,7 +615,7 @@ export async function boot() {
       if (on) {
         pausedBeforeSetup = world.paused;
         world.paused = true;
-        input.keys.clear();
+        input.clearKeys();
       } else world.paused = pausedBeforeSetup;
     },
   });
@@ -811,8 +811,9 @@ export async function boot() {
     world.ego.signal = world.ego.signal === side ? null : side;
     manualSignal = world.ego.signal ? { t: world.t, heading: world.ego.psi } : null;
   }
+  const shortcutSetting = $("#letter-shortcuts");
   const input = new Input({
-    shortcutsEnabled: () => $("#letter-shortcuts").checked,
+    shortcutsEnabled: () => shortcutSetting.checked,
     interceptKey: (key, repeat) => {
       if (photo.active) {
         if ([" ", "h"].includes(key)) {
@@ -862,12 +863,17 @@ export async function boot() {
       else hud.toggleSettings(false);
     },
   });
+  shortcutSetting.addEventListener("change", () => {
+    input.clearKeys();
+    input.refreshShortcutHints();
+  });
+  input.refreshShortcutHints();
   // A gamepad and, on touch screens, the on-screen controls drive through the same input (ui/gamepad.js,
   // ui/touch.js); they change nothing in the simulation.
   input.addSource(
     new GamepadInput({
       actions: input.actions,
-      blocked: () => document.hidden || photo.active || !!document.querySelector("dialog[open]"),
+      blocked: () => input.isBlocked() || photo.active,
       onConnect: (pad) =>
         hud.badge(
           `GAMEPAD CONNECTED · ${String(pad.id || "pad")
@@ -902,8 +908,15 @@ export async function boot() {
   });
   const showTouch = () => {
     const on = touchSetting.value === "auto" ? touchWanted("", coarsePointer?.matches) : touchSetting.value === "show";
-    if (on && !touch) touch = input.addSource(new TouchControls({ actions: input.actions }));
+    if (on && !touch) {
+      touch = input.addSource(new TouchControls({ actions: input.actions }));
+      input.refreshShortcutHints(touch.el);
+    }
     if (touch) {
+      if (!on && touch.el.contains(document.activeElement)) {
+        const focusTarget = touchSetting.getClientRects().length ? touchSetting : $("#settings-toggle");
+        focusTarget.focus({ preventScroll: true });
+      }
       touch.el.hidden = !on;
       if (!on) touch.release();
     }
@@ -1161,7 +1174,7 @@ export async function boot() {
   };
   function restoreFrame(index) {
     recorder.restore(index, replayTarget);
-    input.keys.clear();
+    input.clearKeys();
     arrivalPending = false;
     previousCars.clear();
     previousPeople.clear();
@@ -1204,7 +1217,7 @@ export async function boot() {
         if (lab?.reviewing) lab.live();
         pausedBeforeLab = world.paused;
         world.paused = true;
-        input.keys.clear();
+        input.clearKeys();
       } else world.paused = pausedBeforeLab;
     },
     onScenic: async (driver) => {
@@ -1475,7 +1488,7 @@ export async function boot() {
           world.paused = true;
           autopilot.setEnabled(false);
           hud.setAutopilot(false);
-          input.keys.clear();
+          input.clearKeys();
           acc = 0;
           drive?.incident("simulation_error", simulationError);
           document.body.append(
@@ -1562,6 +1575,9 @@ export async function boot() {
       $("#world-conditions").textContent = conditions;
       lastConditions = conditions;
     }
+    touch?.setPressed("pause", world.paused);
+    touch?.setPressed("signalLeft", world.ego.signal === "left");
+    touch?.setPressed("signalRight", world.ego.signal === "right");
     const pauseButton = $("#pause-world");
     if (pauseButton.getAttribute("aria-pressed") !== String(world.paused)) {
       pauseButton.setAttribute("aria-pressed", String(world.paused));
