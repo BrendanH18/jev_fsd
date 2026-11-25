@@ -6,6 +6,8 @@
 // parked car, drawn with the others (main.js). Render-only throughout; depth-tested, above the ground.
 
 import * as THREE from "three";
+import { animationTime } from "./actor-motion.js";
+import { retireActor, shareActorResources } from "./actor-resources.js";
 import { createPersonMesh, syncPerson } from "./people.js";
 import { createRoadsideMesh, syncRoadside } from "./roadside.js";
 
@@ -14,6 +16,8 @@ const WAVE_S = 1.1; // one beckoning wave
 const cap = new THREE.MeshStandardMaterial({ color: 0x141b2d, roughness: 0.6 });
 const glove = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.7 });
 const band = new THREE.MeshStandardMaterial({ color: 0xd9dde3, roughness: 0.25, metalness: 0.4, emissive: 0x222222 });
+
+shareActorResources([cap, glove, band]);
 
 // The officer: a worker in hi-vis (render/people.js), with a cap, two reflective bands and white gloves.
 export function createOfficerMesh(officer) {
@@ -43,13 +47,13 @@ export function createOfficerMesh(officer) {
 export function syncOfficer(mesh, officer, dt, camera) {
   const u = mesh.userData,
     o = u.officer;
+  dt = animationTime(dt);
   const d = Math.atan2(Math.sin(officer.face - o.psi), Math.cos(officer.face - o.psi));
   o.psi += Math.max(-TURN_RAD_S * dt, Math.min(TURN_RAD_S * dt, d));
   o.t += dt;
   syncPerson(mesh, { x: officer.x, y: officer.y, psi: o.psi, v: 0, phase: 0, frozen: 0 }, camera);
   if (!mesh.visible) return;
-  const right = u.arms.find((a) => a.side > 0),
-    left = u.arms.find((a) => a.side < 0);
+  const [left, right] = u.arms;
   // (the right hand up, palm out, toward the traffic held: STOP)
   right.shoulder.rotation.set(0, 0, Math.PI / 2);
   right.elbow.rotation.set(0, 0, Math.PI / 2);
@@ -71,19 +75,26 @@ export class OfficerView {
     this.cruisers = new Map();
   }
   sync(world, dt, camera, lightsOn = 0) {
-    const ids = new Set();
+    const officerIds = new Set();
+    const cruiserIds = new Set();
+    const jumped = this.lastT != null && (world.t < this.lastT || world.t - this.lastT > 1);
+    this.lastT = world.t;
     for (const o of world.officers?.list || []) {
-      ids.add(o.id);
+      officerIds.add(o.id);
       let m = this.officers.get(o.id);
       if (!m) {
         m = createOfficerMesh(o);
         this.scene.add(m);
         this.officers.set(o.id, m);
       }
+      if (jumped) {
+        m.userData.officer.psi = o.face;
+        m.userData.officer.t = 0;
+      }
       syncOfficer(m, o, dt, camera);
       const car = o.cruiser && !o.cruiser.parked ? o.cruiser.vehicle : null;
       if (!car) continue;
-      ids.add(car.id);
+      cruiserIds.add(car.id);
       let c = this.cruisers.get(car.id);
       if (!c) {
         c = createRoadsideMesh(car);
@@ -92,10 +103,13 @@ export class OfficerView {
       }
       syncRoadside(c, car, dt, world.t, lightsOn);
     }
-    for (const map of [this.officers, this.cruisers])
+    for (const [map, ids] of [
+      [this.officers, officerIds],
+      [this.cruisers, cruiserIds],
+    ])
       for (const [id, m] of map)
         if (!ids.has(id)) {
-          this.scene.remove(m);
+          retireActor(m);
           map.delete(id);
         }
   }

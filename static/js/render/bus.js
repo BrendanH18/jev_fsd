@@ -1,3 +1,14 @@
+import {
+  addActorDetails,
+  boxDetail as detail,
+  mirroredDetails as sides,
+  RUBBER,
+  STEEL,
+  REFLECT_RED,
+  REFLECT_AMBER,
+  REFLECT_WHITE,
+} from "./actor-details.js";
+import { rollWheels, flashPhase, followAnimation, syncBrakeMaterial, syncHeadMaterial } from "./actor-motion.js";
 // Buses (sim/bus.js) and their stops. A 12 m low-floor city bus built from boxes at its simulated
 // size: a white body over a blue skirt, a band of windows, two doors on the curb side that open at a
 // stop, a lit destination sign with the route number, indicators, brake lights and headlamps.
@@ -5,6 +16,7 @@
 // blue bus-stop flag facing along the street; a streetcar stop's flag is the TTC's, red and white.
 
 import * as THREE from "three";
+import { shareActorResources } from "./actor-resources.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { BUS } from "../sim/vehicle.js";
 import { blobTexture } from "./textures.js";
@@ -52,6 +64,7 @@ const shared = {
   }),
   pole: new THREE.MeshStandardMaterial({ color: 0x7b8585, roughness: 0.6, metalness: 0.65 }),
 };
+shareActorResources(Object.values(shared));
 const signs = new Map(); // destination sign text -> material
 
 // The destination sign: amber LED lettering on black, route number first.
@@ -79,6 +92,7 @@ function destination(text) {
     emissiveIntensity: 1.4,
     roughness: 0.4,
   });
+  shareActorResources([material]);
   signs.set(text, material);
   return material;
 }
@@ -142,23 +156,38 @@ export function createBusMesh(id = "bus", text = "") {
     false,
     "bumpers",
   );
+  const head = shared.head.clone();
   add(
     merge([
       box(0.06, 0.16, 0.32, xf + 0.03, 0.62, -(w / 2 - 0.3)),
       box(0.06, 0.16, 0.32, xf + 0.03, 0.62, w / 2 - 0.3),
     ]),
-    shared.head,
+    head,
     false,
     "headlamps",
   );
   const sign = add(box(0.04, 0.24, w - 0.4, xf + 0.02, h - 0.2, 0), destination(text || " "), false, "destination");
   sign.castShadow = false;
+  const rearSign = add(
+    box(0.04, 0.22, 0.58, xr - 0.025, h - 0.2, 0),
+    destination(text.split(" ")[0] || " "),
+    false,
+    "rear-route",
+  );
+  rearSign.castShadow = false;
   // doors on the curb side (+Z): front, by the driver, and centre; closed panels hide the opening
   const doors = [];
   for (const x of [xf - 0.75, 1.1]) {
     add(box(1.15, 2.3, 0.02, x, floor + 1.2, w / 2 + 0.002), shared.inside, false, "doorway");
-    const leaf = add(box(1.15, 2.3, 0.04, x, floor + 1.2, w / 2 + 0.015), shared.door, false, "door");
-    doors.push({ leaf, x });
+    for (const direction of [-1, 1]) {
+      const leaf = add(
+        box(0.575, 2.3, 0.04, x + 0.2875 * direction, floor + 1.2, w / 2 + 0.015),
+        shared.door,
+        false,
+        "door",
+      );
+      doors.push({ leaf, direction });
+    }
   }
   // lamps: amber indicators front and rear at each corner, red brake and tail lamps at the rear
   const brake = new THREE.MeshStandardMaterial({
@@ -185,6 +214,30 @@ export function createBusMesh(id = "bus", text = "") {
       blinkers[side].push(m);
     }
   }
+  addActorDetails(body, "bus", () => [
+    ...sides((side) => [
+      detail(
+        "boarding-edge",
+        REFLECT_AMBER,
+        1.15,
+        0.045,
+        0.08,
+        side < 0 ? xf - 0.75 : 1.1,
+        floor + 0.07,
+        w / 2 + 0.025,
+      ),
+      detail("cab-mirror-stalk", RUBBER, 0.09, 0.07, 0.27, xf - 0.42, 2.25, side * (w / 2 + 0.11)),
+      detail("cab-mirror", STEEL, 0.09, 0.27, 0.15, xf - 0.48, 2.2, side * (w / 2 + 0.25)),
+      detail("rear-mudflap", RUBBER, 0.06, 0.38, 0.42, -0.56, 0.35, (side * spec.track) / 2),
+      detail("rear-reflector", REFLECT_RED, 0.025, 0.08, 0.36, xr - 0.16, floor + 0.14, side * (w / 2 - 0.28)),
+      detail("side-marker", REFLECT_AMBER, 0.18, 0.1, 0.025, mid - 1.7, floor + 0.4, side * (w / 2 + 0.015)),
+    ]),
+    ...Array.from({ length: 8 }, (_, i) =>
+      detail("radiator-grille", RUBBER, 0.03, 0.036, w * 0.53, xr - 0.025, 1.23 + i * 0.06, 0),
+    ),
+    detail("rear-plate", REFLECT_WHITE, 0.03, 0.13, 0.31, xr - 0.147, floor + 0.15, 0),
+    detail("driver-wiper", RUBBER, 0.022, 0.033, w * 0.54, xf + 0.042, 0.96, 0),
+  ]);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(spec.length + 0.6, w + 0.6).rotateX(-Math.PI / 2), shared.blob);
   blob.position.set(mid, 0.02, 0);
   blob.renderOrder = 1;
@@ -205,7 +258,7 @@ export function createBusMesh(id = "bus", text = "") {
     g.add(pivot);
     wheels.push({ pivot, wheel: wl, steer });
   }
-  g.userData = { bus: true, wheels, tire, spin: 0, doors, blinkers, brake, prevV: 0, brakeLevel: 0, open: 0 };
+  g.userData = { head, bus: true, wheels, tire, spin: 0, doors, blinkers, brake, prevV: null, brakeLevel: 0, open: 0 };
   return g;
 }
 
@@ -213,27 +266,18 @@ export function syncBus(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   mesh.position.set(vehicle.x, 0, -vehicle.y);
   mesh.rotation.y = vehicle.psi;
   const u = mesh.userData;
-  u.spin += (vehicle.v * dt) / u.tire;
-  for (const w of u.wheels) {
-    w.wheel.rotation.z = -u.spin;
-    w.pivot.rotation.y = w.steer ? vehicle.delta : 0;
-  }
+  syncHeadMaterial(u.head, lightsOn);
+  rollWheels(u, vehicle, dt, u.tire);
   // the doors slide open outward and along, over about a second
-  u.open += ((vehicle.doors ? 1 : 0) - u.open) * Math.min(1, dt * 3);
+  u.open = followAnimation(u.open, Number(!!vehicle.doors), dt, 3);
   for (const d of u.doors) {
     d.leaf.position.z = 0.12 * u.open;
-    d.leaf.position.x = 0.55 * u.open;
+    d.leaf.position.x = d.direction * 0.59 * u.open;
   }
-  const on = t % 0.8 < 0.45;
+  const on = flashPhase(t, 0.8) < 0.45 / 0.8;
   for (const m of u.blinkers.left) m.visible = on && vehicle.signal === "left";
   for (const m of u.blinkers.right) m.visible = on && vehicle.signal === "right";
-  if (dt > 0) {
-    const decel = (u.prevV - vehicle.v) / dt;
-    const target = decel > 0.6 || Math.abs(vehicle.v) < 0.15 ? 1 : 0;
-    u.brakeLevel += (target - u.brakeLevel) * Math.min(1, dt * 12);
-    u.prevV = vehicle.v;
-    u.brake.emissiveIntensity = 0.3 + lightsOn * 1.5 + u.brakeLevel * (2.2 + lightsOn * 2);
-  }
+  syncBrakeMaterial(u, vehicle.v, dt, lightsOn);
 }
 
 // A stop flag: `ground` colour, its name on a white panel at the top, STOP under it.
