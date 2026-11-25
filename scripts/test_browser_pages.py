@@ -998,6 +998,10 @@ def check(url, chromium=None, groups=GROUPS):
             page.goto(url.rstrip("/") + "/?drive=manual&quality=low", wait_until="domcontentloaded")
             page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
             ok &= check_driving_ui(page)
+            ok &= report(
+                "Photo Mode routing",
+                page.evaluate("import('/tests/ui-tests.js').then(async m => [await m.checkPhotoRoutes(window.__jev)])"),
+            )
             for skip_id, target_id in (("skip-drive-settings", "settings-toggle"), ("skip-drive-map", "minimap")):
                 skip_link = page.locator(f"#{skip_id}")
                 skip_link.focus()

@@ -677,6 +677,7 @@ export async function boot() {
       applySky(photoHour, photoWeather, true);
     },
     onEnter: () => {
+      routeRequests.cancel();
       photoHour = hour;
       photoWeather = world.weather;
       pausedBeforePhoto = world.paused;
@@ -1011,7 +1012,7 @@ export async function boot() {
       routeStatus.textContent = message;
       mapCanvas.setAttribute("aria-busy", String(busy));
     },
-    canInstall: () => !simulationError && !graphicsLost && !lab?.reviewing,
+    canInstall: () => !simulationError && !graphicsLost && !lab?.reviewing && !photo.active,
   });
   canvas.addEventListener("webglcontextlost", () => {
     graphicsLost = true;

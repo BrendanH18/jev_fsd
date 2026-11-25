@@ -832,3 +832,44 @@ function checkPhotoControls(check) {
     photo.reveal.remove();
   }
 }
+
+export async function checkPhotoRoutes(app) {
+  const originalFetch = window.fetch;
+  const originalRoute = app.world.route;
+  const recording = app.recorder.recordingId;
+  const { x, y } = app.world.ego;
+  const point = [x + 20, y];
+  const response = {
+    ok: true,
+    json: async () => ({ routes: [{ polyline: [[x, y], point], edges: [], summary: "Fixture" }] }),
+  };
+  let signal, finish;
+  let requests = 0;
+  window.fetch = (url, options) => {
+    if (url !== "/api/route") return originalFetch(url, options);
+    if (++requests > 1) return Promise.resolve(response);
+    signal = options.signal;
+    return new Promise((resolve) => {
+      finish = () => resolve(response);
+    });
+  };
+  try {
+    const pending = app.setDestination(point);
+    app.photo.enter();
+    const during = app.setDestination(point);
+    finish();
+    return {
+      name: "Entering Photo Mode cancels pending routes and keeps the route and recording intact",
+      ok:
+        !(await pending) &&
+        !(await during) &&
+        signal.aborted &&
+        requests === 1 &&
+        app.world.route === originalRoute &&
+        app.recorder.recordingId === recording,
+    };
+  } finally {
+    app.photo.exit();
+    window.fetch = originalFetch;
+  }
+}
