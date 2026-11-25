@@ -275,7 +275,11 @@ export class Explorer {
     try {
       const data = await this.request(
         "/api/drives",
-        { bbox: this.map.bbox.join(","), from: this.getStart() },
+        {
+          bbox: this.map.bbox.join(","),
+          ...(this.map.synthetic ? { synthetic: true } : {}),
+          from: this.getStart(),
+        },
         { signal: request.signal },
       );
       if (generation !== this.generation || !this.dialog.open) return;

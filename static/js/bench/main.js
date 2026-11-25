@@ -195,7 +195,7 @@ async function boot() {
     endpoints = registerLlmAgents(status.llm);
   const count = (n, what) => (n ? ` · ${n} ${what}${n > 1 ? "s" : ""}` : "");
   $("#map-note").textContent =
-    `${status.map.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${agentAvailable("jev") ? "Jev available" : "no TypeSafe key: no Jev"}${count(decisions.length, "decision model")}${count(endpoints.length, "LLM endpoint")}`;
+    `${map.pack.synthetic ? "synthetic grid" : `${status.map.label}, OpenStreetMap`} · ${map.edges.size} segments · ${agentAvailable("jev") ? "Jev available" : "no TypeSafe key: no Jev"}${count(decisions.length, "decision model")}${count(endpoints.length, "LLM endpoint")}`;
   $("#npcs").value = status.npcs;
   $("#brain").querySelector('option[value="jev"]').disabled = !agentAvailable("jev");
   endpointOptions();

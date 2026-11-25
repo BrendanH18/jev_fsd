@@ -122,7 +122,7 @@ export async function boot() {
   loadingText.textContent = `Building ${pack.edges.length} road segments…`;
   const map = new MapData(pack);
   const hud = new Hud();
-  $("#current-city").textContent = status.map.synthetic ? "Practice grid" : status.map.label;
+  $("#current-city").textContent = pack.synthetic ? "Practice grid" : status.map.label;
   const qualitySetting = preference("quality", "high", undefined, {
     legacy: true,
     valid: (value) => [...hud.el.quality.options].some((o) => o.value === value),
@@ -414,7 +414,7 @@ export async function boot() {
   $("#feature-switches").hidden = Boolean(challenge || replay);
   const showMapNote = () =>
     hud.setMapNote(
-      status.map.synthetic
+      pack.synthetic
         ? `Synthetic grid (map fetch failed: ${status.map.error})`
         : `© OpenStreetMap contributors (ODbL) · ${pack.edges.length} roads · ${pack.intersections.length} signals · ${pack.stops.length} stops`,
       agentAvailable("jev") ? "" : "no TypeSafe key, Jev unavailable",
@@ -663,7 +663,7 @@ export async function boot() {
   let photoHour, photoWeather;
   const photo = new PhotoMode({
     view,
-    place: status.map.synthetic ? "practice grid" : status.map.label,
+    place: pack.synthetic ? "practice grid" : status.map.label,
     getHour: () => hour,
     setHour: (value) => {
       photoHour = parseHour(value);
@@ -957,7 +957,7 @@ export async function boot() {
 
   let pausedBeforeExplorer = false;
   const explorer = new Explorer({
-    map: status.map,
+    map: { ...status.map, synthetic: pack.synthetic },
     getStart: () => ({ x: world.ego.x, y: world.ego.y, heading: world.ego.psi }),
     onOpen: () => {
       if (lab?.reviewing) lab.live();
@@ -999,7 +999,8 @@ export async function boot() {
   const routeRequests = new RouteRequest({
     request: api,
     payload: (point) => ({
-      bbox: status.map.bbox.join(","),
+      bbox: map.routingBbox.join(","),
+      ...(pack.synthetic ? { synthetic: true } : {}),
       from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
       to: { x: point[0], y: point[1] },
       k: 1,
@@ -1113,7 +1114,8 @@ export async function boot() {
     },
     onScenic: async (driver) => {
       const { drives } = await api("/api/drives", {
-        bbox: status.map.bbox.join(","),
+        bbox: map.routingBbox.join(","),
+        ...(pack.synthetic ? { synthetic: true } : {}),
         from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
       });
       if (!drives.length) throw new Error("Try another position or city in Explore cities.");

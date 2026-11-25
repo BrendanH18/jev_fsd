@@ -296,23 +296,24 @@ def _recording_name(path: Path) -> str:
 # Maps
 
 
-def load_map(bbox_text: str = "") -> dict:
+def load_map(bbox_text: str = "", *, refresh: bool = False) -> dict:
     bbox = parse_bbox(bbox_text) or settings.bbox
     key = "%.5f,%.5f,%.5f,%.5f" % bbox
     if tuple(map(float, key.split(","))) != bbox:
         key = ",".join(format(value, ".17g") for value in bbox)
     with _maps_lock:
-        if (entry := _cached_map(key)) is not None:
+        if (entry := _cached_map(key, refresh)) is not None:
             return entry
         lock, callers = _map_locks[key] if key in _map_locks else (threading.Lock(), 0)
         _map_locks[key] = (lock, callers + 1)
     try:
         with lock:
             with _maps_lock:
-                if (entry := _cached_map(key)) is not None:
+                if (entry := _cached_map(key, refresh)) is not None:
                     return entry
             entry = _build_map(bbox)
             with _maps_lock:
+                _maps.pop(key, None)
                 _maps[key] = entry
                 if len(_maps) > MAX_CACHED_MAPS:
                     del _maps[next(iter(_maps))]
@@ -326,12 +327,12 @@ def load_map(bbox_text: str = "") -> dict:
                 _map_locks[key] = (lock, callers - 1)
 
 
-def _cached_map(key: str):
+def _cached_map(key: str, refresh: bool):
     """Look up and promote a map with _maps_lock held."""
-    entry = _maps.pop(key, None)
-    if entry is None or ("retry_at" in entry and time.monotonic() >= entry["retry_at"]):
+    entry = _maps.get(key)
+    if entry is None or (refresh and "retry_at" in entry and time.monotonic() >= entry["retry_at"]):
         return None
-    _maps[key] = entry
+    _maps[key] = _maps.pop(key)
     return entry
 
 
@@ -445,12 +446,25 @@ def api_status(_body, query):
 
 
 def api_map(_body, query):
-    entry = load_map(_map_query(query))
+    entry = load_map(_map_query(query), refresh=True)
     return {**entry["pack"], "routing_bbox": list(entry["bbox"])}
 
 
 def api_maps(_body, _query):
     return {"maps": catalog(MAPS_DIR)}
+
+
+@lru_cache(maxsize=1)
+def _synthetic_router():
+    return Router(synthetic_pack())
+
+
+def _routing_router(body):
+    selector = _map_selector(body.get("bbox"))
+    # The same synthetic grid serves every fallback bbox, even after its streets become available.
+    if body.get("synthetic") is True:
+        return _synthetic_router()
+    return load_map(selector)["router"]
 
 
 def api_drives(body, _query):
@@ -464,8 +478,7 @@ def api_drives(body, _query):
     except (KeyError, TypeError, ValueError, OverflowError):
         raise BadRequest("from {x, y, heading} with finite coordinates is required")
     start["heading"] = _heading(start["heading"])
-    entry = load_map(_map_selector(body.get("bbox")))
-    return {"drives": suggested_drives(entry["router"], start)}
+    return {"drives": suggested_drives(_routing_router(body), start)}
 
 
 def api_route(body, _query):
@@ -533,9 +546,9 @@ def api_route(body, _query):
         raise BadRequest("restrictions must be a boolean")
     if start["heading"] is not None:
         start["heading"] = _heading(start["heading"])
-    entry = load_map(_map_selector(body.get("bbox")))
+    router = _routing_router(body)
     started = time.perf_counter()
-    routes = entry["router"].routes(
+    routes = router.routes(
         start,
         goal,
         k=k,
