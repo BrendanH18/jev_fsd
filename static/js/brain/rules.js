@@ -18,18 +18,31 @@ const FEATURE_COST = hooks("rulesCost");
 const PASS_CYCLIST_COST = 1.5,
   FOLLOW_CYCLIST_GAIN = 1.0;
 
+function explainCost(terms, name, amount) {
+  if (terms) terms[name] = amount;
+  return amount;
+}
+
 export class RulesBrain {
   constructor() {
     this.name = "rules";
   }
 
-  decideSync(snap, eligible) {
+  explain(snap, eligible) {
+    const policy = {};
+    const result = this.decideSync(snap, eligible, policy);
+    return { ...policy, candidateId: result.candidateId, motion: result.motion };
+  }
+
+  decideSync(snap, eligible, policy) {
     // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
     const i = snap.intersection;
     const directive = junctionPlan(i);
     const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     const v = snap.ego.v;
     let stop = STOP_BEFORE_SIGNAL.some((shouldStop) => shouldStop(snap, eligible));
+    const holds = policy ? [] : null;
+    if (stop) holds?.push("feature_before_signal");
     if (i) {
       const brakeDist = (v * v) / (2 * Math.min(3, comfort().hardDecel)) + 1.0;
       if (
@@ -40,22 +53,63 @@ export class RulesBrain {
         !i.entered &&
         i.bumper_to_line_m < brakeDist + 6 &&
         i.bumper_to_line_m > -1
-      )
+      ) {
         stop = i.bumper_to_line_m < 1.5;
-      if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) stop = true;
-      if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) stop = true;
-      if (waitsItsTurn(i) && i.bumper_to_line_m < 1.5) stop = true;
-      if (i.control === "yield" && i.cross_traffic_moving && !i.entered && i.bumper_to_line_m < 1.5) stop = true;
-      if (i.oncoming && i.oncoming.bumper_to_yield_m < 2) stop = true;
-      if (i.give_way?.wait_for && i.give_way.bumper_to_hold_m < 1.5) stop = true;
+        if (holds) {
+          holds.length = 0;
+          if (stop) holds.push(i.signal);
+        }
+      }
+      if (i.control === "stop" && !i.stop_completed && i.bumper_to_line_m < 1.5 && i.bumper_to_line_m > -3) {
+        stop = true;
+        holds?.push("stop_line");
+      }
+      if (i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) {
+        stop = true;
+        holds?.push("stop_cross_traffic");
+      }
+      if (waitsItsTurn(i) && i.bumper_to_line_m < 1.5) {
+        stop = true;
+        holds?.push("all_way_priority");
+      }
+      if (i.control === "yield" && i.cross_traffic_moving && !i.entered && i.bumper_to_line_m < 1.5) {
+        stop = true;
+        holds?.push("roundabout_traffic");
+      }
+      if (i.oncoming && i.oncoming.bumper_to_yield_m < 2) {
+        stop = true;
+        holds?.push("oncoming_turn_traffic");
+      }
+      if (i.give_way?.wait_for && i.give_way.bumper_to_hold_m < 1.5) {
+        stop = true;
+        holds?.push("junction_give_way");
+      }
     }
-    if (snap.following && snap.following.gap_m < 3 && snap.following.speed < 0.5) stop = true;
-    if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) stop = true;
-    if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) stop = true;
-    if (FEATURE_STOP.some((shouldStop) => shouldStop(snap, eligible))) stop = true;
-    if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) stop = true;
+    if (snap.following && snap.following.gap_m < 3 && snap.following.speed < 0.5) {
+      stop = true;
+      holds?.push("stopped_leader");
+    }
+    if (snap.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 3.5) {
+      stop = true;
+      holds?.push("crossing_pedestrian");
+    }
+    if (snap.right_hook && snap.right_hook.bumper_to_yield_m < 2) {
+      stop = true;
+      holds?.push("cyclist_on_right");
+    }
+    if (FEATURE_STOP.some((shouldStop) => shouldStop(snap, eligible))) {
+      stop = true;
+      holds?.push("feature_stop");
+    }
+    if (snap.lane_closure?.stop_s_route != null && snap.lane_closure.bumper_to_stop_m < 1.5) {
+      stop = true;
+      holds?.push("merge_hold");
+    }
     // (parking, the space is the destination: sim/parallel-park.js)
-    if (snap.nav?.arrived && snap.parking?.mode !== "in") stop = true;
+    if (snap.nav?.arrived && snap.parking?.mode !== "in") {
+      stop = true;
+      holds?.push("destination");
+    }
 
     const vDesired = snap.target ? snap.target.v : desiredSpeed(snap).v;
     // A manoeuvre that leaves the car outside the lane its route takes for a turn ahead gains
@@ -65,6 +119,7 @@ export class RulesBrain {
     const toward = l?.delta ? Object.values(l.sides).find((side) => Math.abs(side.delta) < Math.abs(l.delta)) : null;
     const vTurnLane = !l?.route_ahead ? Infinity : l.delta === 0 ? vDesired : toward ? toward.target_v : Infinity;
 
+    const scores = policy ? [] : null;
     const cp = snap.cyclist_pass;
     let best = null;
     for (const c of eligible) {
@@ -76,11 +131,19 @@ export class RulesBrain {
       // (a pull-over is judged by how near it ends to where it pulls over to, across lanes to the
       // kerb if need be: from the lane's centre, two lanes out, it would cost as much as its bonus)
       const laneErr = c.id === "pull_over" ? s.lane_err_end - (c.law.offset - c.law.center) : s.lane_err_end;
-      let cost =
-        -1.0 * s.progress_m +
-        2.0 * Math.abs(laneErr) +
-        0.05 * Math.abs(s.heading_err_deg) +
-        0.8 * Math.abs(s.end_speed - vWant);
+      const progress = -1.0 * s.progress_m;
+      const lateralError = 2.0 * Math.abs(laneErr);
+      const headingError = 0.05 * Math.abs(s.heading_err_deg);
+      const speedError = 0.8 * Math.abs(s.end_speed - vWant);
+      let cost = progress + lateralError + headingError + speedError;
+      const terms = scores
+        ? {
+            progress,
+            lateral_error: lateralError,
+            heading_error: headingError,
+            speed_error: speedError,
+          }
+        : null;
       if (
         snap.bus_lane?.in_effect &&
         !snap.bus_lane.entering_allowed &&
@@ -88,10 +151,10 @@ export class RulesBrain {
         c.change &&
         !snap.bus_lane.lanes.includes(c.law.laneIdx)
       )
-        cost -= 20;
+        cost += explainCost(terms, "exit_bus_lane", -20);
       // ending above the target is worse than below it: the target already accounts for what is ahead
-      if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
-      if (c.id === "stop_at_line" && amberStop && !snap.emergency) cost -= 12;
+      if (s.end_speed > vWant + 0.5) cost += explainCost(terms, "overspeed", 2.0 * (s.end_speed - vWant - 0.5));
+      if (c.id === "stop_at_line" && amberStop && !snap.emergency) cost += explainCost(terms, "amber_stop", -12);
       if (
         c.id === "stop_at_line" &&
         i &&
@@ -105,10 +168,15 @@ export class RulesBrain {
           (i.control === "yield" && i.cross_traffic_moving) ||
           (i.give_way?.wait_for && i.give_way.hold_s_route === i.s_line_route))
       )
-        cost -= 6;
-      if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40) cost -= 6;
-      if (c.id === "stop_for_pedestrian") cost -= 6;
-      for (const adjust of BEFORE_STOPS_COST) cost += adjust(c, snap);
+        cost += explainCost(terms, "control_line_stop", -6);
+      if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40)
+        cost += explainCost(terms, "destination_stop", -6);
+      if (c.id === "stop_for_pedestrian") cost += explainCost(terms, "pedestrian_stop", -6);
+      for (const [index, adjust] of BEFORE_STOPS_COST.entries()) {
+        const adjustment = adjust(c, snap);
+        cost += adjustment;
+        if (terms && adjustment) terms[`feature_before_stops_${index}`] = adjustment;
+      }
       if (
         c.id === "stop_for_oncoming" ||
         c.id === "stop_for_cyclist" ||
@@ -122,32 +190,46 @@ export class RulesBrain {
         c.id === "wait_to_merge" ||
         c.id === "let_merge_in"
       )
-        cost -= 6;
-      for (const adjust of STOPS_COST) cost += adjust(c, snap);
-      if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost -= 6;
-      for (const adjust of FEATURE_COST) cost += adjust(c, snap);
+        cost += explainCost(terms, "required_wait", -6);
+      for (const [index, adjust] of STOPS_COST.entries()) {
+        const adjustment = adjust(c, snap);
+        cost += adjustment;
+        if (terms && adjustment) terms[`feature_stops_${index}`] = adjustment;
+      }
+      if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost += explainCost(terms, "creep_or_give_way", -6);
+      for (const [index, adjust] of FEATURE_COST.entries()) {
+        const adjustment = adjust(c, snap);
+        cost += adjustment;
+        if (terms && adjustment) terms[`feature_${index}`] = adjustment;
+      }
       // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
       // (outweighing the cost of ending up out of the lane's centre)
-      if (c.id === "pull_over") cost -= 15;
+      if (c.id === "pull_over") cost += explainCost(terms, "pull_over", -15);
       // Turning round where the route makes a U-turn is the only way on, and once begun it carries
       // on whenever its prediction is clear.
-      if (c.law.kind === "turnaround") cost -= 50;
+      if (c.law.kind === "turnaround") cost += explainCost(terms, "turnaround", -50);
       // Likewise parking at the destination, and pulling out of the space at the start of a drive; and
       // pulling up where the car reverses into the space comes before driving on past it.
-      if (c.law.kind === "park") cost -= 50;
-      if (c.id === "wait_to_park") cost -= 12;
-      if (cp && !cp.going && isCyclistPass(c.law.detour)) cost += PASS_CYCLIST_COST;
-      if (cp && !cp.go && c.id === "follow_cyclist") cost -= FOLLOW_CYCLIST_GAIN;
-      if (c.law.kind === "hard_brake") cost += 3;
-      if (c.law.kind === "reverse") cost += 2;
-      if (!s.stays_in_lane) cost += 2;
+      if (c.law.kind === "park") cost += explainCost(terms, "parking", -50);
+      if (c.id === "wait_to_park") cost += explainCost(terms, "parking_approach", -12);
+      if (cp && !cp.going && isCyclistPass(c.law.detour))
+        cost += explainCost(terms, "start_cyclist_pass", PASS_CYCLIST_COST);
+      if (cp && !cp.go && c.id === "follow_cyclist") cost += explainCost(terms, "follow_cyclist", -FOLLOW_CYCLIST_GAIN);
+      if (c.law.kind === "hard_brake") cost += explainCost(terms, "hard_brake", 3);
+      if (c.law.kind === "reverse") cost += explainCost(terms, "reverse", 2);
+      if (!s.stays_in_lane) cost += explainCost(terms, "leave_lane", 2);
       // Changing lanes costs a little and so does staying outside the route's lane, so the car
       // passes only for a clear gain and goes back once there is room. A change under way is
       // finished unless finishing it is no longer safe.
-      if (c.change) cost += c.change.offer === "abort" ? 5.0 : 1.0;
-      for (const adjust of BEFORE_PASSING_COST) cost += adjust(c, snap);
-      if (c.law.lane) cost += 2.0 * Math.abs(c.law.lane);
-      if (s.min_gap_m < 3) cost += (3 - s.min_gap_m) * 3;
+      if (c.change) cost += explainCost(terms, "lane_change", c.change.offer === "abort" ? 5.0 : 1.0);
+      for (const [index, adjust] of BEFORE_PASSING_COST.entries()) {
+        const adjustment = adjust(c, snap);
+        cost += adjustment;
+        if (terms && adjustment) terms[`feature_before_passing_${index}`] = adjustment;
+      }
+      if (c.law.lane) cost += explainCost(terms, "outside_route_lane", 2.0 * Math.abs(c.law.lane));
+      if (s.min_gap_m < 3) cost += explainCost(terms, "close_gap", (3 - s.min_gap_m) * 3);
+      scores?.push({ id: c.id, targetSpeed: vWant, cost, terms });
       if (best === null || cost < best.cost) best = { c, cost };
     }
     // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
@@ -158,6 +240,20 @@ export class RulesBrain {
       best?.c.law.kind !== "park"
         ? "stop"
         : "drive";
+    if (policy)
+      Object.assign(policy, {
+        driver: this.name,
+        desiredSpeed: vDesired,
+        turnLaneSpeed: Number.isFinite(vTurnLane) ? vTurnLane : null,
+        holds,
+        scores,
+        holdOverride:
+          !stop || motion === "stop"
+            ? null
+            : amberStop && best?.c.id === "stop_at_line"
+              ? "approach_amber"
+              : best?.c.law.kind,
+      });
     return {
       ...featureDecisionFields(snap),
       motion,
