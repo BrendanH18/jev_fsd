@@ -12,6 +12,7 @@ export function chunkLOD(near, far, distance = 100, lod = new THREE.LOD()) {
   far.position.copy(near.position);
   lod.addLevel(near, 0);
   lod.addLevel(far, distance + sphere.radius, 0.1);
+  far.visible = false;
   // The sun's shadow patch follows the car. Distant scenery contributes its silhouette to the
   // main/reflection views, but only nearby detail casts shadows into that patch.
   far.traverse((object) => {

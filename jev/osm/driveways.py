@@ -24,15 +24,14 @@ nothing else reads it.
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
-from .cache import write_json
-from .parse import OsmData, parse_xml
+from .cache import read_layer, write_json
+from .parse import OsmData
 from .project import Projection
 
 DRIVEWAYS_VERSION = "1"
@@ -49,23 +48,30 @@ def driveways_path(maps_dir: Path, bbox: Bbox) -> Path:
     return maps_dir / ("%s.driveways.v%s.json" % (fetch.cache_key(bbox), DRIVEWAYS_VERSION))
 
 
-def load_driveways(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
-    path = driveways_path(maps_dir, bbox)
-    return json.loads(path.read_text()) if path.is_file() else None
+def load_driveways(bbox: Bbox, maps_dir: Path, *, log=lambda _msg: None) -> Optional[dict]:
+    return read_layer(driveways_path(maps_dir, bbox), "driveways", DRIVEWAYS_VERSION, ("driveways",), log)
 
 
 def build_driveways(
-    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+    bbox: Bbox,
+    maps_dir: Path,
+    pack: dict,
+    force: bool = False,
+    log: Callable[[str], None] = lambda m: None,
+    *,
+    load_osm: Callable[[], OsmData | None] | None = None,
 ) -> Optional[dict]:
     """The cached driveways for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = driveways_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
-    xml_path = fetch.cache_path(maps_dir, bbox)
-    if not xml_path.is_file():
+    if not force:
+        cached = load_driveways(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
         return None
-    layer = driveways_from_osm(parse_xml(xml_path), pack)
+    layer = driveways_from_osm(osm, pack)
     write_json(path, layer)
     log("map: built %s (%d driveways)" % (path.name, len(layer["driveways"])))
     return layer

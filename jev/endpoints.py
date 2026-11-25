@@ -28,13 +28,14 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
 from . import VERSION
+from .client import tokens as tokens
 from .client import JevError, SpendGuard
 from .config import PROJECT_ROOT, Settings
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
-MAX_USAGE_TOKENS = 10**9  # a larger token count is a broken usage block, not a real call
+MAX_CONFIG_DEPTH = 64
 MAX_TRACE_DEPTH = 64  # deeper replies are summarised in the trace instead of copied
 MAX_REPORTED_COST_USD = 100.0  # a larger per-call cost is a broken usage block, not a real charge
 MAX_SCRUB_DEPTH = 2 * MAX_TRACE_DEPTH  # scrub() summarises anything deeper; traces fit well inside it
@@ -304,21 +305,30 @@ def number(value: Any, integer: bool = False) -> Optional[float]:
     result = float(value)
     if not math.isfinite(result):
         raise ValueError("not finite")
+    if integer and not result.is_integer():
+        raise ValueError("not an integer")
     return int(result) if integer else result
 
 
 def public_url(base_url: str) -> str:
     """The base URL without credentials, query or fragment: safe to show in the UI."""
-    parts = urlsplit(base_url)
+    try:
+        parts = urlsplit(base_url)
+        port = parts.port
+    except ValueError:
+        return ""
     host = parts.hostname or ""
     if ":" in host:
         host = "[%s]" % host
-    netloc = host + (":%d" % parts.port if parts.port else "")
+    netloc = host + (":%d" % port if port is not None else "")
     return urlunsplit((parts.scheme, netloc, parts.path.rstrip("/"), "", ""))
 
 
 def is_local_host(base_url: str) -> bool:
-    host = (urlsplit(base_url).hostname or "").lower()
+    try:
+        host = (urlsplit(base_url).hostname or "").lower()
+    except ValueError:
+        return False
     if host in ("localhost", "host.docker.internal") or host.endswith(".local"):
         return True
     try:
@@ -341,30 +351,44 @@ def check_common(raw: Any, where: str, problems: List[str], example_url: str, ex
             'with "api_key_env"' % where
         )
         return None
-    name = str(raw.get("name") or "")
-    if not NAME_RE.match(name):
-        problems.append("%s: name must be 1-32 lowercase letters, digits, '-' or '_' (got %r)" % (where, name[:40]))
+    name = raw.get("name")
+    if not isinstance(name, str) or not NAME_RE.fullmatch(name):
+        problems.append(
+            "%s: name must be 1-32 lowercase letters, digits, '-' or '_' (got %r)" % (where, str(name)[:40])
+        )
         return None
     where = "endpoint %r" % name
-    base_url = str(raw.get("base_url") or "").strip().rstrip("/")
-    parts = urlsplit(base_url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        problems.append("%s: base_url must be an http(s) URL such as %s" % (where, example_url))
-        return None
-    if parts.username or parts.password:
-        problems.append("%s: base_url must not contain credentials; use api_key_env" % where)
+    raw_url = raw.get("base_url")
+    base_url = raw_url.strip().rstrip("/") if isinstance(raw_url, str) else ""
+    try:
+        parts = urlsplit(base_url)
+    except ValueError:
+        problems.append("%s: base_url has an invalid host" % where)
         return None
     try:
-        parts.port
+        port = parts.port
     except ValueError:
         problems.append("%s: base_url has an invalid port" % where)
         return None
-    model = str(raw.get("model") or "").strip()
+    if parts.scheme not in ("http", "https") or not parts.hostname or any(ch.isspace() for ch in base_url):
+        problems.append("%s: base_url must be an http(s) URL such as %s" % (where, example_url))
+        return None
+    if parts.username is not None or parts.password is not None:
+        problems.append("%s: base_url must not contain credentials; use api_key_env" % where)
+        return None
+    if "?" in base_url or "#" in base_url:
+        problems.append("%s: base_url must not contain a query or fragment" % where)
+        return None
+    if port == 0 or parts.netloc.endswith(":"):
+        problems.append("%s: base_url has an invalid port" % where)
+        return None
+    raw_model = raw.get("model")
+    model = raw_model.strip() if isinstance(raw_model, str) else ""
     if not model or len(model) > 200:
         problems.append("%s: model is required" % where)
         return None
     key_env = raw.get("api_key_env")
-    if key_env is not None and (not isinstance(key_env, str) or not ENV_NAME_RE.match(key_env)):
+    if key_env is not None and (not isinstance(key_env, str) or not ENV_NAME_RE.fullmatch(key_env)):
         problems.append("%s: api_key_env must be an environment variable name such as %s" % (where, example_key))
         return None
     if key_env and parts.scheme == "http" and not is_local_host(base_url):
@@ -382,8 +406,11 @@ def load_entries(path, problems: List[str]) -> List[Tuple[Any, str]]:
         data = json.loads(path.read_text())
     except FileNotFoundError:
         return []
-    except (OSError, ValueError) as err:
+    except (OSError, ValueError, RecursionError) as err:
         problems.append("%s could not be read: %s" % (path.name, err))
+        return []
+    if deeper_than(data, MAX_CONFIG_DEPTH):
+        problems.append("%s is nested more than %d levels" % (path.name, MAX_CONFIG_DEPTH))
         return []
     items = data.get("endpoints") if isinstance(data, dict) else data
     if not isinstance(items, list):
@@ -394,25 +421,17 @@ def load_entries(path, problems: List[str]) -> List[Tuple[Any, str]]:
 
 def unique(configs: list, problems: List[str]) -> list:
     out: list = []
+    seen = set()
     for config in configs:
-        if any(c.name == config.name for c in out):
+        if config.name in seen:
             problems.append("endpoint %r is defined twice; the first definition is used" % config.name)
             continue
+        seen.add(config.name)
         out.append(config)
     return out
 
 
 # Replies
-
-
-def tokens(value: Any) -> int:
-    """A token count from a usage block: 0 when missing, negative, boolean or not finite (JSON Infinity, NaN)."""
-    if isinstance(value, bool):
-        return 0
-    try:
-        return min(MAX_USAGE_TOKENS, max(0, int(value or 0)))
-    except (TypeError, ValueError, OverflowError):
-        return 0
 
 
 def finite(value: float) -> Optional[float]:
@@ -569,7 +588,7 @@ class Endpoint:
         with self._lock:
             cached = self._check
         if not force and cached and time.monotonic() - cached[0] < CHECK_TTL_S:
-            return cached[1]
+            return cached[1].copy()
         name = self.config.name
         if self.key_state == "missing":
             out = {
@@ -628,7 +647,7 @@ class Endpoint:
                     }
         out = scrub(out, self.api_key)
         with self._lock:
-            self._check = (time.monotonic(), out)
+            self._check = (time.monotonic(), out.copy())
         return out
 
 
@@ -694,7 +713,8 @@ class EndpointRegistry:
         return endpoint
 
     def check_all(self, force: bool = False) -> List[dict]:
-        if not self.endpoints:
+        endpoints = tuple(self.endpoints.values())
+        if not endpoints:
             return []
-        with ThreadPoolExecutor(max_workers=min(8, len(self.endpoints))) as pool:
-            return list(pool.map(lambda e: e.check(force), self.endpoints.values()))
+        with ThreadPoolExecutor(max_workers=min(8, len(endpoints))) as pool:
+            return list(pool.map(lambda e: e.check(force), endpoints))

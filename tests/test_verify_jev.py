@@ -43,3 +43,15 @@ class SnapshotVerificationTests(unittest.TestCase):
         problems = check({"motion": "stop", "motion_min_p": 0.7, "vector_not_in": ["hard_brake"]}, answers)
         self.assertEqual(len(problems), 2)
         self.assertTrue(check({"motion_absent": True}, answers))
+
+    def test_null_probabilities_fail_expectations_without_raising(self):
+        from jev.client import chosen, ranked
+
+        answer = json.loads('{"choice": "stop", "probabilities": {"stop": 1e999, "go": 0.25}}')
+        answer["probabilities"]["stop"] = None
+        self.assertEqual(ranked(answer), [{"value": "go", "prob": 0.25}])
+        self.assertEqual(chosen(answer), ("stop", 0.0))
+        problems = check({"motion": "stop", "motion_min_p": 0.7}, {"motion": answer})
+        self.assertEqual(problems, ["motion probability missing (wanted at least 0.70)"])
+        problems = check({"motion": "go"}, {"motion": answer})
+        self.assertEqual(problems, ["motion=stop (wanted go, p=0.25)"])

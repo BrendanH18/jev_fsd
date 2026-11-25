@@ -5,11 +5,9 @@ silently promoted to unconditional bans. Weekdays use Monday=0; times are local 
 Red-only bans are kept in `red_turns`, never in the router's `restrictions` list.
 """
 
-import json
 import re
 from . import fetch
-from .cache import write_json
-from .parse import parse_xml
+from .cache import read_layer, write_json
 
 KINDS = {
     "no_left_turn",
@@ -67,19 +65,35 @@ def restrictions_path(maps_dir, bbox):
     return maps_dir / (fetch.cache_key(bbox) + ".restrictions.v1.json")
 
 
-def load_restrictions(bbox, maps_dir):
-    p = restrictions_path(maps_dir, bbox)
-    return json.loads(p.read_text()) if p.exists() else None
+def _routable(record):
+    """A restriction record has the fields the router's index reads."""
+    return (
+        isinstance(record.get("from"), str)
+        and isinstance(record.get("kind"), str)
+        and isinstance(record.get("to"), list)
+        and all(isinstance(edge, str) for edge in record["to"])
+    )
 
 
-def build_restrictions(bbox, maps_dir, pack, force=False, log=lambda _: None):
-    p = restrictions_path(maps_dir, bbox)
-    if p.exists() and not force:
-        return json.loads(p.read_text())
-    raw = fetch.cache_path(maps_dir, bbox)
-    if not raw.exists():
+def load_restrictions(bbox, maps_dir, *, log=lambda _msg: None):
+    path = restrictions_path(maps_dir, bbox)
+    layer = read_layer(path, "restrictions", "1", ("restrictions",), log, optional=("red_turns",))
+    if layer is not None and not all(_routable(record) for record in layer["restrictions"]):
+        log(f"map: ignoring invalid layer {path.name} (restrictions need from, kind and to edges)")
         return None
-    layer = restrictions_from_osm(parse_xml(raw), pack)
+    return layer
+
+
+def build_restrictions(bbox, maps_dir, pack, force=False, log=lambda _: None, *, load_osm=None):
+    p = restrictions_path(maps_dir, bbox)
+    if not force:
+        cached = load_restrictions(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
+        return None
+    layer = restrictions_from_osm(osm, pack)
     write_json(p, layer)
     log(
         "map: built %s (%d restrictions, %d red-turn bans)"

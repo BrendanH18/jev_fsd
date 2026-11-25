@@ -1,7 +1,10 @@
 // Run on /tests or from the simulator: await import('/tests/ui-tests.js').then(m => m.runUiTests())
 // Use the real page markup in a detached root so the live HUD and driver remain untouched.
+import { downloadCsv, downloadJson } from "../js/ui/export.js";
 import { Hud } from "../js/ui/hud.js";
 import { TouchControls, STEER_RANGE_PX } from "../js/ui/touch.js";
+import { bindMapPicker } from "../js/ui/map-picker.js";
+import { clampLook, photoFilename } from "../js/ui/photo-mode.js";
 import { Input } from "../js/ui/input.js";
 
 export async function runUiTests() {
@@ -271,6 +274,188 @@ export async function runUiTests() {
     input.poll();
     check("Hidden touch controls do not drive", !input.anyDriving);
     touchRoot.remove();
+  }
+  {
+    const map = document.createElement("canvas");
+    map.width = 100;
+    map.height = 80;
+    map.tabIndex = 0;
+    const cursor = document.createElement("span");
+    cursor.hidden = true;
+    const picks = [];
+    bindMapPicker(map, cursor, { fromCar: () => [20, 30], onSelect: (...p) => picks.push(p) });
+    document.body.append(map, cursor);
+    map.focus();
+    const press = (key, options = {}) => {
+      const ev = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...options });
+      map.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    };
+    check(
+      "The map uses modified shortcuts only when they belong to the picker",
+      !press("ArrowUp", { ctrlKey: true }) && cursor.hidden,
+    );
+    press("ArrowRight");
+    check(
+      "The map marker starts from the car and moves in canvas coordinates",
+      cursor.style.left === "26%" && !cursor.hidden,
+    );
+    press("ArrowUp", { shiftKey: true });
+    check("Shift moves the minimap marker by one canvas pixel", cursor.style.top === "36.25%");
+    press("Enter");
+    check("Enter sends the keyboard marker to the same destination callback", picks[0]?.join(",") === "26,29");
+    press("Enter", { repeat: true });
+    check("Holding Enter sends only one route request", picks.length === 1);
+    for (let i = 0; i < 24; i++) press("ArrowLeft");
+    check("The marker cannot move beyond the west edge of the map", cursor.style.left === "0%");
+    for (let i = 0; i < 24; i++) press("ArrowDown");
+    check("The marker cannot move beyond the south edge of the map", cursor.style.top === "100%");
+    press("Home");
+    check(
+      "Home recentres the destination marker on the current car",
+      cursor.style.left === "20%" && cursor.style.top === "37.5%",
+    );
+    map.blur();
+    check("Leaving the map hides its keyboard marker", cursor.hidden);
+    map.remove();
+    cursor.remove();
+  }
+  {
+    const map = document.createElement("canvas");
+    map.width = 100;
+    map.height = 80;
+    map.tabIndex = 0;
+    const cursor = document.createElement("span");
+    cursor.hidden = true;
+    bindMapPicker(map, cursor, { fromCar: () => [50, 40], bounds: () => [10, 20, 90, 60], onSelect: () => {} });
+    document.body.append(map, cursor);
+    map.focus();
+    const press = (key) => map.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    for (let i = 0; i < 24; i++) press("ArrowLeft");
+    for (let i = 0; i < 24; i++) press("ArrowUp");
+    check("The keyboard marker stays on a letterboxed map", cursor.style.left === "10%" && cursor.style.top === "25%");
+    map.remove();
+    cursor.remove();
+  }
+  {
+    const fixture = document.createElement("div");
+    document.body.append(fixture);
+    const touch = new TouchControls({ root: fixture });
+    const input = new Input();
+    input.addSource(touch);
+    const key = (element, type, k, extra = {}) =>
+      element.dispatchEvent(
+        new KeyboardEvent(type, {
+          key: k,
+          bubbles: true,
+          cancelable: true,
+          ...extra,
+        }),
+      );
+    const brake = touch.pedalEls.brake,
+      go = touch.pedalEls.throttle,
+      hard = touch.pedalEls.hardBrake;
+    touch.wheel.focus();
+    key(touch.wheel, "keydown", "ArrowLeft");
+    check("Keyboard touch steering uses half travel by default", touch.state.steer === -0.5);
+    key(touch.wheel, "keydown", "ArrowRight", { shiftKey: true });
+    check("Keyboard touch steering combines simultaneous directions", touch.state.steer === 0.5);
+    key(touch.wheel, "keyup", "ArrowLeft");
+    check("Keyboard touch steering can reach full lock", touch.state.steer === 1);
+    key(touch.wheel, "keyup", "ArrowRight", { ctrlKey: true });
+    check("Releasing a steering key with a modifier held still lets go", touch.state.steer === 0);
+    go.focus();
+    check("Blurring the touch steering pad centres it", touch.state.steer === 0);
+    key(go, "keydown", " ");
+    check("The touch accelerator is a keyboard hold control", touch.state.throttle === 1);
+    key(go, "keyup", " ");
+    check("Releasing the keyboard accelerator lets go immediately", touch.state.throttle === 0);
+    key(brake, "keydown", "Enter");
+    check("Enter holds the touch brake", touch.state.brake === 1);
+    key(brake, "keyup", "Enter");
+    go.click();
+    const framesWithoutStep = touch.state.throttle === 1 && touch.state.throttle === 1;
+    touch.stepped();
+    check(
+      "Assistive activation of a pedal lasts until a physics step reads it",
+      framesWithoutStep && touch.state.throttle === 0,
+    );
+    go.click();
+    input.poll();
+    const pulseFirst = input.throttle === 1;
+    input.stepped();
+    check("An assistive pedal pulse drives exactly one physics step", pulseFirst && input.throttle === 0);
+    hard.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 5, button: 2, bubbles: true, cancelable: true }));
+    check("Right-clicking a touch control cannot engage hard braking", !touch.state.hardBrake);
+    go.click();
+    const modal = document.createElement("dialog");
+    fixture.append(modal);
+    modal.showModal();
+    input.poll();
+    modal.close();
+    check("A modal clears the touch pedal state before driving resumes", !touch.state.throttle);
+    fixture.remove();
+  }
+  check("Exposure rejects a nonnumeric edit", clampLook("exposure", "oops") === 0);
+  check("Exposure is bounded at two stops", clampLook("exposure", 100) === 2);
+  check("Vignette has its own asymmetric lower limit", clampLook("vignette", -100) === -0.3);
+  check("Unknown grading controls do not modify the look", clampLook("unknown", 0.2) === 0);
+  check(
+    "Photo filenames normalize accents and include seconds",
+    photoFilename("Île — Montréal", new Date(2026, 0, 2, 3, 4, 5)) === "jev-ile-montreal-2026-01-02-030405.png",
+  );
+  check(
+    "Photo filenames have a readable fallback for an empty slug",
+    photoFilename("…", new Date(2026, 0, 2, 3, 4, 5)).startsWith("jev-drive-"),
+  );
+  {
+    const createURL = URL.createObjectURL;
+    const files = [],
+      clicks = [];
+    const observe = (event) => {
+      if (event.target.closest?.("a[download]")) {
+        event.preventDefault();
+        clicks.push(event.target);
+      }
+    };
+    document.addEventListener("click", observe, true);
+    URL.createObjectURL = (blob) => {
+      files.push(blob);
+      return createURL.call(URL, blob);
+    };
+    try {
+      downloadCsv(
+        "fixture.csv",
+        ["City", "Distance", "Note"],
+        [
+          ["Montréal, QC", -2, "=SUM(1,2)"],
+          ['He said "hello"', null, "Two\nlines"],
+        ],
+      );
+      downloadJson("fixture.json", { city: "Montréal", incidents: [] });
+    } finally {
+      URL.createObjectURL = createURL;
+      document.removeEventListener("click", observe, true);
+    }
+    const bytes = new Uint8Array(await files[0].arrayBuffer());
+    check("CSV carries a UTF-8 marker for spreadsheet imports", bytes.slice(0, 3).join(",") === "239,187,191");
+    const csv = await files[0].text();
+    check("CSV uses portable CRLF record separators", csv.startsWith("City,Distance,Note\r\n") && csv.endsWith("\r\n"));
+    check("CSV quotes city names containing commas", csv.includes('"Montréal, QC"'));
+    check("CSV leaves negative numeric measurements numeric", csv.includes(",-2,"));
+    check("CSV neutralizes formula-like text without losing punctuation", csv.includes(`"'=SUM(1,2)"`));
+    check("CSV doubles literal quotes in labels", csv.includes('"He said ""hello"""'));
+    check("CSV keeps embedded newlines inside a field", csv.includes('"Two\nlines"'));
+    check("CSV writes missing measurements as empty cells", csv.includes('",,"Two'));
+    check(
+      "Exports click attached download links and clean them up",
+      clicks.length === 2 && clicks.every((link) => !link.isConnected),
+    );
+    const restored = JSON.parse(await files[1].text());
+    check(
+      "JSON exports preserve readable Unicode and empty collections",
+      restored.city === "Montréal" && restored.incidents.length === 0,
+    );
   }
   return results;
 }

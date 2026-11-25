@@ -30,8 +30,10 @@ export class GroundReflection {
     this.mirror = new THREE.PerspectiveCamera();
     this.enabled = true;
     this.resolutionScale = 0.25;
-    reflection.texture.value = this.rt.texture;
     this._v = new THREE.Vector3();
+    this._position = new THREE.Vector3();
+    this._target = new THREE.Vector3();
+    this._up = new THREE.Vector3();
     this._clipPlane = new THREE.Plane();
     this._clip = new THREE.Vector4();
     this._q = new THREE.Vector4();
@@ -56,12 +58,16 @@ export class GroundReflection {
     if (strength <= 0) return false;
     const cam = this.camera,
       m = this.mirror;
-    cam.updateMatrixWorld();
+    cam.updateWorldMatrix(true, false); // include a moved parent (a chase rig) before reading the position
     // mirror the camera's position, view target, and up vector in the plane y = 0
-    const pos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
+    const pos = this._position.setFromMatrixPosition(cam.matrixWorld);
+    if (pos.y <= 0.001) {
+      reflection.strength.value = 0;
+      return false;
+    }
     const dir = cam.getWorldDirection(this._v);
-    const target = pos.clone().add(dir);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+    const target = this._target.copy(pos).add(dir);
+    const up = this._up.setFromMatrixColumn(cam.matrixWorld, 1).normalize();
     pos.y = -pos.y;
     target.y = -target.y;
     up.y = -up.y;
@@ -107,19 +113,25 @@ export class GroundReflection {
     // A zero-strength shader branch still leaves its sampler bound. WebGL rejects drawing into
     // an attached texture that is also bound as input, so unbind it for the entire mirror pass.
     reflection.texture.value = null;
+    let rendered = false;
     try {
       r.setRenderTarget(this.rt);
       r.clear();
       r.render(this.scene, m);
+      rendered = true;
     } finally {
       reflection.strength.value = strength;
-      reflection.texture.value = prevTexture;
+      reflection.texture.value = rendered ? this.rt.texture : prevTexture;
       r.setRenderTarget(prevTarget);
     }
     return true;
   }
 
   dispose() {
+    if (reflection.texture.value === this.rt.texture) {
+      reflection.texture.value = null;
+      reflection.strength.value = 0;
+    }
     this.rt.dispose();
   }
 }

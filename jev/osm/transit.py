@@ -26,15 +26,14 @@ they were.
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
-from .cache import write_json
-from .parse import OsmData, parse_xml
+from .cache import read_layer, write_json
+from .parse import OsmData
 from .project import Projection
 
 TRANSIT_VERSION = "1"
@@ -56,23 +55,30 @@ def transit_path(maps_dir: Path, bbox: Bbox) -> Path:
     return maps_dir / ("%s.transit.v%s.json" % (fetch.cache_key(bbox), TRANSIT_VERSION))
 
 
-def load_transit(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
-    path = transit_path(maps_dir, bbox)
-    return json.loads(path.read_text()) if path.is_file() else None
+def load_transit(bbox: Bbox, maps_dir: Path, *, log=lambda _msg: None) -> Optional[dict]:
+    return read_layer(transit_path(maps_dir, bbox), "transit", TRANSIT_VERSION, ("routes", "stops"), log)
 
 
 def build_transit(
-    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+    bbox: Bbox,
+    maps_dir: Path,
+    pack: dict,
+    force: bool = False,
+    log: Callable[[str], None] = lambda m: None,
+    *,
+    load_osm: Callable[[], OsmData | None] | None = None,
 ) -> Optional[dict]:
     """The cached transit for a bbox, built from its raw OSM download if that is on disk (it is never
     downloaded here). None when there is neither."""
     path = transit_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
-    xml_path = fetch.cache_path(maps_dir, bbox)
-    if not xml_path.is_file():
+    if not force:
+        cached = load_transit(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
         return None
-    transit = transit_from_osm(parse_xml(xml_path), pack)
+    transit = transit_from_osm(osm, pack)
     log("map: built %s (%d routes, %d stops)" % (path.name, len(transit["routes"]), len(transit["stops"])))
     write_json(path, transit)
     return transit

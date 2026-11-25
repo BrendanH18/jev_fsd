@@ -1,6 +1,7 @@
 // Geometric perception shared by sensing, prediction and the emergency brake. Map geometry is
 // known; moving objects and signal phases are observed only inside weather range and line of sight.
 import { current as weather } from "./weather.js";
+import { polygonBounds } from "./collision.js";
 
 const CELL = 25;
 export const DAYLIGHT_RANGE_M = 80; // the farthest the car sees anything, in clear daylight
@@ -43,12 +44,15 @@ export class Visibility {
     // how far that observer sees towards (x, y) into the sun (Infinity where it does not dazzle).
     this.glare = null;
     this.grid = new Map();
-    for (const { pts, h } of map.pack.buildings || []) {
-      if (pts.length < 3 || h < 1.5) continue;
-      const xs = pts.map((p) => p[0]),
-        ys = pts.map((p) => p[1]);
-      for (let x = Math.floor(Math.min(...xs) / CELL); x <= Math.floor(Math.max(...xs) / CELL); x++) {
-        for (let y = Math.floor(Math.min(...ys) / CELL); y <= Math.floor(Math.max(...ys) / CELL); y++) {
+    for (const building of map.pack?.buildings || []) {
+      if (!building || building.h < 1.5) continue;
+      const { pts } = building;
+      const bounds = polygonBounds(pts);
+      if (!bounds) continue;
+      const [x0, y0, x1, y1] = bounds.map((n) => Math.floor(n / CELL));
+      if (![x0, y0, x1, y1].every(Number.isSafeInteger)) continue;
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
           const key = `${x},${y}`;
           if (!this.grid.has(key)) this.grid.set(key, []);
           this.grid.get(key).push(pts);
@@ -90,25 +94,37 @@ export class Visibility {
 
   canSee(observer, x, y, reach = 0, high = false) {
     const d = Math.hypot(x - observer.x, y - observer.y);
+    if (!Number.isFinite(d)) return false;
     let range = this.reachAt(observer, x, y, reach);
     if (high) {
       const forward = (x - observer.x) * Math.cos(observer.psi) + (y - observer.y) * Math.sin(observer.psi);
       const side = Math.abs((x - observer.x) * Math.sin(observer.psi) - (y - observer.y) * Math.cos(observer.psi));
       if (forward > 0 && side < forward * 0.4) range = Math.min(weather.visibility, DAYLIGHT_RANGE_M);
     }
-    if (d > range) return false;
+    if (!(d <= range)) return false;
     return !this.occluded([observer.x, observer.y], [x, y]);
   }
 
   // Geometry-only query for authoring repeatable blind-corner challenges, independent of weather.
   occluded(from, to) {
-    const [x, y] = to;
+    const x0 = Math.floor(Math.min(from[0], to[0]) / CELL),
+      x1 = Math.floor(Math.max(from[0], to[0]) / CELL),
+      y0 = Math.floor(Math.min(from[1], to[1]) / CELL),
+      y1 = Math.floor(Math.max(from[1], to[1]) / CELL);
+    if (
+      !Number.isSafeInteger(x0) ||
+      !Number.isSafeInteger(x1) ||
+      !Number.isSafeInteger(y0) ||
+      !Number.isSafeInteger(y1)
+    )
+      return true;
     const seen = new Set();
     // Visit the ray's bounded rectangle, including cells the ray only clips at a corner.
-    for (let cx = Math.floor(Math.min(from[0], x) / CELL); cx <= Math.floor(Math.max(from[0], x) / CELL); cx++) {
-      for (let cy = Math.floor(Math.min(from[1], y) / CELL); cy <= Math.floor(Math.max(from[1], y) / CELL); cy++) {
-        const key = `${cx},${cy}`;
-        for (const pts of this.grid.get(key) || []) {
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cy = y0; cy <= y1; cy++) {
+        const cell = this.grid.get(`${cx},${cy}`);
+        if (!cell) continue;
+        for (const pts of cell) {
           if (seen.has(pts)) continue;
           seen.add(pts);
           if (blocks(from, to, pts)) return true;
@@ -120,13 +136,11 @@ export class Visibility {
 
   sees(observer, object, reach = 0, high = false) {
     const box = object.obb();
+    const [x, y] = box.center;
+    if (this.canSee(observer, x, y, reach, high)) return true;
     // A visible nose still counts when the center is behind a corner.
     const dx = Math.cos(box.heading) * box.halfLength,
       dy = Math.sin(box.heading) * box.halfLength;
-    return [
-      [0, 0],
-      [dx, dy],
-      [-dx, -dy],
-    ].some(([x, y]) => this.canSee(observer, box.center[0] + x, box.center[1] + y, reach, high));
+    return this.canSee(observer, x + dx, y + dy, reach, high) || this.canSee(observer, x - dx, y - dy, reach, high);
   }
 }

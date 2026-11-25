@@ -11,7 +11,10 @@ import { runScenario, yieldNow, suiteOptions, benchmarkConfig } from "./runner.j
 import { aggregate } from "./metrics.js";
 import { driveScores, driverScores } from "./scores.js";
 import { buildHeldoutSuite, heldoutPlan } from "./heldout.js";
-import { compatibleSuiteVersions, CUSTOM_SUITE, suiteVersion } from "./suite-version.js";
+import { CUSTOM_SUITE, suiteVersion } from "./suite-version.js";
+import { coveringArray } from "./features.js";
+import { WEATHER } from "../sim/weather.js";
+import { benchmarkDownloadName, comparisonIssue, routeMatches, validateRunInputs } from "./view-options.js";
 import { agentDefinitions, agentOptionLabel, agentAvailable } from "../brain/registry.js";
 import { registerLlmAgents, checkLlmEndpoints } from "../brain/llm.js";
 import { registerDecisionAgents, checkDecisionEndpoints } from "../brain/decision.js";
@@ -54,6 +57,7 @@ const COLUMNS = [
   ["model_share", "model", "pct", "high"],
   ["local_share", "local", "pct", null],
   ["fallbacks", "fallbacks", 0, "low"],
+  ["flagged_choices", "flagged choices", 0, "low"],
   ["latency_p50_ms", "p50 ms", 0, "low"],
   ["cost_usd", "cost", "usd", null],
 ];
@@ -83,6 +87,7 @@ const CARDS = [
   ["model_share", "decided by the model", "pct", "high"],
   ["local_share", "answered locally", "pct", null],
   ["fallback_share", "fell back to Rules", "pct", "low"],
+  ["flagged_choices", "flagged choices", 0, "low"],
 ];
 
 const fmt = (v, f) => {
@@ -106,6 +111,7 @@ const pickScores = (results) => {
 const compareScores = new Map();
 let tableSort = { key: "index", direction: 1 };
 let savedRunRequest = 0;
+let compareError = null;
 
 async function boot() {
   const params = new URLSearchParams(location.search),
@@ -133,18 +139,31 @@ async function boot() {
   };
   syncHeldout();
   $("#heldout").addEventListener("change", syncHeldout);
+  const syncCity = () => {
+    $("#without").disabled = $("#cover").disabled = $("#features").value !== "city";
+  };
+  syncCity();
+  $("#features").addEventListener("change", syncCity);
+  $("#cover").max = String(coveringArray().length - 1);
+  $("#bench-search").addEventListener("input", () => lastRun && render(lastRun));
   $("#bench-failures").addEventListener("change", () => lastRun && render(lastRun));
   $("#bench-csv").addEventListener("click", () => {
     const rows = tableRows(lastRun).filter(({ result }) => result);
     downloadCsv(
-      "jev-benchmark.csv",
-      ["id", "pass", ...COLUMNS.map(([key]) => key)],
-      rows.map(({ result, scored }) => [result.id, result.pass, ...COLUMNS.map(([key]) => scored[key])]),
+      benchmarkDownloadName(lastRun.config, "csv"),
+      ["id", "pass", "failures", "simulation_error", ...COLUMNS.map(([key]) => key)],
+      rows.map(({ result, scored }) => [
+        result.id,
+        result.pass,
+        result.failures?.join(", "),
+        result.simulation_error,
+        ...COLUMNS.map(([key]) => scored[key]),
+      ]),
     );
   });
   $("#bench-json").addEventListener("click", () => {
     const { config, summary, results, suite_version } = lastRun;
-    downloadJson("jev-benchmark.json", { config, summary, results, suite_version });
+    downloadJson(benchmarkDownloadName(config, "json"), { config, summary, results, suite_version });
   });
   $("#saved-run").addEventListener("change", async (ev) => {
     const name = ev.target.value;
@@ -183,22 +202,29 @@ async function boot() {
       });
   $("#run").addEventListener("click", () => {
     if (running) {
-      stopRequested = true;
+      stop();
       return;
     }
     runFromForm().catch((err) => {
-      running = false;
-      $("#run").textContent = "Run";
       $("#status").textContent = `Failed to run: ${err.message}`;
     });
   });
   $("#compare").addEventListener("change", () => {
-    loadCompareScores().catch(() => {
-      /* scores stay blank */
+    compareError = null;
+    const name = $("#compare").value;
+    loadCompareScores(name).catch((error) => {
+      if ($("#compare").value !== name) return;
+      compareError = `Could not load comparison ${name}: ${error.message}`;
+      if (lastRun) render(lastRun);
     });
     if (lastRun) render(lastRun);
   });
-  await loadRuns();
+  $("#run").disabled = false;
+  try {
+    await loadRuns();
+  } catch (error) {
+    if (!running && !lastRun) $("#status").textContent = `Could not list saved runs: ${error.message}`;
+  }
 }
 
 // Configured decision models and LLM endpoints (agents decision:<name>, llm:<name>) join the brain
@@ -221,7 +247,7 @@ function endpointOptions() {
 }
 
 async function loadRuns() {
-  const { runs } = await api("/api/bench/runs");
+  const { runs } = await api("/api/bench/runs?summary=1");
   const sel = $("#compare");
   const keep = sel.value;
   sel.replaceChildren(
@@ -245,26 +271,58 @@ async function loadRuns() {
   if (runs.some((run) => run.name === previous)) saved.value = previous;
 }
 
-function runFromForm() {
-  return run({
+async function runFromForm() {
+  const options = {
     brain: $("#brain").value,
-    count: +$("#count").value,
-    npcs: +$("#npcs").value,
-    seed: +$("#seed").value,
+    count: $("#count").valueAsNumber,
+    npcs: $("#npcs").valueAsNumber,
+    seed: $("#seed").valueAsNumber,
     mode: $("#mode").value,
     weather: $("#weather").value,
     features: $("#features").value,
     park: $("#park").checked,
     hour: $("#hour").value === "" ? undefined : +$("#hour").value,
-    without: $("#without").value,
+    without: $("#without").disabled ? [] : $("#without").value,
+    cover: $("#cover").disabled || $("#cover").value === "" ? undefined : $("#cover").valueAsNumber,
+    diagnostics: $("#bench-diagnostics").checked,
+    save: $("#bench-save").checked,
     heldout: $("#heldout").checked,
     track: $("#track").value,
-  });
+  };
+  validateRunInputs(options, Object.keys(WEATHER), { form: true });
+  return run(options);
 }
 
 // heldout: the map's held-out routes (bench/heldout.js) instead of count and seed; never debug against
 // them (docs/rules-baseline.md).
-export async function run({
+function stop() {
+  if (!running) return false;
+  stopRequested = true;
+  $("#run").textContent = "Stopping…";
+  $("#run").disabled = true;
+  return true;
+}
+
+export async function run(options) {
+  if (!map) throw new Error("Wait for the benchmark map to load.");
+  if (running) throw new Error("A benchmark is already running.");
+  running = true;
+  savedRunRequest++;
+  stopRequested = false;
+  const controls = [$("#bench-map"), $("#saved-run")];
+  for (const control of controls) control.disabled = true;
+  $("#run").textContent = "Stop";
+  try {
+    return await runBenchmark(options);
+  } finally {
+    running = false;
+    for (const control of controls) control.disabled = false;
+    $("#run").textContent = "Run";
+    $("#run").disabled = false;
+  }
+}
+
+async function runBenchmark({
   brain = "rules",
   count = 12,
   npcs = 40,
@@ -278,6 +336,7 @@ export async function run({
   cover = undefined,
   heldout = false,
   track = "guarded",
+  diagnostics = false,
   save = true,
   record = false,
   replay = null,
@@ -295,6 +354,9 @@ export async function run({
     ({ features = "bare", park = false, hour, without = [], cover, heldout = false, track = "guarded" } = b);
     brain = replaying.header.driver;
   }
+  if (record && replaying) throw new Error("Choose recording or replay for this benchmark.");
+  validateRunInputs({ count, npcs, seed, mode, weather, heldout }, Object.keys(WEATHER));
+  if (!replaying && !agentAvailable(brain)) throw new Error(`Benchmark driver "${brain}" is unavailable.`);
   if ((record || replaying) && mode !== "lockstep")
     throw new Error("Model recordings record and replay only on the lockstep clock.");
   if (record && !replaying && !driverKind(brain))
@@ -305,10 +367,6 @@ export async function run({
     count = plan.seeds.length * plan.count;
     seed = plan.seeds[0];
   }
-  running = true;
-  savedRunRequest++;
-  stopRequested = false;
-  $("#run").textContent = "Stop";
   const definition = agentDefinitions().find((a) => a.id === brain),
     endpoint = definition?.decision || definition?.llm;
   const config = {
@@ -354,12 +412,14 @@ export async function run({
     (plan
       ? await buildHeldoutSuite(map, status.map.id, suiteOptions(features, options))
       : await buildSuite(map, { count, seed, ...suiteOptions(features, options) }));
+  if (!suite.length) throw new Error("No routable scenarios were found on this map.");
   const state = {
     suite_version: CUSTOM_SUITE,
     config,
     suite,
     results: [],
     summary: null,
+    complete: false,
   };
   lastRun = state;
   $("#saved-run").value = "";
@@ -379,8 +439,10 @@ export async function run({
       weather,
       ...options,
       shouldStop: () => stopRequested,
+      diagnostics,
       tape,
     });
+    if (stopRequested) break;
     if (record && !replaying) recording.keepResult(suite[i].id, r, suite[i]);
     if (replaying)
       r.model_recording.same_result = replaying.results[suite[i].id]
@@ -392,8 +454,11 @@ export async function run({
   }
   state.current = null;
   state.summary = aggregate(state.results);
+  state.stopped = stopRequested;
+  state.complete = true;
   const replayed = replaying
-    ? state.results.every((r) => r.model_recording.exact && r.model_recording.same_result === true)
+    ? state.results.length === suite.length &&
+      state.results.every((r) => r.model_recording.exact && r.model_recording.same_result === true)
     : null;
   for (const result of state.results) result.suite_version = state.suite_version;
   let saved = null,
@@ -411,27 +476,32 @@ export async function run({
     try {
       saved = await api("/api/bench/save", {
         suite_version: state.suite_version,
-        config: { ...config, completed: state.results.length },
+        config: { ...config, completed: state.results.length, ...(stopRequested ? { stopped: true } : {}) },
         summary: state.summary,
         results: state.results,
       });
       setStatus(
-        `saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `; could not save the recording: ${recordingError}` : ""}`,
+        `${stopRequested ? "Stopped. " : ""}Saved ${saved.saved}${savedRecording ? ` and ${savedRecording.saved}` : ""}${recordingError ? `. Could not save the recording: ${recordingError}` : ""}`,
       );
-      await loadRuns();
     } catch (err) {
       setStatus(`could not save: ${err.message}`);
     }
-  } else setStatus(stopRequested ? "stopped" : "done");
+    if (saved) {
+      try {
+        await loadRuns();
+      } catch (error) {
+        setStatus(`Saved ${saved.saved}. Could not refresh saved runs: ${error.message}`);
+      }
+    }
+  } else setStatus(stopRequested ? "Stopped" : "Done");
   render(state);
-  running = false;
-  $("#run").textContent = "Run";
   return {
     suite_version: state.suite_version,
     config,
     summary: state.summary,
     results: state.results,
     saved,
+    ...(stopRequested ? { stopped: true } : {}),
     ...(recording
       ? {
           recording: savedRecording || (recordingError ? { error: recordingError, data: recording.toJSON() } : null),
@@ -442,11 +512,18 @@ export async function run({
 }
 
 // The run list carries summaries only, so a compared run's scores come from its results, once.
-async function loadCompareScores() {
-  const name = $("#compare").value;
+async function loadCompareScores(name) {
   if (!name || compareScores.has(name)) return;
   const saved = await api(`/api/bench/runs?name=${encodeURIComponent(name)}`);
-  compareScores.set(name, pickScores(saved.results || []));
+  if (!Array.isArray(saved.results)) throw new Error("Saved run has no results.");
+  const { config, suite_version, manifest, results } = saved;
+  compareScores.set(name, {
+    config,
+    suite_version,
+    manifest,
+    results: results.map(({ id, tags }) => ({ id, tags })),
+    scores: pickScores(results),
+  });
   if (lastRun && $("#compare").value === name) render(lastRun);
 }
 
@@ -471,7 +548,11 @@ function tableRows(state) {
     return scored?.[key];
   };
   return rows
-    .filter(({ result }) => !$("#bench-failures").checked || result?.pass === false)
+    .filter(
+      ({ scenario, result }) =>
+        (!$("#bench-failures").checked || result?.pass === false) &&
+        routeMatches($("#bench-search").value, scenario, result),
+    )
     .sort((a, b) => {
       const x = value(a),
         y = value(b);
@@ -484,12 +565,11 @@ function render(state) {
   const compare = $("#compare");
   const before = compare._runs?.find((run) => run.name === compare.value);
   const note = $("#comparison-note");
-  const differentSuite = before && !compatibleSuiteVersions(state, before);
-  note.hidden = !differentSuite;
-  note.textContent = differentSuite
-    ? `The selected run uses suite ${suiteVersion(before)}. Deltas require compatible suite versions.`
-    : "";
-  const prev = before && !differentSuite ? { ...before.summary, ...compareScores.get(before.name) } : null;
+  const baseline = compareScores.get(before?.name);
+  const issue = compareError || (baseline && state.complete !== false && comparisonIssue(state, baseline));
+  note.hidden = !issue;
+  note.textContent = issue || "";
+  const prev = baseline && !issue && state.complete !== false ? { ...before.summary, ...baseline.scores } : null;
   const s = state.summary && { ...state.summary, ...pickScores(state.results) };
   $("#summary").replaceChildren(
     ...(s
@@ -537,17 +617,20 @@ function render(state) {
     h("th", {}, ""),
   );
   $("#results thead").replaceChildren(head);
-  const rows = tableRows(state).map(({ scenario: sc, index: i, result: r, scored }) => {
+  const visible = tableRows(state);
+  const rows = visible.map(({ scenario: sc, index: i, result: r, scored }) => {
     const t = sc.tags;
     const route =
-      t.length_m == null ? sc.id : `${t.length_m} m · ${t.signals}sig ${t.stops}stop ${t.lefts}L ${t.rights}R`;
+      t.length_m == null
+        ? sc.id
+        : `${sc.id} · ${t.length_m} m · ${t.signals}sig ${t.stops}stop ${t.lefts}L ${t.rights}R`;
     if (!r) {
       return h(
         "tr",
         { class: state.current === i ? "running" : "" },
         h("td", {}, i + 1),
         h("td", { class: "left" }, route),
-        h("td", { class: "left muted" }, state.current === i ? "running…" : "queued"),
+        h("td", { class: "left muted" }, state.current === i ? "running…" : state.stopped ? "skipped" : "queued"),
         ...COLUMNS.map(() => h("td", {}, "")),
         h("td", {}, ""),
       );
@@ -569,7 +652,10 @@ function render(state) {
       h("td", { class: "left" }, route),
       h(
         "td",
-        { class: `left ${r.pass ? "pass" : "failed"}`, title: r.failures?.join(", ") },
+        {
+          class: `left ${r.pass ? "pass" : "failed"}`,
+          title: [r.failures?.join(", "), r.simulation_error].filter(Boolean).join(" · "),
+        },
         r.pass ? "PASS" : r.failures?.join(", ") || "FAIL",
       ),
       ...cells,
@@ -592,7 +678,7 @@ function render(state) {
   $("#results tbody").replaceChildren(
     ...(rows.length ? rows : [h("tr", {}, h("td", { colspan: COLUMNS.length + 4 }, "No matching drives."))]),
   );
-  $("#bench-csv").disabled = !state.results.length;
+  $("#bench-csv").disabled = !visible.some(({ result }) => result);
   $("#bench-json").disabled = !state.results.length;
   const foot = s
     ? h(
@@ -623,14 +709,16 @@ function watch(sc, config) {
         bbox: config.bbox || map.routingBbox,
       }),
     );
-  } catch {
-    /* storage off */
+  } catch (error) {
+    $("#status").textContent = `Could not prepare the scenario to watch: ${error.message}`;
+    return;
   }
   window.open(appUrl("", { replay: 1, bbox: (config.bbox || map.routingBbox).join(",") }), "_blank", "noopener");
 }
 
 window.__bench = {
   run,
+  stop,
   get last() {
     return lastRun;
   },

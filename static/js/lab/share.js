@@ -9,7 +9,8 @@ export function exportFilename(report, ext = "json", prefix = "jev") {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "drive";
+      .slice(0, 48)
+      .replace(/-+$/, "") || "drive";
   const date =
     report?.started_at && Number.isFinite(Date.parse(report.started_at)) ? new Date(report.started_at) : new Date();
   const pad = (n) => String(n).padStart(2, "0");
@@ -61,7 +62,13 @@ export async function exportDriveCard(report, config = {}) {
   ctx.fillStyle = "#f3f6f9";
   ctx.font = "bold 48px system-ui";
   let title = report.title;
-  while (ctx.measureText(title).width > 1040 && title.length > 1) title = `${title.slice(0, -2)}…`;
+  const glyphs = Array.from(title);
+  if (ctx.measureText(title).width > 1040) {
+    do {
+      glyphs.pop();
+      title = `${glyphs.join("")}…`;
+    } while (glyphs.length && ctx.measureText(title).width > 1040);
+  }
   ctx.fillText(title, 70, 157);
   ctx.fillStyle = "#a2b6c6";
   ctx.font = "24px system-ui";

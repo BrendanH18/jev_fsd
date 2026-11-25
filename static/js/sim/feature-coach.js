@@ -1,4 +1,12 @@
-import { FEATURES } from "./features/index.js";
+import { COACH_SLOTS } from "./feature-schema.js";
+import { FEATURES, hooks, firstHookResult } from "./features/index.js";
+
+const COACH_CORRIDOR = hooks("coachCorridor");
+const COACH_CORRIDOR_FRAME = hooks("coachCorridorFrame");
+
+export const featureCoachCorridor = (world, limit) => firstHookResult(COACH_CORRIDOR, world, limit);
+export const featureCoachCorridorFrame = (score, corridor, context) =>
+  firstHookResult(COACH_CORRIDOR_FRAME, score, corridor, context);
 
 const COACH = FEATURES.filter((feature) => feature.coach);
 
@@ -8,24 +16,11 @@ function ordered(field, at) {
   );
 }
 
-const TIPS = Object.fromEntries(
-  ["afterSpeed", "afterMerge", "afterCyclists", "afterFollowing", "afterBusLanes"].map((at) => [
-    at,
-    ordered("tips", at),
-  ]),
-);
-const REPORTS = Object.fromEntries(
-  ["afterSpeed", "afterFlagger", "afterBrakes", "end"].map((at) => [at, ordered("reports", at)]),
-);
-const GUIDANCE = Object.fromEntries(
-  ["afterDirection", "afterBlind", "beforeSample", "afterSample"].map((at) => [at, ordered("guidance", at)]),
-);
-const DEDUCTIONS = Object.fromEntries(
-  ["safety", "beforeLegality", "afterSpeed", "legality", "comfort", "post"].map((at) => [
-    at,
-    ordered("deductions", at),
-  ]),
-);
+const lists = (field) => Object.fromEntries(COACH_SLOTS[field].map((at) => [at, ordered(field, at)]));
+const TIPS = lists("tips");
+const REPORTS = lists("reports");
+const GUIDANCE = lists("guidance");
+const DEDUCTIONS = lists("deductions");
 const EVENTS = new Map();
 for (const { coach } of COACH)
   for (const [type, record] of Object.entries(coach.events || {})) {

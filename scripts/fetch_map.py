@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from functools import cache
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -78,6 +79,10 @@ def main(argv: list[str]) -> int:
         ),
     )
     parser.add_argument("--refresh-osm", action="store_true", help="download fresh raw OSM before rebuilding")
+    parser.add_argument("--offline", action="store_true", help="use only saved packs, layers and raw OSM")
+    parser.add_argument(
+        "--osm-file", type=Path, help="rebuild from a local OSM XML file without updating the raw download cache"
+    )
     for option, (description, _) in LAYER_OPTIONS.items():
         help_text = "rebuild only " + description
         if option in ("transit", "restrictions"):
@@ -94,6 +99,8 @@ def main(argv: list[str]) -> int:
     bbox = parse_bbox(args.area) if args.area is not None else Settings().bbox
     if bbox is None:
         parser.error("AREA must be W,S,E,N in degrees or a preset name")
+    if args.refresh_osm and (args.offline or args.osm_file is not None):
+        parser.error("--refresh-osm cannot be combined with --offline or --osm-file")
 
     selected = {
         layer
@@ -103,46 +110,75 @@ def main(argv: list[str]) -> int:
     }
     layer_only = bool(selected)
     maps_dir = args.maps_dir
-    refresh = args.refresh_osm or args.transit or args.restrictions
-    # These single-layer commands have historically used --force to refresh their raw input.
-    if args.force and any(getattr(args, name) for name in ("bridges", "crossings", "contraflow", "driveways", "parks")):
-        refresh = True
+    refresh = not (args.offline or args.osm_file is not None) and (
+        args.refresh_osm
+        or args.transit
+        or args.restrictions
+        or (
+            args.force
+            and any(getattr(args, name) for name in ("bridges", "crossings", "contraflow", "driveways", "parks"))
+        )
+    )
+
+    @cache
+    def source():
+        if args.osm_file is not None:
+            return fetch.read_xml(args.osm_file)
+        path = fetch.fetch_osm_xml(bbox, maps_dir, force=refresh, offline=args.offline, log=print)
+        return fetch.read_xml(path)
 
     print("bbox W,S,E,N = %s" % ",".join("%.5f" % v for v in bbox))
     try:
         if refresh:
-            fetch.fetch_osm_xml(bbox, maps_dir, force=True, log=print)
+            source()
         pending = pack_path(maps_dir, bbox).with_suffix(".layers-pending")
         # A failed import leaves this marker so a retry rebuilds the pack and all layers together.
         pack = build_pack(
             bbox,
             maps_dir,
-            force=pending.is_file() or ((args.force or refresh) and not layer_only),
+            force=pending.is_file() or ((args.force or refresh or args.osm_file is not None) and not layer_only),
             log=print,
             before_publish=pending.touch,
+            load_osm=source,
         )
         rebuilt = pending.is_file()
         if layer_only and rebuilt:
             print("map: rebuilding all layers for the replacement pack")
-        # A prepared pack can omit rail when it has no level crossings. Crossings can use v1.
-        has_raw = fetch.cache_path(maps_dir, bbox).is_file()
-        missing_layer = any(
-            not path(maps_dir, bbox).is_file()
-            and (layer != "rail" or has_raw)
-            and (layer != "crossings" or not crossings_path(maps_dir, bbox, version="1").is_file())
-            for layer, (_, path, _) in LAYERS.items()
-        )
-        if not refresh and not rebuilt and (layer_only or missing_layer):
-            fetch.fetch_osm_xml(bbox, maps_dir, log=print)
+        deferred_rail = False
+
+        def report(layer, data):
+            layer_path, counts = LAYERS[layer][1:]
+            path_args = {"version": data["crossings_version"]} if layer == "crossings" else {}
+            path = layer_path(maps_dir, bbox, **path_args)
+            summary = ", ".join("%d %s" % (len(data.get(key, [])), label) for key, label in counts)
+            print("%s: %s (%s)" % (layer, path, summary))
+
         for layer, (builder, layer_path, counts) in LAYERS.items():
             if rebuilt or not layer_only or layer in selected:
-                data = builder(bbox, maps_dir, pack, force=layer_only or rebuilt, log=print)
+                # Some bundled maps lack a rail layer. An omitted rail layer alone does
+                # not warrant fetching raw OSM.
+                optional_rail = (
+                    layer == "rail"
+                    and not (rebuilt or refresh or layer_only or args.osm_file is not None)
+                    and not fetch.cache_path(maps_dir, bbox).is_file()
+                )
+                data = builder(
+                    bbox,
+                    maps_dir,
+                    pack,
+                    force=layer_only or rebuilt,
+                    log=print,
+                    load_osm=None if optional_rail else source,
+                )
                 if data is None:
+                    deferred_rail = deferred_rail or optional_rail
                     continue
-                path_args = {"version": data["crossings_version"]} if layer == "crossings" else {}
-                path = layer_path(maps_dir, bbox, **path_args)
-                summary = ", ".join("%d %s" % (len(data.get(key, [])), label) for key, label in counts)
-                print("%s: %s (%s)" % (layer, path, summary))
+                report(layer, data)
+        # A later layer may have loaded the raw source that the skipped rail layer needed.
+        if deferred_rail and source.cache_info().currsize:
+            data = LAYERS["rail"][0](bbox, maps_dir, pack, force=False, log=print, load_osm=source)
+            if data is not None:
+                report("rail", data)
         if rebuilt:
             pending.unlink()
     except (OSError, fetch.FetchError) as err:

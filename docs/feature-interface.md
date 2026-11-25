@@ -6,11 +6,12 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Twenty-four features have moved to the registry. They include driveway reversers, ball chase, spring
+Twenty-seven features have moved to the registry. They include driveway reversers, ball chase, spring
 potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddles, traffic parking,
 road closures, double-parked vans, contraflow cyclists, low sun glare, garbage trucks, traffic calming,
 red-light runners, crossing guards, Ontario pedestrian crossovers, roadside stops, following distance,
-turn restrictions, high beams and no-turn-on-red signs. Each record holds its core pipeline hooks and
+turn restrictions, high beams, no-turn-on-red signs, scramble crossings, work zones with flaggers and
+power cuts. Each record holds its core pipeline hooks and
 model wording.
 
 ## A record
@@ -73,6 +74,37 @@ the crossing audit. `controlDirection` serves the world light and oncoming-traff
 supplies the visible direction and its snapshot fields. `junctionPlan` reads those fields to set the
 stop target, rejection and model wording. `controlAudit` takes over the signal audit while the override
 applies and preserves the record used to check a left turn across oncoming traffic.
+
+For a replacement control such as an all-way stop at a dark signal, register
+`controlReplace(world, control, edgeId)`. Return the replacement or null to leave it to the next
+record. An officer on duty returns the original signal, so the junction still follows the officer.
+`alternateSignal` reports the temporary signal state to the light and oncoming-queue checks.
+`senseSignalControl` supplies the replacement and its snapshot fields once the driver can see the
+junction. `controlEvent` adds fields to missed-stop and all-way-yield events. A traffic driver caught
+too close to stop can use `trafficReleaseControl` after its stop memory has observed the new control.
+
+Use `phaseBansRedTurns` for a whole phase plan that forbids red turns on every approach. Sensing,
+traffic and the manual audit share it. The separate `redLightEvent` hook can tag a missed red for
+coaching. `intersectionFields` adds snapshot fields, while `intersectionModelFields` adds the model
+representation at the corresponding point. Preserve the order of fields and situation clauses so
+recorded requests replay.
+
+Use `trafficCorridor(world, vehicle, path, front)` for a temporary route along or around the lane.
+The result can supply its present pursuit `shift`, a `lineAt(s)` delta for leader projection, an actor
+to `ignore` when bypassing it, a speed `limit`, and a `stop()` evaluated at the existing stop
+decision. A corridor also prevents the start of a new oncoming-lane cyclist pass. The
+`detour` slot before the merge supplies the ego's preferred path to both following and candidate laws.
+An `examinerFail` hook returns a failure item or null without modifying the report.
+
+### Registry validation
+
+Loading the registry validates the declarations before filling the hook lists. A hook can be a
+function at `end` or an object with a supported `at` and a callable `run`. Data records for metrics,
+notices and prompts have their own required fields. A notice's order is unique within its slot.
+World properties, seen flags and audit maps share one namespace, and feature snapshot fields and
+display text IDs each have one owner. Coach reports, guidance, deductions and tips take the same
+slot lists the coaching dispatcher uses. Keep label accessors lazy when a vehicle module can
+import the registry before its constants have initialized.
 
 ## Slots: why results stay exactly the same
 
@@ -223,6 +255,18 @@ open-track recordings of **Over the humps** and **Fresh green** all replayed exa
 free-drive, traffic-calming, red-light-runner, open-track and following-policy checks passed. The
 Jev fixtures stayed current and all 39 offline requests passed.
 
+**Scramble crossings, work zones and power cuts** were compared against `64d9772` in Boat
+with Node 22.23.5. Rules passed 12/12 on Kitsilano bare and 12/12 on Kitsilano city at seed 1
+in dry weather. The additional dry Victoria city suite passed 10/12 on both trees. Route
+`s1-7` timed out and `s1-12` recorded a timeout, a collision and a failure to yield in both runs.
+The Victoria baseline was split across four processes, then merged after checking the same route
+fingerprint and all 12 scenario IDs. Every benchmark result field matched apart from timings.
+
+Rules and the cautious agent each passed all 62 authored drives, including both road tests, on
+both trees. Full arena results, reports, decision traces and events matched. The guarded and
+open system prompts matched byte for byte. The stub model recording replayed on both trees,
+the Jev fixtures stayed current and all 39 offline Jev requests validated.
+
 Before deterministic snapping (roadmap 7.1), comparisons needed one server process or a fixed
 `PYTHONHASHSEED`. The first city comparison
 differed in three drives (`s1-10` to `s1-12`): the simulation matched to the last digit up to a re-plan,
@@ -250,8 +294,10 @@ Checkpoints call `checkpointShare` for immutable state and `checkpoint` after re
 world and fleet.
 
 Free drives and the city benchmark enable every registered feature by default. Use the record's
-option key with `--without` and its lowercase form in the URL. For example, disable road closures
-with `--without roadClosures` or `?roadclosures=0`. `scripts/test_free_drive.mjs` checks both paths.
+option key with `--without` and its lowercase form in the URL. A record can declare `flag` to preserve
+an existing URL parameter. Scramble crossings use `--without scrambles` and `?scramble=0`.
+For counted placement features, `defaultCount` is the enabled count and the URL opt-out supplies zero.
+`scripts/test_free_drive.mjs` checks both paths.
 
 The record's `metric.label` supplies the trace event text. Counter events appear in metric slot
 order, then registration order within each slot. For a duration metric, `decimals` controls rounding
@@ -267,6 +313,33 @@ when the car is waiting for a feature.
 
 A new feature needs its own sim module, record, challenge, test and registration line, plus applicable
 entries in the presentation files above.
+
+## Running the registry comparison
+
+On Boat, archive the before commit into a temporary source directory. Copy
+[`registry_parity.mjs`](../scripts/registry_parity.mjs) into that directory's `scripts/` so the same
+capture logic loads each revision's simulator. Start one loopback server with
+`PYTHONHASHSEED=0 PORT=8331 uv run --locked server.py` for both trees. Reuse it when maps and
+routing have stayed the same. Run these commands from each source tree with a different absolute
+output directory:
+
+```sh
+node --experimental-default-type=module scripts/registry_parity.mjs bench "$output" bare
+node --experimental-default-type=module scripts/registry_parity.mjs bench "$output" city
+node --experimental-default-type=module scripts/registry_parity.mjs bench "$output" city victoria
+node --experimental-default-type=module scripts/registry_parity.mjs arena "$output" rules
+node --experimental-default-type=module scripts/registry_parity.mjs arena "$output" cautious
+node --experimental-default-type=module scripts/registry_parity.mjs prompt "$output"
+node --experimental-default-type=module scripts/test_model_recording.mjs
+```
+
+Choose a city map and weather that exercise the batch. For example, Victoria contains the bundled
+scramble crossing, and the optional final `bench` argument selects weather. Compare the output
+directories with `node scripts/registry_parity.mjs compare "$before" "$after"`. The check compares
+the complete benchmark configuration, summary and individual results, both arena drivers' full
+traces and results, and both system prompts. It discards wall time, decision latency, run timestamps
+and benchmark source identifiers. Simulation times, incidents, audit fields, candidate IDs, array
+order, map fingerprints and route fingerprints still have to match.
 
 ## Moving the rest (3.2)
 

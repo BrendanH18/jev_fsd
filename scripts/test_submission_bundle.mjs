@@ -74,6 +74,16 @@ verifySubmissionManifest(replayRecording, current, [id]);
 verifySubmissionReport(report, structuredClone(report));
 assert.throws(() => readSubmission({ ...bundle, format: "future" }), /jev-submission/);
 assert.throws(() => readSubmission({ ...bundle, report: { ...report, manifest: current } }), /same v2 run manifest/);
+for (const [results, message] of [
+  [[], /no drives/],
+  [[null], /needs a challenge ID/],
+  [[{ ...report.results[0], challenge: " " }], /needs a challenge ID/],
+  [[{ ...report.results[0], pass: "false" }], /boolean verdict/],
+  [[...report.results, ...report.results], /repeats a challenge ID/],
+  [[{ ...report.results[0], challenge: "changed" }], /challenge IDs declared/],
+]) {
+  assert.throws(() => readSubmission({ ...bundle, report: { ...report, results } }), message);
+}
 assert.throws(() => verifySubmissionManifest(replayRecording, { ...current, source_dirty: true }, [id]), /clean/);
 assert.throws(() => verifySubmissionManifest(replayRecording, { ...current, source_commit: "bad" }, [id]), /commit/);
 assert.throws(() => verifySubmissionManifest(replayRecording, { ...current, engine_version: "0" }, [id]), /V8/);
@@ -83,6 +93,18 @@ assert.throws(
   /manifest differs/,
 );
 assert.throws(() => verifySubmissionManifest(replayRecording, current, [id, "flagger"]), /declared drive/);
+for (const [candidate, message] of [
+  [{ ...replayRecording, drives: {} }, /declared drive/],
+  [{ ...replayRecording, results: {} }, /declared drive/],
+  [{ ...replayRecording, results: { [id]: { challenge: "flagger" } } }, /does not identify/],
+  [{ ...replayRecording, results: { [id]: { challenge: id, stopped: "budget" } } }, /stopped drive/],
+  [{ ...replayRecording, results: { [id]: { challenge: id, simulation_error: "exception" } } }, /simulation error/],
+]) {
+  assert.throws(() => verifySubmissionManifest(candidate, current, [id]), message);
+}
+assert.throws(() => verifySubmissionReport({ ...report, results: [] }, report), /drive order/);
+assert.throws(() => verifySubmissionReport({ ...report, results: null }, report), /results:/);
+assert.throws(() => verifySubmissionReport({ ...report, extra: true }, report), /extra: expected true/);
 const merged = {
   ...replayRecording,
   header: { ...replayRecording.header, arena: { set: "challenges", ids: ["flagger", id], track: "open" } },

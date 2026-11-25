@@ -123,7 +123,9 @@ class EndpointConfig:
             problems.append("%s: Anthropic's API has no json_object mode; use json_schema or none" % where)
             return
         reserved = ANTHROPIC_RESERVED_BODY_KEYS if anthropic else RESERVED_BODY_KEYS
-        extra = raw.get("extra_body") or {}
+        extra = raw.get("extra_body")
+        if extra is None:
+            extra = {}
         if not isinstance(extra, dict) or reserved & set(extra):
             problems.append("%s: extra_body must be an object without %s" % (where, ", ".join(sorted(reserved))))
             return
@@ -626,6 +628,8 @@ def validate_request(body: dict) -> dict:
             raise InvalidLlmRequest("each message needs a role (system, user or assistant) and string content")
         total += len(m["content"])
         clean.append({"role": m["role"], "content": m["content"]})
+    if not any(m["role"] == "user" and m["content"].strip() for m in clean):
+        raise InvalidLlmRequest("messages must include a non-empty user message")
     if total > MAX_PROMPT_CHARS:
         raise InvalidLlmRequest("prompt is longer than %d characters" % MAX_PROMPT_CHARS)
     expect_in = body.get("expect")
@@ -639,9 +643,11 @@ def validate_request(body: dict) -> dict:
         if (
             not isinstance(values, list)
             or not 1 <= len(values) <= MAX_CHOICES
-            or not all(isinstance(v, str) and ID_RE.match(v) for v in values)
+            or not all(isinstance(v, str) and ID_RE.fullmatch(v) for v in values)
         ):
             raise InvalidLlmRequest("expect.%s must be a list of 1-%d short ids" % (field, MAX_CHOICES))
+        if len(set(values)) != len(values):
+            raise InvalidLlmRequest("expect.%s must contain unique ids" % field)
         if field == "motion" and not set(values) <= set(MOTIONS):
             raise InvalidLlmRequest("expect.motion may only contain %s" % ", ".join(MOTIONS))
         expect[field] = values

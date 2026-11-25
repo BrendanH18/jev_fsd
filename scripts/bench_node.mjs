@@ -22,7 +22,17 @@
 // driver, map and suite from the recording, and reports whether each drive played out as recorded
 // (--check 1 also checks verdicts; --check replay checks replay fidelity alone).
 import { CUSTOM_SUITE, replaySuiteVersion, setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
-import { benchPage, jsonDifferences, parseOptions } from "./cli_tools.mjs";
+import {
+  benchPage,
+  checkFiles,
+  checkMode,
+  commaList,
+  jsonDifferences,
+  parseOptions,
+  readJson,
+  wholeNumber,
+  writeArtifact,
+} from "./cli_tools.mjs";
 
 const OPTIONS = [
   "map",
@@ -49,6 +59,9 @@ const OPTIONS = [
   "replay",
   "heldout",
   "track",
+  "skip",
+  "start-at",
+  "limit",
 ];
 
 const USAGE = [
@@ -69,7 +82,7 @@ const USAGE = [
   "  --diagnostics <0|1>       include incident diagnostics",
   "  --only <id,id>            run only selected scenarios",
   "  --port <port>             local server port (default: PORT or 8331)",
-  "  --json <path>             write full JSON report",
+  "  --json <path[.gz]>        write full JSON report, compressed with a .gz suffix",
   "  --check <0|1|replay>      exit 1 on failure or replay drift",
   "  --record <path[.gz]>      record model answers",
   "  --replay <path[.gz]>      replay from a model recording",
@@ -77,6 +90,12 @@ const USAGE = [
   "  --prompt-audit <path>     write prompt-size audit alongside --record/--replay",
   "  --trace <path[.gz]>       capture a single tuned Rules trace",
   "  --trace-from <path[.gz]>  reuse a trace's scenario",
+  "  --skip <id,id>            exclude selected scenario IDs",
+  "  --start-at <id>           start from this scenario, inclusive",
+  "  --limit <N>              drive at most N selected scenarios",
+  "  --list                   print the selected route IDs and tags without driving",
+  "  --quiet                  emit only the final JSON to stdout",
+  "  --progress               report route starts to stderr",
   "  --help, -h                show this help",
 ].join("\n");
 
@@ -95,7 +114,7 @@ const fail = (message) => {
 };
 let parsed;
 try {
-  parsed = parseOptions(process.argv.slice(2), OPTIONS);
+  parsed = parseOptions(process.argv.slice(2), OPTIONS, ["list", "quiet", "progress"]);
 } catch (error) {
   fail(error.message);
 }
@@ -104,6 +123,35 @@ if (parsed.help) {
   process.exit(0);
 }
 const args = parsed.args;
+const say = args.quiet ? () => {} : console.log;
+const integer = (name, fallback, min) => wholeNumber(name, args[name], fallback, { min });
+let only, skip, limit;
+try {
+  checkMode(args.check, ["0", "1", "replay"]);
+  only = commaList("only", args.only);
+  skip = commaList("skip", args.skip);
+  limit = integer("limit", Number.MAX_SAFE_INTEGER, 1);
+  for (const name of ["count", "seed", "npcs", "cover"])
+    if (args[name] !== undefined) integer(name, 0, name === "count" ? 1 : 0);
+  for (const name of ["park", "diagnostics", "heldout"])
+    if (args[name] !== undefined && !["0", "1"].includes(args[name])) fail(`--${name} must be 0 or 1.`);
+  checkFiles(
+    { replay: args.replay, "trace-from": args["trace-from"] },
+    {
+      record: args.record,
+      json: args.json,
+      "prompt-audit": args["prompt-audit"],
+      trace: args.trace,
+    },
+  );
+} catch (error) {
+  fail(error.message);
+}
+if (
+  args.list &&
+  (args.record || args.trace || args.json || args["prompt-audit"] || args.reserve || (args.check && args.check !== "0"))
+)
+  fail("--list only plans the suite. Drop drive and output options.");
 
 if (args.record && args.replay) fail("Use --record or --replay, not both.");
 if (args["trace-from"] && !args.trace) fail("--trace-from needs --trace.");
@@ -143,10 +191,7 @@ let replayJson = null;
 if (args.replay) {
   // (a recording may be gzipped: name it .json.gz)
   try {
-    const raw = (await import("node:fs")).readFileSync(args.replay);
-    replayJson = JSON.parse(
-      args.replay.endsWith(".gz") ? (await import("node:zlib")).gunzipSync(raw).toString("utf8") : raw.toString("utf8"),
-    );
+    replayJson = readJson(args.replay);
   } catch (error) {
     fail(`Cannot read the recording ${args.replay}: ${error.message}`);
   }
@@ -171,8 +216,7 @@ if (args.replay) {
     ...(b.track ? { track: b.track } : {}),
   });
 }
-const { base, page } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
-const token = page.match(/name="jev-csrf" content="([^"]+)"/)?.[1] || "";
+const { base, token } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
 globalThis.document = { querySelector: (sel) => (sel.includes("jev-csrf") ? { content: token } : null) };
 const nativeFetch = globalThis.fetch;
 globalThis.fetch = (path, opts) =>
@@ -207,12 +251,11 @@ const preset = String(
   !maps.some((m) => m.id === args.map) && replayBbox ? replayBbox.join(",") : args.map || "kitsilano",
 );
 const known = maps.find((m) => m.id === preset);
-const wanted = known ? known.bbox : preset.split(",").map(Number);
+const wanted = known ? known.bbox : preset.split(",").map((v) => (v.trim() ? Number(v) : NaN));
 if (wanted.length !== 4 || wanted.some((v) => !Number.isFinite(v)))
   fail(`Unknown map "${preset}": use a preset id or W,S,E,N.`);
-const map = new MapData(await api(`/api/map?bbox=${encodeURIComponent(preset)}`));
-if (map.routingBbox.some((v, i) => Math.abs(v - wanted[i]) > 1e-6))
-  fail(`The server loaded ${map.routingBbox.join(",")} instead of "${preset}".`);
+if (wanted[0] >= wanted[2] || wanted[1] >= wanted[3] || wanted.some((v, i) => Math.abs(v) > (i % 2 ? 90 : 180)))
+  fail(`Invalid map bounds "${preset}": use ordered W,S,E,N coordinates within the world.`);
 // The world and autopilot also fall back silently (to dry weather, to the previous driver), so an
 // unknown weather or driver would run something else under the name asked for.
 // (model endpoints configured on the server join the drivers, as on /bench)
@@ -229,15 +272,6 @@ if (!FEATURE_PRESETS.includes(String(args.features || "bare")))
   fail(`Unknown features "${args.features}": use one of ${FEATURE_PRESETS.join(", ")}.`);
 if (!Object.hasOwn(WEATHER, String(args.weather || "dry")))
   fail(`Unknown weather "${args.weather}": use one of ${Object.keys(WEATHER).join(", ")}.`);
-const integer = (name, fallback, min) => {
-  // Plain digits only: Number() also reads " " as 0 and accepts forms such as 1e2 or 0x10.
-  const v = args[name] === undefined ? fallback : /^\d+$/.test(args[name]) ? Number(args[name]) : NaN;
-  if (!Number.isSafeInteger(v) || v < min)
-    fail(`--${name} must be a whole number of at least ${min}, not "${args[name]}".`);
-  return v;
-};
-for (const name of ["park", "diagnostics", "heldout"])
-  if (args[name] !== undefined && !["0", "1"].includes(args[name])) fail(`--${name} must be 0 or 1.`);
 if (args.hour !== undefined && !/^\d+(?:\.\d+)?$/.test(args.hour))
   fail("--hour must be a number from 0 inclusive to 24 exclusive.");
 let options;
@@ -258,6 +292,9 @@ if (heldout && !replaying && (args.seed !== undefined || args.count !== undefine
   fail("--heldout sets the seeds and routes: drop --seed and --count.");
 // (a held-out run records its seeds; `seed` and `count` are the first seed and the number of routes)
 const plan = heldout ? heldoutPlan(preset) : null;
+const map = new MapData(await api(`/api/map?bbox=${encodeURIComponent(preset)}`));
+if (map.routingBbox.some((v, i) => Math.abs(v - wanted[i]) > 1e-6))
+  fail(`The server loaded ${map.routingBbox.join(",")} instead of "${preset}".`);
 const config = {
   brain: String(args.brain || "rules"),
   count: plan ? plan.seeds.length * plan.count : integer("count", 12, 1),
@@ -302,10 +339,26 @@ if (args["trace-from"]) {
       : await buildSuite(map, { count: config.count, seed: config.seed, ...suiteOptions(features, options) }));
 }
 if (!suite.length) fail(`No routable scenarios on "${preset}".`);
-const only = args.only ? String(args.only).split(",") : null;
-const missing = (only || []).filter((id) => !suite.some((sc) => sc.id === id));
+const partial = Boolean(only || skip || args["start-at"] || args.limit);
+const missing = [...(only || []), ...(skip || []), ...[args["start-at"]].filter(Boolean)].filter(
+  (id) => !suite.some((sc) => sc.id === id),
+);
 if (missing.length) fail(`No scenario ${missing.join(", ")} in this suite (${suite.map((sc) => sc.id).join(", ")}).`);
-const selected = only ? suite.filter((sc) => only.includes(sc.id)) : suite;
+const first = args["start-at"] ? suite.findIndex((sc) => sc.id === args["start-at"]) : 0;
+const selected = suite
+  .slice(first)
+  .filter((sc) => (!only || only.includes(sc.id)) && !skip?.includes(sc.id))
+  .slice(0, limit);
+if (!selected.length) fail("The selection leaves no scenarios.");
+if (args.list) {
+  await new Promise((resolve) =>
+    process.stdout.write(
+      `${JSON.stringify({ config, scenarios: selected.map(({ id, tags }) => ({ id, tags })) })}\n`,
+      resolve,
+    ),
+  );
+  process.exit(0);
+}
 if (args.trace && selected.length !== 1) fail("--trace needs exactly one scenario; select it with --only.");
 const suiteMetadata = {
   kind: "bench",
@@ -313,7 +366,7 @@ const suiteMetadata = {
   ids: selected.map((sc) => sc.id),
   generated_ids: suite.map((sc) => sc.id),
   route_sha: manifestModule.benchRouteFingerprint(suite),
-  ...(only ? { only: true } : {}),
+  ...(partial ? { only: true } : {}),
 };
 const trace = traceModule?.captureTrace(config, mapSha, selected[0]);
 let manifest = null;
@@ -351,25 +404,9 @@ const results = [],
 const promptSizes = {};
 let budgetStop = null;
 const completedVersion = () =>
-  !only && !budgetStop && !trace ? benchSuiteVersion({ ...suiteMetadata, map_sha: mapSha }, results) : CUSTOM_SUITE;
+  !partial && !budgetStop && !trace ? benchSuiteVersion({ ...suiteMetadata, map_sha: mapSha }, results) : CUSTOM_SUITE;
 // (written beside the destination and renamed over it, so a run killed while saving keeps the last save)
-const saveRecording = async () => {
-  const fs = await import("node:fs"),
-    { dirname, join } = await import("node:path"),
-    text = recording.serialize();
-  const directory = fs.mkdtempSync(join(dirname(args.record), ".bench-recording-"));
-  const tmp = join(directory, "recording");
-  try {
-    fs.writeFileSync(
-      tmp,
-      args.record.endsWith(".gz") ? (await import("node:zlib")).gzipSync(text, { level: 9 }) : text,
-    );
-    fs.renameSync(tmp, args.record);
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
-};
-for (const sc of selected) {
+for (const [index, sc] of selected.entries()) {
   if (reserve !== null) {
     const { budget_usd: budget, spent_usd: spent } = (await api("/api/status")).spend || {};
     // A zero budget disables the spend limit. Refuse to start a reserved run without a limit.
@@ -382,6 +419,7 @@ for (const sc of selected) {
       break;
     }
   }
+  if (args.progress) console.error(`[${index + 1}/${selected.length}] Starting ${sc.id}`);
   const prompt = audit?.promptAudit();
   const tape = recording
     ? recording.tape(sc.id, args.record ? "record" : "replay", { onRequest: prompt?.observe })
@@ -406,7 +444,7 @@ for (const sc of selected) {
     recording.keepResult(sc.id, r, sc);
     manifest.cost_usd = manifestModule.runCost(Object.values(recording.results));
     setRecordingSuiteVersion(recording, completedVersion());
-    await saveRecording();
+    writeArtifact(args.record, recording.serialize(), { gzip: args.record.endsWith(".gz") });
   }
   // (a replay matches when every call was answered from the recording and the drive's result is the
   // recorded one, timings aside)
@@ -424,13 +462,13 @@ for (const sc of selected) {
   if (prompt) {
     audit.checkAuditPath(auditPath, [args.record, args.replay, args.json], fail);
     promptSizes[sc.id] = prompt.result();
-    (await import("node:fs")).writeFileSync(auditPath, `${JSON.stringify(promptSizes, null, 2)}\n`);
+    writeArtifact(auditPath, `${JSON.stringify(promptSizes, null, 2)}\n`);
   }
   const hits = r.events
     .filter((e) => e.type === "collision")
     .map((e) => `${e.with}:${e.kind}@${e.t}`)
     .join(" ");
-  console.log(
+  say(
     `${r.id} ${r.pass ? "PASS" : "FAIL"} arrived=${r.arrived} t=${r.time_s} coll=${r.collisions}/${r.at_fault} off=${r.off_road_s} dl=${r.deadlocks} safety=${r.safety_brakes} lc=${r.lane_changes ?? "-"} ${hits}${r.pass ? "" : ` failures=${r.failures.join(",")}`}${r.simulation_error ? ` error=${JSON.stringify(r.simulation_error)}` : ""}${r.model_recording ? ` model=${JSON.stringify(r.model_recording)}` : ""} score=${driveScores(r).score}`,
   );
 }
@@ -439,7 +477,7 @@ const replayProvenance = replaying?.header.manifest;
 const replayDate = replaying?.header.recorded_at;
 const replayManifest =
   replaying &&
-  !only &&
+  !partial &&
   !drifted.length &&
   results.length === Object.keys(replaying.results).length &&
   replayProvenance?.source_dirty === false &&
@@ -455,9 +493,9 @@ const replayManifest =
 const suite_version = replaying ? replaySuiteVersion(replaying.header, replayManifest !== null) : completedVersion();
 for (const result of results) result.suite_version = suite_version;
 // (computed for display only: bench/scores.js)
-console.log(`${heldout ? "held-out " : ""}scores ${JSON.stringify(driverScores(results))}`);
+say(`${heldout ? "held-out " : ""}scores ${JSON.stringify(driverScores(results))}`);
 if (heldout)
-  console.log(
+  say(
     `held-out suite (seeds ${config.seeds.join(", ")}): ${results.filter((r) => r.pass).length}/${results.length} passed; report apart from the tuned suites and never debug against it (docs/rules-baseline.md)`,
   );
 if (args.json) {
@@ -473,12 +511,12 @@ if (args.json) {
     const name = manifestModule.benchRunName(savedAt, driver);
     Object.assign(saved, { name, saved_at: savedAt, manifest: reportManifest });
   }
-  (await import("node:fs")).writeFileSync(args.json, JSON.stringify(saved, null, 1));
+  writeArtifact(args.json, JSON.stringify(saved, null, 1), { gzip: args.json.endsWith(".gz") });
 }
-if (args.record && results.length) console.log(`recorded ${results.length} drives to ${args.record}`);
+if (args.record && results.length) say(`recorded ${results.length} drives to ${args.record}`);
 // The runner's MessageChannel would keep Node alive; exit once the summary has been written out.
 if (replaying)
-  console.log(
+  say(
     drifted.length
       ? `replay: ${drifted.join(", ")} did not play out as recorded`
       : `replay: all ${results.length} drives played out as recorded`,

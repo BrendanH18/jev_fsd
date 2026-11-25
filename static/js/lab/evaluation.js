@@ -179,6 +179,8 @@ export async function evaluateChallenge(
       }
       if (world.tick % 120 === 0) await yieldNow();
     }
+    // (a decision that failed during the last wait never reached stepWorld: it still fails the drive)
+    if (autopilot.stepFailure) throw autopilot.stepFailure.error;
   } catch (error) {
     simulationError = String(error?.message || error || "Unknown simulation error").slice(0, 240);
     trace.event("simulation_error", simulationError, world.t);

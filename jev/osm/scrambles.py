@@ -21,15 +21,14 @@ they were.
 
 from __future__ import annotations
 
-import json
 import math
 import re
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 from . import fetch
-from .cache import write_json
-from .parse import OsmData, parse_xml
+from .cache import read_layer, write_json
+from .parse import OsmData
 from .project import Projection
 
 SCRAMBLES_VERSION = "1"
@@ -45,23 +44,30 @@ def scrambles_path(maps_dir: Path, bbox: Bbox) -> Path:
     return maps_dir / ("%s.scrambles.v%s.json" % (fetch.cache_key(bbox), SCRAMBLES_VERSION))
 
 
-def load_scrambles(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
-    path = scrambles_path(maps_dir, bbox)
-    return json.loads(path.read_text()) if path.is_file() else None
+def load_scrambles(bbox: Bbox, maps_dir: Path, *, log=lambda _msg: None) -> Optional[dict]:
+    return read_layer(scrambles_path(maps_dir, bbox), "scrambles", SCRAMBLES_VERSION, ("scrambles",), log)
 
 
 def build_scrambles(
-    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+    bbox: Bbox,
+    maps_dir: Path,
+    pack: dict,
+    force: bool = False,
+    log: Callable[[str], None] = lambda m: None,
+    *,
+    load_osm: Callable[[], OsmData | None] | None = None,
 ) -> Optional[dict]:
     """The cached scramble crossings for a bbox, built from its raw OSM download if that is on disk
     (it is never downloaded here). None when there is neither."""
     path = scrambles_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
-    xml_path = fetch.cache_path(maps_dir, bbox)
-    if not xml_path.is_file():
+    if not force:
+        cached = load_scrambles(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
         return None
-    scrambles = scrambles_from_osm(parse_xml(xml_path), pack)
+    scrambles = scrambles_from_osm(osm, pack)
     log("map: built %s (%d scramble crossings)" % (path.name, len(scrambles["scrambles"])))
     write_json(path, scrambles)
     return scrambles

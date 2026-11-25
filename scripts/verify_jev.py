@@ -32,9 +32,13 @@ def check(expect: dict, answers: dict) -> list:
         if not a:
             problems.append("motion was not asked")
         else:
-            p = a["probabilities"].get(expect["motion"], 0.0)
+            p = (a.get("probabilities") or {}).get(expect["motion"], 0.0)
+            numeric = isinstance(p, (int, float)) and not isinstance(p, bool)
             if a["choice"] != expect["motion"]:
-                problems.append("motion=%s (wanted %s, p=%.2f)" % (a["choice"], expect["motion"], p))
+                shown = "%.2f" % p if numeric else "missing"
+                problems.append("motion=%s (wanted %s, p=%s)" % (a["choice"], expect["motion"], shown))
+            elif not numeric:
+                problems.append("motion probability missing (wanted at least %.2f)" % expect.get("motion_min_p", 0.0))
             elif p < expect.get("motion_min_p", 0.0):
                 problems.append("motion p=%.2f below %.2f" % (p, expect["motion_min_p"]))
     if "motion_absent" in expect and "motion" in answers:

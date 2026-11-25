@@ -18,6 +18,7 @@ const { DriveScore } = await import("../static/js/sim/drive-score.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { toJevState, situationClauses } = await import("../static/js/brain/state.js");
 const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
+const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 
@@ -252,6 +253,22 @@ await test("at a scramble some people at a corner cross diagonally, on the all-w
     else assert.equal(diagonal, 0);
   }
   new World(VIC, { seed: 1, parked: 0, pedestrians: 0 });
+});
+
+await test("restoring a checkpoint reconnects the captured world's scramble signal plan", () => {
+  const { world, fleet, autopilot } = setupChallenge(VIC, CH);
+  const recorder = new DriveRecorder();
+  recorder.record({ world, fleet, autopilot, drive: {}, clock: {} }, true);
+  new World(VIC, { parked: 0, pedestrians: 0, scrambles: false });
+  assert.equal(S.isScramble(inter), false);
+  recorder.restore(0, {
+    world,
+    fleet,
+    autopilot,
+    clock: { setHour() {}, update() {} },
+    setDrive() {},
+  });
+  assert.equal(S.isScramble(inter), true);
 });
 
 await test("All walk: Rules and the cautious agent wait through the scramble, let the slow walker finish, and turn on green", async () => {

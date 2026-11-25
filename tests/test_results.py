@@ -24,6 +24,73 @@ spec.loader.exec_module(build_results)
 
 
 class ResultsTest(unittest.TestCase):
+    def test_validate_all_returns_machine_readable_diagnostics(self):
+        for errors, status in [([], 0), (["first.json: invalid shape", "é.json: missing tape"], 1)]:
+            with self.subTest(errors=errors):
+                stdout = StringIO()
+                with patch.object(build_results, "validate_all", return_value=errors), redirect_stdout(stdout):
+                    self.assertEqual(build_results.main(["--validate-all", "--json"]), status)
+                self.assertEqual(json.loads(stdout.getvalue()), {"valid": not errors, "errors": errors})
+
+    def test_generation_rejects_ambiguous_markers_and_leaves_files_intact(self):
+        start, end = build_results.START, build_results.END
+        with tempfile.TemporaryDirectory() as tmp:
+            readme = Path(tmp) / "README.md"
+            output = Path(tmp) / "results.json"
+            output.write_text("previous result")
+            for text, diagnostic in [
+                ("no delimiters", "has no"),
+                (f"{start}\nold\n{end}\n{start}\nother\n{end}", "exactly one pair"),
+                (f"{start}\nold\n{end}\n{end}", "exactly one pair"),
+            ]:
+                with self.subTest(text=text):
+                    readme.write_text(text)
+                    err = StringIO()
+                    with (
+                        patch.object(build_results, "README", readme),
+                        patch.object(build_results, "OUTPUT", output),
+                        patch.object(build_results, "build", return_value={"rows": []}),
+                        patch.object(build_results, "readme_block", return_value="new results"),
+                        redirect_stderr(err),
+                    ):
+                        self.assertEqual(build_results.main([]), 1)
+                    self.assertIn(diagnostic, err.getvalue())
+                    self.assertEqual(readme.read_text(), text)
+                    self.assertEqual(output.read_text(), "previous result")
+
+    def test_benchmark_validation_keeps_stopped_runs_and_refuses_duplicate_verdicts(self):
+        run = {
+            "name": "example",
+            "saved_at": "2026-11-22T00:00:00Z",
+            "config": {"brain": "rules", "map": "kitsilano"},
+            "summary": {},
+        }
+        row = {"id": "r1", "pass": False}
+        build_results._check_run_shape({**run, "results": [], "stopped": "budget"})
+        build_results._check_run_shape({**run, "results": [row]})
+        with self.assertRaisesRegex(ValueError, "repeats route ID 'r1'"):
+            build_results._check_run_shape({**run, "results": [row, {**row, "pass": True}]})
+        with self.assertRaisesRegex(ValueError, "route ID and boolean verdict"):
+            build_results._check_run_shape({**run, "results": [{**row, "pass": 1}]})
+        with self.assertRaisesRegex(ValueError, "drives or a stop reason"):
+            build_results._check_run_shape({**run, "results": []})
+
+    def test_generation_refuses_legacy_run_with_repeated_route(self):
+        row = {"id": "r1", "pass": True, "decisions": 1}
+        run = {
+            "name": "20261119-000000-rules",
+            "saved_at": "2026-11-19T00:00:00Z",
+            "config": {"brain": "rules", "map": "kitsilano", "count": 2, "seed": 1},
+            "summary": {},
+            "results": [row, dict(row)],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / f"{run['name']}.json"
+            path.write_text(json.dumps(run))
+            with patch.object(build_results, "committed_runs", return_value=[path]):
+                with self.assertRaisesRegex(ValueError, "repeats route ID 'r1'"):
+                    build_results.run_rows({})
+
     def test_published_drive_keeps_measured_flagged_choices(self):
         result = {"challenge": "flagger", "map": "kitsilano", "pass": True, "time_s": 36}
         self.assertNotIn("flagged_choices", build_results.published_drive(result))

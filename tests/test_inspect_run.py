@@ -553,3 +553,164 @@ class InspectRunTests(unittest.TestCase):
             self.assertEqual(regression["coverage"]["failure_label_pairs"], 1)
             self.assertEqual(regression["coverage"]["comparable_traffic_counters"], 0)
             self.assertTrue(regression["coverage"]["incomplete"])
+
+    def test_forensic_report_catalog_and_exports(self):
+        rows = [
+            {
+                "id": "a",
+                "map": "kitsilano",
+                "pass": False,
+                "failures": ["timeout", "timeout", "collision"],
+                "time_s": 12,
+                "events": [
+                    {"type": "safety", "t": 4, "detail": "held"},
+                    {"type": "reroute", "t": 3},
+                    {"type": "warning"},
+                    {"type": "invalid", "t": True},
+                    {"type": "negative", "t": -1},
+                ],
+            },
+            {"id": "b", "pass": True, "failures": ["ghost"], "events": []},
+            {"id": "c", "pass": False, "events": [{"t": 0}]},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            path.write_text(json.dumps({"results": rows}))
+            reports = ["event-timeline", "event-time-issues", "failure-examples"]
+            result = json.loads(subprocess.check_output([sys.executable, CLI, path, *reports]))
+            self.assertEqual(
+                [(x["id"], x["event_index"], x["time_s"]) for x in result["event-timeline"]],
+                [("a", 0, 4), ("a", 1, 3), ("a", 2, None), ("a", 3, True), ("a", 4, -1)],
+            )
+            self.assertEqual(result["event-timeline"][0]["event"]["detail"], "held")
+            self.assertEqual(
+                [x["error"] for x in result["event-time-issues"]],
+                ["time moved backwards", "invalid time", "invalid time", "invalid time"],
+            )
+            self.assertEqual(
+                result["failure-examples"],
+                [
+                    {"reason": why, "routes": 1, "drives": [{"id": "a", "map": "kitsilano", "time_s": 12}]}
+                    for why in ("collision", "timeout")
+                ],
+            )
+            table = subprocess.check_output(
+                [sys.executable, CLI, path, "suite-failure-reasons", "--format", "table"], text=True
+            )
+            self.assertIn("suite-failure-reasons: coverage", table)
+            self.assertIn("measured_routes", table)
+        listed = subprocess.check_output(
+            [sys.executable, CLI, "--list-diagnostics", "--filter", "timestamp"], text=True
+        )
+        self.assertEqual([line.split()[0] for line in listed.splitlines()], ["event-time-issues"])
+
+    def test_targeted_filters_keep_comparable_drives_and_validate_full_input(self):
+        rows = [
+            {"challenge": "a", "map": "kitsilano", "pass": False, "failures": ["timeout"]},
+            {"challenge": "b", "map": "ottawa", "pass": False, "failures": ["collision"]},
+            {"challenge": "c", "map": "victoria", "pass": True, "failures": []},
+        ]
+        modified = [
+            {**rows[0], "pass": True, "failures": []},
+            rows[1],
+            {**rows[2], "pass": False, "failures": ["timeout"]},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            before = Path(directory) / "before.json"
+            after = Path(directory) / "after.json.gz"
+            before.write_text(json.dumps({"results": rows}), encoding="utf-8-sig")
+            after.write_bytes(gzip.compress(json.dumps({"results": modified}).encode("utf-8-sig")))
+            cli = [sys.executable, CLI, before, "suite-verdicts"]
+            selected = json.loads(
+                subprocess.check_output([*cli, "--failure-reason", "collision", "--failure-reason", "timeout"])
+            )
+            self.assertEqual(selected["suite-verdicts"]["counts"], {"failed": 2})
+            selected = json.loads(subprocess.check_output([*cli, "--drive-map", "victoria", "--drive-map", "ottawa"]))
+            self.assertEqual(selected["suite-verdicts"]["counts"], {"failed": 1, "passed": 1})
+            selected = json.loads(subprocess.check_output([*cli, "--compare", after, "--failure-reason", "timeout"]))
+            self.assertEqual(selected["routes"]["matched"], ["a", "c"])
+            selected = json.loads(subprocess.check_output([*cli, "--compare", after, "--drive-map", "kitsilano"]))
+            self.assertEqual(selected["routes"]["matched"], ["a"])
+            after.write_bytes(gzip.compress(json.dumps({"results": [*modified, modified[1]]}).encode()))
+            duplicate = subprocess.run([*cli, "--compare", after, "--route", "a"], capture_output=True)
+            self.assertEqual(duplicate.returncode, 2)
+            self.assertIn(b"duplicate route ID 'b'", duplicate.stderr)
+
+    def test_regression_gate_preserves_offsets_and_identifies_changed_arena_conditions(self):
+        rows = [
+            {"challenge": "a", "pass": True, "failures": [], "collisions": 1},
+            {"challenge": "b", "pass": False, "failures": ["timeout"], "collisions": 0},
+        ]
+        changed = [
+            {**rows[0], "pass": False, "failures": ["timeout"], "collisions": 0},
+            {**rows[1], "pass": True, "failures": [], "collisions": 1},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            before = Path(directory) / "before.json"
+            after = Path(directory) / "after.json"
+            before.write_text(json.dumps({"results": rows}))
+            after.write_text(json.dumps({"results": changed}))
+            cli = [sys.executable, CLI, before, "--compare", after, "--summary", "--fail-on-regression"]
+            run = subprocess.run(cli, capture_output=True)
+            self.assertEqual(run.returncode, 2)
+            payload = json.loads(run.stdout)["regression"]
+            self.assertEqual(payload["deltas"]["passed"], 0)
+            self.assertEqual(payload["deltas"]["collisions"], 0)
+            self.assertEqual(payload["lost_passes"], ["a"])
+            self.assertEqual(payload["increased_collisions"], [{"id": "b", "increase": 1}])
+            table = subprocess.run([*cli, "--format", "table"], capture_output=True)
+            self.assertIn(b"lost passes", table.stdout)
+            self.assertIn(b"increased collision counts", table.stdout)
+            for field, first, second in (("weather", "dry", "snow"), ("time", 8, 12), ("car", "a", "b")):
+                with self.subTest(field=field):
+                    before.write_text(json.dumps({"results": [{**rows[0], field: first}]}))
+                    after.write_text(json.dumps({"results": [{**rows[0], field: second}]}))
+                    output = subprocess.run(cli, capture_output=True)
+                    self.assertEqual(output.returncode, 3)
+                    self.assertEqual(json.loads(output.stdout)["routes"]["changed_tags"], ["a"])
+                    strict = subprocess.run([*cli, "--same-conditions"], capture_output=True)
+                    self.assertEqual(strict.returncode, 2)
+                    self.assertIn(f"recorded drive conditions differ: a ({field})".encode(), strict.stderr)
+
+    def test_misplaced_flags_have_actionable_errors(self):
+        for args, message in [
+            ([SAMPLE, "--filter", "text"], b"--filter requires"),
+            ([SAMPLE, "--cohort", "signals="], b"invalid --cohort"),
+            ([SAMPLE, "--list"], b"does not take saved runs"),
+        ]:
+            with self.subTest(args=args):
+                result = subprocess.run([sys.executable, CLI, *args], capture_output=True)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(message, result.stderr)
+
+    def test_display_exports_keep_multiline_cells_in_one_row(self):
+        identifier = "a|b\r\n<b>c</b>"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            path.write_text(json.dumps({"results": [{"id": identifier, "time_s": 13}]}))
+            cli = [sys.executable, CLI, path, "motion-duration", "--format"]
+            markdown = subprocess.check_output([*cli, "markdown"], text=True)
+            self.assertIn(r"a\|b<br>&lt;b&gt;c&lt;/b&gt;", markdown)
+            table = subprocess.check_output([*cli, "table"], text=True)
+            self.assertIn(r"a|b\r\n<b>c</b>", table)
+
+    def test_same_conditions_allows_driver_changes_but_checks_simulation_conditions(self):
+        config = {"map": "kitsilano", "pack": 6, "seed": 1, "count": 1, "without": ["vans", "geese"]}
+        row = {"id": "a", "pass": True, "tags": {"length_m": 10, "signals": 0, "stops": 0, "lefts": 0, "rights": 0}}
+        with tempfile.TemporaryDirectory() as directory:
+            before = Path(directory) / "before.json"
+            after = Path(directory) / "after.json"
+            before.write_text(json.dumps({"config": {**config, "brain": "rules"}, "results": [row]}))
+            other = {**config, "brain": "cautious", "without": ["geese", "vans", "geese"]}
+            after.write_text(json.dumps({"config": other, "results": [row]}))
+            cli = [sys.executable, CLI, before, "--compare", after, "suite-verdicts"]
+            output = json.loads(subprocess.check_output([*cli, "--same-conditions"]))
+            self.assertEqual(set(output["condition_differences"]), {"driver"})
+            after.write_text(
+                json.dumps({"config": {**other, "weather": "snow", "cover": 2, "mode": "live"}, "results": [row]})
+            )
+            output = json.loads(subprocess.check_output(cli))
+            self.assertEqual(set(output["condition_differences"]), {"driver", "weather", "cover", "mode"})
+            blocked = subprocess.run([*cli, "--same-conditions"], capture_output=True)
+            self.assertEqual(blocked.returncode, 2)
+            self.assertIn(b"recorded driving conditions differ: weather, cover, mode", blocked.stderr)

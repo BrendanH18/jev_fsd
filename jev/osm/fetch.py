@@ -14,13 +14,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 from http.client import HTTPException
+from math import isfinite
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 from .cache import write_bytes
-from .parse import parse_records
+from .parse import OsmData, parse_xml
 
 Bbox = Tuple[float, float, float, float]  # W, S, E, N
 
@@ -73,22 +73,23 @@ def _http(url: str, data: Optional[bytes], timeout: float) -> bytes:
         return resp.read()
 
 
-def _validate_xml(source: Path | bytes) -> None:
+def read_xml(source: Path | bytes) -> OsmData:
     try:
-        root = ET.parse(source).getroot() if isinstance(source, Path) else ET.fromstring(source)
-    except (ET.ParseError, LookupError, ValueError) as err:
-        raise FetchError("Invalid OSM XML: %s" % err) from err
-    if root.tag != "osm":
-        raise FetchError("Expected an OSM XML document, got <%s>" % root.tag)
-    for element in ("error", "remark"):
-        notice = root.find(element)
-        if notice is not None:
-            message = " ".join("".join(notice.itertext()).split())[:200]
-            raise FetchError("OSM reported an error: %s" % (message or element))
-    try:
-        parse_records(root)
-    except (KeyError, TypeError, ValueError) as err:
-        raise FetchError("Invalid OSM records: %s" % err) from err
+        return parse_xml(source)
+    except (OSError, ValueError) as err:
+        prefix = f"{source.name}: " if isinstance(source, Path) else ""
+        raise FetchError(f"{prefix}{err}") from err
+
+
+def read_cached_osm(bbox: Bbox, maps_dir: Path, log: Callable[[str], None]) -> OsmData | None:
+    """Optional raw input for a derived layer. Do not request it from the network."""
+    path = cache_path(maps_dir, bbox)
+    if path.is_file():
+        try:
+            return read_xml(path)
+        except FetchError as err:
+            log(f"map: cannot build layer ({err})")
+    return None
 
 
 def fetch_osm_xml(
@@ -99,21 +100,33 @@ def fetch_osm_xml(
     log: Callable[[str], None] = lambda _msg: None,
     http: Callable[[str, Optional[bytes], float], bytes] = _http,
     sleep: Callable[[float], None] = time.sleep,
+    *,
+    offline: bool = False,
 ) -> Path:
     """Return the path of the cached XML for `bbox`, downloading it first when needed."""
     w, s, e, n = bbox
-    if (e - w) * (n - s) > MAX_AREA_DEG2:
-        raise FetchError("Bounding box is larger than 0.25 square degrees; pick a smaller area.")
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    if not (-180 <= w < e <= 180 and -90 <= s < n <= 90):
+        raise FetchError("Expected W,S,E,N in degrees with positive width and height.")
+    if offline and force:
+        raise FetchError("Refreshing raw OSM requires network access.")
     path = cache_path(cache_dir, bbox)
     if path.is_file() and not force:
         try:
-            _validate_xml(path)
+            read_xml(path)
         except FetchError as err:
+            if offline:
+                raise
             log("map: replacing invalid cache %s (%s)" % (path.name, err))
         else:
             log("map: using cached %s" % path.name)
             return path
+    if offline:
+        raise FetchError(f"No cached OSM file at {path}")
+    if (e - w) * (n - s) > MAX_AREA_DEG2:
+        raise FetchError("Bounding box is larger than 0.25 square degrees; pick a smaller area.")
+    if not isfinite(timeout) or timeout <= 0:
+        raise FetchError("OSM download timeout must be finite and positive.")
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
     attempts = []
     attempts.append(("osm main api", OSM_MAP_URL.format(w=w, s=s, e=e, n=n), None))
@@ -127,7 +140,7 @@ def fetch_osm_xml(
             try:
                 log("map: fetching %s (attempt %d)" % (name, attempt + 1))
                 raw = http(url, data, timeout)
-                _validate_xml(raw)
+                read_xml(raw)
             except urllib.error.HTTPError as err:
                 errors.append("%s: HTTP %s" % (name, err.code))
                 if err.code in (400, 404):  # our fault, no point retrying this source

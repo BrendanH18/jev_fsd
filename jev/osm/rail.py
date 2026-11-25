@@ -26,16 +26,15 @@ were.
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .. import geometry as g
 from . import fetch
-from .cache import write_json
+from .cache import read_layer, write_json
 from .graph import is_drivable
-from .parse import OsmData, parse_xml
+from .parse import OsmData
 from .project import Projection
 
 RAIL_VERSION = "1"
@@ -54,23 +53,30 @@ def rail_path(maps_dir: Path, bbox: Bbox) -> Path:
     return maps_dir / ("%s.rail.v%s.json" % (fetch.cache_key(bbox), RAIL_VERSION))
 
 
-def load_rail(bbox: Bbox, maps_dir: Path) -> Optional[dict]:
-    path = rail_path(maps_dir, bbox)
-    return json.loads(path.read_text()) if path.is_file() else None
+def load_rail(bbox: Bbox, maps_dir: Path, *, log=lambda _msg: None) -> Optional[dict]:
+    return read_layer(rail_path(maps_dir, bbox), "rail", RAIL_VERSION, ("tracks", "crossings"), log)
 
 
 def build_rail(
-    bbox: Bbox, maps_dir: Path, pack: dict, force: bool = False, log: Callable[[str], None] = lambda m: None
+    bbox: Bbox,
+    maps_dir: Path,
+    pack: dict,
+    force: bool = False,
+    log: Callable[[str], None] = lambda m: None,
+    *,
+    load_osm: Callable[[], OsmData | None] | None = None,
 ) -> Optional[dict]:
     """The cached tracks and level crossings for a bbox, built from its raw OSM download if that is
     on disk (it is never downloaded here). None when there is neither."""
     path = rail_path(maps_dir, bbox)
-    if path.is_file() and not force:
-        return json.loads(path.read_text())
-    xml_path = fetch.cache_path(maps_dir, bbox)
-    if not xml_path.is_file():
+    if not force:
+        cached = load_rail(bbox, maps_dir, log=log)
+        if cached is not None:
+            return cached
+    osm = fetch.read_cached_osm(bbox, maps_dir, log) if load_osm is None else load_osm()
+    if osm is None:
         return None
-    rail = rail_from_osm(parse_xml(xml_path), pack)
+    rail = rail_from_osm(osm, pack)
     log("map: built %s (%d tracks, %d level crossings)" % (path.name, len(rail["tracks"]), len(rail["crossings"])))
     write_json(path, rail)
     return rail

@@ -54,11 +54,15 @@ export function approachTo(map, v, node, usePath = true) {
   const inter = map.intersections?.get(node);
   if (inter) {
     for (const id of inter.vertices || []) {
-      const a = approachTo(map, v, id, usePath);
+      const a = approachToNode(map, v, id, usePath);
       if (a && inter.approaches.some((b) => b.edge === a.edge)) return a;
     }
     return null;
   }
+  return approachToNode(map, v, node, usePath);
+}
+
+function approachToNode(map, v, node, usePath) {
   const spec = v.spec || CAR,
     front = spec.length - spec.rearOverhang;
   const path = usePath && v.path?.edges ? v.path : null;

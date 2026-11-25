@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { gzipSync } from "node:zlib";
 import { benchPage, jsonDifferences, loopbackPort } from "./cli_tools.mjs";
+import { publishedDrives } from "./driver_comparison.mjs";
 
 const cli = (script) => fileURLToPath(new URL(script, import.meta.url));
 const run = (script, ...args) =>
@@ -93,8 +94,25 @@ try {
   assert.equal(checkDriverHelp.status, 0, checkDriverHelp.stderr);
   assert.match(checkDriverHelp.stdout, /--track/);
   assert.match(checkDriverHelp.stdout, /--no-baselines/);
+  assert.match(checkDriverHelp.stdout, /--no-published/);
   assert.equal(run("check_driver.mjs", "--agent", "unused.js", "--track", "bogus").status, 1);
+  assert.match(run("check_driver.mjs", "--agent", "unused.js", "--set", "bogus").stderr, /Unknown --set/);
   assert.match(run("check_driver.mjs", "--agent", "unused.js", "--port=0").stderr, /port must be a decimal integer/);
+  const drive = { map: "kitsilano", id: "flagger", version: 2, pack: 7 };
+  const selected = new Map([["kitsilano/flagger", drive]]);
+  const publishedRow = { driver: "pilot", recording: "pilot.json.gz", date: "2026-11-19", drives: [drive] };
+  const index = {
+    rows: [
+      publishedRow,
+      { ...publishedRow, date: "2026-11-21", drives: [{ ...drive, version: 1 }] },
+      { ...publishedRow, date: "2026-11-22", drives: [{ ...drive, pack: 6 }] },
+      { ...publishedRow, date: "2026-11-23", map: "kitsilano" },
+      { ...publishedRow, date: "2026-11-24", track: "open" },
+    ],
+  };
+  assert.equal(publishedDrives(index, "guarded", selected).get("pilot").get("kitsilano/flagger").date, "2026-11-19");
+  assert.equal(publishedDrives(index, "open", selected).get("pilot").get("kitsilano/flagger").date, "2026-11-24");
+  assert.equal(publishedDrives(index, "guarded", new Map()).get("pilot").size, 0);
 
   globalThis.document = { querySelector: () => null };
   const { canonicalJson, comparableResult } = await import("../static/js/brain/recording.js");
@@ -161,7 +179,11 @@ try {
 
   const manifest = { format: "jev-run-manifest/2", driver: "outside-driver", cost_usd: 0.1 };
   const report = { manifest, results: [{ challenge: "example", pass: true, arrived: true, time_s: 10 }] };
-  const recording = { format: "jev-local-recording/1", header: { arena: {}, manifest } };
+  const recording = {
+    format: "jev-local-recording/1",
+    header: { arena: { ids: ["example"] }, manifest },
+    results: { example: { ...report.results[0], result_sha: "fixture" } },
+  };
   const bundle = write("submission.json.gz", { format: "jev-submission/1", recording, report });
   const inspected = run("driver_submission.mjs", "inspect", "--bundle", bundle, "--json");
   assert.equal(inspected.status, 0, inspected.stderr);
@@ -170,7 +192,42 @@ try {
   assert.equal(unpacked.driver, "outside-driver");
   assert.equal(unpacked.cost_usd, 0.1);
   assert.match(unpacked.file_sha256, /^[a-f0-9]{64}$/);
+  assert.equal(
+    run("driver_submission.mjs", "inspect", "--bundle", bundle, "--expect-sha256", unpacked.file_sha256.toUpperCase())
+      .status,
+    0,
+  );
+  assert.match(
+    run("driver_submission.mjs", "inspect", "--bundle", bundle, "--expect-sha256", "0".repeat(64)).stderr,
+    /File SHA-256 mismatch/,
+  );
+  assert.match(
+    run("driver_submission.mjs", "inspect", "--bundle", bundle, "--expect-sha256", "short").stderr,
+    /64 hexadecimal/,
+  );
   assert.equal(unpacked.tape_sha256_verified, null);
+  assert.match(run("driver_submission.mjs", "pack", "--recording", "missing").stderr, /pack needs --report/);
+  assert.match(
+    run("driver_submission.mjs", "inspect", "--bundle", bundle, "--checkout", "elsewhere").stderr,
+    /inspect does not use --checkout/,
+  );
+  const invalidJSON = join(directory, "broken-report.json");
+  writeFileSync(invalidJSON, "{");
+  assert.ok(run("driver_submission.mjs", "inspect", "--bundle", invalidJSON).stderr.includes(invalidJSON));
+  const bom = join(directory, "with-bom.json");
+  writeFileSync(bom, `\uFEFF${JSON.stringify({ format: "jev-submission/1", recording, report })}`);
+  assert.equal(run("driver_submission.mjs", "inspect", "--bundle", bom).status, 0);
+  const invalidUTF8 = join(directory, "invalid-utf8.json");
+  writeFileSync(invalidUTF8, Buffer.from([255]));
+  assert.match(run("driver_submission.mjs", "inspect", "--bundle", invalidUTF8).stderr, /utf-8/i);
+  const tapeInput = write("input-tape.json", recording);
+  const reportInput = write("input-report.json", report);
+  const packed = join(directory, "packed.json.gz");
+  const pack = () =>
+    run("driver_submission.mjs", "pack", "--report", reportInput, "--recording", tapeInput, "--out", packed);
+  assert.equal(pack().status, 0);
+  assert.equal(run("driver_submission.mjs", "inspect", "--bundle", packed).status, 0);
+  assert.match(pack().stderr, /EEXIST/);
   assert.equal(run("driver_submission.mjs", "verify", "--bundle", bundle, "--timeout=0").status, 1);
   assert.match(
     run("driver_submission.mjs", "verify", "--bundle", bundle, "--port=1.5").stderr,
@@ -191,6 +248,29 @@ try {
   const publishedInfo = run("driver_submission.mjs", "inspect", "--bundle", published, "--json");
   assert.equal(publishedInfo.status, 0, publishedInfo.stderr);
   assert.equal(JSON.parse(publishedInfo.stdout).tape_sha256_verified, true);
+  const forged = write("forged.json", {
+    format: "jev-published-submission/1",
+    submitter: "example",
+    recording_sha256: createHash("sha256").update(bytes).digest("hex"),
+    report: { ...report, manifest: { ...manifest, cost_usd: 9 } },
+  });
+  assert.match(run("driver_submission.mjs", "inspect", "--bundle", forged).stderr, /tape is missing/);
+  writeFileSync(`${forged}.gz`, bytes);
+  assert.match(run("driver_submission.mjs", "inspect", "--bundle", forged).stderr, /same v2 run manifest/);
+  for (const [change, message] of [
+    [{ pass: false }, /verdict for example differs from the recording/],
+    [{ time_s: 11 }, /example\.time_s differs from the recording/],
+  ]) {
+    write("forged.json", {
+      format: "jev-published-submission/1",
+      submitter: "example",
+      recording_sha256: createHash("sha256").update(bytes).digest("hex"),
+      report: { ...report, results: [{ ...report.results[0], ...change }] },
+    });
+    const inspection = run("driver_submission.mjs", "inspect", "--bundle", forged);
+    assert.equal(inspection.status, 1);
+    assert.match(inspection.stderr, message);
+  }
   writeFileSync(`${published}.gz`, "corrupted");
   assert.match(run("driver_submission.mjs", "inspect", "--bundle", published).stderr, /Recording SHA-256 mismatch/);
 } finally {

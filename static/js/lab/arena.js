@@ -21,6 +21,7 @@ import { decidedByText } from "../bench/metrics.js";
 import { driveScores, rankDrivers, scoresText } from "../bench/scores.js";
 import { CUSTOM_SUITE, suiteVersion } from "../bench/suite-version.js";
 import { examine } from "./examiner.js";
+import { arenaDrives, arenaOutcome, filterArenaResults, filterTimeline, timelineTypes } from "./arena-view.js";
 
 let running = false,
   editingHistory = false,
@@ -28,7 +29,8 @@ let running = false,
   results = [],
   current = null,
   saved = [],
-  history = null;
+  history = null,
+  detailsTrigger = null;
 const agentLabel = (id) => agentDefinitions().find((a) => a.id === id)?.label || id;
 const challengeLabel = (id) =>
   CHALLENGES.find((c) => c.id === id)?.title || ROAD_TESTS.find((t) => t.id === id)?.title || id;
@@ -50,13 +52,15 @@ const runLabel = (run) =>
   `${new Date(run.created_at).toLocaleString()} · ${suiteVersion(run)} · ${run.status} · ${run.results.length} attempts · ${[...new Set(run.results.map((r) => r.mode))].join(" / ")}${run.results.some((r) => r.track === "open") ? " · open track" : ""}`;
 const visibleRun = () => ($("#arena-history").value === "current" ? current : saved[Number($("#arena-history").value)]);
 const baselineRun = () => ($("#arena-baseline").value === "" ? null : saved[Number($("#arena-baseline").value)]);
-const outcome = (r) => (r.stopped ? "stopped" : r.pass ? "pass" : "fail");
+
 const COLUMNS = [
   ["Agent / challenge", (r) => `${agentLabel(r.brain)} · ${challengeLabel(r.challenge)}`],
-  ["Outcome", outcome],
+  ["Outcome", arenaOutcome],
   ["Score", (r) => (r.report.qualified ? r.report.score : null)],
   ["Ranking score", (r) => driveScores(r).score],
   ["Time", (r) => r.time_s],
+  ["Track", (r) => r.track ?? "guarded"],
+  ["Flagged choices", (r) => r.flagged_choices ?? null],
   ["Incidents", incidentCount],
   ["Hard brakes", (r) => r.hard_brakes],
   ["p50", (r) => r.latency_p50_ms],
@@ -65,18 +69,18 @@ const COLUMNS = [
 let tableSort = null;
 let sortDirection = 1;
 
+const ARENA_FILTERS = ["#arena-search", "#arena-filter-agent", "#arena-filter-outcome", "#arena-filter-track"];
+
 function filteredResults(shown) {
-  const query = $("#arena-search").value.trim().toLowerCase();
-  const agent = $("#arena-filter-agent").value;
-  const verdict = $("#arena-filter-outcome").value;
-  const list = shown.filter(
-    (r) =>
-      (!agent || agent === r.brain) &&
-      (!verdict || verdict === outcome(r)) &&
-      (!query ||
-        `${r.brain} ${agentLabel(r.brain)} ${r.challenge} ${challengeLabel(r.challenge)}`
-          .toLowerCase()
-          .includes(query)),
+  const list = filterArenaResults(
+    shown,
+    {
+      query: $("#arena-search").value,
+      agent: $("#arena-filter-agent").value,
+      verdict: $("#arena-filter-outcome").value,
+      track: $("#arena-filter-track").value,
+    },
+    { agent: agentLabel, challenge: challengeLabel },
   );
   if (tableSort === null) return list;
   const [, value] = COLUMNS[tableSort];
@@ -207,7 +211,7 @@ function render() {
                 "button",
                 {
                   class: "result-button",
-                  onclick: () => details(r),
+                  onclick: (event) => details(r, event.currentTarget),
                   "aria-label": `Inspect ${agentLabel(r.brain)} on ${challengeLabel(r.challenge)}`,
                 },
                 agentLabel(r.brain),
@@ -220,7 +224,13 @@ function render() {
             h(
               "td",
               { class: r.pass ? "pass" : "fail" },
-              r.stopped ? "STOPPED" : r.pass ? "PASS" : r.failures.join(", "),
+              r.stopped
+                ? "STOPPED"
+                : r.simulation_error
+                  ? `ERROR · ${r.simulation_error}`
+                  : r.pass
+                    ? "PASS"
+                    : r.failures.join(", "),
               roadTestVerdict(r),
               decidedByText(r) ? h("small", { class: "delta" }, `Decisions: ${decidedByText(r)}`) : null,
               before
@@ -247,7 +257,14 @@ function render() {
                   ? h("small", { class: "delta" }, `${signed(s.score - driveScores(before).score, 1)} vs baseline`)
                   : null,
               ))(driveScores(r)),
-            h("td", {}, `${r.time_s}s`),
+            h(
+              "td",
+              {},
+              `${r.time_s}s`,
+              delta(r, before, "time_s", (n) => `${signed(n, 1)} s`),
+            ),
+            h("td", {}, r.track ?? "guarded"),
+            h("td", {}, r.flagged_choices ?? "—", delta(r, before, "flagged_choices")),
             h(
               "td",
               {},
@@ -277,12 +294,14 @@ function render() {
             {},
             h(
               "td",
-              { colspan: 9 },
+              { colspan: COLUMNS.length },
               shown.length ? "No matching drives." : "Run an evaluation or import a saved export to see results.",
             ),
           ),
         ]),
   );
+  $("#arena-match-count").textContent = `${filtered.length} of ${shown.length} attempts`;
+  $("#arena-clear-filters").disabled = !ARENA_FILTERS.some((id) => $(id).value);
   $("#arena-csv").disabled = !filtered.length;
   $("#arena-export").disabled = !shown.length || running || editingHistory;
   $("#arena-delete").disabled = $("#arena-history").value === "current" || running || editingHistory;
@@ -300,9 +319,7 @@ function render() {
       const rows = shown.filter((r) => r.brain === id),
         summary = summarizeResults(rows),
         place = ranked.ranking.find((e) => e.driver === id);
-      const pairs = rows
-        .map((r) => ({ r, c: baseline ? compareResult(r, baseline, brain) : {} }))
-        .filter((p) => p.c.before);
+      const pairs = rows.map((r) => ({ r, c: byResult.get(r) })).filter((p) => p.c.before);
       const after = summarizeResults(pairs.map((p) => p.r)),
         before = summarizeResults(pairs.map((p) => p.c.before));
       return h(
@@ -385,9 +402,37 @@ function decisionDetails(decision, age) {
       : null,
   );
 }
-function details(result) {
+function details(result, trigger) {
+  detailsTrigger = trigger;
   const trace = result.decisions_trace || [];
   const events = result.events || result.report.incidents;
+  const decisions = new Map(trace.map((decision) => [decision.id, decision]));
+  const timeline = h("ol", { class: "timeline" });
+  const eventCount = h("span", { role: "status" });
+  const renderTimeline = (type) => {
+    const shown = filterTimeline(events, type);
+    eventCount.textContent = ` ${shown.length} of ${events.length} events`;
+    timeline.replaceChildren(
+      ...shown.map((event) => {
+        const decision = decisions.get(event.decision_id);
+        return h(
+          "li",
+          {},
+          h("strong", {}, `${event.at_s}s · ${event.message}${event.count > 1 ? ` ×${event.count}` : ""}`),
+          decision
+            ? decisionDetails(decision, event.decision_age_s)
+            : h("p", {}, "No recorded decision context for this event."),
+        );
+      }),
+    );
+  };
+  renderTimeline("");
+  const eventType = h(
+    "select",
+    { onchange: () => renderTimeline(eventType.value) },
+    h("option", { value: "" }, "All events"),
+    timelineTypes(events).map((type) => h("option", { value: type }, type.replaceAll("_", " "))),
+  );
   $("#details-heading").textContent = `${agentLabel(result.brain)} · ${challengeLabel(result.challenge)}`;
   $("#details-content").replaceChildren(
     ...[
@@ -421,23 +466,8 @@ function details(result) {
       result.trace_truncated
         ? h("p", {}, "Recording reached its size limit; some later events or decisions are unavailable.")
         : null,
-      events.length
-        ? h(
-            "ol",
-            { class: "timeline" },
-            events.map((event) => {
-              const decision = trace.find((d) => d.id === event.decision_id);
-              return h(
-                "li",
-                {},
-                h("strong", {}, `${event.at_s}s · ${event.message}${event.count > 1 ? ` ×${event.count}` : ""}`),
-                decision
-                  ? decisionDetails(decision, event.decision_age_s)
-                  : h("p", {}, "No recorded decision context for this event."),
-              );
-            }),
-          )
-        : h("p", {}, "No incidents recorded."),
+      events.length > 1 ? h("label", {}, "Event type ", eventType, eventCount) : null,
+      events.length ? timeline : h("p", {}, "No incidents recorded."),
       trace.length
         ? h(
             "details",
@@ -501,9 +531,11 @@ async function run() {
   }
   const subset = $("#arena-subset").value;
   const custom = new Set([...$("#arena-custom").selectedOptions].map((option) => option.value));
-  const pool = [...CHALLENGES, ...($("#arena-road-tests").checked || subset === "custom" ? ROAD_TESTS : [])].filter(
-    (challenge) => !subset || (subset === "custom" ? custom.has(challenge.id) : challenge.map === subset),
-  );
+  const pool = arenaDrives(CHALLENGES, ROAD_TESTS, {
+    subset,
+    includeRoadTests: $("#arena-road-tests").checked,
+    selected: custom,
+  });
   if (!pool.length) {
     $("#arena-status").textContent = "Choose at least one drive.";
     return;
@@ -530,11 +562,12 @@ async function run() {
   progress.hidden = false;
   const mode = $("#arena-mode").value,
     track = $("#arena-track")?.value === "open" ? "open" : "guarded";
+  const packs = new Map();
   try {
     for (const challenge of pool) {
       if (stop) break;
-      const pack = await api(`/api/map?map=${challenge.map}`),
-        map = new MapData(pack);
+      if (!packs.has(challenge.map)) packs.set(challenge.map, await api(`/api/map?map=${challenge.map}`));
+      const map = new MapData(packs.get(challenge.map));
       for (const brain of selected) {
         if (stop) break;
         $("#arena-status").textContent =
@@ -602,9 +635,18 @@ async function boot() {
   subset.addEventListener("change", () => {
     $("#arena-custom-wrap").hidden = subset.value !== "custom";
   });
-  $("#arena-search").addEventListener("input", render);
-  $("#arena-filter-agent").addEventListener("change", render);
-  $("#arena-filter-outcome").addEventListener("change", render);
+  for (const filter of ARENA_FILTERS)
+    $(filter).addEventListener(filter === "#arena-search" ? "input" : "change", render);
+  $("#arena-clear-filters").addEventListener("click", () => {
+    for (const filter of ARENA_FILTERS) $(filter).value = "";
+    render();
+    $("#arena-search").focus();
+  });
+  $("#arena-close-details").addEventListener("click", () => {
+    $("#arena-details").hidden = true;
+    (detailsTrigger?.isConnected ? detailsTrigger : $("#arena-search")).focus();
+    detailsTrigger = null;
+  });
   $("#arena-csv").addEventListener("click", () => {
     const run = visibleRun();
     downloadCsv(

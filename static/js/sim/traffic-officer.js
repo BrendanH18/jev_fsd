@@ -28,7 +28,7 @@ import { reserveSlot } from "./parking.js";
 // (sim/npc.js), contraflow cyclists, and the audit: for a vehicle on an approach to a junction an
 // officer governs, "go" while that approach's group is waved (or the vehicle was waved on as the
 // officer turned), else "stop"; null where no officer governs. People on foot use `officerWalk`.
-// With an officer there, `controlAt` (sim/outage.js) keeps the junction a signal even in a power cut or
+// With an officer there, `controlAt` (sim/features/index.js) keeps the junction a signal even in a power cut or
 // overnight flashing, so that nobody treats it as an all-way or two-way stop.
 //
 // The audit (sim/world.js) counts entering the junction (the front bumper crossing the line) while the

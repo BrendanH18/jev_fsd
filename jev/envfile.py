@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 
 KEY_NAME = "TYPESAFE_API_KEY"
 VAR_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+_QUOTED = re.compile(r"""^(['"])(.*?)\1(?:\s+#.*)?$""")
 _LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 
 
@@ -35,10 +36,11 @@ def parse(text: str) -> Dict[str, str]:
         if not m:
             continue
         value = m.group(2)
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        elif " #" in value:
-            value = value.split(" #", 1)[0].rstrip()
+        quoted = _QUOTED.fullmatch(value)
+        if quoted:
+            value = quoted.group(2)
+        else:
+            value = re.split(r"\s+#", value, maxsplit=1)[0].rstrip()
         values[m.group(1)] = value
     return values
 
@@ -99,9 +101,10 @@ def preflight(root: Path, name: str = ".env") -> List[str]:
 def _atomic_write(path: Path, text: str) -> None:
     fd, tmp = tempfile.mkstemp(prefix=".env.", dir=str(path.parent))
     try:
-        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
-        with os.fdopen(fd, "w") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -109,17 +112,16 @@ def _atomic_write(path: Path, text: str) -> None:
         except OSError:
             pass
         raise
-    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
 
 def write_key(root: Path, key: str, name: str = ".env", var: str = KEY_NAME) -> Path:
     """Insert or replace `var` (TYPESAFE_API_KEY by default) in `.env`, keeping every other line intact."""
-    if not VAR_NAME.match(var or ""):
+    if not VAR_NAME.fullmatch(var or ""):
         raise EnvFileError("Not an environment variable name.")
     problems = preflight(root, name)
     if problems:
         raise EnvFileError(" ".join(problems))
-    if not key or len(key) > 512 or any(ch.isspace() or ord(ch) < 32 or ch in "\"'#" for ch in key):
+    if not key or len(key) > 512 or any(not 33 <= ord(ch) <= 126 or ch in "\"'#" for ch in key):
         raise EnvFileError("That does not look like an API key.")
     path = root / name
     try:
@@ -169,4 +171,4 @@ def permissions_ok(path: Path) -> Optional[bool]:
         mode = path.stat().st_mode
     except FileNotFoundError:
         return None
-    return not (mode & (stat.S_IRGRP | stat.S_IROTH | stat.S_IWGRP | stat.S_IWOTH))
+    return stat.S_ISREG(mode) and not (mode & (stat.S_IRWXG | stat.S_IRWXO))

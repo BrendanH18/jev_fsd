@@ -1,34 +1,50 @@
 // Oriented bounding boxes (separating axis theorem) and corridor queries along a route.
 
-function axes(obb) {
-  const c = Math.cos(obb.heading),
-    s = Math.sin(obb.heading);
-  return [
-    [c, s],
-    [-s, c],
-  ];
-}
-
-function project(obb, axis) {
-  const [ax, ay] = axis;
-  const centerDot = obb.center[0] * ax + obb.center[1] * ay;
-  const [ux, uy] = axes(obb)[0];
-  const [vx, vy] = axes(obb)[1];
-  const r = Math.abs((ux * ax + uy * ay) * obb.halfLength) + Math.abs((vx * ax + vy * ay) * obb.halfWidth);
-  return [centerDot - r, centerDot + r];
+function projectedRadius(x, y, c, s, length, width) {
+  return Math.abs((c * x + s * y) * length) + Math.abs((-s * x + c * y) * width);
 }
 
 export function obbOverlap(a, b, margin = 0) {
   const quick = Math.hypot(a.center[0] - b.center[0], a.center[1] - b.center[1]);
   if (quick > a.halfLength + b.halfLength + margin + 0.01) return false;
-  const inflatedA = { ...a, halfLength: a.halfLength + margin / 2, halfWidth: a.halfWidth + margin / 2 };
-  const inflatedB = { ...b, halfLength: b.halfLength + margin / 2, halfWidth: b.halfWidth + margin / 2 };
-  for (const axis of [...axes(inflatedA), ...axes(inflatedB)]) {
-    const [a0, a1] = project(inflatedA, axis);
-    const [b0, b1] = project(inflatedB, axis);
-    if (a1 < b0 || b1 < a0) return false;
+  const ah = a.heading,
+    bh = b.heading;
+  if (!Number.isFinite(quick) || !Number.isFinite(ah) || !Number.isFinite(bh))
+    throw new RangeError("Invalid collision box pose");
+  const al = a.halfLength + margin / 2,
+    aw = a.halfWidth + margin / 2,
+    bl = b.halfLength + margin / 2,
+    bw = b.halfWidth + margin / 2;
+  const ac = Math.cos(ah),
+    as = Math.sin(ah),
+    bc = Math.cos(bh),
+    bs = Math.sin(bh);
+  for (let i = 0; i < 4; i++) {
+    const x = i === 0 ? ac : i === 1 ? -as : i === 2 ? bc : -bs;
+    const y = i === 0 ? as : i === 1 ? ac : i === 2 ? bs : bc;
+    const ca = a.center[0] * x + a.center[1] * y;
+    const cb = b.center[0] * x + b.center[1] * y;
+    const ar = projectedRadius(x, y, ac, as, al, aw);
+    const br = projectedRadius(x, y, bc, bs, bl, bw);
+    if (ca + ar < cb - br || cb + br < ca - ar) return false;
   }
   return true;
+}
+
+export function polygonBounds(points) {
+  if (!Array.isArray(points) || points.length < 3) return null;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const point of points) {
+    if (!Array.isArray(point) || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return null;
+    minX = Math.min(minX, point[0]);
+    minY = Math.min(minY, point[1]);
+    maxX = Math.max(maxX, point[0]);
+    maxY = Math.max(maxY, point[1]);
+  }
+  return [minX, minY, maxX, maxY];
 }
 
 // Distance from point p to box b (0 inside).
@@ -110,8 +126,9 @@ export function obbPolygonOverlap(box, pts, margin = 0) {
 // (metres right of the route, so a corridor can follow another lane).
 export function corridorQuery(route, s0, s1, halfWidth, vehicles, hint = null, center = 0, frame = null) {
   const out = [];
+  const projectionHint = hint ?? route.hint ?? 0;
   for (const v of vehicles) {
-    const p = route.project(v.x, v.y, hint);
+    const p = route.project(v.x, v.y, projectionHint);
     if (!p || p.s < s0 || p.s > s1) continue;
     // `frame(s)` re-measures a lateral from where the route was at the query's start, when the
     // route has moved to another lane in between

@@ -82,7 +82,7 @@ export function deadZone(v, zone = STICK_DEAD_ZONE) {
 // `pressed`. (Very old browsers expose buttons as plain numbers.)
 export function buttonValue(button) {
   if (button == null) return 0;
-  if (typeof button === "number") return clamp01(button);
+  if (typeof button === "number") return Number.isFinite(button) ? clamp01(button) : 0;
   const value = Number(button.value);
   if (Number.isFinite(value) && value > 0) return clamp01(value);
   return button.pressed ? 1 : 0;
@@ -150,6 +150,7 @@ export class GamepadInput {
     this.state = { ...IDLE };
     this.pad = null; // the id of the pad in use
     this.held = [];
+    this.waitForNeutral = false;
   }
   poll() {
     let pad = null;
@@ -162,6 +163,7 @@ export class GamepadInput {
     if (id !== this.pad) {
       const before = this.pad;
       this.pad = id;
+      this.waitForNeutral = this.blocked();
       this.held = pad ? pressedEdges([], pad.buttons).held : [];
       if (before && this.onDisconnect) this.onDisconnect(before);
       if (pad && this.onConnect) this.onConnect(pad);
@@ -175,10 +177,16 @@ export class GamepadInput {
     const { edges, held } = pressedEdges(this.held, pad.buttons);
     this.held = held;
     if (this.blocked()) {
+      this.waitForNeutral = true;
       this.state = { ...IDLE };
       return this.state;
     }
-    this.state = readPad(pad);
+    const state = readPad(pad);
+    if (this.waitForNeutral) {
+      this.waitForNeutral = !!(state.steer || state.throttle || state.brake || state.hardBrake);
+      if (this.waitForNeutral) return this.state;
+    }
+    this.state = state;
     for (const i of edges) {
       const name = BUTTON_ACTIONS[i];
       if (name && this.actions[name]) this.actions[name]();

@@ -25,6 +25,7 @@ const {
 const { ROAD_TEST_KEY, readRoadTests, roadTestStatus, saveRoadTest, practiceOutcome } = await import(
   "../static/js/lab/practice.js"
 );
+const { roadTestNote } = await import("../static/js/ui/road-test.js");
 const { failures } = await import("../static/js/bench/metrics.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
@@ -161,6 +162,106 @@ const report = (overrides = {}) => ({
   ...overrides,
 });
 const incident = (type, message = type, at_s = 10) => ({ type, message, at_s, at_m: 100 });
+// Lab validation additions
+test("Tell drivers when an eligible road-test verdict could not be saved", () => {
+  for (const outcome of ["passed", "failed"]) {
+    const note = roadTestNote(kits, { practice: { outcome, saved: false } });
+    assert.ok(note.includes(outcome));
+    assert.ok(note.includes("Browser storage is unavailable."));
+    assert.ok(!note.includes("recorded"));
+  }
+});
+test("Check that a road-test result at the exact demerit allowance still passes", () => {
+  const sheet = examine({ ...kits, maxDemerits: 1 }, report({ speeding_s: 1 }));
+  assert.equal(sheet.demerits, 1);
+  assert.equal(sheet.pass, true);
+});
+test("Check that a coaching score of zero does not change a clean examiner verdict", () => {
+  const sheet = examine(kits, report({ score: 0, qualified: false }));
+  assert.equal(sheet.pass, true);
+  assert.equal(sheet.demerits, 0);
+});
+test("Check that an ordinary street kerb contact does not count as a parking demerit", () => {
+  const sheet = examine(kits, report({ parking: undefined, incidents: [incident("kerb")] }));
+  assert.ok(sheet.fails.some((f) => f.reason === "not parked"));
+  assert.equal(sheet.demerits, 0);
+});
+test("Check that the examiner prefers the move-over event when both roadside audits fire", () => {
+  const move = incident("no_move_over", "Did not move", 21);
+  const speed = incident("roadside_speeding", "Too fast", 19);
+  const sheet = examine(kits, report({ no_move_over: 1, roadside_speeding_s: 0.7, incidents: [speed, move] }));
+  const entries = sheet.fails.filter((f) => f.reason === "move over");
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].incident.at_s, 21);
+});
+test("Check that the examiner attaches a dangerous-action mark to its own incident", () => {
+  const red = incident("red_lights_run", "Red", 30);
+  const sheet = examine(kits, report({ red_lights: 1, incidents: [incident("stop_signs_run", "Stop", 20), red] }));
+  const failure = sheet.fails.find((f) => f.reason === "red light");
+  assert.equal(failure.incident.at_s, 30);
+});
+test("Check that following-gap demerits accumulate with exposure and cap at three", () => {
+  for (const [close_following_s, expected] of [
+    [1.99, 0],
+    [2, 1],
+    [7, 2],
+    [12, 3],
+    [60, 3],
+  ]) {
+    const sheet = examine(kits, report({ close_following_s }));
+    assert.equal(sheet.demerits, expected);
+  }
+});
+test("Check that minor speeding becomes a dangerous violation only above ten seconds", () => {
+  const boundary = examine(kits, report({ speeding_s: 10 }));
+  const after = examine(kits, report({ speeding_s: 10.1 }));
+  assert.equal(boundary.demerits, 3);
+  assert.equal(boundary.pass, true);
+  assert.ok(after.fails.some((f) => f.reason === "speeding"));
+});
+test("Check that a brief road-edge excursion is a demerit and one second is a failure", () => {
+  const boundary = examine(kits, report({ off_road_s: 0.99 }));
+  const after = examine(kits, report({ off_road_s: 1 }));
+  assert.equal(boundary.demerits, 1);
+  assert.ok(after.fails.some((f) => f.reason === "off road" || f.reason === "off-road"));
+});
+test("Check that either direction of parking misalignment can earn a demerit", () => {
+  for (const angle_deg of [-5, 5]) {
+    const sheet = examine(kits, report({ parking: { ...report().parking, angle_deg } }));
+    assert.equal(sheet.minors.find((m) => m.key === "park_angle")?.points, 1);
+  }
+});
+test("Check that a completed test retains a clean pass at each parking demerit boundary", () => {
+  const sheet = examine(kits, report({ parking: { ...report().parking, angle_deg: -4, kerb_m: 0.2, legs: 5 } }));
+  assert.equal(sheet.demerits, 0);
+  assert.equal(sheet.pass, true);
+});
+test("Check that queuing away from the line does not mask a later stop over it", () => {
+  const observer = new RoadTestObserver();
+  const marked = [];
+  const score = { distance: 100, incident: (type, message, at) => marked.push({ type, message, ...at }) };
+  const route = {
+    controls: [{ sRoute: 100, edge: "main", control: { type: "stop" } }],
+    map: { edges: new Map([["main", { name: "Main Street" }]]) },
+  };
+  observer.stops(route, 90, 0, 1, score);
+  observer.stops(route, 102, 0, 2, score);
+  observer.stops(route, 113, 0, 3, score);
+  assert.deepEqual(marked, [
+    { type: "late_stop", message: "Stopped past the stop line on Main Street", at_s: 2, at_m: 100 },
+  ]);
+});
+test("Check that the first valid stop governs even when the driver stops again past the line", () => {
+  const observer = new RoadTestObserver();
+  const score = { distance: 100, incident: () => assert.fail("A valid first stop must hold") };
+  const route = { controls: [{ sRoute: 100, control: { type: "signal" } }] };
+  observer.stops(route, 99, 0, 1, score);
+  observer.stops(route, 102, 0, 2, score);
+  observer.stops(route, 113, 0, 3, score);
+  assert.equal(observer.control, 1);
+});
+// End lab validation additions
+
 test("a clean drive passes with no demerits, and every category is on the sheet", () => {
   const sheet = examine(kits, report());
   assert.equal(sheet.available, true);

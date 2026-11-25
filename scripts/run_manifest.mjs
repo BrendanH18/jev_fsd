@@ -65,7 +65,15 @@ export function runManifest({ driver, model, track, suite, maps, fingerprints = 
 }
 
 export function runCost(results) {
-  return Math.round(results.reduce((sum, result) => sum + (result.cost_usd || 0), 0) * 1e6) / 1e6;
+  let total = 0;
+  for (const result of results) {
+    const cost = result.cost_usd ?? 0;
+    if (!Number.isFinite(cost) || cost < 0) throw new Error("Drive cost must be a finite nonnegative number.");
+    total += cost;
+  }
+  const microdollars = Math.round(total * 1e6);
+  if (!Number.isSafeInteger(microdollars)) throw new Error("Run cost exceeds the supported range.");
+  return microdollars / 1e6;
 }
 
 export function benchRunName(savedAt, driver) {

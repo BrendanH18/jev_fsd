@@ -26,6 +26,7 @@ import threading
 import time
 import traceback
 import zlib
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -66,6 +67,9 @@ MAX_BODY_BYTES = 1024 * 1024
 MAX_RECORDING_BYTES = 32 * 1024 * 1024
 # The largest bundled legacy recording expands to about 448 MiB.
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+MAX_RECORDING_HEADER_BYTES = 64 * 1024  # bounds what each cached recording listing holds
+MAX_RUN_BYTES = 16 * 1024 * 1024
+MAX_QUERY_FIELDS = 64
 _save_lock = threading.Lock()
 RECORDING_FORMAT = "jev-model-recording/1"
 
@@ -142,22 +146,78 @@ def _save_artifact(path, encode):
             return destination
 
 
-def _read_json_file(path: Path):
-    if path.name.endswith(".json.gz"):
-        with gzip.open(path, "rb") as fh:
-            data = fh.read(MAX_ARCHIVE_BYTES + 1)
-        if len(data) > MAX_ARCHIVE_BYTES:
-            raise ValueError("Recording exceeds the decoded size limit")
-        return json.loads(data)
-    return json.loads(path.read_text(encoding="utf-8"))
+def _read_json_file(path: Path, limit: int):
+    opener = gzip.open if path.name.endswith(".json.gz") else open
+    with opener(path, "rb") as fh:
+        data = fh.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError("Saved file exceeds the decoded size limit")
+    return json.loads(data.decode("utf-8"))
 
 
-def _load_saved_object(path: Path):
+def _load_saved_object(path: Path, limit: int):
     try:
-        data = _read_json_file(path)
+        if not path.is_file():
+            return None
+        data = _read_json_file(path, limit)
     except (OSError, ValueError, EOFError, RecursionError, zlib.error):
         return None
     return data if isinstance(data, dict) else None
+
+
+def _header_fits(header) -> bool:
+    """A recording header small enough to list and cache (real headers are a few kilobytes)."""
+    try:
+        return len(json.dumps(header, allow_nan=False)) <= MAX_RECORDING_HEADER_BYTES
+    except (TypeError, ValueError, RecursionError):
+        return False
+
+
+def _usable_recording(data) -> bool:
+    """A recording the catalog lists and lookup serves: current format with a bounded header and drives."""
+    return (
+        isinstance(data, dict)
+        and data.get("format") == RECORDING_FORMAT
+        and isinstance(data.get("header"), dict)
+        and _header_fits(data["header"])
+        and isinstance(data.get("drives"), dict)
+        and _drive_answers_shaped(data["drives"])
+    )
+
+
+def _drive_answers_shaped(drives: dict) -> bool:
+    """Each drive maps request keys to lists of outcomes, as the browser's tape player expects."""
+    return all(
+        isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()
+    )
+
+
+@lru_cache(maxsize=256)
+def _artifact_metadata(path: Path, signature: tuple, recording: bool, limit: int):
+    """Only hold listing metadata in memory, including for large legacy tapes."""
+    data = _load_saved_object(path, limit)
+    if data is None:
+        return None
+    if recording:
+        if not _usable_recording(data):
+            return None
+        return {"name": _recording_name(path), "header": data["header"], "drives": sorted(data["drives"])}
+    return {
+        "name": path.stem,
+        "saved_at": data.get("saved_at"),
+        "suite_version": data.get("suite_version", "legacy"),
+        "config": data.get("config"),
+        "summary": data.get("summary"),
+    }
+
+
+def _listed_artifact(path: Path, recording: bool = False):
+    try:
+        info = path.stat()
+    except OSError:
+        return None
+    signature = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    return _artifact_metadata(path, signature, recording, MAX_ARCHIVE_BYTES if recording else MAX_RUN_BYTES)
 
 
 def _recording_name(path: Path) -> str:
@@ -313,14 +373,16 @@ def api_maps(_body, _query):
 
 
 def api_drives(body, _query):
-    entry = load_map(str(body.get("bbox") or ""))
-    start = body.get("from") or {}
+    raw = body.get("from")
     try:
-        start = {"x": float(start["x"]), "y": float(start["y"]), "heading": float(start["heading"])}
+        if not isinstance(raw, dict) or any(isinstance(raw[k], bool) for k in ("x", "y", "heading")):
+            raise TypeError()
+        start = {k: float(raw[k]) for k in ("x", "y", "heading")}
         if not all(math.isfinite(v) for v in start.values()):
             raise ValueError()
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError, OverflowError):
         raise BadRequest("from {x, y, heading} with finite coordinates is required")
+    entry = load_map(str(body.get("bbox") or ""))
     return {"drives": suggested_drives(entry["router"], start)}
 
 
@@ -371,16 +433,21 @@ def api_route(body, _query):
     except (TypeError, ValueError, OverflowError):
         raise BadRequest("weekday must be an integer")
     # (edges no route may enter: a block closed for an event, static/js/sim/road-closures.js)
-    avoid = body.get("avoid") or []
+    avoid = body.get("avoid")
+    if avoid is None:
+        avoid = []
     if not isinstance(avoid, list) or len(avoid) > 200 or not all(isinstance(a, str) and len(a) <= 64 for a in avoid):
         raise BadRequest("avoid must be a list of edge ids")
+    restrictions = body.get("restrictions", False)
+    if not isinstance(restrictions, bool):
+        raise BadRequest("restrictions must be a boolean")
     entry = load_map(str(body.get("bbox") or ""))
     started = time.perf_counter()
     routes = entry["router"].routes(
         start,
         goal,
         k=k,
-        restrictions=bool(body.get("restrictions")),
+        restrictions=restrictions,
         hour=hour,
         weekday=weekday,
         avoid=avoid,
@@ -405,9 +472,16 @@ def api_llm_decide(body, _query):
         raise BadRequest(str(err))
 
 
+def _probe_force(body):
+    force = body.get("force", False)
+    if not isinstance(force, bool):
+        raise BadRequest("force must be a boolean")
+    return force
+
+
 def api_llm_check(body, _query):
     """Probe every configured endpoint (GET {base_url}/models, no spend). POST so it needs the token."""
-    return {"endpoints": llm_registry.check_all(force=bool(body.get("force")))}
+    return {"endpoints": llm_registry.check_all(force=_probe_force(body))}
 
 
 def _setup(action, body):
@@ -458,7 +532,7 @@ def api_decision_decide(body, _query):
 
 def api_decision_check(body, _query):
     """Probe every decision endpoint (one free GET each). POST so it needs the token."""
-    return {"endpoints": decision_registry.check_all(force=bool(body.get("force")))}
+    return {"endpoints": decision_registry.check_all(force=_probe_force(body))}
 
 
 def api_decision_models(body, _query):
@@ -485,16 +559,18 @@ def api_snapshot_save(body, _query):
         req = decide.validate_request(body)
     except decide.InvalidRequest as err:
         raise BadRequest(str(err))
-    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    expect = body.get("expect")
+    if expect is not None and not isinstance(expect, dict):
+        raise BadRequest("expect must be an object")
     path = SNAPSHOTS_DIR / ("%s.json" % safe)
     payload = {
         "name": safe,
         "state": req["state"],
         "questions": req["questions"],
-        "expect": body.get("expect") or {},
+        "expect": expect or {},
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
-    path = _save_artifact(path, lambda _: json.dumps(payload, indent=2))
+    path = _save_artifact(path, lambda dest: json.dumps({**payload, "name": dest.stem}, indent=2))
     return {"saved": str(path.relative_to(PROJECT_ROOT))}
 
 
@@ -513,9 +589,10 @@ def api_bench_save(body, _query):
         raise BadRequest("browser benchmark runs must use the custom suite")
     if any(not isinstance(result, dict) or result.get("suite_version") != declared for result in body["results"]):
         raise BadRequest("run and results must agree on suite_version")
-    config = body["config"] if isinstance(body["config"], dict) else {}
+    config = body["config"]
+    if not isinstance(config, dict):
+        raise BadRequest("config must be an object")
     brain = "".join(ch for ch in str(config.get("brain") or "run") if ch.isalnum())[:20] or "run"
-    RUNS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = RUNS_DIR / ("%s-%s.json" % (stamp, brain))
     payload = {
@@ -531,33 +608,24 @@ def api_bench_save(body, _query):
 
 def api_bench_runs(_body, query):
     """Recent runs, newest first: name, config, and summary (?name=<run> returns one in full)."""
-    RUNS_DIR.mkdir(parents=True, exist_ok=True)
     name = (query.get("name") or [""])[0]
     if name:
-        safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_")
-        path = RUNS_DIR / ("%s.json" % safe)
-        if not safe or not path.is_file():
-            raise BadRequest("No run named %s" % safe)
-        data = _load_saved_object(path)
+        if not all(ch.isalnum() or ch in "-_" for ch in name):
+            raise BadRequest("Invalid run name")
+        path = RUNS_DIR / ("%s.json" % name)
+        if not path.is_file():
+            raise BadRequest("No run named %s" % name)
+        data = _load_saved_object(path, MAX_RUN_BYTES)
         if data is None:
-            raise BadRequest("Run %s could not be read" % safe)
+            raise BadRequest("Run %s could not be read" % name)
         return data
     runs = []
     for path in sorted(RUNS_DIR.glob("*.json"), reverse=True):
         if len(runs) >= 30:
             break
-        data = _load_saved_object(path)
-        if data is None:
-            continue
-        runs.append(
-            {
-                "name": path.stem,
-                "saved_at": data.get("saved_at"),
-                "suite_version": data.get("suite_version", "legacy"),
-                "config": data.get("config"),
-                "summary": data.get("summary"),
-            }
-        )
+        item = _listed_artifact(path)
+        if item is not None:
+            runs.append(item)
     return {"runs": runs}
 
 
@@ -568,7 +636,11 @@ def api_bench_runs(_body, query):
 def valid_suite_version(version):
     return isinstance(version, str) and (
         version in ("legacy", "custom")
-        or (version.startswith("v") and version[1:2] in "123456789" and version[1:].isdigit())
+        or (
+            version.startswith("v")
+            and version[1:2] in "123456789"
+            and (version[1:].isascii() and version[1:].isdigit())
+        )
     )
 
 
@@ -580,9 +652,9 @@ def api_recording_save(body, _query):
     results, scenarios = body.get("results", {}), body.get("scenarios", {})
     if not all(isinstance(v, dict) for v in (header, drives, results, scenarios)):
         raise BadRequest("a recording needs header, drives, results and scenarios objects")
-    if not all(
-        isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()
-    ):
+    if not _header_fits(header):
+        raise BadRequest("a recording header must be under %d KiB" % (MAX_RECORDING_HEADER_BYTES // 1024))
+    if not _drive_answers_shaped(drives):
         raise BadRequest("each drive maps request keys to lists of outcomes")
     declared, manifest = header.get("suite_version"), header.get("manifest")
     if (
@@ -602,7 +674,6 @@ def api_recording_save(body, _query):
     driver = (
         "".join(ch if ch.isalnum() else "-" for ch in str(header.get("driver") or "model"))[:40].strip("-") or "model"
     )
-    RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     path = RECORDINGS_DIR / ("%s-%s.json" % (stamp, driver))
     text = _recording_text(header, results, scenarios, drives)
@@ -658,10 +729,10 @@ def api_recordings(_body, query):
             if not path.is_file():
                 continue
             found = True
-            data = _load_saved_object(path)
-            if data is not None and data.get("format") == RECORDING_FORMAT:
+            data = _load_saved_object(path, MAX_ARCHIVE_BYTES)
+            if _usable_recording(data):
                 return data
-            if fallback is None:
+            if fallback is None and data is not None and data.get("format") != RECORDING_FORMAT:
                 fallback = data
         if fallback is not None:
             return fallback
@@ -684,17 +755,10 @@ def api_recordings(_body, query):
         rec_name = _recording_name(path)
         if rec_name in seen or not _recording_basename(rec_name):
             continue
-        data = _load_saved_object(path)
-        if data is not None and data.get("format") == RECORDING_FORMAT:
+        item = _listed_artifact(path, recording=True)
+        if item is not None:
             seen.add(rec_name)
-            drives = data.get("drives")
-            recordings.append(
-                {
-                    "name": rec_name,
-                    "header": data.get("header"),
-                    "drives": sorted(drives) if isinstance(drives, dict) else [],
-                }
-            )
+            recordings.append(item)
     return {"recordings": recordings}
 
 
@@ -702,7 +766,10 @@ def api_results(_body, _query):
     """The committed results (data/results.json), as the leaderboard page and the demo show them."""
     if not RESULTS_FILE.is_file():
         raise BadRequest("No results file: run uv run scripts/build_results.py")
-    return json.loads(RESULTS_FILE.read_text())
+    data = _load_saved_object(RESULTS_FILE, MAX_RUN_BYTES)
+    if data is None:
+        raise BadRequest("The results file is unreadable: run uv run scripts/build_results.py")
+    return data
 
 
 ROUTES = {
@@ -740,6 +807,17 @@ CSP = (
 )
 
 
+def _reject_json_constant(value):
+    raise ValueError("Invalid JSON constant %s" % value)
+
+
+def _json_float(value):
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("JSON number is out of range")
+    return number
+
+
 class LocalServer(ThreadingHTTPServer):
     # Module graphs and map previews arrive in bursts. The default five-connection
     # backlog can reset parallel asset downloads on a cold browser load.
@@ -758,7 +836,7 @@ class Handler(BaseHTTPRequestHandler):
         log(fmt % args)
 
     def _send(self, status, payload, content_type="application/json", nonce=""):
-        data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+        data = payload if isinstance(payload, bytes) else json.dumps(payload, allow_nan=False).encode()
         # Header values must stay on one line, including types from the MIME registry.
         safe_content_type = content_type.replace("\r", "").replace("\n", "")
         if safe_content_type != content_type:
@@ -769,14 +847,21 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", CSP % (nonce or "none"))
+        self.send_header("Content-Security-Policy", CSP % nonce if nonce else CSP.replace(" 'nonce-%s'", ""))
         self.end_headers()
         self.wfile.write(data)
 
     def _handle(self, method):
-        parsed = urlparse(self.path)
+        try:
+            parsed = urlparse(self.path)
+            query = parse_qs(parsed.query, max_num_fields=MAX_QUERY_FIELDS)
+        except ValueError:
+            return self._send(400, {"error": "Invalid request URL"})
+        if parsed.scheme or parsed.netloc:
+            return self._send(400, {"error": "Expected a local request path"})
         path = parsed.path.rstrip("/") or "/"
-        query = parse_qs(parsed.query)
+        if self.headers.get("Transfer-Encoding") is not None:
+            return self._send(400, {"error": "Transfer-Encoding is not supported"})
         raw_lengths = self.headers.get_all("Content-Length") if hasattr(self.headers, "get_all") else None
         if raw_lengths and len(raw_lengths) > 1:
             return self._send(400, {"error": "Invalid Content-Length"})
@@ -799,21 +884,18 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if length > (MAX_RECORDING_BYTES if path == "/api/recordings/save" else MAX_BODY_BYTES):
                     raise BadRequest("Request body too large")
-                body = json.loads(self.rfile.read(length).decode() or "{}") if length else {}
-                if not isinstance(body, dict):
-                    raise BadRequest("Body must be a JSON object")
+                body = self._read_body(length)
                 self._send(200, route(body, query))
             except BadRequest as err:
                 self._send(400, {"error": str(err)})
             except JevError as err:
                 status = err.status if err.status in (401, 402, 403, 422, 429, 504) else 502
                 self._send(status, {"error": str(err), "jev_status": err.status})
-            except (KeyError, ValueError, TypeError) as err:
+            except (BrokenPipeError, ConnectionResetError):
+                return
+            except Exception:  # noqa: BLE001
                 traceback.print_exc()
-                self._send(400, {"error": "Bad request: %s" % err})
-            except Exception as err:  # noqa: BLE001
-                traceback.print_exc()
-                self._send(500, {"error": "Server error: %s" % err})
+                self._send(500, {"error": "Internal server error"})
             return
         if method != "GET":
             return self._send(404, {"error": "Not found"})
@@ -832,6 +914,20 @@ class Handler(BaseHTTPRequestHandler):
         if ctype.startswith("text/") or ctype.endswith("javascript"):
             ctype += "; charset=utf-8"
         self._send(200, Path(file).read_bytes(), ctype)
+
+    def _read_body(self, length):
+        if not length:
+            return {}
+        raw = self.rfile.read(length)
+        if len(raw) != length:
+            raise BadRequest("Request body is incomplete")
+        try:
+            body = json.loads(raw.decode("utf-8"), parse_constant=_reject_json_constant, parse_float=_json_float)
+        except (ValueError, RecursionError):
+            raise BadRequest("Body must be valid UTF-8 JSON") from None
+        if not isinstance(body, dict):
+            raise BadRequest("Body must be a JSON object")
+        return body
 
     def do_GET(self):
         self._handle("GET")

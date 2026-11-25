@@ -8,6 +8,7 @@ import { parseArgs } from "node:util";
 import { driverScores, driveScores } from "../static/js/bench/scores.js";
 import { driverDisplayName } from "../static/js/lab/results.js";
 import { loopbackPort } from "./cli_tools.mjs";
+import { publishedDrives } from "./driver_comparison.mjs";
 
 const usage = [
   "Usage: node --experimental-default-type=module scripts/check_driver.mjs --agent path [options]",
@@ -16,6 +17,7 @@ const usage = [
   "  --only <id,id>             run only these drive ids",
   "  --track <guarded|open|all> track(s) to evaluate (default: all)",
   "  --no-baselines             skip running Rules and Cautious baselines",
+  "  --no-published             skip published model comparisons",
   "  --json                     print machine-readable JSON output",
   "  --check                    exit with status 1 if any drive of your driver fails",
   "  --port <port>              local server port (default: 8331)",
@@ -32,6 +34,7 @@ try {
       port: { type: "string" },
       track: { type: "string", default: "all" },
       "no-baselines": { type: "boolean", default: false },
+      "no-published": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       check: { type: "boolean", default: false },
       help: { type: "boolean", short: "h" },
@@ -54,6 +57,10 @@ if (!["guarded", "open", "all"].includes(values.track)) {
   console.error(`Unknown --track "${values.track}": use guarded, open, or all.`);
   process.exit(1);
 }
+if (!["challenges", "road-tests", "all"].includes(values.set)) {
+  console.error(`Unknown --set "${values.set}": use challenges, road-tests, or all.`);
+  process.exit(1);
+}
 
 const tracks = values.track === "all" ? ["guarded", "open"] : [values.track];
 let port;
@@ -64,7 +71,6 @@ try {
   process.exit(1);
 }
 const arena = fileURLToPath(new URL("./arena_node.mjs", import.meta.url));
-const leaderboard = JSON.parse(readFileSync(new URL("../data/results.json", import.meta.url), "utf8"));
 const outputDir = mkdtempSync(join(tmpdir(), "jev-driver-"));
 const output = join(outputDir, "result.json");
 const arenaArgs = ["--experimental-default-type=module", arena, "--set", values.set, "--json", output, "--port", port];
@@ -78,21 +84,6 @@ function evaluate(track, label, ...options) {
   });
   const { summary, results } = JSON.parse(readFileSync(output, "utf8"));
   return { summary, drives: new Map(results.map((drive) => [`${drive.map}/${drive.challenge}`, drive])) };
-}
-
-function publishedDrives(track, selected) {
-  const rows = leaderboard.rows.filter((r) => r.recording && !r.map && r.track === track);
-  const drivers = new Map();
-  rows.sort((a, b) => b.date.localeCompare(a.date));
-  for (const row of rows) {
-    if (!drivers.has(row.driver)) drivers.set(row.driver, new Map());
-    const drives = drivers.get(row.driver);
-    for (const drive of row.drives) {
-      const key = `${drive.map}/${drive.id}`;
-      if (selected.has(key) && !drives.has(key)) drives.set(key, { ...drive, date: row.date });
-    }
-  }
-  return drivers;
 }
 
 function failureDetails(drive) {
@@ -111,13 +102,16 @@ function verdict(drive) {
 }
 
 try {
+  const leaderboard = values["no-published"]
+    ? { rows: [] }
+    : JSON.parse(readFileSync(new URL("../data/results.json", import.meta.url), "utf8"));
   let anyFailed = false;
   const jsonTracks = {};
   for (const track of tracks) {
     const custom = evaluate(track, "your driver", "--agent", values.agent);
     const rules = values["no-baselines"] ? null : evaluate(track, "Rules", "--brain", "rules");
     const cautious = values["no-baselines"] ? null : evaluate(track, "Cautious", "--brain", "cautious");
-    const published = publishedDrives(track, custom.drives);
+    const published = publishedDrives(leaderboard, track, custom.drives);
     const customList = [...custom.drives.values()];
     const customScores = driverScores(customList);
     if (customList.some((drive) => !drive.pass)) anyFailed = true;

@@ -224,6 +224,22 @@ assert.equal(steerFromDrag(NaN), 0);
   assert.equal(input.left, 1, "two sources steering the same way clamp at full lock");
   near(input.throttle, 0.8);
   assert.equal(input.hardBrake, true);
+  let pulse = 1;
+  input.addSource({
+    get state() {
+      return { steer: 0, throttle: pulse, brake: 0, hardBrake: false };
+    },
+    stepped() {
+      const had = pulse > 0;
+      pulse = 0;
+      return had;
+    },
+  });
+  input.poll();
+  near(input.throttle, 1);
+  input.stepped();
+  near(input.throttle, 0.8); // consuming a pulse keeps the poll-only source's sample
+  assert.equal(input.hardBrake, true);
   dialogOpen = true;
   input.poll();
   dialogOpen = false;
@@ -269,6 +285,97 @@ assert.equal(steerFromDrag(NaN), 0);
   const fullSteer = new World(map, { parked: 0, pedestrians: 0 });
   for (let i = 0; i < 120; i++) fullSteer.stepManual(1 / 60, { left: 1 });
   near(steerWorld.ego.delta / fullSteer.ego.delta, 0.5, 1e-3);
+}
+
+// Bindings must remain safe when a page pauses input or a device sends invalid samples.
+{
+  const { getDeadZone, setDeadZone } = await import("../static/js/ui/gamepad.js");
+  const saved = getDeadZone();
+  assert.equal(setDeadZone(-1), 0, "negative saved dead zones cannot invert the stick");
+  assert.equal(setDeadZone(2), 0.5, "at least half the stick travel remains available");
+  assert.equal(setDeadZone(NaN), 0.5, "non-finite settings do not replace the last dead zone");
+  setDeadZone(saved);
+  assert.equal(buttonValue(NaN), 0, "legacy non-finite gamepad button values are released");
+  assert.deepEqual(
+    pressedEdges([true, true], [button(0), button(0)]).held,
+    [false, false],
+    "every button can be released in one sample",
+  );
+
+  let live = pad();
+  let blocked = false;
+  const gp = new GamepadInput({ getPads: () => [live], blocked: () => blocked });
+  gp.poll();
+  live = pad({ axes: [1, 0] });
+  assert.equal(gp.poll().steer, 1);
+  blocked = true;
+  gp.poll();
+  blocked = false;
+  assert.equal(gp.poll().steer, 0, "held steering does not resume after closing a modal");
+  live = pad();
+  gp.poll();
+  live = pad({ axes: [-1, 0] });
+  assert.equal(gp.poll().steer, -1, "neutral restores steering after modal dismissal");
+
+  let disconnected = 0;
+  const unreliable = new GamepadInput({
+    getPads: () => {
+      if (!live) throw new Error("Gamepad permission revoked");
+      return [live];
+    },
+    onDisconnect: () => disconnected++,
+  });
+  unreliable.poll();
+  live = null;
+  assert.equal(unreliable.poll().steer, 0);
+  assert.equal(disconnected, 1, "Gamepad API failure disconnects an active device cleanly");
+
+  const input = new Input();
+  input.addSource({ state: { steer: 3, throttle: 4, brake: Infinity } });
+  input.addSource({ state: { steer: -0.5, throttle: NaN, brake: -3 } });
+  assert.deepEqual(
+    input.poll(),
+    { steer: 0.5, throttle: 1, brake: 0, hardBrake: false },
+    "invalid source magnitudes stay within the manual input contract",
+  );
+  window.dispatchEvent(new Event("blur"));
+  assert.equal(input.anyDriving, false, "window blur resets the last analog sample");
+  let released = 0;
+  input.keys.add("w");
+  input.addSource({ release: () => released++ });
+  document.hidden = true;
+  input.poll();
+  assert.equal(released, 1, "hidden pages release held touch controls");
+  assert.equal(input.anyDriving, false, "a visibility change clears held keyboard input before physics");
+  document.hidden = false;
+}
+
+{
+  const { preference } = await import("../static/js/ui/preferences.js");
+  const entries = new Map();
+  const storage = { getItem: (key) => entries.get(key), setItem: (key, value) => entries.set(key, value) };
+  const volume = preference("volume", 100, storage);
+  assert.equal(volume.read(), 100, "new profiles receive the supplied fallback");
+  volume.write(0);
+  assert.equal(volume.read(), 0, "muted volume survives preference serialization");
+  const wipers = preference("wipers", true, storage);
+  wipers.write(false);
+  assert.equal(wipers.read(), false, "false preferences are preserved");
+  assert.equal(volume.read(), 0, "preferences for different controls are independent");
+  volume.write("25");
+  assert.equal(volume.read(), 100, "stored values of the wrong type fall back");
+  entries.set("jev-fsd-ui-volume", "broken JSON");
+  assert.equal(volume.read(), 100, "a corrupt preference does not break startup");
+  const blocked = preference("volume", 65, {
+    getItem() {
+      throw new Error("Storage denied");
+    },
+    setItem() {
+      throw new Error("Storage denied");
+    },
+  });
+  blocked.write(0);
+  assert.equal(blocked.read(), 65, "denied storage is safe to read and write");
 }
 
 console.log("gamepad and touch input: ok");

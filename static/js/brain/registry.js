@@ -21,6 +21,7 @@ export function registerAgent({
   definitions.set(id, { id, label, create, description, builtin, available, note, llm, decision });
 }
 export const agentDefinitions = () => [...definitions.values()];
+export const agentDefinition = (id) => definitions.get(id);
 export const createAgents = () => Object.fromEntries(agentDefinitions().map((d) => [d.id, d.create()]));
 // An unavailable agent stays listed (people should know it exists) but cannot be selected.
 export function setAgentAvailability(id, available, note = "") {
@@ -62,6 +63,8 @@ registerAgent({
 
 export function validAgentChoice(result, eligible) {
   return (
-    result && ["drive", "stop", "reverse"].includes(result.motion) && eligible.some((c) => c.id === result.candidateId)
+    !!result &&
+    ["drive", "stop", "reverse"].includes(result.motion) &&
+    eligible.some((c) => c.id === result.candidateId)
   );
 }

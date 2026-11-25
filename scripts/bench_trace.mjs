@@ -1,8 +1,8 @@
 // Compare two captures from bench_node.mjs --trace.
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { checkFiles, readJson, writeArtifact } from "./cli_tools.mjs";
 
 const VERSION = 1;
 const STATE_TOLERANCE = 1e-9;
@@ -12,15 +12,16 @@ const USAGE = [
   "  --tolerance <N>  numeric state tolerance (default 1e-9)",
   "  --summary        include aggregate max position, heading, and speed drift across all ticks",
   "  --window <k>     include k context ticks before and after the first divergence",
+  "  --position-tolerance <N>  tolerance for x and y in metres",
+  "  --heading-tolerance <N>   tolerance for heading in radians",
+  "  --speed-tolerance <N>     tolerance for speed in metres per second",
+  "  --exact                   treat every state difference as a divergence",
+  "  --output <path[.gz]>      write the comparison to a file",
+  "  --compact                 emit JSON without indentation",
   "  --help, -h       show this help",
 ].join("\n");
 
 const pose = ({ x, y, psi, v }) => ({ x, y, heading: psi, speed: v });
-
-function readTraceFile(path) {
-  const raw = readFileSync(path);
-  return JSON.parse(path.endsWith(".gz") ? gunzipSync(raw).toString("utf8") : raw.toString("utf8"));
-}
 
 function traceSettings(config, mapSha) {
   const { engine: _engine, ...settings } = config;
@@ -46,14 +47,17 @@ export function captureTrace(config, mapSha, scenario) {
     write(path, result) {
       const { pass, arrived, time_s } = result;
       const text = JSON.stringify({ ...trace, result: { pass, arrived, time_s } });
-      writeFileSync(path, path.endsWith(".gz") ? gzipSync(text, { level: 9 }) : text);
+      writeArtifact(path, text, { gzip: path.endsWith(".gz") });
     },
   };
 }
 
 function difference(left, right, tolerance, path = "") {
   if (left === right) return null;
-  if (typeof left === "number" && typeof right === "number" && Math.abs(left - right) <= tolerance) return null;
+  if (typeof left === "number" && typeof right === "number") {
+    const threshold = typeof tolerance === "function" ? tolerance(path) : tolerance;
+    if (Math.abs(left - right) <= threshold) return null;
+  }
   if (
     left &&
     right &&
@@ -116,7 +120,7 @@ export function readTraceScenario(path, destination, config, mapSha) {
   const destinationFile = statSync(destination, { throwIfNoEntry: false });
   if (destinationFile?.dev === sourceFile.dev && destinationFile.ino === sourceFile.ino)
     throw new Error("--trace-from and --trace need different files.");
-  const trace = readTraceFile(path);
+  const trace = readJson(path);
   if (trace?.version !== VERSION || typeof trace.inputs?.scenario?.id !== "string")
     throw new Error("Invalid benchmark trace.");
   const { scenario, ...settings } = trace.inputs;
@@ -125,11 +129,36 @@ export function readTraceScenario(path, destination, config, mapSha) {
   return scenario;
 }
 
-export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summary = false, window = null } = {}) {
-  if (!Number.isFinite(tolerance) || tolerance < 0) throw new Error("Tolerance must be a finite nonnegative number.");
+export function compareTraces(
+  left,
+  right,
+  {
+    tolerance = STATE_TOLERANCE,
+    positionTolerance,
+    headingTolerance,
+    speedTolerance,
+    summary = false,
+    window = null,
+  } = {},
+) {
+  const tolerances = [tolerance, positionTolerance, headingTolerance, speedTolerance];
+  if (tolerances.some((v) => v !== undefined && (!Number.isFinite(v) || v < 0)))
+    throw new Error("Tolerance must be a finite nonnegative number.");
+  const stateTolerance = (path) => {
+    const field = path.split(".").at(-1);
+    // Numeric actor IDs identify entities, even when the numeric pose tolerance is large.
+    if (field === "id") return 0;
+    if (field === "x" || field === "y") return positionTolerance ?? tolerance;
+    if (field === "heading") return headingTolerance ?? tolerance;
+    if (field === "speed") return speedTolerance ?? tolerance;
+    return tolerance;
+  };
   if (window !== null && (!Number.isSafeInteger(window) || window < 0))
     throw new Error("Window must be a nonnegative integer.");
-  for (const trace of [left, right]) {
+  for (const [side, trace] of [
+    ["left", left],
+    ["right", right],
+  ]) {
     if (
       trace?.version !== VERSION ||
       typeof trace.inputs?.scenario?.id !== "string" ||
@@ -139,7 +168,9 @@ export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summar
       typeof trace.result.arrived !== "boolean" ||
       !Number.isFinite(trace.result.time_s)
     )
-      throw new Error("Invalid benchmark trace.");
+      throw new Error(`Invalid benchmark trace on the ${side}.`);
+    const badStep = trace.steps.findIndex((step) => !step?.ego || !Array.isArray(step.traffic));
+    if (badStep !== -1) throw new Error(`Invalid benchmark trace on the ${side} at tick ${badStep}.`);
   }
   const mismatch = difference(left.inputs, right.inputs, 0);
   if (mismatch) throw new Error(`Benchmark trace inputs differ at ${mismatch.path}.`);
@@ -150,24 +181,31 @@ export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summar
   const egoDrift = summary ? emptyDriftStats() : null;
   const trafficDrift = summary ? emptyDriftStats() : null;
   let ticksOverTolerance = 0;
+  let divergentDecisionTicks = 0;
+  let unmatchedTrafficTicks = 0;
   const shared = Math.min(left.steps.length, right.steps.length);
   for (let tick = 0; tick < shared; tick++) {
     const { decision: aDecision, ...aState } = left.steps[tick];
     const { decision: bDecision, ...bState } = right.steps[tick];
     const exact = exactState ? null : difference(aState, bState, 0);
     if (exact) exactState = { tick, ...exact };
-    const state = !stateOverTolerance || summary ? difference(aState, bState, tolerance) : null;
+    const state = !stateOverTolerance || summary ? difference(aState, bState, stateTolerance) : null;
     if (state) {
       if (!stateOverTolerance) stateOverTolerance = { tick, ...state };
       if (summary) ticksOverTolerance++;
     }
-    const choice = decision ? null : difference(aDecision, bDecision, 0, "decision");
-    if (choice) decision = { tick, ...choice };
+    const choice = !decision || summary ? difference(aDecision, bDecision, 0, "decision") : null;
+    if (choice) {
+      if (!decision) decision = { tick, ...choice };
+      if (summary) divergentDecisionTicks++;
+    }
     if (summary) {
       recordPoseDrift(egoDrift, aState.ego, bState.ego, tick);
       const aTraffic = Array.isArray(aState.traffic) ? aState.traffic : [];
       const bTraffic = Array.isArray(bState.traffic) ? bState.traffic : [];
       const bById = new Map(bTraffic.map((car, index) => [car?.id ?? index, car]));
+      if (aTraffic.length !== bTraffic.length || aTraffic.some((car, index) => !bById.has(car?.id ?? index)))
+        unmatchedTrafficTicks++;
       for (const [index, aCar] of aTraffic.entries()) {
         recordPoseDrift(trafficDrift, aCar, bById.get(aCar?.id ?? index), tick);
       }
@@ -188,6 +226,15 @@ export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summar
     resultDifference: difference(left.result, right.result, 0, "result"),
     exactState,
     stateTolerance: tolerance,
+    ...(positionTolerance !== undefined || headingTolerance !== undefined || speedTolerance !== undefined
+      ? {
+          poseTolerances: {
+            position: positionTolerance ?? tolerance,
+            heading: headingTolerance ?? tolerance,
+            speed: speedTolerance ?? tolerance,
+          },
+        }
+      : {}),
     stateOverTolerance,
     decision,
   };
@@ -195,6 +242,8 @@ export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summar
     result.summary = {
       sharedTicks: shared,
       ticksOverTolerance,
+      divergentDecisionTicks,
+      unmatchedTrafficTicks,
       ego: egoDrift,
       traffic: trafficDrift,
       maxPositionDrift: Math.max(egoDrift.maxPositionDrift, trafficDrift.maxPositionDrift),
@@ -203,11 +252,12 @@ export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summar
     };
   }
   if (window !== null) {
-    const anchor = Math.min(
+    const diverged = Math.min(
       stateOverTolerance?.tick ?? Infinity,
       decision?.tick ?? Infinity,
       lengthDifference?.tick ?? Infinity,
     );
+    const anchor = !Number.isFinite(diverged) && result.resultDifference ? shared - 1 : diverged;
     if (!Number.isFinite(anchor)) {
       result.window = null;
     } else {
@@ -222,7 +272,7 @@ export function compareTraces(left, right, { tolerance = STATE_TOLERANCE, summar
         if (leftStep && rightStep) {
           const { decision: aDecision, ...aState } = leftStep;
           const { decision: bDecision, ...bState } = rightStep;
-          stateDiff = difference(aState, bState, tolerance);
+          stateDiff = difference(aState, bState, stateTolerance);
           decisionDiff = difference(aDecision, bDecision, 0, "decision");
         }
         ticks.push({ tick, left: leftStep, right: rightStep, stateDiff, decisionDiff });
@@ -241,6 +291,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         summary: { type: "boolean" },
         tolerance: { type: "string" },
         window: { type: "string" },
+        "position-tolerance": { type: "string" },
+        "heading-tolerance": { type: "string" },
+        "speed-tolerance": { type: "string" },
+        exact: { type: "boolean" },
+        output: { type: "string" },
+        compact: { type: "boolean" },
         help: { type: "boolean", short: "h" },
       },
       allowPositionals: true,
@@ -250,21 +306,37 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exit(0);
     }
     if (positionals.length !== 2) throw new Error(USAGE);
-    let tolerance = STATE_TOLERANCE;
-    if (values.tolerance !== undefined) {
-      if (!values.tolerance.trim()) throw new Error("--tolerance must be a finite nonnegative number.");
-      tolerance = Number(values.tolerance);
-      if (!Number.isFinite(tolerance) || tolerance < 0)
-        throw new Error("--tolerance must be a finite nonnegative number.");
-    }
+    const numeric = (name) => {
+      if (values[name] === undefined) return undefined;
+      const n = values[name].trim() ? Number(values[name]) : NaN;
+      if (!Number.isFinite(n) || n < 0) throw new Error(`--${name} must be a finite nonnegative number.`);
+      return n;
+    };
+    const names = ["tolerance", "position-tolerance", "heading-tolerance", "speed-tolerance"];
+    if (values.exact && names.some((name) => values[name] !== undefined))
+      throw new Error("--exact cannot be combined with tolerance options.");
+    const [tolerance, positionTolerance, headingTolerance, speedTolerance] = names.map(numeric);
     let window = null;
     if (values.window !== undefined) {
       if (!/^\d+$/.test(values.window)) throw new Error("--window must be a nonnegative integer.");
       window = Number(values.window);
     }
-    const [left, right] = positionals.map((file) => readTraceFile(file));
-    const comparison = compareTraces(left, right, { tolerance, summary: Boolean(values.summary), window });
-    console.log(JSON.stringify(comparison, null, 2));
+    if (values.output !== undefined) {
+      if (!values.output) throw new Error("--output needs a path.");
+      for (const file of positionals) checkFiles({ trace: file }, { output: values.output });
+    }
+    const [left, right] = positionals.map(readJson);
+    const comparison = compareTraces(left, right, {
+      tolerance: values.exact ? 0 : tolerance,
+      positionTolerance,
+      headingTolerance,
+      speedTolerance,
+      summary: Boolean(values.summary),
+      window,
+    });
+    const output = JSON.stringify(comparison, null, values.compact ? 0 : 2);
+    if (values.output) writeArtifact(values.output, `${output}\n`, { gzip: values.output.endsWith(".gz") });
+    else console.log(output);
     if (
       values.check &&
       (comparison.stateOverTolerance ||

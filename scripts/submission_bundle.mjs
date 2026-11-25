@@ -15,6 +15,15 @@ export function readSubmission(bundle) {
   if (report?.manifest?.format !== "jev-run-manifest/2" || !same(report.manifest, recording.header.manifest))
     throw new Error("The report and recording must include the same v2 run manifest.");
   if (!Array.isArray(report.results) || !report.results.length) throw new Error("The report has no drives.");
+  if (report.results.some((drive) => typeof drive?.challenge !== "string" || !drive.challenge.trim()))
+    throw new Error("Every report drive needs a challenge ID.");
+  if (report.results.some((drive) => typeof drive.pass !== "boolean"))
+    throw new Error("Every report drive needs a boolean verdict.");
+  const reported = report.results.map((drive) => drive.challenge).sort();
+  const declared = recording.header.arena.ids;
+  if (new Set(reported).size !== reported.length) throw new Error("The report repeats a challenge ID.");
+  if (!Array.isArray(declared) || !same([...declared].sort(), reported))
+    throw new Error("The report must cover the challenge IDs declared by the recording.");
   return bundle;
 }
 
@@ -40,6 +49,7 @@ export function verifySubmissionManifest(recording, current, ids) {
   const declared = header.arena.ids;
   if (
     !ids.length ||
+    new Set(ids).size !== ids.length ||
     !Array.isArray(declared) ||
     !same([...declared].sort(), sorted) ||
     !same(keys(results), sorted) ||
@@ -48,6 +58,8 @@ export function verifySubmissionManifest(recording, current, ids) {
     throw new Error("The submission must contain every declared drive and only those drives.");
   if (Object.values(results).some((result) => result?.stopped || result?.simulation_error))
     throw new Error("The submission includes a stopped drive or simulation error.");
+  if (Object.entries(results).some(([id, result]) => result?.challenge !== id))
+    throw new Error("A recording result does not identify its declared drive.");
 }
 
 export function verifySubmissionReport(submitted, replayed) {

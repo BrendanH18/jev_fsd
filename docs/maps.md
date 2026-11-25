@@ -79,6 +79,44 @@ some) and moved back the 202 signal and 2 stop lines set back from those streets
 build of Kitsilano from its cached OSM with the fixed code gives the same roads, lanes and controls
 as its migrated pack, except for one stop line 1 cm away (packs store lengths to the centimetre).
 
+### Rebuild and verify maps offline
+
+Use a separate `--maps-dir` when working on an extract. `AREA` is a preset name or the bounding
+box in west, south, east, north order. A local extract uses the supplied area's coordinate frame,
+so use its corresponding box.
+
+```sh
+uv run scripts/fetch_map.py kitsilano --maps-dir /tmp/jev-maps --osm-file /path/to/kitsilano.osm
+uv run scripts/fetch_map.py kitsilano --maps-dir /tmp/jev-maps --offline
+uv run scripts/fetch_map.py kitsilano --maps-dir /tmp/jev-maps --crossings --osm-file /path/to/kitsilano.osm
+```
+
+`--osm-file` reads the XML in place and leaves the raw download cache alone. The first command builds
+every layer against the new pack. The second command reports on the prepared files. Add `--force`
+to rebuild from raw XML saved under its cache name in the maps directory. `--offline` also keeps
+layer flags such as `--transit` and `--restrictions` from refreshing the source online. For an
+offline repair of a damaged layer, supply the matching XML or restore the layer from a known-good copy.
+The last command keeps the existing street pack and rebuilds crossings against it. A missing or
+invalid pack is rebuilt together with all its layers. A failed import that leaves a
+`.layers-pending` marker can be retried with the same area and source.
+
+Use the migration preview to see which v5 sources would become v6. With `--output-dir`, the script
+can stage migrated packs in a separate directory while preserving the source files. Use
+`--keep-source` to preserve the v5 files when migrating beside them.
+
+```sh
+uv run scripts/migrate_packs.py --maps-dir /path/to/v5 --output-dir /tmp/v6 --check
+uv run scripts/migrate_packs.py --maps-dir /path/to/v5 --output-dir /tmp/v6
+```
+
+The [bundled map checks](../tests/test_map_data_quality.py) validate coordinate frames, graph and
+control references, and how committed layers attach to the packs. They read the prepared JSON
+directly and never need the raw XML cache.
+
+```sh
+scripts/boat-check.sh -- uv run --locked python -m unittest discover -s tests -p test_map_data_quality.py
+```
+
 ### Bus and streetcar routes
 
 Each bundled map has its bus and trolleybus routes and their stops beside its pack, in

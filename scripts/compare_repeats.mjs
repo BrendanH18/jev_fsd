@@ -45,6 +45,7 @@ const AUDIT_FIELDS = [
   "closure_entries",
   "officer_violations",
 ];
+const usage = "Usage: node scripts/compare_repeats.mjs [--plan FILE] [--driver ID] RECORDING RECORDING [...]";
 
 function providerOptions(request) {
   const { messages: _messages, system: _system, ...settings } = request;
@@ -142,6 +143,18 @@ function readRepeat(path) {
   const { header, results } = recording;
   const track = header.arena?.track || "guarded";
   if (!header.arena) throw new Error(`${path} is a benchmark recording. Use arena recordings for this report.`);
+  if (!["guarded", "open"].includes(track)) throw new Error(`${path} declares an unknown arena track.`);
+  if (
+    Object.values(results).some(
+      (drive) =>
+        typeof drive?.challenge !== "string" ||
+        !drive.challenge.trim() ||
+        typeof drive.pass !== "boolean" ||
+        !Array.isArray(drive.failures) ||
+        drive.failures.some((reason) => typeof reason !== "string"),
+    )
+  )
+    throw new Error(`${path} has an invalid challenge result.`);
   const drives = Object.values(results).sort((a, b) => a.challenge.localeCompare(b.challenge));
   const plan = header.arena.ids;
   const planned = new Set(Array.isArray(plan) ? plan : []);
@@ -233,6 +246,9 @@ function readRepeat(path) {
     cost_usd: runCost(drives),
     drives: drives.map((drive) => ({
       id: drive.challenge,
+      pass: drive.pass,
+      time_s: Number.isFinite(drive.time_s) ? drive.time_s : null,
+      cost_usd: Number.isFinite(drive.cost_usd) ? drive.cost_usd : null,
       score: driveScores(drive).score,
       failures: [...new Set(drive.failures)],
     })),
@@ -250,7 +266,7 @@ function spread(values) {
   };
 }
 
-function compare(paths, planPath) {
+function compare(paths, planPath, selectedDriver) {
   if (new Set(paths.map((path) => realpathSync(path))).size !== paths.length)
     throw new Error("List each recording once.");
   const runs = paths.map(readRepeat);
@@ -266,6 +282,7 @@ function compare(paths, planPath) {
     );
   const groups = Map.groupBy(runs, (run) => run.driver);
   if (planPath) requirePlan(runs, groups, readPlan(planPath));
+  if (selectedDriver && !groups.has(selectedDriver)) throw new Error(`Unknown driver ${selectedDriver}.`);
   return {
     scores_version: SCORES_VERSION,
     suite_version: first.suite_version,
@@ -273,80 +290,93 @@ function compare(paths, planPath) {
     engine: first.engine,
     track: first.track,
     drives_per_repeat: first.drives.length,
-    drivers: [...groups].map(([driver, repeats]) => {
-      const { model, prompt, provider_settings } = repeats[0];
-      if (
-        repeats.some(
-          (run) => run.model !== model || run.prompt !== prompt || run.provider_settings !== provider_settings,
+    drivers: [...groups]
+      .map(([driver, repeats]) => {
+        const { model, prompt, provider_settings } = repeats[0];
+        if (
+          repeats.some(
+            (run) => run.model !== model || run.prompt !== prompt || run.provider_settings !== provider_settings,
+          )
         )
-      )
-        throw new Error(`Repeats for ${driver} need the same model, prompt and provider settings.`);
-      const reasons = new Set(repeats.flatMap((run) => Object.keys(run.audited_failures)));
-      const failedDrives = new Set(repeats.flatMap((run) => run.failed_drives));
-      const fields = [
-        "score",
-        "passed",
-        "decisions",
-        "model_share",
-        "fallback_share",
-        "flagged_choices",
-        "flags_per_decision",
-        "safety_brakes",
-        "fallbacks",
-        "cost_usd",
-      ];
-      return {
-        driver,
-        model,
-        repeats: repeats.length,
-        ...Object.fromEntries(fields.map((field) => [field, spread(repeats.map((run) => run[field]))])),
-        audited_failures: Object.fromEntries(
-          [...reasons]
-            .sort()
-            .map((reason) => [reason, spread(repeats.map((run) => run.audited_failures[reason] || 0))]),
-        ),
-        audit_totals: Object.fromEntries(
-          AUDIT_FIELDS.filter((field) => repeats.some((run) => Object.hasOwn(run.audits, field))).map((field) => [
-            field,
-            spread(repeats.map((run) => run.audits[field] ?? 0)),
-          ]),
-        ),
-        failures_by_drive: Object.fromEntries(
-          [...failedDrives].sort().map((id) => [id, repeats.filter((run) => run.failed_drives.includes(id)).length]),
-        ),
-        by_drive: Object.fromEntries(
-          repeats[0].drives.map(({ id }, index) => {
-            const matched = repeats.map((run) => run.drives[index]);
-            const failureCounts = new Map();
-            for (const drive of matched)
-              for (const reason of drive.failures) failureCounts.set(reason, (failureCounts.get(reason) ?? 0) + 1);
-            return [
-              id,
-              {
-                score: spread(matched.map((drive) => drive.score)),
-                failure_reasons: Object.fromEntries([...failureCounts].sort(([a], [b]) => a.localeCompare(b))),
-              },
-            ];
-          }),
-        ),
-        files: repeats.map((run) => run.path),
-        runs: repeats.map((run) => ({
-          file: run.path,
-          ...Object.fromEntries(fields.map((field) => [field, run[field]])),
-          failed_drives: run.failed_drives,
-          audited_failures: run.audited_failures,
-          audit_totals: run.audits,
-        })),
-      };
-    }),
+          throw new Error(`Repeats for ${driver} need the same model, prompt and provider settings.`);
+        const reasons = new Set(repeats.flatMap((run) => Object.keys(run.audited_failures)));
+        const failedDrives = new Set(repeats.flatMap((run) => run.failed_drives));
+        const fields = [
+          "score",
+          "passed",
+          "decisions",
+          "model_share",
+          "fallback_share",
+          "flagged_choices",
+          "flags_per_decision",
+          "safety_brakes",
+          "fallbacks",
+          "cost_usd",
+        ];
+        return {
+          driver,
+          model,
+          repeats: repeats.length,
+          ...Object.fromEntries(fields.map((field) => [field, spread(repeats.map((run) => run[field]))])),
+          audited_failures: Object.fromEntries(
+            [...reasons]
+              .sort()
+              .map((reason) => [reason, spread(repeats.map((run) => run.audited_failures[reason] || 0))]),
+          ),
+          audit_totals: Object.fromEntries(
+            AUDIT_FIELDS.filter((field) => repeats.some((run) => Object.hasOwn(run.audits, field))).map((field) => [
+              field,
+              spread(repeats.map((run) => run.audits[field] ?? 0)),
+            ]),
+          ),
+          failures_by_drive: Object.fromEntries(
+            [...failedDrives].sort().map((id) => [id, repeats.filter((run) => run.failed_drives.includes(id)).length]),
+          ),
+          by_drive: Object.fromEntries(
+            repeats[0].drives.map(({ id }, index) => {
+              const matched = repeats.map((run) => run.drives[index]);
+              const failureCounts = new Map();
+              for (const drive of matched)
+                for (const reason of drive.failures) failureCounts.set(reason, (failureCounts.get(reason) ?? 0) + 1);
+              return [
+                id,
+                {
+                  score: spread(matched.map((drive) => drive.score)),
+                  verdicts: {
+                    passed: matched.filter((drive) => drive.pass).length,
+                    failed: matched.filter((drive) => !drive.pass).length,
+                  },
+                  time_s: spread(matched.map((drive) => drive.time_s)),
+                  cost_usd: spread(matched.map((drive) => drive.cost_usd)),
+                  failure_reasons: Object.fromEntries([...failureCounts].sort(([a], [b]) => a.localeCompare(b))),
+                },
+              ];
+            }),
+          ),
+          files: repeats.map((run) => run.path),
+          runs: repeats.map((run) => ({
+            file: run.path,
+            ...Object.fromEntries(fields.map((field) => [field, run[field]])),
+            failed_drives: run.failed_drives,
+            audited_failures: run.audited_failures,
+            audit_totals: run.audits,
+          })),
+        };
+      })
+      .filter(({ driver }) => !selectedDriver || driver === selectedDriver),
   };
 }
 
 try {
-  const { positionals: paths, values } = parseArgs({ options: { plan: { type: "string" } }, allowPositionals: true });
-  if (paths.length < 2)
-    throw new Error("Usage: node scripts/compare_repeats.mjs [--plan FILE] RECORDING RECORDING [...]");
-  console.log(JSON.stringify(compare(paths, values.plan), null, 2));
+  const { positionals: paths, values } = parseArgs({
+    options: { plan: { type: "string" }, driver: { type: "string" }, help: { type: "boolean", short: "h" } },
+    allowPositionals: true,
+  });
+  if (values.help) console.log(usage);
+  else {
+    if (paths.length < 2) throw new Error(usage);
+    console.log(JSON.stringify(compare(paths, values.plan, values.driver), null, 2));
+  }
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

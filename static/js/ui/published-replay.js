@@ -306,8 +306,12 @@ export function mountPublishedReplay(root) {
       if (signal.aborted) return;
       signal.addEventListener("abort", showDrive(player, replay).pause, { once: true });
     } catch (error) {
-      if (!signal.aborted)
-        player.replaceChildren(h("p", { role: "status" }, `Could not load the browser replay. ${error.message}.`));
+      if (!signal.aborted) {
+        player.replaceChildren(
+          h("p", { role: "status" }, `Could not load the browser replay. ${error.message}.`),
+          h("button", { type: "button", class: "chip-button", onclick: load }, "Retry replay"),
+        );
+      }
     }
   }
   select.onchange = load;
@@ -329,7 +333,7 @@ export function showDrive(root, replay, alignedTime) {
     "aria-label": "Overhead street map of the recorded drive",
   });
   const draw = streetView(canvas, replay);
-  const play = h("button", { class: "chip-button", type: "button" }, "Play replay");
+  const play = h("button", { class: "chip-button", type: "button", disabled: duration <= 0 }, "Play replay");
   const scrub = h("input", {
     type: "range",
     min: 0,
@@ -430,11 +434,15 @@ export function showDrive(root, replay, alignedTime) {
     if (message !== event.textContent) event.textContent = message;
     if (sparkline) drawSparkline(sparkline, frames, duration, time, flaggedTimes);
     if (logList && selectedIndex !== activeChoiceIndex) {
-      if (activeChoiceIndex >= 0 && logItems[activeChoiceIndex]) logItems[activeChoiceIndex].classList.remove("active");
+      if (activeChoiceIndex >= 0 && logItems[activeChoiceIndex]) {
+        logItems[activeChoiceIndex].classList.remove("active");
+        logItems[activeChoiceIndex].firstElementChild.removeAttribute("aria-current");
+      }
       activeChoiceIndex = selectedIndex;
       if (activeChoiceIndex >= 0 && logItems[activeChoiceIndex]) {
         const li = logItems[activeChoiceIndex];
         li.classList.add("active");
+        li.firstElementChild.setAttribute("aria-current", "step");
         const top = li.offsetTop - logList.offsetTop;
         if (top < logList.scrollTop || top + li.offsetHeight > logList.scrollTop + logList.clientHeight) {
           logList.scrollTop = Math.max(0, top - logList.clientHeight / 2 + li.offsetHeight / 2);
@@ -443,13 +451,18 @@ export function showDrive(root, replay, alignedTime) {
     }
     return ended;
   }
+  function pauseOnHide() {
+    if (document.hidden) pause();
+  }
   function pause() {
+    document.removeEventListener("visibilitychange", pauseOnHide);
     if (animation !== null) cancelAnimationFrame(animation);
     animation = null;
     play.textContent = time >= duration ? "Play again" : "Play replay";
   }
   function advance(now) {
-    if (render(((now - startedAt) / 1000) * speedRate)) pause();
+    if (!root.contains(canvas) || !root.isConnected || document.hidden) pause();
+    else if (render(((now - startedAt) / 1000) * speedRate)) pause();
     else animation = requestAnimationFrame(advance);
   }
   function togglePlay() {
@@ -458,6 +471,7 @@ export function showDrive(root, replay, alignedTime) {
       if (time >= duration) render(0);
       startedAt = performance.now() - (time * 1000) / speedRate;
       play.textContent = "Pause replay";
+      document.addEventListener("visibilitychange", pauseOnHide);
       animation = requestAnimationFrame(advance);
     }
   }

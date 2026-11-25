@@ -1,5 +1,3 @@
-import { flashControl } from "./night-flash.js";
-import { officerAt } from "./traffic-officer.js";
 // Power cuts: now and then a signal's lights go dark. Where they are out, every driver treats the
 // junction as an all-way stop: stop at the line, then go in turn, whoever stopped first going first
 // (the MTO Driver's Handbook: "If traffic lights are not working, treat the intersection as an
@@ -31,10 +29,12 @@ const NOTICE_M = 80;
 // id as its junction, and the signal's line and group.
 const darkOf = new WeakMap();
 export function darkControl(control, edgeId) {
-  let d = darkOf.get(control);
+  let approaches = darkOf.get(control);
+  if (!approaches) darkOf.set(control, (approaches = new Map()));
+  let d = approaches.get(edgeId);
   if (!d)
-    darkOf.set(
-      control,
+    approaches.set(
+      edgeId,
       (d = {
         type: "stop",
         all_way: true,
@@ -46,16 +46,6 @@ export function darkControl(control, edgeId) {
       }),
     );
   return d;
-}
-
-// The control a driver obeys in `world` where the map has `control`, on `edgeId`: an all-way stop for
-// a dark signal.
-export function controlAt(world, control, edgeId) {
-  // (a police officer directing traffic there keeps it a signal, whose directions they give: sim/traffic-officer.js)
-  if (control?.type === "signal" && world.officers?.list.length && officerAt(world, control.id)) return control;
-  return control?.type === "signal" && world.outages?.isDark(control.id)
-    ? darkControl(control, edgeId)
-    : flashControl(world, control, edgeId);
 }
 
 export class Outages {
@@ -79,6 +69,7 @@ export class Outages {
 
   // Turn a signal's lights off for `last` seconds (for good, by default: a challenge's).
   cut(id, last = Infinity) {
+    if (typeof last !== "number" || !(last > 0)) return null;
     if (this.isDark(id) || !this.world.map.intersections.has(id)) return null;
     const o = { id, since: this.world.t, left: last };
     this.list.push(o);

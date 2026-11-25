@@ -9,7 +9,7 @@
 // exhausted budget falls back to Rules for that decision, and a call that happened still counts.
 
 import { api } from "../common.js";
-import { agentDefinitions, setAgentAvailability } from "./registry.js";
+import { agentDefinition, agentDefinitions, setAgentAvailability } from "./registry.js";
 import { syncEndpointAgents, checkEndpoints, checkedStatus, defaultFrom } from "./endpoints.js";
 import { decisionResult } from "./jev.js";
 
@@ -38,13 +38,13 @@ export class DecisionBrain {
       { signal },
     );
     const meta = {
-      ...res.meta,
+      ...res?.meta,
       source: this.name,
       live_call: true,
       round_trip_ms: Math.round(performance.now() - started),
     };
     // The call happened, so the error carries its tokens, cost and trace into the Rules fallback.
-    if (res.invalid) throw Object.assign(new Error(`invalid answer: ${res.invalid}`), { meta, trace: res.trace });
+    if (res?.invalid) throw Object.assign(new Error(`invalid answer: ${res.invalid}`), { meta, trace: res.trace });
     return decisionResult(res, request, eligible, meta);
   }
 }
@@ -62,7 +62,7 @@ export function registerDecisionAgents(decision, { demo = false } = {}) {
   return syncEndpointAgents("decision", decision?.endpoints || [], decisionBrainFor);
 }
 export const decisionBrainFor = (id) => {
-  const e = agentDefinitions().find((d) => d.id === id)?.decision;
+  const e = agentDefinition(id)?.decision;
   return e ? new DecisionBrain(e) : null;
 };
 export const decisionIds = () => [

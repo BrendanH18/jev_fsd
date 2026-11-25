@@ -163,6 +163,9 @@ export default {
     if (world.officers?.enabled) stepOfficers(world, dt);
   },
   controlDirection: officerDirection,
+  controlReplace(world, control) {
+    return control?.type === "signal" && world.officers?.list.length && officerAt(world, control.id) ? control : null;
+  },
   controlAudit(world, control, edge, rc, past, entered) {
     const officer = officerAt(world, control.id);
     if (!officer) return false;

@@ -104,13 +104,13 @@ class Settings:
 
     @property
     def rpm(self) -> int:
-        value = _float(self.get("JEV_FSD_RPM"), 240)
-        return int(value) if value >= 0 else 240
+        value = _float(self.get("JEV_FSD_RPM"), 240.0)
+        return int(value) if value >= 0 and value.is_integer() else 240
 
     @property
     def npcs(self) -> int:
-        value = _float(self.get("JEV_FSD_NPCS"), 40)
-        return int(value) if value >= 0 else 40
+        value = _float(self.get("JEV_FSD_NPCS"), 40.0)
+        return int(value) if value >= 0 and value.is_integer() else 40
 
     @property
     def llm_endpoints_path(self) -> Path:
@@ -136,10 +136,11 @@ class Settings:
 
 def parse_bbox(value: Optional[str]) -> Optional[Tuple[float, float, float, float]]:
     """'W,S,E,N' or a preset name -> tuple, or None when missing/invalid."""
-    if not value:
+    if not isinstance(value, str) or not value.strip():
         return None
-    if value.strip().lower() in PRESET_BBOXES:
-        return PRESET_BBOXES[value.strip().lower()]
+    preset = PRESET_BBOXES.get(value.strip().lower())
+    if preset is not None:
+        return preset
     try:
         parts = [float(p) for p in value.split(",")]
     except ValueError:

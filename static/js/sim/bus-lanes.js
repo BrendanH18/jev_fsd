@@ -40,6 +40,8 @@ export function legalBusLane(
 export function routeBusLane(route, s, clock, curb = false, i = route.laneEdgeAt(s)) {
   const edge = route.map.edges.get(route.edges[i]);
   if (!edge) return null;
+  const lanes = (route.map.buslanes || []).filter((l) => l.edge === edge.id);
+  if (!lanes.length) return null;
   const starts = route.laneEdgeStarts(),
     remaining = starts[i + 1] - s;
   const turn = route.map.turnThrough(
@@ -47,8 +49,6 @@ export function routeBusLane(route, s, clock, curb = false, i = route.laneEdgeAt
     i,
     route.map.junctionNodes(route.map.intersections.get(edge.control?.id)),
   ).turn;
-  const lanes = (route.map.buslanes || []).filter((l) => l.edge === edge.id);
-  if (!lanes.length) return null;
   // (how far along this street the car is, having turned right into it: null if it did not)
   const before = i > 0 ? route.map.edges.get(route.edges[i - 1]) : null;
   const turnedIn =

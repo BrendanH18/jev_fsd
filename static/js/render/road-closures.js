@@ -82,14 +82,17 @@ const lampMaterial = new THREE.MeshStandardMaterial({
 const tentMaterials = TENT_COLORS.map(
   (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, side: THREE.DoubleSide }),
 );
+const signMaterials = new Map();
 
 function signMesh(map, width) {
   const g = new THREE.Group();
+  if (!signMaterials.has(map))
+    signMaterials.set(map, new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, roughness: 0.5 }));
   g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 6).translate(0, 1.1, 0), postMaterial));
   g.add(
     new THREE.Mesh(
       new THREE.PlaneGeometry(width, width).rotateY(-Math.PI / 2).translate(-0.05, 2.0, 0),
-      new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.5, roughness: 0.5 }),
+      signMaterials.get(map),
     ),
   );
   return g;
@@ -167,8 +170,8 @@ export function createRoadClosureMesh(closure, map) {
   g.name = `road-closure-${closure.id}`;
   for (const end of closure.ends) g.add(endMesh(closure, end));
   // festival tents along the block, alternately by each kerb
-  const e = map.edges.get(closure.edges[0]),
-    L = e.cum[e.cum.length - 1];
+  const e = map.edges.get(closure.edges[0]);
+  const L = e?.cum.at(-1) ?? 0;
   for (let k = 0, s = L * 0.3; s < L * 0.75 && k < 4; s += Math.max(12, L * 0.2), k++) {
     const side = k % 2 ? -1 : 1,
       lat = side > 0 ? e.asphalt[1] - 2 : e.asphalt[0] + 2,
@@ -202,6 +205,11 @@ export class RoadClosureView {
     for (const [key, m] of this.meshes)
       if (!keys.has(key)) {
         this.scene.remove(m);
+        const geometry = new Set();
+        m.traverse((child) => {
+          if (child.isMesh) geometry.add(child.geometry);
+        });
+        for (const g of geometry) g.dispose();
         this.meshes.delete(key);
       }
     lampMaterial.emissiveIntensity = t % 1 < 0.5 ? 3.5 : 0;

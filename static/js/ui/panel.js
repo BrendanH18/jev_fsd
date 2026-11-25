@@ -20,7 +20,7 @@ export class Panel {
     this.inlineMode = null;
     this.snapshotDecision = null;
     this.toggles = [...document.querySelectorAll("[data-inspect]")];
-    for (const button of this.toggles) button.addEventListener("click", () => this.toggle());
+    for (const button of this.toggles) button.addEventListener("click", () => this.toggle(undefined, button));
     $("#panel-close").addEventListener("click", () => this.toggle(false));
     this.tabButtons = [...this.el.querySelectorAll(".tabs [role='tab'], .tabs button")];
     for (const b of this.tabButtons) {
@@ -70,6 +70,7 @@ export class Panel {
 
   selectTab(name, focus = false) {
     this.tab = name;
+    this.body.setAttribute("aria-labelledby", `inspector-${name}`);
     for (const o of this.tabButtons) {
       const selected = o.dataset.tab === name;
       o.classList.toggle("active", selected);
@@ -99,7 +100,8 @@ export class Panel {
   }
 
   openInline(mode) {
-    if (!this.inlineForm || !this.inlineInput) return;
+    if (!this.inlineForm || !this.inlineInput || this.inlineSubmit.disabled) return;
+    this.inlineTrigger = mode === "snapshot" ? $("#save-snapshot") : $("#edit-style");
     if (mode === "snapshot") {
       const d = this.displayed;
       if (!d || !Object.keys(d.questions || {}).length) {
@@ -111,6 +113,7 @@ export class Panel {
       this.inlineLabel.textContent = "Snapshot name (data/snapshots/<name>.json)";
       this.inlineInput.value = `snap-${Date.now() % 100000}`;
       this.inlineInput.placeholder = "snapshot-name";
+      this.inlineInput.required = true;
       this.inlineSubmit.textContent = "Save";
     } else {
       this.snapshotDecision = null;
@@ -118,6 +121,7 @@ export class Panel {
       this.inlineLabel.textContent = "driving_style (sent with every request)";
       this.inlineInput.value = this.autopilot.style || "";
       this.inlineInput.placeholder = "calm, smooth, cautious";
+      this.inlineInput.required = false;
       this.inlineSubmit.textContent = "Apply";
     }
     this.inlineForm.hidden = false;
@@ -125,7 +129,8 @@ export class Panel {
     this.inlineInput.select();
   }
 
-  closeInline() {
+  closeInline(restoreFocus = true) {
+    if (restoreFocus && this.inlineForm?.contains(document.activeElement)) this.inlineTrigger?.focus();
     this.inlineMode = null;
     this.snapshotDecision = null;
     if (this.inlineForm) this.inlineForm.hidden = true;
@@ -134,12 +139,10 @@ export class Panel {
   async submitInline() {
     const mode = this.inlineMode;
     const value = this.inlineInput?.value.trim();
-    if (!mode) return;
+    if (!mode || this.inlineSubmit.disabled) return;
     if (mode === "style") {
-      if (value) {
-        this.autopilot.style = value;
-        this.hud.badge("driving style updated", "", 900);
-      }
+      this.autopilot.style = value;
+      this.hud.badge(value ? "Driving style updated" : "Custom driving style cleared", "", 900);
       this.closeInline();
       return;
     }
@@ -168,23 +171,28 @@ export class Panel {
     }
   }
 
-  toggle(force) {
+  toggle(force, trigger = document.activeElement) {
     const open = force === undefined ? this.el.hidden : force;
+    if (open === !this.el.hidden) return;
+    if (open) this.returnFocus = trigger;
+    const restoreFocus = !open && this.el.contains(document.activeElement);
     this.el.hidden = !open;
-    if (!open) this.closeInline();
+    if (!open) this.closeInline(false);
     for (const button of this.toggles) {
       button.classList.toggle("on", open);
       button.setAttribute("aria-expanded", String(open));
     }
     if (open) {
-      this.dirty = true;
-      this.render();
+      this.selectTab(this.tab, true);
+    } else if (restoreFocus) {
+      const target = this.returnFocus?.getClientRects().length ? this.returnFocus : $("#view");
+      target?.focus({ preventScroll: true });
     }
   }
 
   set(decision) {
     this.latest = decision;
-    if (this.pinned && this.last) return;
+    if (this.pinned) return;
     this.last = decision;
     this.dirty = true;
   }
@@ -299,7 +307,10 @@ export class Panel {
 
   async copyJson() {
     const d = this.displayed;
-    if (!d) return;
+    if (!d) {
+      this.hud.badge("No decision to copy yet", "", 1200);
+      return;
+    }
     const tab = this.displayedTab;
     const payload =
       tab === "state"
@@ -314,7 +325,10 @@ export class Panel {
 
   async copyCurl() {
     const d = this.displayed;
-    if (!d) return;
+    if (!d || (!d.trace?.request?.url && !Object.keys(d.questions || {}).length)) {
+      this.hud.badge("No model request to copy", "", 1200);
+      return;
+    }
     // LLM and decision endpoints record their (credential-free) URL and key variable in the trace.
     const request = d.trace?.request?.url ? d.trace.request : null;
     let curl;

@@ -29,7 +29,14 @@ import { isEmergency } from "../sim/emergency.js";
 import { SAME_LANE_M } from "../sim/snow-plow.js";
 import { isCyclistPass, minPassM } from "../sim/cyclist-pass.js";
 import { wheelPoints } from "../sim/potholes.js";
-import { firstHookResult, junctionPlan, PRIORITY_IDS, featureObstacle, hooks } from "../sim/features/index.js";
+import {
+  firstHookResult,
+  junctionPlan,
+  PRIORITY_IDS,
+  featureObstacle,
+  hooks,
+  primaryDetour,
+} from "../sim/features/index.js";
 
 // The registered features' candidates and forward-sim checks (sim/features/index.js), each where that
 // feature's own code used to be.
@@ -39,6 +46,7 @@ const LINE_STOP = hooks("lineStop");
 const PREDICTION_IGNORE = hooks("predictionIgnore");
 const SETTLE = hooks("candidateSettle");
 const CANDIDATES = {
+  beforeMerge: hooks("candidates", "beforeMerge"),
   afterFlagger: hooks("candidates", "afterFlagger"),
   restrictions: hooks("candidates", "restrictions"),
   beforeRunner: hooks("candidates", "beforeRunner"),
@@ -54,6 +62,7 @@ const ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
 const BRAKE_DETOUR = hooks("brakeDetour");
 const SIMS = {
   afterCollision: hooks("sim", "afterCollision"),
+  beforeMerge: hooks("sim", "beforeMerge"),
   first: hooks("sim", "first"),
   beforeRunner: hooks("sim", "beforeRunner"),
   driveways: hooks("sim", "driveways"),
@@ -153,7 +162,7 @@ export function sampleCandidates(snap, world) {
   // (round a cyclist, through the oncoming lane, only `pass_cyclist` goes, at the pass speed the way
   // round was worked out for, and `hard_brake` keeps to it: see cyclistPass)
   const detourPlan =
-    snap.work_zone?.detour ||
+    primaryDetour(snap) ||
     snap.lane_closure?.detour ||
     featurePassingDetour(snap) ||
     (!snap.cyclist_pass?.detour && featureDetour(snap));
@@ -520,17 +529,7 @@ export function sampleCandidates(snap, world) {
         speed: "wait at the line for room past the junction",
       });
     }
-    // A work zone's flagger showing STOP: stop at the line, and stay stopped until the paddle turns to SLOW.
-    const wz = snap.work_zone;
-    if (wz?.wait && wz.bumper_to_stop_m > 0.3) {
-      out.push({
-        id: "stop_for_flagger",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(wz.stop_s_route - FRONT - 0.5) }),
-        steer: "hold lane",
-        speed: "stop at the line for the flagger's STOP paddle",
-      });
-    }
+    for (const add of CANDIDATES.beforeMerge) add(featureCtx, out);
     for (const add of CANDIDATES.afterFlagger) add(featureCtx, out);
     // A lane closed ahead (sim/lane-closure.js): in the closed lane, wait at the merge point for the car's
     // turn; in the open lane, stop short of it to let in the one whose turn it is.
@@ -844,8 +843,6 @@ export function simulateAll(candidates, snap, world) {
   const railStop = snap.level_crossing?.wait ? snap.level_crossing.stop_s_route : null;
   // where the car waits at a signal it could not clear
   const boxStop = snap.junction_box?.stop_s_route ?? null;
-  // where the car stops for a flagger showing STOP
-  const flaggerStop = snap.work_zone?.wait ? snap.work_zone.stop_s_route : null;
   // at a lane closure: where the car waits for its turn at the merge point, or stops to let one in; and
   // the lane changes the zipper rules out (sim/lane-closure.js)
   const lz = snap.lane_closure;
@@ -882,6 +879,7 @@ export function simulateAll(candidates, snap, world) {
     ...sims.driveways,
     ...sims.streetHazards,
     ...sims.beforeEmergency,
+    ...sims.beforeMerge,
     ...sims.parking,
     ...sims.end,
   ];
@@ -904,7 +902,6 @@ export function simulateAll(candidates, snap, world) {
       passesTram = false,
       passesRail = false,
       passesBox = false,
-      passesFlagger = false,
       passesMerge = false,
       passesLetIn = false,
       passesPlow = false,
@@ -999,8 +996,6 @@ export function simulateAll(candidates, snap, world) {
         if (railStop !== null && s + FRONT > railStop + 1.5) passesRail = true;
         // (and here: 1.5 m past the line is still short of the street across)
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
-        // (and here: 1.5 m past the line is still 4.5 m short of the one-lane section)
-        if (flaggerStop !== null && s + FRONT > flaggerStop + 1.5) passesFlagger = true;
         // (and here: a metre past the merge point has not gone through it, sim/lane-closure.js THROUGH_M; 1.5 m past
         // where it lets one in is still behind it)
         if (mergeStop !== null && s + FRONT > mergeStop + 1) passesMerge = true;
@@ -1186,7 +1181,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesRail && c.law.kind !== "hard_brake")
       reject = snap.level_crossing.wait === "train" ? "crosses_in_front_of_train" : "no_room_past_tracks";
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
-    else if (passesFlagger && c.law.kind !== "hard_brake") reject = "runs_flagger_stop";
+    else if ((reject = rejectBy(sims.beforeMerge, c)));
     else if ((reject = rejectBy(sims.parking, c)));
     else if (passesMerge && c.law.kind !== "hard_brake") reject = "merges_out_of_turn";
     else if (passesLetIn && c.law.kind !== "hard_brake") reject = "takes_merge_turn";
@@ -1212,6 +1207,7 @@ export function simulateAll(candidates, snap, world) {
     else if ((reject = rejectBy(sims.end, c)));
     c.reject = reject;
     c.eligible = !reject;
+    delete c.flagged; // a new guarded prediction replaces a previous open-track advisory
   }
   // (and what a registered feature lets stand once every candidate is judged: sim/features/index.js)
   for (const settle of SETTLE) settle(snap, candidates);

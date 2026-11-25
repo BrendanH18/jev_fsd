@@ -308,12 +308,19 @@ assert.equal(explicitLegacy.suite_version, "legacy");
 assert.equal(explicitLegacy.manifest.suite_version, "legacy");
 assert.ok(explicitLegacy.results.every((result) => result.suite_version === "legacy"));
 
-function repeat(name, { pass, recorded_at, cost_usd, source_dirty = false }) {
+function repeat(
+  name,
+  { pass, recorded_at, cost_usd, time_s, source_dirty = false, model = "jev-test", failures, track = "guarded" },
+) {
   const challenge = "one";
   const recording = new ModelRecording({
-    header: header([challenge], { recorded_at, manifest: { source_commit: "a".repeat(40), source_dirty } }),
-    results: { [challenge]: { challenge, pass, failures: pass ? [] : ["timeout"], cost_usd } },
-    drives: { [challenge]: { key: [{ response: { meta: { model: "jev-test" } } }] } },
+    header: header([challenge], {
+      recorded_at,
+      track,
+      manifest: { source_commit: "a".repeat(40), source_dirty },
+    }),
+    results: { [challenge]: { challenge, pass, failures: failures ?? (pass ? [] : ["timeout"]), cost_usd, time_s } },
+    drives: { [challenge]: { key: [{ response: { meta: { model } } }] } },
   });
   const file = path.join(dir, name);
   fs.writeFileSync(file, recording.serialize());
@@ -323,10 +330,56 @@ const compare = (...files) =>
   execFileSync(process.execPath, [new URL("compare_repeats.mjs", import.meta.url).pathname, ...files], {
     stdio: "pipe",
   });
-const repeatOne = repeat("repeat-one.json", { pass: true, recorded_at: "2026-11-21T08:00:00Z", cost_usd: 0.01 });
-const repeatTwo = repeat("repeat-two.json", { pass: false, recorded_at: "2026-11-21T08:30:00Z", cost_usd: 0.03 });
+const repeatOne = repeat("repeat-one.json", {
+  pass: true,
+  recorded_at: "2026-11-21T08:00:00Z",
+  cost_usd: 0.01,
+  time_s: 10,
+});
+const repeatTwo = repeat("repeat-two.json", {
+  pass: false,
+  recorded_at: "2026-11-21T08:30:00Z",
+  cost_usd: 0.03,
+  time_s: 20,
+});
 const reportRepeat = JSON.parse(compare(repeatOne, repeatTwo)).drivers[0];
 assert.deepEqual(reportRepeat.cost_usd, { min: 0.01, mean: 0.02, max: 0.03 });
+assert.deepEqual(reportRepeat.by_drive.one.verdicts, { passed: 1, failed: 1 });
+assert.deepEqual(reportRepeat.by_drive.one.time_s, { min: 10, mean: 15, max: 20 });
+assert.deepEqual(reportRepeat.by_drive.one.cost_usd, { min: 0.01, mean: 0.02, max: 0.03 });
+assert.deepEqual(reportRepeat.by_drive.one.failure_reasons, { timeout: 1 });
+assert.match(String(compare("--help")), /--driver/);
+assert.deepEqual(
+  JSON.parse(compare("--driver=jev", repeatOne, repeatTwo)).drivers.map((driver) => driver.driver),
+  ["jev"],
+);
+assert.throws(() => compare("--driver=absent", repeatOne, repeatTwo), /Unknown driver absent/);
+assert.throws(() => compare(repeatOne, repeatOne), /List each recording once/);
+assert.throws(
+  () => compare(repeatOne, repeat("unknown-track.json", { pass: true, track: "typo" })),
+  /unknown arena track/,
+);
+assert.throws(() => compare(repeatOne, repeat("bad-result.json", { pass: 1 })), /invalid challenge result/);
+assert.throws(
+  () => compare(repeatOne, repeat("bad-failures.json", { pass: true, failures: "timeout" })),
+  /invalid challenge result/,
+);
+assert.throws(
+  () => compare(repeatOne, repeat("changed-model.json", { pass: true, model: "moved" })),
+  /same model, prompt and provider settings/,
+);
+assert.throws(
+  () => compare(repeatOne, repeat("negative-cost.json", { pass: true, cost_usd: -1 })),
+  /finite nonnegative/,
+);
+assert.throws(
+  () => compare(repeatOne, repeat("string-cost.json", { pass: true, cost_usd: "0.01" })),
+  /finite nonnegative/,
+);
+assert.throws(
+  () => compare(repeatOne, repeat("excessive-cost.json", { pass: true, cost_usd: 1e12 })),
+  /cost exceeds the supported range/,
+);
 assert.deepEqual(
   reportRepeat.runs.map(({ file, cost_usd, failed_drives }) => [file, cost_usd, failed_drives]),
   [
@@ -418,6 +471,18 @@ function plannedRepeat(driver, number, { track = "open", effort = "low", ids = O
 const haiku = "llm:claude-haiku-5-5";
 const jevRepeats = [1, 2, 3].map((number) => plannedRepeat("jev", number));
 const haikuRepeats = [1, 2, 3].map((number) => plannedRepeat(haiku, number));
+const unevenRepeats = [...jevRepeats.slice(0, 2), haikuRepeats[0]];
+assert.deepEqual(
+  JSON.parse(compare(...unevenRepeats)).drivers.map(({ driver, repeats }) => [driver, repeats]),
+  [
+    ["jev", 2],
+    [haiku, 1],
+  ],
+);
+assert.deepEqual(
+  JSON.parse(compare("--driver=jev", ...unevenRepeats)).drivers.map(({ driver }) => driver),
+  ["jev"],
+);
 const planned = JSON.parse(compare("--plan", plan, ...jevRepeats, ...haikuRepeats));
 assert.equal(planned.drives_per_repeat, 62);
 assert.equal(planned.drivers.length, 2);

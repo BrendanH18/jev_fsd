@@ -1,7 +1,7 @@
 // Solid scenery geometry: mapped buildings, rendered trunks and posts, porch decks/steps and
 // hedges. Rendering and collision placement share pure manifests. The spatial grid bounds both
 // physics and planning queries without adding stationary scenery to moving-object perception.
-import { obbPolygonOverlap } from "./collision.js";
+import { obbPolygonOverlap, polygonBounds } from "./collision.js";
 import { sceneryFor } from "../map/scenery.js";
 
 const CELL = 25;
@@ -127,21 +127,14 @@ export class StaticObstacles {
     this.grid = new Map();
     this.list = [];
     for (const [i, building] of (map.pack?.buildings || []).entries()) {
-      const pts = building.pts;
-      if (
-        !Array.isArray(pts) ||
-        pts.length < 3 ||
-        pts.some((p) => !Array.isArray(p) || !Number.isFinite(p[0]) || !Number.isFinite(p[1]))
-      )
-        continue;
+      const pts = building?.pts;
+      const bounds = polygonBounds(pts);
+      if (!bounds) continue;
       const area = pts.reduce((sum, p, j) => {
         const q = pts[(j + 1) % pts.length];
         return sum + p[0] * q[1] - q[0] * p[1];
       }, 0);
       if (Math.abs(area) < 1e-6) continue;
-      const xs = pts.map((p) => p[0]),
-        ys = pts.map((p) => p[1]);
-      const bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
       const obstacle = { id: `building:${building.id ?? i}`, kind: "building", pts, bounds };
       this.list.push(obstacle);
       this.forCells(bounds, (key) => {
@@ -149,7 +142,8 @@ export class StaticObstacles {
         this.grid.get(key).push(obstacle);
       });
     }
-    for (const circle of sceneryFor(map).circles) {
+    const scenery = sceneryFor(map);
+    for (const circle of scenery.circles) {
       const r = circle.radius;
       const obstacle = { ...circle, bounds: [circle.x - r, circle.y - r, circle.x + r, circle.y + r] };
       this.list.push(obstacle);
@@ -158,10 +152,10 @@ export class StaticObstacles {
         this.grid.get(key).push(obstacle);
       });
     }
-    for (const polygon of sceneryFor(map).polygons) {
-      const xs = polygon.pts.map((p) => p[0]),
-        ys = polygon.pts.map((p) => p[1]);
-      const obstacle = { ...polygon, bounds: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] };
+    for (const polygon of scenery.polygons) {
+      const bounds = polygonBounds(polygon.pts);
+      if (!bounds) continue;
+      const obstacle = { ...polygon, bounds };
       this.list.push(obstacle);
       this.forCells(obstacle.bounds, (key) => {
         if (!this.grid.has(key)) this.grid.set(key, []);
@@ -171,8 +165,19 @@ export class StaticObstacles {
   }
 
   forCells(bounds, visit) {
-    for (let x = Math.floor(bounds[0] / CELL); x <= Math.floor(bounds[2] / CELL); x++) {
-      for (let y = Math.floor(bounds[1] / CELL); y <= Math.floor(bounds[3] / CELL); y++) visit(`${x},${y}`);
+    const x0 = Math.floor(bounds[0] / CELL),
+      y0 = Math.floor(bounds[1] / CELL),
+      x1 = Math.floor(bounds[2] / CELL),
+      y1 = Math.floor(bounds[3] / CELL);
+    if (
+      !Number.isSafeInteger(x0) ||
+      !Number.isSafeInteger(y0) ||
+      !Number.isSafeInteger(x1) ||
+      !Number.isSafeInteger(y1)
+    )
+      return;
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) visit(`${x},${y}`);
     }
   }
 
@@ -225,12 +230,13 @@ export class StaticObstacles {
     };
     const initial = touching(from);
     if (initial) return { obstacle: initial, fraction: 0, safePose: from };
-    const travel = Math.hypot(to.x - from.x, to.y - from.y) + radius * Math.abs(angleDelta(from.psi, to.psi));
+    const rotation = Math.abs(angleDelta(from.psi, to.psi));
+    const travel = Math.hypot(to.x - from.x, to.y - from.y) + radius * rotation;
     let exact = null;
     for (const obstacle of obstacles) {
       if (obstacle.radius === undefined) continue;
       const fraction =
-        Math.abs(angleDelta(from.psi, to.psi)) < 1e-10
+        rotation < 1e-10
           ? translatingCircleHit(from, to, spec, obstacle, margin)
           : rotatingCircleHit(from, to, spec, obstacle, margin, travel);
       if (fraction !== null && (!exact || fraction < exact.fraction)) exact = { obstacle, fraction };

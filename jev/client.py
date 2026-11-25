@@ -12,6 +12,7 @@ Around the call sit two things a demo that spends real money should have:
 from __future__ import annotations
 
 import json
+import math
 import random
 import threading
 import time
@@ -51,21 +52,42 @@ class JevError(Exception):
         self.body = body
 
 
+MAX_USAGE_TOKENS = 10**9
+
+
+def tokens(value: Any) -> int:
+    """A token count from a provider usage block, or zero for invalid counts."""
+    if isinstance(value, bool):
+        return 0
+    try:
+        return min(MAX_USAGE_TOKENS, max(0, int(value or 0)))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 class JevResult:
     """One System One call: typed answers plus everything the UI shows about the call."""
 
     def __init__(self, request: dict, response: dict, latency_ms: float, backend: str = ""):
         self.request = request
+        # Overflowing provider numbers become null so answers, meta and traces always serialize.
+        response = _json_safe(response)
         self.response = response
         self.latency_ms = latency_ms
         self.backend = backend
-        self.answers: Dict[str, dict] = response.get("answers", {})
+        answers = response.get("answers")
+        self.answers: Dict[str, dict] = answers if isinstance(answers, dict) else {}
         self.model: str = response.get("model", request.get("model", ""))
-        self.usage: dict = response.get("usage") or {}
+        usage = response.get("usage")
+        self.usage: dict = usage if isinstance(usage, dict) else {}
 
     @property
     def input_tokens(self) -> int:
-        return int(self.usage.get("input_tokens") or 0)
+        return tokens(self.usage.get("input_tokens"))
+
+    @property
+    def output_tokens(self) -> int:
+        return tokens(self.usage.get("output_tokens"))
 
     @property
     def cost_usd(self) -> float:
@@ -77,13 +99,24 @@ class JevResult:
             "latency_ms": round(self.latency_ms, 1),
             "question_count": len(self.request.get("questions", {})),
             "input_tokens": self.input_tokens,
-            "output_tokens": int(self.usage.get("output_tokens") or 0),
+            "output_tokens": self.output_tokens,
             "cost_usd": self.cost_usd,
             "backend": self.backend,
         }
 
     def trace(self) -> dict:
         return {"request": self.request, "response": self.response, "meta": self.meta()}
+
+
+def _json_safe(value):
+    """Copy a provider payload with non-finite numbers replaced by null, so traces always serialize."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 class SpendGuard:
@@ -110,12 +143,12 @@ class SpendGuard:
                     "JEV_FSD_BUDGET_USD=<amount> to allow more." % (self.budget_usd, self.live_calls),
                     status=402,
                 )
-            if not rate:
+            if not rate or self.rpm <= 0:
                 return
             now = time.monotonic()
-            while self._times and self._times[0] < now - 60:
+            while self._times and self._times[0] <= now - 60:
                 self._times.popleft()
-            if self.rpm > 0 and len(self._times) >= self.rpm:
+            if len(self._times) >= self.rpm:
                 raise JevError(
                     "Local rate limit: more than %d live calls in the last minute. Wait a moment." % self.rpm,
                     status=429,
@@ -123,11 +156,14 @@ class SpendGuard:
             self._times.append(now)
 
     def record(self, result) -> None:
+        input_tokens = result.input_tokens
+        output_tokens = tokens(getattr(result, "output_tokens", 0))
+        cost_usd = result.cost_usd
         with self._lock:
             self.live_calls += 1
-            self.input_tokens += result.input_tokens
-            self.output_tokens += int(getattr(result, "output_tokens", 0) or 0)
-            self.spent_usd += result.cost_usd
+            self.input_tokens += input_tokens
+            self.output_tokens += output_tokens
+            self.spent_usd += cost_usd
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -154,7 +190,7 @@ class JevClient:
         self._memory_key = api_key
         self.guard = guard or SpendGuard(self.settings.budget_usd, self.settings.rpm)
         self._sdk = None
-        self._sdk_key: Optional[str] = None
+        self._sdk_config: Optional[tuple] = None
         self._lock = threading.Lock()
 
     # Key management
@@ -186,7 +222,8 @@ class JevClient:
         return "typesafe-sdk %s" % SDK_VERSION if TypeSafeClient is not None else "stdlib fallback"
 
     def set_api_key(self, key: Optional[str]) -> None:
-        self._memory_key = (key or "").strip() or None
+        with self._lock:
+            self._memory_key = (key or "").strip() or None
 
     def reload_settings(self) -> None:
         self.settings.reload_file()
@@ -204,6 +241,8 @@ class JevClient:
         self.guard.check()
         started = time.perf_counter()
         response = self._post_system_one(payload)
+        if not isinstance(response, dict):
+            raise JevError("TypeSafe did not return a JSON object")
         latency_ms = (time.perf_counter() - started) * 1000
         result = JevResult(payload, response, latency_ms, backend=self.backend)
         self.guard.record(result)
@@ -221,6 +260,8 @@ class JevClient:
                 raise JevError("Could not reach TypeSafe: %s" % err) from err
             except TypeSafeError as err:
                 raise JevError(str(err)) from err
+            except (ValueError, RecursionError) as err:
+                raise JevError("TypeSafe did not return readable JSON") from err
         response, _ = self._stdlib_request("GET", "/v1/models", None, max_attempts=2)
         return response
 
@@ -229,15 +270,17 @@ class JevClient:
     def _sdk_client(self):
         with self._lock:
             key = self.api_key
-            if self._sdk is None or self._sdk_key != key:
+            model, base_url, timeout = self.model, self.base_url, self.timeout
+            config = (key, model, base_url, timeout)
+            if self._sdk is None or self._sdk_config != config:
                 self._sdk = TypeSafeClient(
                     api_key=key,
-                    model=self.model,
-                    base_url=self.base_url,
-                    timeout=self.timeout,
-                    retry=RetryPolicy(max_retries=3, timeout=self.timeout),
+                    model=model,
+                    base_url=base_url,
+                    timeout=timeout,
+                    retry=RetryPolicy(max_retries=3, timeout=timeout),
                 )
-                self._sdk_key = key
+                self._sdk_config = config
             return self._sdk
 
     def _post_system_one(self, payload: dict) -> dict:
@@ -251,6 +294,8 @@ class JevClient:
                 raise JevError("Could not reach TypeSafe: %s" % err) from err
             except TypeSafeError as err:
                 raise JevError(str(err)) from err
+            except (ValueError, RecursionError) as err:
+                raise JevError("TypeSafe did not return readable JSON") from err
         response, _ = self._stdlib_request("POST", "/v1/systemone", payload)
         return response
 
@@ -273,15 +318,21 @@ class JevClient:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     return json.loads(resp.read().decode()), attempt
             except urllib.error.HTTPError as err:
-                raw = err.read().decode(errors="replace")
+                with err:
+                    raw = err.read(4096).decode(errors="replace")
                 try:
                     parsed = json.loads(raw)
-                except ValueError:
+                except (ValueError, RecursionError):
                     parsed = raw
                 if err.code in RETRYABLE_STATUSES and attempt < max_attempts:
                     retry_after = err.headers.get("retry-after")
-                    delay = float(retry_after) if retry_after and retry_after.replace(".", "", 1).isdigit() else None
-                    time.sleep(delay if delay is not None else (0.4 * 2 ** (attempt - 1)) + random.random() * 0.2)
+                    try:
+                        delay = float(retry_after or "nan")
+                    except ValueError:
+                        delay = float("nan")
+                    if not math.isfinite(delay) or delay < 0:
+                        delay = (0.4 * 2 ** (attempt - 1)) + random.random() * 0.2
+                    time.sleep(min(delay, self.timeout))
                     continue
                 raise JevError(_error_message(err.code, parsed), status=err.code, body=parsed) from err
             except urllib.error.URLError as err:
@@ -289,12 +340,14 @@ class JevClient:
                     time.sleep(0.4 * 2 ** (attempt - 1))
                     continue
                 raise JevError("Could not reach TypeSafe: %s" % err.reason) from err
+            except (ValueError, RecursionError) as err:
+                raise JevError("TypeSafe did not return readable JSON") from err
 
 
 def _error_message(status: int, body: Any) -> str:
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, dict) and detail.get("message"):
-        text = detail["message"]
+        text = str(detail["message"])[:400]
     elif detail:
         text = json.dumps(detail)[:400]
     else:
@@ -326,14 +379,23 @@ def score(instructions: Any, levels: list) -> dict:
     return {"type": "score", "instructions": instructions, "criteria": levels}
 
 
+def _probability(value):
+    """A probability as a float, or None when the provider sent none or an unusable number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
 def chosen(answer: dict) -> tuple:
     """(value, probability of that value) for a Choice answer."""
     value = answer["choice"]
-    return value, float(answer.get("probabilities", {}).get(value, answer.get("confidence", 0.0)))
+    p = _probability((answer.get("probabilities") or {}).get(value))
+    if p is None:
+        p = _probability(answer.get("confidence"))
+    return value, 0.0 if p is None else p
 
 
 def ranked(answer: dict, limit: int = 3) -> list:
-    probs = answer.get("probabilities", {})
-    return [
-        {"value": k, "prob": float(v)} for k, v in sorted(probs.items(), key=lambda kv: kv[1], reverse=True)[:limit]
-    ]
+    probs = [(k, _probability(v)) for k, v in (answer.get("probabilities") or {}).items()]
+    probs = [(k, p) for k, p in probs if p is not None]
+    return [{"value": k, "prob": p} for k, p in sorted(probs, key=lambda kv: kv[1], reverse=True)[:limit]]

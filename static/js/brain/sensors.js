@@ -7,16 +7,7 @@ import { leftOnRedExit } from "../sim/left-on-red.js";
 import { routeBusLane, legalBusLane } from "../sim/bus-lanes.js";
 import { CAR, comfort } from "../sim/vehicle.js";
 import { corridorQuery } from "../sim/collision.js";
-import {
-  advanceHolds,
-  approachPhase,
-  isScramble,
-  movementSignal,
-  protectedLeft,
-  scrambleState,
-  STOP_ZONE_M,
-} from "../sim/signals.js";
-import { darkControl } from "../sim/outage.js";
+import { advanceHolds, approachPhase, movementSignal, protectedLeft, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
 import { ringBusy, ringJoining } from "../sim/roundabout.js";
@@ -114,19 +105,11 @@ import {
   isLaneClosure,
 } from "../sim/lane-closure.js";
 import {
-  SPAN_M as WZ_SPAN_M,
-  WZ_LIMIT_MPS,
-  canStopFor as canStopForFlagger,
-  detourOf,
-  isWorkZone,
-  marksOn,
-  paddle,
-  sideOf,
-  stopKey,
-} from "../sim/work-zone.js";
-import {
+  alternateSignal,
   controlDirection,
   firstHookResult,
+  phaseBansRedTurns,
+  primaryDetour,
   isParkingTraffic,
   isTrafficObstacle,
   FEATURE_SNAPSHOT_FIELDS,
@@ -137,6 +120,8 @@ import {
 
 // The registered features' sensing (sim/features/index.js), each where that feature's own code used to be:
 // what it adds to the snapshot, the speed ceiling, the target speed and the hazard flags.
+const SENSE_SIGNAL_CONTROL = hooks("senseSignalControl");
+const INTERSECTION_FIELDS_AFTER_RIGHT = hooks("intersectionFields", "afterRightTurn");
 const SENSE = {
   afterPedestrians: hooks("sense", "afterPedestrians"),
   beforeWorkZone: hooks("sense", "beforeWorkZone"),
@@ -160,6 +145,7 @@ const LIMIT = {
   parking: hooks("limit", "parking"),
 };
 const TARGET = {
+  beforeMerge: hooks("target", "beforeMerge"),
   beforeParked: hooks("target", "beforeParked"),
   afterSchoolBus: hooks("target", "afterSchoolBus"),
   parking: hooks("target", "parking"),
@@ -457,26 +443,19 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
   for (let k = 0; k < route.controls.length; k++) {
     const c = route.controls[k],
       next = route.controls[k + 1];
-    // (a signal whose lights are out is an all-way stop, once the car can see that they are:
-    // sim/outage.js; until then it is a signal it cannot see)
     const inter = c.control.type === "signal" ? map.intersections.get(c.control.id) : null;
     const junction = inter ? [inter.x, inter.y] : c.junction;
     const directive = inter ? firstHookResult(CONTROL_SENSE, world, c, frontS) : null;
-    const dark =
-      !directive &&
-      !!inter &&
-      world.outages?.isDark(inter.id) &&
-      !!junction &&
-      world.visibility.canSee(ego, ...junction);
+    const phaseOverride = inter ? alternateSignal(world, inter.id) : null;
+    const replacement =
+      !directive && phaseOverride && world.visibility.canSee(ego, ...junction)
+        ? firstHookResult(SENSE_SIGNAL_CONTROL, world, c, phaseOverride)
+        : null;
     const seenFlash =
       !directive && inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction)
         ? flashState(inter, c.control.group, world)
         : null;
-    const control = dark
-      ? darkControl(c.control, c.edge)
-      : seenFlash
-        ? flashControl(world, c.control, c.edge)
-        : c.control;
+    const control = replacement?.control ?? (seenFlash ? flashControl(world, c.control, c.edge) : c.control);
     const leftTurn =
       (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") &&
       (c.turn === "left" || c.turn === "uturn") &&
@@ -495,7 +474,7 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
     // (the light for the way the car goes: under a left arrow only a left turn has a green; and
     // whether an advance green shows, or holds the car while the approach opposite has it)
     const shows =
-      inter && !dark && junction && world.visibility.canSee(ego, ...junction)
+      inter && !replacement && junction && world.visibility.canSee(ego, ...junction)
         ? approachPhase(inter, c.edge, world.t)
         : null;
     if (seenFlash === "flashing_amber") snap.limit = Math.min(snap.limit, NIGHT_CAUTION_MPS);
@@ -558,13 +537,14 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
     )
       continue;
     const signed = control.type === "signal" && !directive ? firstHookResult(ROUTE_RED_BANS, world, c) : null;
+    const phaseContext = { control, replacement, seenFlash };
     snap.intersection = {
       id: control.id,
       control: control.type,
       signal,
       group: control.group || null,
       advance,
-      ...directive?.fields(world.outages?.isDark(inter.id) ? "dark" : signal),
+      ...directive?.fields(phaseOverride ?? signal),
       ...(world.amberLights && control.type === "signal" && inter && !directive
         ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) }
         : {}),
@@ -574,13 +554,12 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
       ...(world.amberLights && entered && control.type === "signal" ? { clear_entered: true } : {}),
       turn: c.turn || "straight",
       oncoming,
-      // (never at a scramble crossing, sim/signals.js: `scramble` says so)
       right_on_red:
         control.type === "signal" &&
         !directive &&
         map.rightOnRed &&
         !signed &&
-        !isScramble(inter) &&
+        !phaseBansRedTurns(inter) &&
         c.turn === "right" &&
         signal === "red" &&
         bumperToLine > -CLEARING_M &&
@@ -588,29 +567,27 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
           ? turnOnRed(world, c, inter, frontS, visible, advance?.light === "held")
           : null,
       ...signed,
-      ...(control.type === "signal" && isScramble(inter) && !dark && !seenFlash
-        ? { scramble: { ...scrambleState(inter, world.t), right_on_red: false } }
-        : {}),
+      ...Object.assign({}, ...INTERSECTION_FIELDS_AFTER_RIGHT.map((fields) => fields(world, inter, phaseContext))),
       ...(world.leftOnRed &&
       !directive &&
       control.type === "signal" &&
       signal === "red" &&
       c.turn === "left" &&
       inter &&
-      !isScramble(inter) &&
+      !phaseBansRedTurns(inter) &&
       bumperToLine > -CLEARING_M &&
       leftOnRedExit(world, c)
         ? { left_on_red: turnOnRed(world, c, inter, frontS, visible, advance?.light === "held") }
         : {}),
       stop_completed: stopCompleted,
       all_way: control.type === "stop" ? !!control.all_way : null,
-      ...(dark ? { dark: true } : {}),
+      ...replacement?.fields,
       rule: control.type === "uncontrolled" ? control.rule : null,
       priority,
       give_way: giveWay,
       roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
       cross_traffic_moving: crossTraffic,
-      seconds_to_green: c.secondsToGreen && !dark && !seenFlash && !directive ? c.secondsToGreen(world.t) : null,
+      seconds_to_green: c.secondsToGreen && !replacement && !seenFlash && !directive ? c.secondsToGreen(world.t) : null,
     };
     break;
   }
@@ -691,7 +668,6 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
   snap.level_crossing = levelCrossing(world, route, frontS, vehicles);
   snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
   for (const sense of SENSE.beforeWorkZone) sense(world, snap, { p, frontS, lane, road });
-  snap.work_zone = workZone(world, p, frontS, road);
   snap.lane_closure = laneClosure(world, p, frontS, road, lane);
   for (const sense of SENSE.parking) sense(world, snap, { p, frontS, lane, executing });
   snap.snow_plow = snowPlow(world, p, frontS, lane, road.limit || 11.2, snap.visibility.clear_path_m);
@@ -727,7 +703,7 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, FRONT) {
   // (follow along the way the car will go round an obstruction)
   // (and round a cyclist, through the oncoming lane: see cyclistPass)
   const detour =
-    snap.work_zone?.detour ||
+    primaryDetour(snap) ||
     snap.lane_closure?.detour ||
     featurePassingDetour(snap) ||
     snap.cyclist_pass?.detour ||
@@ -788,11 +764,9 @@ function senseSurroundings(snap, ego, visible, visibleNpcs) {
             ? "parking"
             : o.pull
               ? "pulling out"
-              : isWorkZone(o)
-                ? "work zone"
-                : isLaneClosure(o)
-                  ? "lane closure"
-                  : featureObstacle(o)?.label || firstHookResult(STANDING_VEHICLE_LABELS, o) || "parked car",
+              : isLaneClosure(o)
+                ? "lane closure"
+                : featureObstacle(o)?.label || firstHookResult(STANDING_VEHICLE_LABELS, o) || "parked car",
       right: local.right,
       ahead: local.ahead,
       signal: o.signal || null,
@@ -833,7 +807,6 @@ export function buildSnapshot(world, executing = null) {
     level_crossing: null,
     junction_box: null,
     speed_zone: null,
-    work_zone: null,
     lane_closure: null,
     ...FEATURE_SNAPSHOT_FIELDS,
     snow_plow: null,
@@ -859,8 +832,6 @@ export function buildSnapshot(world, executing = null) {
   if (executing?.hazard) snap.current_path_hazard = executing.hazard;
   snap.speed_zone = speedZone(world, snap, FRONT);
   for (const limit of LIMIT.beforeWorkZone) limit(snap);
-  // (likewise coming up to a work zone, and through it)
-  if (snap.work_zone) snap.limit = Math.min(snap.limit, workZoneSpeed(snap.work_zone));
   // (and at a lane closure, from its merge point: sim/lane-closure.js)
   if (snap.lane_closure) snap.limit = Math.min(snap.limit, closureSpeed(snap.lane_closure));
   for (const limit of LIMIT.passing) limit(snap);
@@ -1126,7 +1097,7 @@ function oncomingYield(world, c, frontS, look = true) {
       n.a >= -0.5 &&
       ctl?.type === "signal" &&
       ctl.id === c.control.id &&
-      !world.outages.isDark(ctl.id) &&
+      !alternateSignal(world, ctl.id) &&
       !flashState(world.map.intersections.get(ctl.id), ctl.group, world) &&
       controlDirection(world, n, lane.edge) !== "stop" &&
       movementSignal(approachPhase(world.map.intersections.get(ctl.id), lane.edge, world.t), "straight") === "green";
@@ -1635,70 +1606,6 @@ function levelCrossing(world, route, frontS, vehicles) {
     wait,
     blocker,
   };
-}
-
-// A work zone with a flagger on the car's route ahead (sim/work-zone.js), from when the car can see the
-// flagger at its end of it (or is already past the line) until its front is out of the one-lane
-// section. `side` is "closed" when the car's lane is the one shut; `paddle` what that flagger shows
-// ("stop" or "slow"); `stop_s_route` the stop line (for the front bumper); `wait` whether the car must
-// stop there now: the paddle shows STOP, and when the car first saw it turned to STOP, still short of
-// the one-lane section, it could have stopped at the line braking at OWED_DECEL, or was standing still
-// (a car too close to stop by then goes on through, and the flaggers wait for it), and its front is
-// not yet in the one-lane section; `detour`, on the closed
-// side, the way round the closed stretch through the other lane in route arc lengths
-// (sim/controller.js detourAt); `limit_mps` the zone's limit, never above the street's. Or null.
-const WZ_LOOK_M = 120;
-function workZone(world, _p, frontS, road) {
-  const { ego, route, map } = world,
-    zones = world.workZones?.zones;
-  if (!zones?.length) return null;
-  for (const z of zones) {
-    if (Math.hypot(z.x - ego.x, z.y - ego.y) > WZ_LOOK_M + WZ_SPAN_M) continue;
-    const i = route.edges.findIndex((id, k) => sideOf(z, id) && route.edgeStarts[k + 1] > frontS - ego.spec.length);
-    if (i < 0) continue;
-    const side = sideOf(z, route.edges[i]),
-      e = map.edges.get(route.edges[i]),
-      lane = map.lane(e.id, 0),
-      m = marksOn(z, side);
-    // (along the route: where the edge puts it, as projected onto the route's own line)
-    const toRoute = (x) => {
-      const est = route.edgeStarts[i + 1] - (e.length - x),
-        q = pointAt(lane.pts, lane.cum, (x * lane.length) / e.length),
-        r = projectPoint(route.pts, route.cum, q);
-      return r && r.distance < 1.5 && Math.abs(r.s - est) < 15 ? r.s : est;
-    };
-    const line = toRoute(m.line),
-      from = toRoute(m.from),
-      to = toRoute(m.to);
-    if (frontS > to || line - frontS > WZ_LOOK_M) continue;
-    const flagger = z.flaggers[side];
-    if (frontS < line && !world.visibility.canSee(ego, flagger[0], flagger[1])) continue;
-    const shows = paddle(z, side),
-      key = stopKey(z, side);
-    world.flaggerYields ||= new Map();
-    // (decided when the car first sees the paddle showing STOP, short of the one-lane section)
-    if (shows === "stop" && !world.flaggerYields.has(key) && frontS < from) {
-      if (world.flaggerYields.size > 20) world.flaggerYields.delete(world.flaggerYields.keys().next().value);
-      world.flaggerYields.set(key, canStopForFlagger(ego.v, Math.max(0, line - frontS)));
-    }
-    const d = side === "closed" ? detourOf(z) : null;
-    return {
-      id: z.id,
-      side,
-      paddle: shows,
-      stop_s_route: line,
-      bumper_to_stop_m: line - frontS,
-      wait: shows === "stop" && !!world.flaggerYields.get(key) && frontS < from - 0.5,
-      one_lane: { from_s: from, to_s: to },
-      in_one_lane: frontS > from,
-      closure_id: z.closure.id,
-      limit_mps: Math.min(road.limit || 11.2, WZ_LIMIT_MPS),
-      detour: d
-        ? { from: toRoute(d.from), full: toRoute(d.full), back: toRoute(d.back), to: toRoute(d.to), shift: d.shift }
-        : null,
-    };
-  }
-  return null;
 }
 
 // A lane closure on the car's route ahead (sim/lane-closure.js), from when the car can see it (or is 30 m
@@ -2797,17 +2704,7 @@ export function desiredSpeed(snap) {
       reasons.push(lx.wait === "train" ? "train coming at the level crossing" : "no room past the tracks");
     }
   }
-  // a work zone's flagger showing STOP: stop at the line
-  const wz = snap.work_zone;
-  if (wz?.wait) {
-    const room = wz.bumper_to_stop_m;
-    const vw = room < 1.0 ? 0 : stopSpeedFor(room - 0.5, decel);
-    if (vw < v) {
-      v = vw;
-      reasons.push("flagger showing STOP");
-    }
-  } else if (wz && workZoneSpeed(wz) <= v + 0.05)
-    reasons.push(wz.side === "closed" ? "work zone: round it through the other lane" : "work zone: one lane");
+  for (const cap of TARGET.beforeMerge) v = cap(snap, v, reasons, targetCtx);
   // a lane closure: in the closed lane, wait at the merge point for its turn; in the open lane, let the
   // one whose turn it is in
   const lz = snap.lane_closure;
@@ -2865,13 +2762,6 @@ export function desiredSpeed(snap) {
   return { v: Math.max(0, v), reasons };
 }
 
-// The speed to go through a work zone at (see workZone), from 5 m short of its stop line, or, short of
-// that, the speed from which the car slows to it comfortably by then.
-function workZoneSpeed(wz) {
-  if (wz.bumper_to_stop_m <= 5) return wz.limit_mps;
-  return Math.sqrt(wz.limit_mps * wz.limit_mps + 2 * comfort().decel * 0.6 * (wz.bumper_to_stop_m - 5));
-}
-
 // The speed to go through a lane closure at (see laneClosure), from 5 m short of its merge point, or, short
 // of that, the speed from which the car slows to it comfortably by then.
 function closureSpeed(lz) {
@@ -2924,7 +2814,6 @@ export function hazardFlags(snap) {
     const label = flag(snap);
     if (label) f.push(label);
   }
-  if (snap.work_zone) f.push("work zone");
   if (snap.lane_closure) f.push("lane closure");
   for (const flag of HAZARD.parking) {
     const label = flag(snap);

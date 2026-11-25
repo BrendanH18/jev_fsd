@@ -5,6 +5,7 @@ import csv
 import gzip
 import io
 import json
+from html import escape as escape_html
 from math import isfinite
 from pathlib import Path
 import sys
@@ -38,6 +39,7 @@ ARENA_CONFIG_KEYS = (
     "seeds",
     "count",
     "heldout",
+    "cover",
 )
 
 
@@ -69,9 +71,9 @@ def finite_float(value):
 
 def _read_text(path):
     if path.suffix == ".gz":
-        with gzip.open(path, "rt", encoding="utf-8") as handle:
+        with gzip.open(path, "rt", encoding="utf-8-sig") as handle:
             return handle.read()
-    return path.read_text(encoding="utf-8")
+    return path.read_text(encoding="utf-8-sig")
 
 
 def _normalize_row(row):
@@ -118,7 +120,7 @@ def _parse_cohorts(specs, parser):
     parsed = []
     for spec in specs or ():
         key, sep, value = spec.partition("=")
-        if not sep or key not in profiles.COHORTS:
+        if not sep or not value.strip() or key not in profiles.COHORTS:
             valid = ", ".join(sorted(profiles.COHORTS))
             parser.error(f"invalid --cohort {spec!r}; expected <key>=<value> with key in: {valid}")
         parsed.append((key, value))
@@ -129,7 +131,11 @@ def _matches_cohorts(row, cohort_filters):
     return all((profiles.COHORTS[key][1](row) or "unknown") == expected for key, expected in cohort_filters)
 
 
-def _filter_rows(rows, *, route_ids=None, cohort_filters=(), only_failures=False):
+def _matches_failure(row, selected):
+    return bool(selected.intersection(outcomes.reasons(row) or ()))
+
+
+def _filter_rows(rows, *, route_ids=None, cohort_filters=(), only_failures=False, failure_reasons=(), maps=()):
     filtered = rows
     if route_ids is not None:
         filtered = [row for row in filtered if row.get("id") in route_ids]
@@ -137,15 +143,19 @@ def _filter_rows(rows, *, route_ids=None, cohort_filters=(), only_failures=False
         filtered = [row for row in filtered if _matches_cohorts(row, cohort_filters)]
     if only_failures:
         filtered = [row for row in filtered if outcomes.verdict(row) == "failed"]
+    if failure_reasons:
+        filtered = [row for row in filtered if _matches_failure(row, failure_reasons)]
+    if maps:
+        filtered = [row for row in filtered if row.get("map") in maps]
     return filtered
 
 
-def _filter_pair(left_rows, right_rows, *, route_ids=None, cohort_filters=(), only_failures=False):
-    if route_ids is not None:
-        left_rows = [row for row in left_rows if row.get("id") in route_ids]
-        right_rows = [row for row in right_rows if row.get("id") in route_ids]
-    if cohort_filters:
-        left_rows = [row for row in left_rows if _matches_cohorts(row, cohort_filters)]
+def _filter_pair(
+    left_rows, right_rows, *, route_ids=None, cohort_filters=(), only_failures=False, failure_reasons=(), maps=()
+):
+    left_rows = _filter_rows(left_rows, route_ids=route_ids, cohort_filters=cohort_filters, maps=maps)
+    right_rows = _filter_rows(right_rows, route_ids=route_ids)
+    if cohort_filters or maps:
         keep_ids = {row.get("id") for row in left_rows}
         right_rows = [row for row in right_rows if row.get("id") in keep_ids]
     if only_failures:
@@ -154,6 +164,12 @@ def _filter_pair(left_rows, right_rows, *, route_ids=None, cohort_filters=(), on
         }
         left_rows = [row for row in left_rows if row.get("id") in failed_ids]
         right_rows = [row for row in right_rows if row.get("id") in failed_ids]
+    if failure_reasons:
+        matching_ids = {
+            row.get("id") for rows in (left_rows, right_rows) for row in rows if _matches_failure(row, failure_reasons)
+        }
+        left_rows = [row for row in left_rows if row.get("id") in matching_ids]
+        right_rows = [row for row in right_rows if row.get("id") in matching_ids]
     return left_rows, right_rows
 
 
@@ -209,6 +225,11 @@ def _csv_cell(value):
     if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
         return "'" + value
     return _cell(value)
+
+
+def _markdown_cell(value):
+    text = escape_html(_cell(value)).replace("\\", "\\\\").replace("|", "\\|")
+    return text.replace("\r\n", "<br>").replace("\r", "<br>").replace("\n", "<br>")
 
 
 def _dict_rows_section(title, items):
@@ -310,6 +331,11 @@ def _report_sections(title, payload):
         return sections
     if "counts" in payload and isinstance(payload["counts"], dict):
         rows = [{"label": label, "count": count} for label, count in payload["counts"].items()]
+        if "measured_routes" in payload:
+            return [
+                _dict_rows_section(title, rows),
+                _dict_rows_section(f"{title}: coverage", [{"measured_routes": payload["measured_routes"]}]),
+            ]
         return [_dict_rows_section(title, rows)]
     return [(title, ["key", "value"], [{"key": k, "value": v} for k, v in payload.items()])]
 
@@ -330,6 +356,10 @@ def _build_sections(data, *, is_summary=False, is_compare=False):
                 sections.append(_dict_rows_section("new audit failures", regression["new_audit_failures"]))
             if regression["increased_violations"]:
                 sections.append(_dict_rows_section("increased violation counts", regression["increased_violations"]))
+            if regression["lost_passes"]:
+                sections.append(_dict_rows_section("lost passes", [{"id": id_} for id_ in regression["lost_passes"]]))
+            if regression["increased_collisions"]:
+                sections.append(_dict_rows_section("increased collision counts", regression["increased_collisions"]))
         if is_summary:
             sections.append(_dict_rows_section("deltas", [data["deltas"]]))
             for side in ("baseline", "comparison"):
@@ -384,7 +414,7 @@ def format_output(data, fmt, *, is_summary=False, is_compare=False):
     if fmt == "table":
         blocks = []
         for title, headers, rows in sections:
-            str_rows = [[_cell(row.get(h)) for h in headers] for row in rows]
+            str_rows = [[_cell(row.get(h)).replace("\r", "\\r").replace("\n", "\\n") for h in headers] for row in rows]
             widths = [max((len(h), *(len(r[i]) for r in str_rows))) for i, h in enumerate(headers)]
             lines = [title]
             lines.append("  ".join(f"{h:{widths[i]}}" for i, h in enumerate(headers)))
@@ -396,11 +426,11 @@ def format_output(data, fmt, *, is_summary=False, is_compare=False):
     if fmt == "markdown":
         blocks = []
         for title, headers, rows in sections:
-            lines = [f"## {title}", ""]
-            lines.append("| " + " | ".join(headers) + " |")
+            lines = [f"## {_markdown_cell(title)}", ""]
+            lines.append("| " + " | ".join(map(_markdown_cell, headers)) + " |")
             lines.append("| " + " | ".join("---" for _ in headers) + " |")
             for row in rows:
-                cells = [_cell(row.get(h)).replace("|", "\\|").replace("\n", "<br>") for h in headers]
+                cells = [_markdown_cell(row.get(h)) for h in headers]
                 lines.append("| " + " | ".join(cells) + " |")
             blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
@@ -429,12 +459,17 @@ def main():
         catalog.update(module.REPORTS)
     analytics = {**scores.REPORTS, **safety.EXTENDED_REPORTS, **decisions.EXTENDED_REPORTS}
     all_paired = {**profiles.PAIRED_RATES, **scores.PAIRED_METRICS}
-    available = {**catalog, **profiles.REPORTS, **analytics, **all_paired}
+    available = {**catalog, **profiles.REPORTS, **analytics, **all_paired, **outcomes.DIAGNOSTICS}
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", nargs="?", type=Path, help="saved benchmark or arena JSON/.json.gz file")
     parser.add_argument("reports", nargs="*", help="report IDs (default: all original reports)")
     parser.add_argument("--compare", type=Path, help="second saved run to compare with the baseline")
+    parser.add_argument(
+        "--same-conditions",
+        action="store_true",
+        help="require both runs to have the same recorded weather, preset, traffic, track, parking and clock",
+    )
     parser.add_argument(
         "--format",
         choices=("json", "table", "markdown", "csv"),
@@ -443,6 +478,8 @@ def main():
     )
     parser.add_argument("--top", type=int, help="limit ranked route lists and digest entries to top N")
     parser.add_argument("--only-failures", action="store_true", help="include only failed routes")
+    parser.add_argument("--failure-reason", action="append", help="match a recorded failure reason (repeatable)")
+    parser.add_argument("--drive-map", action="append", help="filter by the recorded per-drive map (repeatable)")
     parser.add_argument("--route", action="append", help="filter to a specific route ID (repeatable)")
     parser.add_argument(
         "--cohort",
@@ -484,6 +521,7 @@ def main():
         help="run all matched score and continuous metric delta reports with --compare",
     )
     mode.add_argument("--summary", action="store_true", help="print a concise executive digest of the run")
+    mode.add_argument("--list-diagnostics", action="store_true", help="list forensic report IDs and descriptions")
     args = parser.parse_intermixed_args()
 
     list_catalogs = (
@@ -493,10 +531,13 @@ def main():
         (args.list_scores, scores.REPORTS, None),
         (args.list_analytics, analytics, None),
         (args.list_paired_metrics, scores.PAIRED_METRICS, None),
+        (args.list_diagnostics, outcomes.DIAGNOSTICS, None),
     )
     for active, listed, fixed_width in list_catalogs:
         if not active:
             continue
+        if args.run or args.compare or args.reports:
+            parser.error("catalog listing does not take saved runs or report IDs")
         if args.filter is not None:
             needle = args.filter.lower()
             listed = {
@@ -507,17 +548,28 @@ def main():
             print(f"{key:{width}} {description}")
         return
 
+    if args.filter is not None:
+        parser.error("--filter requires a catalog listing mode")
     if args.top is not None and args.top < 1:
         parser.error("--top must be at least 1")
     if args.fail_on_regression and args.compare is None:
         parser.error("--fail-on-regression requires --compare")
+    if args.same_conditions and args.compare is None:
+        parser.error("--same-conditions requires --compare")
     if args.run is None:
         parser.error(
             "provide a saved run or use --list, --list-profiles, --list-paired-rates, "
-            "--list-scores, --list-analytics or --list-paired-metrics"
+            "--list-scores, --list-analytics, --list-paired-metrics or --list-diagnostics"
         )
     cohort_filters = _parse_cohorts(args.cohort, parser)
     route_ids = set(args.route) if args.route else None
+    filters = {
+        "route_ids": route_ids,
+        "cohort_filters": cohort_filters,
+        "only_failures": args.only_failures,
+        "failure_reasons": set(args.failure_reason or ()),
+        "maps": tuple(args.drive_map or ()),
+    }
 
     for flag, label in (
         (args.profiles, "--profiles"),
@@ -534,40 +586,43 @@ def main():
         if key not in available:
             parser.error(
                 f"unknown report {key!r}. See --list, --list-profiles, --list-paired-rates, "
-                "--list-scores, --list-analytics and --list-paired-metrics."
+                "--list-scores, --list-analytics, --list-paired-metrics and --list-diagnostics."
             )
 
     regression = None
     try:
         config, rows = load_run(args.run)
+        if args.compare is not None:
+            other_config, other_rows = load_run(args.compare)
+            if args.same_conditions:
+                differences = comparison.condition_differences(config, other_config)
+                differences.pop("driver", None)
+                if differences:
+                    raise ValueError(f"recorded driving conditions differ: {', '.join(differences)}")
+            # Validate identities before filters can hide malformed or duplicate rows.
+            comparison.index_routes(args.run.name, rows)
+            comparison.index_routes(args.compare.name, other_rows)
+            if args.same_conditions:
+                conflicts = comparison.drive_condition_conflicts(config, rows, other_config, other_rows)
+                if conflicts:
+                    raise ValueError(f"recorded drive conditions differ: {'; '.join(conflicts)}")
+            rows, other_rows = _filter_pair(rows, other_rows, **filters)
+            if args.fail_on_regression:
+                routes, _, left_matched, right_matched = comparison.match_routes(
+                    args.run.name, config, rows, args.compare.name, other_config, other_rows
+                )
+                regression = comparison.assess_regression(left_matched, right_matched, routes)
+        else:
+            rows = _filter_rows(rows, **filters)
         if args.summary:
             top = args.top if args.top is not None else 5
             if args.compare is not None:
-                other_config, other_rows = load_run(args.compare)
-                rows, other_rows = _filter_pair(
-                    rows,
-                    other_rows,
-                    route_ids=route_ids,
-                    cohort_filters=cohort_filters,
-                    only_failures=args.only_failures,
-                )
-                if args.fail_on_regression:
-                    routes, _, left_matched, right_matched = comparison.match_routes(
-                        args.run.name, config, rows, args.compare.name, other_config, other_rows
-                    )
-                    regression = comparison.assess_regression(left_matched, right_matched, routes)
                 output = scores.build_comparison_summary(
                     (args.run.name, config, rows),
                     (args.compare.name, other_config, other_rows),
                     top=top,
                 )
             else:
-                rows = _filter_rows(
-                    rows,
-                    route_ids=route_ids,
-                    cohort_filters=cohort_filters,
-                    only_failures=args.only_failures,
-                )
                 output = scores.build_summary(config, rows, top=top)
         else:
             if args.paired_rates:
@@ -588,30 +643,11 @@ def main():
             if paired and args.compare is None:
                 parser.error("matched rate and metric reports require --compare")
             if args.compare is not None:
-                other_config, other_rows = load_run(args.compare)
-                rows, other_rows = _filter_pair(
-                    rows,
-                    other_rows,
-                    route_ids=route_ids,
-                    cohort_filters=cohort_filters,
-                    only_failures=args.only_failures,
-                )
-                if args.fail_on_regression:
-                    routes, _, left_matched, right_matched = comparison.match_routes(
-                        args.run.name, config, rows, args.compare.name, other_config, other_rows
-                    )
-                    regression = comparison.assess_regression(left_matched, right_matched, routes)
                 baseline = args.run.name, config, rows
                 other = args.compare.name, other_config, other_rows
                 output = comparison.compare(baseline, other, selected, paired)
                 output = _apply_top(output, args.top, is_compare=True)
             else:
-                rows = _filter_rows(
-                    rows,
-                    route_ids=route_ids,
-                    cohort_filters=cohort_filters,
-                    only_failures=args.only_failures,
-                )
                 output = {key: report(rows) for key, report in selected.items()}
                 output = _apply_top(output, args.top, is_compare=False)
     except ValueError as exc:

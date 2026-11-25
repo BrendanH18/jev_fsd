@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import stat
 import threading
 from copy import deepcopy
@@ -10,9 +11,9 @@ from pathlib import Path
 from typing import Optional
 
 from .config import PRESET_BBOXES
-from .osm.pack import pack_path
+from .osm.pack import PACK_VERSION, pack_path
 
-_META_CACHE: dict = {}  # str(path) -> ((mtime_ns, size), metadata)
+_META_CACHE: dict = {}  # str(path) -> (file stamp, metadata or None)
 _META_LOCK = threading.Lock()
 
 MAP_CATALOG = (
@@ -151,31 +152,61 @@ def map_identity(bbox: tuple) -> dict:
 
 
 def _pack_metadata(path: Path) -> Optional[dict]:
-    """Cached stats, extent and road preview for a pack file, invalidated when mtime or size changes."""
+    """Cached stats, extent and road preview for a pack file, invalidated on changes."""
     key = str(path)
     try:
         st = path.stat()
     except OSError:
+        st = None
+    if st is None or not stat.S_ISREG(st.st_mode):
         with _META_LOCK:
             _META_CACHE.pop(key, None)
         return None
-    if not stat.S_ISREG(st.st_mode):
-        return None
-    stamp = (st.st_mtime_ns, st.st_size)
+    stamp = (st.st_dev, st.st_ino, st.st_ctime_ns, st.st_mtime_ns, st.st_size)
     with _META_LOCK:
         cached = _META_CACHE.get(key)
         if cached is not None and cached[0] == stamp:
             return cached[1]
-    pack = json.loads(path.read_text())
+    try:
+        meta = _preview_metadata(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
+        meta = None
+    with _META_LOCK:
+        _META_CACHE[key] = (stamp, meta)
+    return meta
+
+
+def _finite(value) -> bool:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def _preview_metadata(pack: dict) -> dict:
+    if not isinstance(pack, dict) or pack.get("pack_version") != PACK_VERSION:
+        raise ValueError("unexpected pack version")
+    for field in ("edges", "intersections", "stops", "buildings", "extent"):
+        if not isinstance(pack[field], list):
+            raise ValueError(f"{field} must be an array")
+    if len(pack["extent"]) != 4 or not all(_finite(v) for v in pack["extent"]):
+        raise ValueError("extent must have four finite coordinates")
     preview = []
     seen = set()
     for edge in pack["edges"]:
-        edge_key = tuple(sorted((edge["from"], edge["to"])))
+        start, end = edge["from"], edge["to"]
+        points = tuple(map(tuple, edge["pts"]))
+        if not all(len(pt) == 2 and _finite(pt[0]) and _finite(pt[1]) for pt in points):
+            raise ValueError("edge points must be finite coordinate pairs")
+        reverse = (end, start, points[::-1])
+        edge_key = min((start, end, points), reverse)
         if edge_key in seen:
             continue
         seen.add(edge_key)
         preview.append({"pts": edge["pts"], "major": edge["cls"] in ("primary", "secondary", "tertiary", "trunk")})
-    meta = {
+    return {
         "stats": {
             "roads": len(pack["edges"]),
             "signals": len(pack["intersections"]),
@@ -185,9 +216,6 @@ def _pack_metadata(path: Path) -> Optional[dict]:
         "extent": pack["extent"],
         "preview": preview,
     }
-    with _META_LOCK:
-        _META_CACHE[key] = (stamp, meta)
-    return meta
 
 
 def catalog(maps_dir: Path) -> list:

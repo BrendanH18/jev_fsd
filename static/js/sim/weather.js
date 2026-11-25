@@ -17,8 +17,9 @@ export const WEATHER = {
 export const current = { name: "dry", ...WEATHER.dry };
 
 export function setWeather(name) {
-  const w = WEATHER[name] || WEATHER.dry;
-  Object.assign(current, { name: WEATHER[name] ? name : "dry" }, w);
+  if (typeof name !== "string" || !Object.hasOwn(WEATHER, name)) name = "dry";
+  const w = WEATHER[name];
+  Object.assign(current, { name }, w);
   ROAD.mu = w.mu;
   return current;
 }

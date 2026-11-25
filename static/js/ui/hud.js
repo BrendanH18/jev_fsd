@@ -130,10 +130,12 @@ export class Hud {
     this.shownDecision = null;
     this.shownAutopilot = null;
     this._keysReturnFocus = null;
-    this.el.settingsToggle.addEventListener("click", () => {
-      const open = this.el.settings.hidden;
-      this.el.settings.hidden = !open;
-      this.el.settingsToggle.setAttribute("aria-expanded", String(open));
+    this.el.settingsToggle.addEventListener("click", () => this.toggleSettings());
+    this.el.settings.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.toggleSettings(false);
     });
     this.el.keysToggle.addEventListener("click", () => this.toggleKeys());
     this.el.keysClose?.addEventListener("click", () => this.toggleKeys(false));
@@ -147,10 +149,13 @@ export class Hud {
       const initial = Math.round(getDeadZone() * 100);
       this.el.deadzone.value = String(initial);
       if (this.el.deadzoneValue) this.el.deadzoneValue.textContent = `${initial}%`;
+      this.el.deadzone.setAttribute("aria-valuetext", `${initial} percent`);
       this.el.deadzone.addEventListener("input", () => {
         const pctVal = Number(this.el.deadzone.value) || 0;
         const applied = setDeadZone(pctVal / 100);
-        if (this.el.deadzoneValue) this.el.deadzoneValue.textContent = `${Math.round(applied * 100)}%`;
+        const shown = Math.round(applied * 100);
+        if (this.el.deadzoneValue) this.el.deadzoneValue.textContent = `${shown}%`;
+        this.el.deadzone.setAttribute("aria-valuetext", `${shown} percent`);
       });
     }
     if (this.el.featureSwitchesList) {
@@ -198,6 +203,13 @@ export class Hud {
 
   show() {
     this.el.root.hidden = false;
+  }
+
+  toggleSettings(force = this.el.settings.hidden) {
+    if (force === !this.el.settings.hidden) return;
+    if (!force && this.el.settings.contains(document.activeElement)) this.el.settingsToggle.focus();
+    this.el.settings.hidden = !force;
+    this.el.settingsToggle.setAttribute("aria-expanded", String(force));
   }
 
   toggleKeys(force) {

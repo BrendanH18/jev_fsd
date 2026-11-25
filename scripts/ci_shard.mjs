@@ -8,17 +8,30 @@
 // node scripts/ci_shard.mjs --shards 6 --plan      every shard with its files and estimated time
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseOptions, wholeNumber } from "./cli_tools.mjs";
+
+const USAGE = `Usage: node scripts/ci_shard.mjs --shards N (--shard I | --plan | --file NAME)
+  --json              emit structured JSON for the requested view
+  --times FILE        plan with another timing table
+  --require-measured  fail if any discovered test is outside the timing table
+  --help, -h          show this help`;
 
 const SCRIPTS = fileURLToPath(new URL(".", import.meta.url));
 
 export function testFiles(dir = SCRIPTS) {
-  return readdirSync(dir)
-    .filter((f) => /^test_.*\.mjs$/.test(f))
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => (entry.isFile() || entry.isSymbolicLink()) && /^test_.*\.mjs$/.test(entry.name))
+    .map((entry) => entry.name)
     .sort();
 }
 
 export function measuredTimes(path = `${SCRIPTS}ci_test_times.json`) {
-  return JSON.parse(readFileSync(path, "utf8")).seconds;
+  const times = JSON.parse(readFileSync(path, "utf8")).seconds;
+  if (!times || Array.isArray(times) || typeof times !== "object")
+    throw new Error(`${path}: expected a seconds object.`);
+  for (const [name, seconds] of Object.entries(times))
+    if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`${path}: invalid time for ${name}.`);
+  return times;
 }
 
 // The measured seconds of each file, the median for one not in `times`.
@@ -43,7 +56,13 @@ export function plan(files, times, count) {
   const shards = Array.from({ length: count }, () => ({ files: [], seconds: 0 }));
   for (const f of longestFirst(files, times)) {
     let best = 0;
-    for (let i = 1; i < count; i++) if (shards[i].seconds < shards[best].seconds) best = i;
+    for (let i = 1; i < count; i++) {
+      if (
+        shards[i].seconds < shards[best].seconds ||
+        (shards[i].seconds === shards[best].seconds && shards[i].files.length < shards[best].files.length)
+      )
+        best = i;
+    }
     shards[best].files.push(f);
     shards[best].seconds += cost(f);
   }
@@ -52,23 +71,38 @@ export function plan(files, times, count) {
 }
 
 function main(argv) {
-  const arg = (name) => {
-    const i = argv.indexOf(name);
-    return i >= 0 ? argv[i + 1] : undefined;
-  };
-  const count = Number(arg("--shards"));
-  if (!Number.isInteger(count) || count < 1) throw new Error("--shards N (a positive whole number) is required");
-  const shards = plan(testFiles(), measuredTimes(), count);
-  if (argv.includes("--plan")) {
-    shards.forEach((s, i) =>
-      console.log(`shard ${i}: ${s.files.length} files, about ${Math.round(s.seconds)} s\n  ${s.files.join("\n  ")}`),
-    );
+  const { help, args } = parseOptions(argv, ["shards", "shard", "times", "file"], ["plan", "json", "require-measured"]);
+  if (help) {
+    console.log(USAGE);
     return;
   }
-  const index = Number(arg("--shard"));
-  if (!Number.isInteger(index) || index < 0 || index >= count)
-    throw new Error(`--shard must be a whole number from 0 to ${count - 1}`);
-  for (const f of shards[index].files) console.log(`scripts/${f}`);
+  const count = wholeNumber("shards", args.shards, undefined, { min: 1, max: 10_000 });
+  if (["plan", "shard", "file"].filter((name) => args[name] !== undefined).length !== 1)
+    throw new Error("Choose one of --plan, --shard and --file.");
+  const files = testFiles();
+  const times = measuredTimes(args.times);
+  if (args["require-measured"]) {
+    const missing = files.filter((file) => !Object.hasOwn(times, file));
+    if (missing.length) throw new Error(`Missing measured times: ${missing.join(", ")}`);
+  }
+  const shards = plan(files, times, count);
+  if (args.plan) {
+    if (args.json) console.log(JSON.stringify(shards));
+    else
+      shards.forEach((s, i) =>
+        console.log(`shard ${i}: ${s.files.length} files, about ${Math.round(s.seconds)} s\n  ${s.files.join("\n  ")}`),
+      );
+    return;
+  }
+  if (args.file) {
+    const index = shards.findIndex((shard) => shard.files.includes(args.file));
+    if (index === -1) throw new Error(`No discovered check named ${args.file}.`);
+    console.log(args.json ? JSON.stringify({ shard: index, file: args.file }) : index);
+    return;
+  }
+  const index = wholeNumber("shard", args.shard, undefined, { min: 0, max: count - 1 });
+  if (args.json) console.log(JSON.stringify({ shard: index, ...shards[index] }));
+  else for (const f of shards[index].files) console.log(`scripts/${f}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

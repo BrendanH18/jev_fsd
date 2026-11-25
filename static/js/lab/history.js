@@ -53,7 +53,7 @@ function validDecision(d, compactAllowed) {
         (Array.isArray(d.flags) && d.flags.length > 0 && d.flags.length <= 20 && d.flags.every(text))) &&
       (d.repeats === undefined
         ? d.until_s === undefined
-        : Number.isInteger(d.repeats) && d.repeats > 1 && finite(d.until_s) && d.until_s >= d.at_s)
+        : Number.isSafeInteger(d.repeats) && d.repeats > 1 && finite(d.until_s) && d.until_s >= d.at_s)
     );
   }
   return (
@@ -62,6 +62,7 @@ function validDecision(d, compactAllowed) {
     Array.isArray(d.flags) &&
     d.flags.length <= 20 &&
     d.flags.every(text) &&
+    (d.error == null || typeof d.error === "string") &&
     typeof d.context_recorded === "boolean" &&
     (d.state === null ? !d.context_recorded : !!d.state && typeof d.state === "object" && !Array.isArray(d.state)) &&
     (d.candidates === null
@@ -104,8 +105,7 @@ export function validateEvaluation(value) {
       !Number.isInteger(r.version) ||
       r.version < 1 ||
       !Number.isInteger(r.seed) ||
-      r.pack == null ||
-      !["string", "number"].includes(typeof r.pack) ||
+      (!(Number.isSafeInteger(r.pack) && r.pack >= 0) && !text(r.pack)) ||
       !COUNTERS.every((k) => finite(r[k])) ||
       typeof r.arrived !== "boolean" ||
       typeof r.stopped !== "boolean" ||
@@ -134,7 +134,8 @@ export function validateEvaluation(value) {
             Object.values(r.flagged_by_check).reduce((a, n) => a + n, 0) === r.flagged_choices
           )) ||
       r.report.status !== (r.simulation_error ? "error" : r.stopped ? "stopped" : r.arrived ? "arrived" : "timeout") ||
-      !Number.isInteger(r.report.model_version) ||
+      !Number.isSafeInteger(r.report.model_version) ||
+      r.report.model_version < 1 ||
       !Array.isArray(r.report.incidents) ||
       r.report.incidents.length > 100 ||
       r.report.incidents.some((e) => !e || !finite(e.at_s) || !text(e.type) || !text(e.message))
@@ -160,6 +161,9 @@ export function validateEvaluation(value) {
         new Set(r.decisions_trace.map((d) => d.id)).size !== r.decisions_trace.length)
     )
       throw new Error("The export contains an invalid decision trace.");
+    const contextTimes = new Map(
+      (r.decisions_trace || []).filter((d) => d.context_recorded).map((d) => [d.id, d.at_s]),
+    );
     if (
       r.events !== undefined &&
       (!Array.isArray(r.events) ||
@@ -170,10 +174,7 @@ export function validateEvaluation(value) {
             !finite(e.at_s) ||
             !text(e.type) ||
             !text(e.message) ||
-            !(
-              e.decision_id === null ||
-              r.decisions_trace?.some((d) => d.id === e.decision_id && d.at_s <= e.at_s && d.context_recorded)
-            ) ||
+            !(e.decision_id === null || contextTimes.get(e.decision_id) <= e.at_s) ||
             !(e.decision_age_s === null || finite(e.decision_age_s)),
         ))
     )
@@ -615,14 +616,15 @@ export function conditionDifferences(a, b) {
 export function compareResult(result, baseline, brain) {
   const candidates = baseline.results.filter((r) => r.challenge === result.challenge && r.brain === brain);
   if (!candidates.length) return { reasons: ["challenge absent from baseline"] };
-  const matches = candidates.filter((r) => !conditionDifferences(result, r).length);
+  const conditions = candidates.map((r) => ({ before: r, reasons: conditionDifferences(result, r) }));
+  const matches = conditions.filter(({ reasons }) => !reasons.length);
   if (matches.length > 1) return { reasons: ["duplicate baseline results"] };
   if (!matches.length) {
-    const nearest = candidates.map((r) => conditionDifferences(result, r)).sort((a, b) => a.length - b.length)[0];
-    return { reasons: nearest };
+    return { reasons: conditions.sort((a, b) => a.reasons.length - b.reasons.length)[0].reasons };
   }
-  const before = matches[0];
+  const { before } = matches[0];
   if (result.stopped || before.stopped) return { reasons: ["stopped attempt"] };
+  if (result.simulation_error || before.simulation_error) return { reasons: ["simulation error"] };
   return { before, reasons: [] };
 }
 

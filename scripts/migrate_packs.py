@@ -99,7 +99,14 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--check", action="store_true", help="report the migration without writing files")
     parser.add_argument("--maps-dir", type=Path, default=MAPS_DIR, help="directory containing the source packs")
+    parser.add_argument("--keep-source", action="store_true", help="keep v5 files after publishing v6")
+    parser.add_argument("--output-dir", type=Path, help="write v6 files here and retain the original v5 files")
     args = parser.parse_args(argv[1:])
+    if not args.maps_dir.is_dir():
+        parser.error("--maps-dir must be an existing directory")
+    output_dir = args.output_dir if args.output_dir is not None else args.maps_dir
+    if output_dir.exists() and not output_dir.is_dir():
+        parser.error("--output-dir must be a directory")
     sources = sorted(args.maps_dir.glob("*.v%s.pack.json" % FROM_VERSION))
     if not sources:
         print("no v%s packs in %s" % (FROM_VERSION, args.maps_dir))
@@ -107,20 +114,35 @@ def main(argv: list[str]) -> int:
     planned = []
     try:
         for source in sources:
-            target = source.with_name(
-                source.name.replace(".v%s.pack.json" % FROM_VERSION, ".v%s.pack.json" % TO_VERSION)
-            )
+            stem = source.name.removesuffix(f".v{FROM_VERSION}.pack.json")
+            target = output_dir / f"{stem}.v{TO_VERSION}.pack.json"
             if target.exists() or target.is_symlink():
                 raise FileExistsError("migration destination already exists: %s" % target)
-            pack = json.loads(source.read_text())
-            counts = migrate(pack)
-            print("%s -> %s: %s" % (source.name, target.name, ", ".join("%s %d" % kv for kv in counts.items())))
+            try:
+                pack = json.loads(source.read_text(encoding="utf-8"))
+                counts = migrate(pack)
+            except (ValueError, TypeError, KeyError, IndexError, RecursionError) as err:
+                raise ValueError(f"{source.name}: {err}") from err
+            print("%s -> %s: %s" % (source, target, ", ".join("%s %d" % kv for kv in counts.items())))
             planned.append((source, target, pack))
         if not args.check:
-            for source, target, pack in planned:
-                write_json(target, pack, replace=False)
-                source.unlink()
-    except (OSError, ValueError, TypeError, KeyError) as err:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            published = []
+            try:
+                for _, target, pack in planned:
+                    write_json(target, pack, replace=False)
+                    published.append(target)
+            except OSError as err:
+                for path in reversed(published):
+                    try:
+                        path.unlink(missing_ok=True)
+                    except OSError as cleanup_err:
+                        print(f"FAILED to remove incomplete migration output {path}: {cleanup_err}", file=sys.stderr)
+                raise OSError(f"could not publish {target}: {err}") from err
+            if not args.keep_source and args.output_dir is None:
+                for source, _, _ in planned:
+                    source.unlink()
+    except (OSError, ValueError) as err:
         print("FAILED: %s" % err, file=sys.stderr)
         return 1
     return 0

@@ -45,15 +45,46 @@ class OsmData:
 
 
 def parse_xml(source: Union[Path, str, bytes]) -> OsmData:
-    if (
-        isinstance(source, (bytes, str))
-        and not isinstance(source, Path)
-        and (isinstance(source, bytes) or source.lstrip().startswith("<"))
-    ):
-        root = ET.fromstring(source)
-    else:
-        root = ET.parse(str(source)).getroot()
+    try:
+        if isinstance(source, bytes) or (isinstance(source, str) and source.lstrip("\ufeff \t\r\n").startswith("<")):
+            root = ET.fromstring(source)
+        else:
+            root = ET.parse(source).getroot()
+    except (ET.ParseError, LookupError, ValueError) as err:
+        raise ValueError(f"Invalid OSM XML: {err}") from err
+    if root.tag != "osm":
+        raise ValueError(f"Expected an OSM XML document, got <{root.tag}>")
+    for element in ("error", "remark"):
+        notice = root.find(element)
+        if notice is not None:
+            message = " ".join("".join(notice.itertext()).split())[:200]
+            raise ValueError(f"OSM reported an error: {message or element}")
     return parse_records(root)
+
+
+def _attribute(element: ET.Element, name: str) -> str:
+    value = element.get(name)
+    if value is None:
+        raise ValueError(f"<{element.tag}> is missing {name!r}")
+    return value
+
+
+def _number(element: ET.Element, name: str, convert):
+    value = _attribute(element, name)
+    try:
+        return convert(value)
+    except ValueError as err:
+        raise ValueError(f"<{element.tag}> has invalid {name!r} ({value[:80]!r})") from err
+
+
+def _relation_members(element: ET.Element) -> list[tuple]:
+    members = []
+    for member in element.findall("member"):
+        kind = _attribute(member, "type")
+        if kind not in ("node", "way", "relation"):
+            raise ValueError(f"unsupported member type {kind[:80]!r}")
+        members.append((kind, _number(member, "ref", int), member.get("role") or ""))
+    return members
 
 
 def parse_records(root: ET.Element) -> OsmData:
@@ -61,17 +92,21 @@ def parse_records(root: ET.Element) -> OsmData:
     for el in root:
         if el.tag not in ("node", "way", "relation"):
             continue
-        tags = {t.attrib["k"]: t.attrib["v"] for t in el.findall("tag")}
-        if el.tag == "node":
-            lat, lon = float(el.get("lat")), float(el.get("lon"))
-            if not (isfinite(lat) and isfinite(lon)):
-                raise ValueError("node coordinates must be finite")
-            data.add_node(int(el.get("id")), lat, lon, tags)
-        elif el.tag == "way":
-            refs = [int(nd.get("ref")) for nd in el.findall("nd")]
-            data.add_way(int(el.get("id")), refs, tags)
-        else:
-            if (
+        try:
+            tags = {_attribute(t, "k"): _attribute(t, "v") for t in el.findall("tag")}
+            if el.tag == "node":
+                lat, lon = _number(el, "lat", float), _number(el, "lon", float)
+                if not (isfinite(lat) and isfinite(lon)):
+                    raise ValueError("node coordinates must be finite")
+                if not -90 <= lat <= 90:
+                    raise ValueError("latitude must lie within [-90, 90]")
+                if not -180 <= lon <= 180:
+                    raise ValueError("longitude must lie within [-180, 180]")
+                data.add_node(_number(el, "id", int), lat, lon, tags)
+            elif el.tag == "way":
+                refs = [_number(nd, "ref", int) for nd in el.findall("nd")]
+                data.add_way(_number(el, "id", int), refs, tags)
+            elif (
                 tags.get("type") in ("restriction", "restriction:on_red")
                 or (tags.get("type") == "route" and tags.get("route") in TRANSIT_ROUTES)
                 or (
@@ -81,6 +116,8 @@ def parse_records(root: ET.Element) -> OsmData:
                     )
                 )
             ):
-                members = [(m.get("type"), int(m.get("ref")), m.get("role") or "") for m in el.findall("member")]
-                data.add_relation(int(el.get("id")), members, tags)
+                data.add_relation(_number(el, "id", int), _relation_members(el), tags)
+        except ValueError as err:
+            record = el.get("id", "?")[:80]
+            raise ValueError(f"Invalid OSM records: {el.tag} {record!r}: {err}") from err
     return data

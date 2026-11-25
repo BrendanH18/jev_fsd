@@ -7,6 +7,7 @@
 //
 // A record:
 //   key       the World option (fleet option when `buildFleet` is present) and the default World property
+//   flag      optional URL parameter including when it differs from the lowercase option key
 //   property  the World property when it differs from `key`
 //   defaultCount  the free-drive default for a feature whose option is a count
 //   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations
@@ -103,6 +104,16 @@
 //   holdStill(snap)                     when holding still is right, or "": "driveways", "late", "parking"
 //   prompt                              { at, text }: a section of the LLM system prompt: "restrictions",
 //                                       "streetHazards", "driveways", "snowbanks", "junctions", "rearTraffic", "parking", "afterParking"
+//   phaseBansRedTurns(intersection)    true when the current signal plan forbids all turns on red
+//   redLightEvent(event, intersection) attach phase-specific fields to a red-light event
+//   intersectionFields(world, inter, context) snapshot fields next to the turn-on-red offers
+//   intersectionModelFields(intersection) decision fields before cross-traffic data
+//   controlReplace(world, control, edgeId) replacement control, or the original to prevent later overrides
+//   alternateSignal(world, id)         temporary signal state or null
+//   diagonalCrossing(intersection)     true if pedestrians may choose the opposite corner
+//   senseSignalControl(world, routeControl, signal) { control, fields } for a visible replacement
+//   controlEvent(control)             extra fields on an audited stop or all-way yield event
+//   trafficReleaseControl(world, n, edge, control, memory, distance) true when traffic clears a replaced stop
 //   controlDirection(world, vehicle, edgeId) direction overriding the normal signal ("end")
 //   controlAudit(world, control, edge, rc, past, entered) true if the feature audits that signal itself ("end")
 //   auditSignal(world, control, edge, rc, past, entered) observe a signal approach under the ordinary signal audit ("end")
@@ -118,6 +129,10 @@
 //                                       skipFollowing, leadSpeed(leader, speed) or brake(leader, gap, accel) ("end")
 //   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
 //   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
+//   trafficCorridor(world, n, path, front) first corridor { shift, lineAt(s), ignore, limit, stop() }, or null
+//   coachCorridor(world, limit)        temporary passage through a restricted area for the coach
+//   coachCorridorFrame(score, corridor, context) record a passage incident and return immediate guidance
+//   examinerFail(report)              an examiner failure item or null ("beforeTracks")
 //   checkpoint(world, fleet)            restore references after the recorder reinstates state ("end")
 //   trafficLeaderHold(world, n, path, front) { gap, vehicle } of a virtual traffic leader ("end")
 //   trafficParkingPlan(n, standstillGap) { shift, stop, signal } for a car preparing to park ("end")
@@ -150,7 +165,7 @@
 // Import a record through this registry (or a core module), never on its own: the snowbanks record's simulation
 // reaches sim/npc.js, which loads this registry while that record is still loading
 // (scripts/test_feature_registry.mjs checks each record loads after it).
-import { CATEGORIES } from "../../lab/examiner-categories.js";
+import { featureRecordProblem, featureRegistryProblem, slotOf } from "../feature-schema.js";
 import balls from "./balls.js";
 import contraflow from "./contraflow.js";
 import collection from "./collection-truck.js";
@@ -174,6 +189,10 @@ import following from "./following.js";
 import restrictions from "./turn-restrictions.js";
 import highBeams from "./high-beams.js";
 import redTurnSigns from "./red-turn-signs.js";
+import workZones from "./work-zones.js";
+import outages from "./outages.js";
+import { flashControl } from "../night-flash.js";
+import scrambles from "./scrambles.js";
 import runners from "./red-light-runner.js";
 
 export const FEATURES = [
@@ -201,6 +220,9 @@ export const FEATURES = [
   roadside,
   following,
   redTurnSigns,
+  scrambles,
+  workZones,
+  outages,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -210,7 +232,7 @@ export const SLOTS = {
   requestReroute: ["beforeOffRoute", "afterOffRoute"],
   checkpointShare: ["end"],
   rulesStop: ["beforeSignal", "end"],
-  notice: ["beforePlow", "beforeLeftOnRed", "end", "beforeZone"],
+  notice: ["beforeMerge", "beforePlow", "beforeLeftOnRed", "end", "beforeZone"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
   rulesCost: ["beforeStops", "stops", "beforePassing", "end"],
@@ -219,10 +241,11 @@ export const SLOTS = {
   cautiousDrive: ["end"],
   legitimateStop: ["end"],
   obstacles: ["end"],
-  stepBeforeTraffic: ["first", "afterParked", "afterOutages", "end"],
+  stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
   audit: [
     "beforeCollisions",
+    "beforeMerge",
     "afterFlagger",
     "afterCalming",
     "beforeDriveways",
@@ -248,6 +271,7 @@ export const SLOTS = {
   finishLanes: ["end"],
   limit: ["beforeWorkZone", "beforeRunner", "passing", "driveways", "streetHazards", "parking"],
   target: [
+    "beforeMerge",
     "beforeRunner",
     "restrictions",
     "beforeCurve",
@@ -277,6 +301,7 @@ export const SLOTS = {
   trafficSignalHold: ["end"],
   turnPace: ["end"],
   candidates: [
+    "beforeMerge",
     "afterFlagger",
     "beforeRunner",
     "restrictions",
@@ -288,8 +313,19 @@ export const SLOTS = {
   ],
   adjust: ["streetHazards", "end"],
   brakeDetour: ["end"],
-  sim: ["beforeRunner", "first", "afterCollision", "driveways", "streetHazards", "beforeEmergency", "parking", "end"],
+  sim: [
+    "beforeRunner",
+    "first",
+    "afterCollision",
+    "beforeMerge",
+    "driveways",
+    "streetHazards",
+    "beforeEmergency",
+    "parking",
+    "end",
+  ],
   state: [
+    "beforeMerge",
     "signal",
     "afterFollowing",
     "beforePlow",
@@ -307,6 +343,7 @@ export const SLOTS = {
   outcome: ["ids", "laneChange"],
   slowOutcome: ["lane", "end"],
   clause: [
+    "stopStart",
     "signal",
     "afterJunctionBox",
     "afterClosure",
@@ -321,12 +358,15 @@ export const SLOTS = {
     "rearTraffic",
     "parking",
   ],
-  holdStill: ["afterFlagger", "beforeRunner", "driveways", "late", "parking"],
+  holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "parking"],
   prompt: [
     "headlights",
     "pedestrian",
     "beforeSchoolBus",
+    "beforeMerge",
     "afterPlow",
+    "afterAllWay",
+    "beforeBusLanes",
     "afterBusLanes",
     "afterGlare",
     "beforeRunner",
@@ -374,6 +414,16 @@ export const SLOTS = {
   redEntryBans: ["end"],
   turnOnRedBlocked: ["end"],
   routeTurnOnRedBlocked: ["end"],
+  phaseBansRedTurns: ["end"],
+  controlReplace: ["end"],
+  alternateSignal: ["end"],
+  diagonalCrossing: ["end"],
+  senseSignalControl: ["end"],
+  controlEvent: ["end"],
+  trafficReleaseControl: ["end"],
+  intersectionModelFields: ["beforeCrossTraffic"],
+  redLightEvent: ["end"],
+  intersectionFields: ["afterRightTurn"],
   followingPolicy: ["end"],
   handlesPedestrian: ["end"],
   returnClause: ["end"],
@@ -388,67 +438,19 @@ export const SLOTS = {
   evStop: ["end"],
   followingExclusion: ["end"],
   trafficBypass: ["end"],
+  trafficCorridor: ["end"],
+  coachCorridor: ["end"],
+  coachCorridorFrame: ["end"],
+  examinerFail: ["beforeTracks"],
+  passBlockReason: ["end"],
   trafficSpawnBlocked: ["end"],
-  detour: ["parking", "end"],
+  detour: ["beforeMerge", "parking", "end"],
   pullOverDetour: ["end"],
 };
-// The fields of a record that are not hooks.
-const FIELDS = [
-  "key",
-  "property",
-  "defaultCount",
-  "buildAt",
-  "snapshot",
-  "seen",
-  "calls",
-  "build",
-  "buildFleet",
-  "obstacle",
-  "priority",
-  "flagText",
-  "perceptionRejections",
-  "eventBadges",
-  "coach",
-  "motion",
-  "parkingTraffic",
-  "day",
-  "utcOffset",
-];
-
-// What is wrong with record `f`, or null: a missing field, an unknown hook, or a hook at a slot the core
-// never runs.
-export function recordProblem(f) {
-  if (typeof f.key !== "string" || !f.key) return "a record has no key";
-  if ((f.seen !== undefined || f.metric !== undefined) && (typeof f.seen !== "string" || !f.seen.trim()))
-    return `${f.key} has no seen flag`;
-  if (f.buildAt !== undefined && !["early", "afterSpawn"].includes(f.buildAt))
-    return `${f.key} has an unknown build position`;
-  if (f.calls !== undefined && (typeof f.calls !== "string" || !f.calls))
-    return `${f.key} has an invalid audit calls field`;
-  if (typeof f.build !== "function") return `${f.key} has no build`;
-  if (f.buildFleet !== undefined && typeof f.buildFleet !== "function") return `${f.key} has an invalid buildFleet`;
-  if (f.metric !== undefined) {
-    for (const key of ["name", "failure", "label"]) {
-      const value = f.metric?.[key];
-      if (typeof value !== "string" || !value.trim()) return `${f.key}'s metric has no ${key}`;
-    }
-    const { category } = f.metric;
-    if (category !== undefined && (typeof category !== "string" || !Object.hasOwn(CATEGORIES, category)))
-      return `${f.key}'s metric has an unknown category`;
-  }
-  for (const [name, h] of Object.entries(f)) {
-    if (FIELDS.includes(name)) continue;
-    if (!SLOTS[name]) return `${f.key} has an unknown hook or field ${name}`;
-    const at = typeof h === "function" ? "end" : h?.at || "end";
-    if (!SLOTS[name].includes(at))
-      return `${f.key}'s ${name} is at "${at}", which the core never runs: use ${SLOTS[name].join(", ")}`;
-  }
-  return null;
-}
-for (const f of FEATURES) {
-  const problem = recordProblem(f);
-  if (problem) throw new Error(`Feature registry: ${problem}.`);
-}
+export const recordProblem = (record) => featureRecordProblem(record, SLOTS);
+export const registryProblem = (records) => featureRegistryProblem(records, SLOTS);
+const problem = registryProblem(FEATURES);
+if (problem) throw new Error(`Feature registry: ${problem}.`);
 
 // The functions of hook `name` at `slot`, in registration order (bound to their record as `this`).
 // A core module asks for its hooks when it loads, and that may be while the records are still loading,
@@ -461,11 +463,12 @@ export function hooks(name, slot = "end") {
   return out;
 }
 function fillHooks(out, name, slot) {
-  if (!SLOTS[name]?.includes(slot)) throw new Error(`Feature registry: no slot "${slot}" for ${name}.`);
+  if (!Object.hasOwn(SLOTS, name) || !SLOTS[name].includes(slot))
+    throw new Error(`Feature registry: no slot "${slot}" for ${name}.`);
   for (const f of FEATURES) {
     const h = f[name];
     if (!h) continue;
-    const at = typeof h === "function" ? "end" : h.at || "end";
+    const at = slotOf(h);
     if (at === slot) out.push((typeof h === "function" ? h : h.run).bind(f));
   }
 }
@@ -488,8 +491,20 @@ const JUNCTION_PLAN = hooks("junctionPlan");
 export const controlDirection = (world, vehicle, edgeId) => firstHookResult(CONTROL_DIRECTION, world, vehicle, edgeId);
 export const junctionPlan = (intersection) => firstHookResult(JUNCTION_PLAN, intersection);
 
+const PHASE_BANS_RED_TURNS = hooks("phaseBansRedTurns");
+export const phaseBansRedTurns = (inter) => PHASE_BANS_RED_TURNS.some((blocked) => blocked(inter));
+
+const PRIMARY_DETOURS = hooks("detour", "beforeMerge");
+export const primaryDetour = (snap) => firstHookResult(PRIMARY_DETOURS, snap);
+
+const CONTROL_REPLACEMENTS = hooks("controlReplace");
+const SIGNAL_OVERRIDES = hooks("alternateSignal");
+export const controlAt = (world, control, edge) =>
+  firstHookResult(CONTROL_REPLACEMENTS, world, control, edge) ?? flashControl(world, control, edge);
+export const alternateSignal = (world, id) => firstHookResult(SIGNAL_OVERRIDES, world, id);
+
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
-export const recordsAt = (name, slot) => FEATURES.filter((f) => f[name] && (f[name].at || "end") === slot);
+export const recordsAt = (name, slot) => FEATURES.filter((f) => f[name] && slotOf(f[name]) === slot);
 
 const NOTICES = Object.fromEntries(
   SLOTS.notice.map((slot) => [slot, recordsAt("notice", slot).sort((a, b) => a.notice.order - b.notice.order)]),

@@ -118,12 +118,15 @@ def public(settings: Settings, registry: DecisionRegistry, client: JevClient) ->
     return {**registry.public(), "providers": DECISION.providers_public(settings), "jev": jev_public(client)}
 
 
-def _typesafe_models(data) -> List[dict]:
+def _typesafe_models(data, secret=None) -> List[dict]:
     """TypeSafe lists {"models": [{"name", "description", "release_date"}]}: the name is the model id."""
     models = data.get("models") if isinstance(data, dict) else None
     if not isinstance(models, list):
-        return parse_models(data)
-    return parse_models([{"id": m.get("name"), "name": m.get("description")} for m in models if isinstance(m, dict)])
+        return parse_models(data, secret=secret)
+    return parse_models(
+        [{"id": m.get("name"), "name": m.get("description")} for m in models if isinstance(m, dict)],
+        secret=secret,
+    )
 
 
 def list_models(settings: Settings, body: dict) -> dict:
@@ -141,7 +144,9 @@ def list_models(settings: Settings, body: dict) -> dict:
         note = None
         if key:
             try:  # a wrong key is worth saying now; an unreachable list is not worth blocking on
-                listed = _typesafe_models(fetch_json(p["base_url"] + "/v1/models", key, p["label"], MODELS_TIMEOUT_S))
+                listed = _typesafe_models(
+                    fetch_json(p["base_url"] + "/v1/models", key, p["label"], MODELS_TIMEOUT_S), secret=key
+                )
             except SetupError as err:
                 if "rejected the key" in str(err):
                     raise
@@ -162,7 +167,7 @@ def list_models(settings: Settings, body: dict) -> dict:
             "note": note,
         }
     base_url = probe_url(base_url_for(p, body), keyed=bool(key))
-    models = parse_models(fetch_json(base_url + "/v1/models", key, p["label"], MODELS_TIMEOUT_S))
+    models = parse_models(fetch_json(base_url + "/v1/models", key, p["label"], MODELS_TIMEOUT_S), secret=key)
     return {"provider": p["id"], "endpoint": public_url(base_url) + "/v1/systemone", "models": models}
 
 

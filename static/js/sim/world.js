@@ -5,9 +5,9 @@ import { leftOnRedAllowed } from "./left-on-red.js";
 
 import { auditBusLanes } from "./bus-lanes.js";
 import { Vehicle, CAR, comfort } from "./vehicle.js";
-import { headingAt, pointAt, projectPoint } from "../map/mapdata.js";
+import { headingAt, pointAt } from "../map/mapdata.js";
 import { surfaceDistance } from "../map/junctions.js";
-import { approachPhase, isScramble, movementSignal, phaseOf, setScrambles, StopMemory } from "./signals.js";
+import { approachPhase, movementSignal, phaseOf, StopMemory } from "./signals.js";
 import { boxGap, obbOverlap } from "./collision.js";
 import { ringBusy } from "./roundabout.js";
 import { ParkedCars, PARKED_DENSITY } from "./parking.js";
@@ -49,14 +49,6 @@ import {
 } from "./streetcar.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
-import {
-  SPAN_M as WZ_SPAN_M,
-  WorkZones,
-  canStopFor as canStopForFlagger,
-  marksOn,
-  paddle,
-  stopKey,
-} from "./work-zone.js";
 import { NEXT_LANE_M, SAME_LANE_M, isPlow, plowRelation, stayBack, turningLeft } from "./snow-plow.js";
 import {
   EGO_ID,
@@ -66,7 +58,6 @@ import {
   THROUGH_M,
   canStop as canStopForMerge,
 } from "./lane-closure.js";
-import { Outages, controlAt } from "./outage.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
@@ -74,10 +65,13 @@ import { egoPassing, oncomingPassConflict, minPassM } from "./cyclist-pass.js";
 import {
   FEATURES,
   controlDirection,
+  controlAt,
+  alternateSignal,
   featureNeedsDay,
   featureNeedsUtcOffset,
   featureObstacle,
   firstHookResult,
+  phaseBansRedTurns,
   hooks,
   buildFeatures,
 } from "./features/index.js";
@@ -95,11 +89,14 @@ const HIDES = hooks("hides"),
   EV_KERB = hooks("evKerb"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
+const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
 const VISION_RANGE = hooks("visionRange");
 const SIGNED_EXITS = hooks("redEntryBans");
 const CONTROL_AUDIT = hooks("controlAudit");
+const CONTROL_EVENT = hooks("controlEvent");
+const RED_LIGHT_EVENT = hooks("redLightEvent");
 const AUDIT_SIGNAL = hooks("auditSignal");
 const RESET_CONTACT = hooks("resetContact");
 
@@ -216,14 +213,6 @@ const AUDIT_TRAIN_MOVING_MPS = 1;
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
-// Stopping for a flagger's STOP paddle (sim/work-zone.js, Ontario HTA s. 146.1): once the car, heading
-// into a work zone along its street, first sees its flagger showing STOP while still short of the
-// one-lane section, it owes the stop if it could then stop at the line braking at up to 3.5 m/s^2
-// (standing still, it can). It misses the stop if, owing it, its front goes more than 2 m past the
-// line at more than 1 m/s while the paddle still shows STOP. Counted once each time that paddle turns
-// to STOP.
-const AUDIT_FLAGGER_PAST_M = 2;
-const AUDIT_FLAGGER_MOVING_MPS = 1;
 // Snow plows (sim/snow-plow.js): the car passes one when its centre draws level with the plow's,
 // going its way in the lane beside it. On its right (the plow not turning left), that is passing it on
 // the right, counted once a pass. Having passed one on the left, moving back into its lane with its
@@ -251,8 +240,7 @@ const AUDIT_PASS_NEAR_M = 30;
 
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
-  // `workZones`: how many work zones with a flagger stand at a time (sim/work-zone.js). `outages`: how
-  // many signals at a time have their lights out (sim/outage.js). `park`: the autopilot parks at the
+  // `park`: the autopilot parks at the
   // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
   // driven car keeps to a speed it can stop from beside them; `stepOuts`: with that, how many people at
   // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
@@ -261,8 +249,6 @@ export class World {
   // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
   // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
   // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
-  // `scrambles`: signals with a scramble crossing run their
-  // all-walk phase, with no right turn on red (sim/signals.js; like the weather, module state).
   // And the option of each registered feature (sim/features/index.js).
   constructor(
     map,
@@ -273,14 +259,11 @@ export class World {
       weather = "dry",
       vehicleSpec = CAR,
       buses = false,
-      workZones = 0,
-      outages = 0,
       park = false,
       hazards = false,
       stepOuts = 0,
       closures = 0,
       passCyclists = false,
-      scrambles = false,
       busLanes = false,
       nightFlash = false,
       leftOnRed = false,
@@ -297,7 +280,6 @@ export class World {
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
-    this.scrambles = setScrambles(scrambles);
     this.nightFlash = !!nightFlash;
     this.nightFlashSeen = false;
     setNightFlash(this);
@@ -329,7 +311,6 @@ export class World {
     this.trainCalls = new Map(); // "<crossing id>:<train id>:<departure>" -> { owed, counted }: one approaching it
     this.onTracks = null; // the level crossing the car is standing on the tracks of, and since when
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
-    this.flaggerCalls = new Map(); // "<work zone id>:<paddle change>" -> { owed, counted }: a flagger showing STOP
     // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
     // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
     // spaces it gave up, the space it is parked in, and the kerb strikes the audit counted
@@ -376,9 +357,7 @@ export class World {
     this.arrowCheck = null; // the left arrow the car crossed the line on: which way did it go?
     this.spawnEgo();
     buildFeatures(this, features, seed, map, "afterSpawn");
-    this.workZones = new WorkZones(this, { count: workZones, seed });
     this.laneClosures = new LaneClosures(this, { count: closures, seed });
-    this.outages = new Outages(this, { count: outages, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     buildFeatures(this, features, seed, map);
@@ -480,12 +459,12 @@ export class World {
     return phaseOf(this.map.intersections.get(intersectionId), this.t);
   }
   // The light for one movement through a signal: from the approach `edgeId`, turning `turn`
-  // (sim/signals.js: under a left arrow only a left turn has a green), or "dark" while its lights are
-  // out (sim/outage.js).
+  // including a movement-specific signal or a temporary signal state supplied by a feature.
   light(intersectionId, edgeId, turn = "straight") {
     const direction = controlDirection(this, this.ego, edgeId);
     if (direction) return direction === "go" ? "green" : "red";
-    if (this.outages?.isDark(intersectionId)) return "dark";
+    const override = alternateSignal(this, intersectionId);
+    if (override) return override;
     const inter = this.map.intersections.get(intersectionId);
     const flash = flashState(inter, this.map.edges.get(edgeId)?.control?.group, this);
     if (flash) return flash;
@@ -520,8 +499,6 @@ export class World {
     this.trainYields?.clear();
     this.onTracks = null;
     this.inBox = null;
-    this.flaggerCalls.clear();
-    this.flaggerYields?.clear();
     this.plowPass.clear();
     this.mergeCall = null;
     this.mergeWait = null;
@@ -741,7 +718,6 @@ export class World {
     )
       this.egoPeek = null;
     const edge = rc ? this.map.edges.get(rc.edge) : road.edge;
-    // (a signal whose lights are out is an all-way stop: sim/outage.js)
     const control = controlAt(
       this,
       rc ? rc.control : edge?.control || (edge ? this.map.priorityOf(edge.id) : null),
@@ -811,8 +787,7 @@ export class World {
           const arrow = shows === "arrow" || shows === "arrow_yellow";
           const state = arrow ? "green" : movementSignal(shows, "straight");
           // after a full stop, where turning right on red is allowed, which way it turns decides
-          // (never at a scramble crossing: sim/signals.js)
-          const scramble = isScramble(inter);
+
           // The legacy rightOnRed record below also validates enabled one-way left turns.
           // (and only from the leftmost lane, lane 0, as for traffic: sim/npc.js `rightOnRed`)
           const egoLane = this.leftOnRed ? this.map.nearestLane(this.ego.x, this.ego.y, this.ego.psi, 8)?.lane : null;
@@ -824,7 +799,7 @@ export class World {
           const pending =
             state === "red" &&
             (this.map.rightOnRed || leftPending) &&
-            !scramble &&
+            !phaseBansRedTurns(inter) &&
             inter &&
             this.egoStop.controlId === control.id &&
             this.egoStop.completed;
@@ -833,7 +808,9 @@ export class World {
           const signed = bannedExits ? { bannedExits } : {};
           if (state === "red" && !pending) {
             this.violations.red_lights_run++;
-            this.events.push({ type: "red_light", ...(scramble ? { scramble: true } : {}) });
+            const event = { type: "red_light" };
+            for (const add of RED_LIGHT_EVENT) add(event, inter);
+            this.events.push(event);
           }
           this.arrowCheck =
             arrow && inter
@@ -886,7 +863,10 @@ export class World {
           }
         } else if (control.type === "stop" && !this.egoStop.completed) {
           this.violations.stop_signs_run++;
-          this.events.push({ type: "stop_sign", ...(control.dark ? { dark: true } : {}) });
+          this.events.push({
+            type: "stop_sign",
+            ...Object.assign({}, ...CONTROL_EVENT.map((fields) => fields(control))),
+          });
         } else if (
           control.type === "yield" &&
           ringBusy(this.map.roundabouts.get(control.roundabout), this.map.nodes.get(edge.to), this.npcs)
@@ -970,7 +950,7 @@ export class World {
           type: "failed_to_yield",
           to: "all-way stop",
           with: missed.id,
-          ...(control.dark ? { dark: true } : {}),
+          ...Object.assign({}, ...CONTROL_EVENT.map((fields) => fields(control))),
         });
       }
     } else {
@@ -988,7 +968,7 @@ export class World {
     this.auditCrossings(dt);
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
-    this.auditFlaggers();
+    for (const audit of AUDIT_BEFORE_MERGE) audit(this);
     for (const audit of AUDIT_AFTER_FLAGGER) audit(this);
     this.auditPlows();
     this.auditClosures();
@@ -1210,47 +1190,6 @@ export class World {
         cyclist: bike.id,
       });
     }
-  }
-
-  // Going past a flagger's STOP paddle once the stop was owed (see AUDIT_FLAGGER_PAST_M).
-  auditFlaggers() {
-    const zones = this.workZones.zones;
-    if (!zones.length) return;
-    const ego = this.ego,
-      FRONT = ego.spec.length - ego.spec.rearOverhang;
-    for (const z of zones) {
-      if (Math.abs(ego.x - z.x) > WZ_SPAN_M + 80 || Math.abs(ego.y - z.y) > WZ_SPAN_M + 80) continue;
-      for (const side of ["closed", "open"]) {
-        if (paddle(z, side) !== "stop") continue;
-        const e = this.map.edges.get(z[side]),
-          p = projectPoint(e.pts, e.cum, [ego.x, ego.y], null);
-        if (
-          !p ||
-          p.lateral < e.asphalt[0] - 1 ||
-          p.lateral > e.asphalt[1] + 1 ||
-          Math.abs(wrap(ego.psi - p.heading)) > Math.PI / 3
-        )
-          continue;
-        const m = marksOn(z, side),
-          front = p.s + FRONT,
-          key = stopKey(z, side);
-        if (front > m.to) continue;
-        let rec = this.flaggerCalls.get(key);
-        // (decided when the car first sees the flagger showing STOP, still short of the one-lane section)
-        if (!rec && front < m.from && this.visibility.canSee(ego, ...z.flaggers[side]))
-          this.flaggerCalls.set(
-            key,
-            (rec = { owed: canStopForFlagger(ego.v, Math.max(0, m.line - front)), counted: false }),
-          );
-        if (rec?.owed && !rec.counted && front > m.line + AUDIT_FLAGGER_PAST_M && ego.v > AUDIT_FLAGGER_MOVING_MPS) {
-          rec.counted = true;
-          this.violations.stop_signs_run++;
-          this.events.push({ type: "stop_sign", flagger: true, zone: z.id });
-        }
-      }
-    }
-    if (this.flaggerCalls.size > 20)
-      for (const key of [...this.flaggerCalls.keys()].slice(0, 10)) this.flaggerCalls.delete(key);
   }
 
   // Through a junction on a left arrow: anything but a left turn (heading more than 45 deg left of

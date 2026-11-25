@@ -24,11 +24,16 @@ const ENFORCED = new Set(["collision"]);
 // first (a road closure's barricade, say, is checked before collisions). Returns the same shape as
 // simulateAll; `rejected` counts only what stays removed.
 export function openTrack(candidates, sim) {
-  for (const c of candidates)
-    if (c.reject && !ENFORCED.has(c.reject) && !c.sim?.collision) {
+  for (const c of candidates) {
+    if (c.sim?.collision) {
+      c.eligible = false;
+      c.reject ||= "collision";
+      delete c.flagged;
+    } else if (c.reject && !ENFORCED.has(c.reject)) {
       c.eligible = true;
       c.flagged = true;
-    }
+    } else delete c.flagged;
+  }
   const rejected = {};
   for (const c of candidates) if (!c.eligible) rejected[c.reject] = (rejected[c.reject] || 0) + 1;
   return { ...sim, eligible: candidates.filter((c) => c.eligible), rejected };
@@ -70,7 +75,6 @@ export const FLAG_TEXT = {
   crosses_in_front_of_train: "it crosses the level crossing with a train coming",
   no_room_past_tracks: "it stops on the level crossing, with no room past the tracks",
   blocks_junction: "it enters a junction it has no room to clear",
-  runs_flagger_stop: "it goes past a work zone flagger showing STOP",
   merges_out_of_turn: "it merges at the lane closure out of turn",
   takes_merge_turn: "it takes the turn of the car merging at the lane closure",
   into_closed_lane: "it moves into a closed lane",
@@ -86,4 +90,7 @@ export const FLAG_TEXT = {
   enters_closed_road: "it drives onto a road closed by barricades",
   ...FEATURE_FLAG_TEXT,
 };
-export const flagText = (reject) => FLAG_TEXT[reject] || reject.replaceAll("_", " ");
+export const flagText = (reject) => {
+  if (typeof reject !== "string" || !reject) return "unknown road-rule check";
+  return Object.hasOwn(FLAG_TEXT, reject) ? FLAG_TEXT[reject] : reject.replaceAll("_", " ");
+};

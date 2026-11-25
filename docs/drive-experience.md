@@ -32,6 +32,14 @@ remain cumulative/session statistics.
 keyboard help; `Escape` closes help and the JSON inspector. `1` selects the decision model, `2`
 Rules and `3` the LLM.
 The brain buttons also support arrow keys, Home and End, with one tab stop in the radio group.
+**Letter and number shortcuts** can be switched off in Settings. Arrow-key driving and focused
+controls remain available. Camera motion follows the system's reduced-motion setting until you
+choose a value in Settings. Volume, wipers and these control preferences are saved for this browser.
+
+Tab to the minimap to plan a route without a mouse. Arrow keys move the destination marker, Shift
+with an arrow makes a finer adjustment, and Home returns the marker to your present position.
+Press Enter to request the route. The map shows when routing is in progress and explains when a
+destination is unreachable.
 Space and arrows retain their normal behaviour while a button is focused. Browser shortcuts
 with Ctrl, Cmd or Alt do not trigger driving actions.
 
@@ -71,14 +79,17 @@ only after its first button press.
 A pad without analog triggers accelerates with the left stick pushed up and brakes with it pulled
 down. Buttons act once on the press, never while held.
 
-**Touch** (`static/js/ui/touch.js`). Shown on coarse-pointer screens; `?touch=1` forces the controls
-on (to test on a desktop) and `?touch=0` off. On the left, a steering pad: put a finger down anywhere
+**Touch** (`static/js/ui/touch.js`). In Settings, choose **Automatic**, **Show** or **Hide**.
+Automatic shows the controls on coarse-pointer screens. A link can start with `?touch=1` for on
+or `?touch=0` for off. **Swap touch pedals and steering** reverses their placement. On the left, a steering pad: put a finger down anywhere
 on it and slide sideways, up to full lock at 90 px; it centres when the finger lifts. On the right,
 the brake and accelerator pedals, held while pressed (the brake reverses once stopped). Between them,
 **Auto**, ◀ / ▶ indicators, **View**, **Pause** and **Reset**. Each control follows its own finger,
 so steering and a pedal work together. While the autopilot drives the steering pad and pedals dim;
 touching them takes over. The drive replay deck sits just above the controls and the HUD above both,
 so the speed, limit, minimap and trip card stay clear of the thumbs; photo mode hides the controls.
+With the steering pad focused, hold Left or Right for half travel or add Shift for full travel.
+Hold Space or Enter on a focused pedal to use it.
 
 ## Model v1
 

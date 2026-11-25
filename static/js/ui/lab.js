@@ -428,7 +428,8 @@ export class DriveLab {
       roadGrid.replaceChildren(
         ...ROAD_TESTS.map((t) => {
           const status = roadTestStatus(t, roadTests.records),
-            best = roadTestRecord(t, roadTests.records)?.best;
+            record = roadTestRecord(t, roadTests.records),
+            best = record?.best;
           return h(
             "a",
             { class: "road-test-card", "data-road-test": t.id, href: challengeUrl(t) },
@@ -451,12 +452,17 @@ export class DriveLab {
                   `Best: ${best.pass ? "Pass" : "Fail"} · ${best.demerits} demerit${best.demerits === 1 ? "" : "s"}`,
                 )
               : null,
+            record
+              ? h("span", { class: "practice-badge" }, `${record.passes}/${record.attempts} attempts passed`)
+              : null,
             h("p", {}, t.description),
             h("div", { class: "challenge-card-meta" }, `${challengeCity(t)} · ${t.region} · ${t.weather} · ${t.time}`),
             h("strong", {}, status === "untried" ? "Take the test →" : "Retake the test →"),
           );
         }),
       );
+    const cleanScore = (challenge) =>
+      practiceStatus(challenge, practice.records) === "completed" ? practice.records[challenge.id].best_score : null;
     const sortMatches = (matches) => {
       if (!filters.sort) return matches;
       const statusRank = { untried: 0, attempted: 1, completed: 2 };
@@ -480,6 +486,9 @@ export class DriveLab {
         if (filters.sort === "difficulty") {
           return a.difficulty.localeCompare(b.difficulty) || a.title.localeCompare(b.title);
         }
+        if (filters.sort === "score") {
+          return (cleanScore(b) ?? -1) - (cleanScore(a) ?? -1) || a.title.localeCompare(b.title);
+        }
         if (filters.sort === "title") {
           return a.title.localeCompare(b.title);
         }
@@ -496,6 +505,7 @@ export class DriveLab {
       grid.replaceChildren(
         ...matches.map((c) => {
           const status = practiceStatus(c, practice.records);
+          const best = cleanScore(c);
           const aiFail = AI_FAILED_CHALLENGES[c.id];
           const city = challengeCity(c);
           const neighbourhood = challengeNeighbourhood(c);
@@ -514,6 +524,7 @@ export class DriveLab {
               "div",
               { class: "challenge-badges" },
               h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
+              best == null ? null : h("span", { class: "practice-badge" }, `Best: ${best}/100`),
               aiFail ? h("span", { class: "practice-badge beat-ai-badge", title: aiFail }, "Beat the AI") : null,
             ),
             h("p", {}, c.description),
@@ -668,7 +679,7 @@ export class DriveLab {
             (controls.query = h("input", {
               type: "search",
               value: filters.query,
-              placeholder: "Title, city, street or lesson",
+              placeholder: "Title, place, conditions or lesson",
               "aria-label": "Search challenges",
               oninput: () => {
                 filters.query = controls.query.value;
@@ -706,6 +717,7 @@ export class DriveLab {
               ["city", "City"],
               ["difficulty", "Difficulty"],
               ["title", "A–Z"],
+              ["score", "Best clean score"],
             ],
             "Sort challenges",
             "Default order",

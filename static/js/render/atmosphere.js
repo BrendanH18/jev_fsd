@@ -94,7 +94,8 @@ function keyed(elDeg) {
 
 // Everything the renderer needs for one time of day and weather.
 export function atmosphereFor(hour, weather = "dry", location = null) {
-  const W = WEATHER[weather] || WEATHER.dry;
+  if (!Object.hasOwn(WEATHER, weather)) weather = "dry";
+  const W = WEATHER[weather];
   const sun = sunPosition(hour, location);
   const elDeg = (sun.elevation * 180) / Math.PI;
   const sky = keyed(elDeg);
