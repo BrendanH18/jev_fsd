@@ -186,7 +186,8 @@ export function hardCityMarkdown(report) {
   return [
     `# ${report.slice}`,
     "",
-    `${report.map} · seed ${report.seed} · ${report.counts.pass}/${report.legs.length} legs passed`,
+    `${report.map} · seed ${report.seed} · ${report.counts.pass}/${report.legs.length} legs passed · ` +
+      `shards ${report.shards_received.length}/${report.shards_expected ?? 0} · ${report.passed ? "passed" : "failed"}`,
     "",
     "| Leg | Weather | Hour | Parking | Routes | Status | Evidence |",
     "|---|---|---:|---|---|---|---|",

@@ -54,6 +54,7 @@ const withoutEmpty = hardCityReport([...Array(7).keys()].filter((index) => index
 assert.equal(withoutEmpty.counts.pass, 5);
 assert.equal(withoutEmpty.complete, false);
 assert.equal(withoutEmpty.passed, false);
+assert.match(hardCityMarkdown(withoutEmpty), /5\/5 legs passed · shards 6\/7 · failed/);
 assert.equal(hardCityReport([...Array(7).keys()].map((i) => shard(i, 7))).passed, true);
 const complete = hardCityReport([shard(1, 2), shard(0, 2)]);
 assert.equal(complete.shards_received.join(), "0,1");
