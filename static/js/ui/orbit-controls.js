@@ -17,10 +17,14 @@ export class OrbitControls {
       canvas.classList.remove("orbit-dragging");
     };
     canvas.addEventListener("pointerdown", (ev) => {
-      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      if (ev.button !== 0 || this.points.size >= 2) return;
       canvas.focus({ preventScroll: true });
       this.points.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-      canvas.setPointerCapture(ev.pointerId);
+      try {
+        canvas.setPointerCapture(ev.pointerId);
+      } catch (error) {
+        if (error.name !== "NotFoundError") throw error;
+      }
       canvas.classList.add("orbit-dragging");
     });
     canvas.addEventListener("pointermove", (ev) => {
@@ -50,7 +54,8 @@ export class OrbitControls {
     );
     canvas.addEventListener("keydown", (ev) => {
       // Shift+arrows orbit; plain arrows remain driving inputs.
-      if (!ev.shiftKey || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key)) return;
+      if (!ev.shiftKey || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key)) return;
       ev.preventDefault();
       ev.stopImmediatePropagation();
       rotate(

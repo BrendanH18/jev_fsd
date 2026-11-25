@@ -10,13 +10,15 @@ function csvCell(value) {
 function downloadFile(filename, content, type) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const a = h("a", { href: url, download: filename });
+  document.body.append(a);
   a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function downloadCsv(filename, headers, rows) {
   const lines = [headers.map(csvCell).join(","), ...rows.map((r) => r.map(csvCell).join(","))];
-  downloadFile(filename, `${lines.join("\n")}\n`, "text/csv;charset=utf-8");
+  downloadFile(filename, `\uFEFF${lines.join("\r\n")}\r\n`, "text/csv;charset=utf-8");
 }
 
 export function downloadJson(filename, payload) {

@@ -114,6 +114,22 @@ assert.deepEqual(calls.pop(), ["rotate", -24, 0]);
 const driving = emit(canvas, "keydown", { key: "ArrowLeft" });
 assert(!driving.defaultPrevented);
 assert.equal(calls.length, 0);
+const browserShortcut = emit(canvas, "keydown", { key: "ArrowLeft", shiftKey: true, metaKey: true });
+assert(!browserShortcut.defaultPrevented, "modified arrow shortcuts stay with the browser");
+pointer("pointerdown", 11, 20, 20, { pointerType: "touch" });
+pointer("pointerdown", 12, 40, 40, { pointerType: "touch" });
+pointer("pointerdown", 13, 60, 60, { pointerType: "touch" });
+assert.equal(controls.points.size, 2, "a third finger cannot disturb a pinch");
+pointer("pointermove", 13, 80, 80);
+assert.equal(calls.length, 0, "ignored pointers cannot move the camera");
+emit(canvas, "lostpointercapture", { pointerId: 11 });
+assert.equal(controls.points.has(11), false, "losing capture removes the pointer from the gesture");
+document.hidden = true;
+emit(document, "visibilitychange");
+assert.equal(controls.points.size, 0, "backgrounding clears active gestures");
+const pageWheel = emit(canvas, "wheel", { deltaY: -1, deltaMode: 2 });
+assert(pageWheel.defaultPrevented);
+assert.deepEqual(calls.pop(), ["zoom", -800], "page-wheel deltas use the view height");
 console.log(
   "Orbit camera checks passed: 360° wrap, following, vehicle clearance, bounds, state isolation, reset, drag capture, pinch, cancellation, blur, wheel units, browser zoom and keyboard separation.",
 );

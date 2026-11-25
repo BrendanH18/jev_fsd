@@ -3,7 +3,15 @@
 // any amount between, and World.stepManual takes either.
 
 const editing = (target) => target?.isContentEditable || target?.closest?.("input, textarea, select, [role='textbox']");
-const control = (target) => target?.closest?.("button, a, [role='button'], [role='radio'], [role='switch']");
+const control = (target) =>
+  target?.closest?.(
+    "button, a, [role='button'], [role='radio'], [role='switch'], [role='tab'], [role='slider'], summary, [role='menuitem'], [role='menuitemradio'], #minimap, #panel-body",
+  );
+
+function amount(value, minimum = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(minimum, Math.min(1, number)) : 0;
+}
 
 export class Input {
   constructor(actions = {}) {
@@ -13,12 +21,14 @@ export class Input {
     this.sources = []; // analog sources, each with a `state` (see poll)
     this.analog = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
     window.addEventListener("keydown", (ev) => {
-      if (ev.defaultPrevented || document.querySelector("dialog[open]") || editing(ev.target)) {
+      if (ev.defaultPrevented) return;
+      if (ev.isComposing || editing(ev.target) || document.querySelector("dialog[open]")) {
         this.keys.clear();
         return;
       }
       const k = ev.key.toLowerCase();
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (/^[a-z0-9/?]$/.test(k) && this.actions.shortcutsEnabled?.() === false) return;
       if (
         control(ev.target) &&
         ["w", "a", "s", "d", " ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)
@@ -62,13 +72,17 @@ export class Input {
       }
     });
     window.addEventListener("keyup", (ev) => this.keys.delete(ev.key.toLowerCase()));
-    window.addEventListener("blur", () => this.keys.clear());
+    window.addEventListener("blur", () => this.clear());
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) this.keys.clear();
+      if (document.hidden) this.clear();
     });
     document.addEventListener("focusin", (ev) => {
       if (document.querySelector("dialog[open]") || editing(ev.target) || control(ev.target)) this.keys.clear();
     });
+  }
+  clear() {
+    this.keys.clear();
+    this.analog = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
   }
   // Adds an analog source: anything with a `state` of { steer -1..1 (right positive), throttle and
   // brake 0..1, hardBrake }, and an optional poll() run once a frame.
@@ -80,13 +94,15 @@ export class Input {
   // a dialog is open, as with the keys.
   poll() {
     const sum = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
-    const blocked = typeof document !== "undefined" && document.querySelector?.("dialog[open]");
+    const blocked = typeof document !== "undefined" && (document.hidden || document.querySelector?.("dialog[open]"));
+    if (blocked) this.keys.clear();
     for (const source of this.sources) {
+      if (blocked) source.release?.();
       const s = source.poll ? source.poll() : source.state;
       if (!s || blocked) continue;
-      sum.steer += Number(s.steer) || 0;
-      sum.throttle = Math.max(sum.throttle, Number(s.throttle) || 0);
-      sum.brake = Math.max(sum.brake, Number(s.brake) || 0);
+      sum.steer += amount(s.steer, -1);
+      sum.throttle = Math.max(sum.throttle, amount(s.throttle));
+      sum.brake = Math.max(sum.brake, amount(s.brake));
       sum.hardBrake ||= !!s.hardBrake;
     }
     sum.steer = Math.max(-1, Math.min(1, sum.steer));

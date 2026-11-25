@@ -3,6 +3,7 @@
 // the controls never appear in the photo.
 
 import { h } from "../common.js";
+import { formatClock } from "../sim/world-clock.js";
 
 export const LOOK_RANGES = {
   exposure: { min: -2, max: 2, step: 0.1, label: "Exposure", unit: " EV" },
@@ -32,9 +33,6 @@ export function photoFilename(place, date = new Date()) {
   const stamp = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
   return `jev-${slug}-${stamp}.png`;
 }
-
-const formatHour = (hour) =>
-  `${String(Math.floor(hour) % 24).padStart(2, "0")}:${String(Math.round((hour % 1) * 60) % 60).padStart(2, "0")}`;
 
 export class PhotoMode {
   constructor({ view, place, getHour, setHour, getWeather, setWeather, onEnter, onExit }) {
@@ -69,7 +67,7 @@ export class PhotoMode {
       "aria-label": "Time of day",
       oninput: (ev) => {
         this.setHour(String(ev.target.value));
-        this.timeOutput.textContent = formatHour(Number(ev.target.value));
+        this.updateTimeLabel(Number(ev.target.value));
       },
     });
     this.weather = setWeather
@@ -146,7 +144,11 @@ export class PhotoMode {
         { class: "photo-actions" },
         h("button", { type: "button", class: "chip-button", onclick: () => this.resetLook() }, "Reset look"),
         h("button", { type: "button", class: "toggle", onclick: () => this.exit() }, "Done"),
-        h("button", { type: "button", class: "toggle photo-capture", onclick: () => this.capture() }, "Save photo"),
+        (this.captureButton = h(
+          "button",
+          { type: "button", class: "toggle photo-capture", onclick: () => this.capture() },
+          "Save photo",
+        )),
       ),
     );
     this.reveal = h(
@@ -170,6 +172,7 @@ export class PhotoMode {
   enter() {
     if (this.active) return;
     this.active = true;
+    this.returnFocus = document.activeElement;
     this.previousCamera = this.view.mode;
     this.previousHour = this.getHour();
     this.previousWeather = this.getWeather?.();
@@ -181,7 +184,7 @@ export class PhotoMode {
     if (this.weather) this.weather.value = this.previousWeather;
     this.grid.hidden = !this.gridToggle.checked;
     this.timeInput.value = String(Math.round(hour * 4) / 4);
-    this.timeOutput.textContent = formatHour(hour);
+    this.updateTimeLabel(Number(this.timeInput.value));
     this.setCamera(this.previousCamera === "cinematic" ? "cinematic" : "orbit");
   }
 
@@ -197,6 +200,13 @@ export class PhotoMode {
     document.body.classList.remove("photo-mode");
     this.view.setCamera(this.previousCamera || "chase");
     this.onExit?.();
+    const target = this.returnFocus?.getClientRects().length ? this.returnFocus : this.view.renderer.domElement;
+    target.focus({ preventScroll: true });
+  }
+
+  updateTimeLabel(hour) {
+    this.timeOutput.textContent = formatClock(hour);
+    this.timeInput.setAttribute("aria-valuetext", this.timeOutput.textContent);
   }
 
   collapse(hidden) {
@@ -239,19 +249,28 @@ export class PhotoMode {
   // Render a fresh frame and read it back in the same task, before the browser clears the buffer.
   capture() {
     const canvas = this.view.renderer.domElement;
-    this.view.render(0, true);
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        this.status.textContent = "This browser could not save the frame.";
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const link = h("a", { href: url, download: photoFilename(this.place) });
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      this.status.textContent = `Saved ${canvas.width} × ${canvas.height} photo`;
-    }, "image/png");
+    if (!this.active || this.captureButton.disabled) return;
+    this.captureButton.disabled = true;
+    this.status.textContent = "Saving photo…";
+    const failed = () => {
+      this.captureButton.disabled = false;
+      this.status.textContent = "This browser could not save the frame.";
+    };
+    try {
+      this.view.render(0, true);
+      canvas.toBlob((blob) => {
+        if (!blob) return failed();
+        this.captureButton.disabled = false;
+        const url = URL.createObjectURL(blob);
+        const link = h("a", { href: url, download: photoFilename(this.place) });
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        this.status.textContent = `Saved ${canvas.width} × ${canvas.height} photo`;
+      }, "image/png");
+    } catch {
+      failed();
+    }
   }
 }

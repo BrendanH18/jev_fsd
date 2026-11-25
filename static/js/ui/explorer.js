@@ -22,6 +22,7 @@ export class Explorer {
   constructor({ map, getStart, onDrive, onMap, onOpen, onClose, request = api }) {
     Object.assign(this, { map, getStart, onDrive, onMap, onOpen, onClose, request });
     this.maps = [];
+    this.previews = new WeakMap();
     this.drives = [];
     this.generation = 0;
     this.mapsLoading = false;
@@ -77,6 +78,17 @@ export class Explorer {
         this.renderMaps();
       },
     });
+    this.sortMaps = h(
+      "select",
+      {
+        "aria-label": "Sort neighbourhoods",
+        "aria-controls": "explorer-maps",
+        onchange: () => this.renderMaps(),
+      },
+      h("option", { value: "catalog" }, "Catalog order"),
+      h("option", { value: "city" }, "City A–Z"),
+      h("option", { value: "name" }, "Neighbourhood A–Z"),
+    );
     this.mapsView = h("div", { id: "explorer-maps" });
     this.mapStatus = h("div", { class: "explorer-status", "aria-live": "polite", "aria-atomic": "true" });
     this.driveStatus = h("div", { class: "explorer-status", "aria-live": "polite", "aria-atomic": "true" });
@@ -111,6 +123,7 @@ export class Explorer {
         h("label", { class: "explorer-search" }, h("span", {}, "Search maps"), this.search),
         h("label", {}, h("span", {}, "Region"), this.region),
         h("label", {}, h("span", {}, "Driving style"), this.character),
+        h("label", {}, h("span", {}, "Sort maps"), this.sortMaps),
       ),
       this.mapStatus,
       this.mapsView,
@@ -215,6 +228,7 @@ export class Explorer {
     this.onOpen();
     this.sessionOpen = true;
     this.dialog.showModal();
+    this.search.focus();
     this.pendingMap = null;
     this.switchError = null;
     this.renderMaps();
@@ -256,7 +270,14 @@ export class Explorer {
 
   renderMaps() {
     const visible = filterMaps(this.maps, this.filters),
-      cityCount = new Set(this.maps.map((m) => m.city)).size;
+      cityCount = new Set(visible.map((m) => m.city)).size;
+    const sort = this.sortMaps.value;
+    if (sort === "city" || sort === "name") {
+      visible.sort(
+        (a, b) =>
+          String(a[sort] || "").localeCompare(b[sort] || "") || String(a.name || "").localeCompare(b.name || ""),
+      );
+    }
     this.summary.textContent = this.maps.length
       ? `${visible.length} of ${this.maps.length} neighbourhoods · ${cityCount} ${cityCount === 1 ? "city" : "cities"}`
       : "";
@@ -385,9 +406,13 @@ export class Explorer {
   }
 
   cityCard(m) {
-    const current = m.id === this.map.id,
+    const current = m.id === this.map.id;
+    let canvas = this.previews.get(m);
+    if (!canvas) {
       canvas = h("canvas", { width: 480, height: 200, "aria-hidden": "true" });
-    drawMapPreview(canvas, m);
+      drawMapPreview(canvas, m);
+      this.previews.set(m, canvas);
+    }
     const stats = m.stats || {},
       roads =
         stats.roads == null
@@ -464,7 +489,7 @@ function drawMapPreview(canvas, map) {
   ctx.fillRect(0, 0, w, height);
   if (!map.extent) return;
   const [x0, y0, x1, y1] = map.extent,
-    scale = Math.max(w / Math.max(1, x1 - x0), height / Math.max(1, y1 - y0)) * 0.92;
+    scale = Math.min(w / Math.max(1, x1 - x0), height / Math.max(1, y1 - y0)) * 0.92;
   const x = (p) => w / 2 + (p[0] - (x0 + x1) / 2) * scale;
   const y = (p) => height / 2 - (p[1] - (y0 + y1) / 2) * scale;
   for (const major of [false, true]) {

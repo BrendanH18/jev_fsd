@@ -16,6 +16,16 @@ export async function runExplorerTests() {
       cached: true,
       stats: { roads: 120, signals: 5 },
       accent: "#6ec7a1",
+      extent: [0, 0, 1000, 100],
+      preview: [
+        {
+          major: true,
+          pts: [
+            [0, 50],
+            [1000, 50],
+          ],
+        },
+      ],
     },
     {
       id: "downtown",
@@ -88,6 +98,7 @@ export async function runExplorerTests() {
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
   try {
     const firstOpen = explorer.open();
+    check("Explorer opens with search ready for typing", document.activeElement === explorer.search);
     explorer.search.focus();
     explorer.search.value = "Vancouver";
     explorer.search.dispatchEvent(new Event("input"));
@@ -109,7 +120,7 @@ export async function runExplorerTests() {
     );
     check(
       "Catalog summary counts unique cities separately from maps",
-      explorer.summary.textContent === "2 of 3 neighbourhoods · 2 cities",
+      explorer.summary.textContent === "2 of 3 neighbourhoods · 1 city",
     );
     requests[0].reject(new Error("Temporary route failure"));
     await firstOpen;
@@ -182,6 +193,38 @@ export async function runExplorerTests() {
       "Catalog retry recovers without disturbing search focus",
       !explorer.mapError && !explorer.mapsLoading && document.activeElement === explorer.search,
     );
+    const cards = () => [...explorer.mapsView.querySelectorAll("[data-map]")];
+    const cachedPreview = cards()[0].querySelector("canvas");
+    const ctx = cachedPreview.getContext("2d");
+    const greenAt = (x) => ctx.getImageData(x, 100, 1, 1).data[1];
+    check(
+      "Wide map previews show margin beyond both endpoints",
+      greenAt(25) > greenAt(5) && greenAt(455) > greenAt(475),
+    );
+    const changeOrder = (value) => {
+      explorer.sortMaps.value = value;
+      explorer.sortMaps.dispatchEvent(new Event("change"));
+    };
+    changeOrder("name");
+    check(
+      "Explorer can sort neighbourhoods by name",
+      cards()
+        .map((c) => c.dataset.map)
+        .join(",") === "downtown,kitsilano,montreal",
+    );
+    check("Changing map order reuses already drawn artwork", cards()[1].querySelector("canvas") === cachedPreview);
+    changeOrder("city");
+    check(
+      "Explorer can sort by city with neighbourhood tie-breaking",
+      cards()
+        .map((c) => c.dataset.map)
+        .join(",") === "montreal,downtown,kitsilano",
+    );
+    changeOrder("catalog");
+    check("Catalog order remains available after sorting", cards()[0].dataset.map === "kitsilano");
+    cards()[1].focus();
+    changeOrder("name");
+    check("Sorting preserves focus on the same neighbourhood", document.activeElement.dataset.map === "downtown");
   } finally {
     explorer.close();
     explorer.dialog.remove();

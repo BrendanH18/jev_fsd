@@ -106,6 +106,8 @@ import { WorldClock, formatClock, worldOptions } from "./sim/world-clock.js";
 import { freeDriveOptions } from "./sim/free-drive.js";
 import { getVehicleModel, vehicleOptions, PAINT_COLORS } from "./sim/vehicle-models.js";
 import { OrbitControls } from "./ui/orbit-controls.js";
+import { bindMapPicker } from "./ui/map-picker.js";
+import { preference } from "./ui/preferences.js";
 import { PhotoMode } from "./ui/photo-mode.js";
 import { challengeById, challengeConfig } from "./lab/challenges.js";
 import { practiceEligible, savePractice } from "./lab/practice.js";
@@ -513,7 +515,12 @@ export async function boot() {
     hud.badge(`graphics: ${view.quality}`, "", 800);
   });
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt), {
+    clearButton: $("#clear-route"),
     onClearRoute: challenge || replay ? null : () => clearDestination(),
+  });
+  bindMapPicker($("#minimap"), $("#minimap-cursor"), {
+    fromCar: () => minimap.toPx(world.ego.x, world.ego.y),
+    onSelect: (x, y) => setDestination(minimap.toWorld(x, y)),
   });
   $("#feature-switches").hidden = Boolean(challenge || replay);
   const showMapNote = () =>
@@ -532,7 +539,7 @@ export async function boot() {
       return;
     }
     if (!autopilot.enabled && !world.route) {
-      hud.badge("set a destination first (click the minimap)", "", 1500);
+      hud.badge("Set a destination on the minimap or choose a suggested drive in Explore cities.", "", 2400);
       return;
     }
     autopilot.setEnabled(!autopilot.enabled);
@@ -672,9 +679,17 @@ export async function boot() {
   hud.onBrainChange(selectBrain);
   const audio = new DriveAudio($("#drive-sound"));
   const volume = $("#drive-volume");
-  volume.addEventListener("input", () => {
+  const volumePreference = preference("volume", 100);
+  volume.value = String(volumePreference.read());
+  const applyVolume = () => {
     audio.setVolume(Number(volume.value) / 100);
     $("#drive-volume-value").textContent = `${volume.value}%`;
+    volume.setAttribute("aria-valuetext", `${volume.value} percent`);
+  };
+  applyVolume();
+  volume.addEventListener("input", () => {
+    applyVolume();
+    volumePreference.write(Number(volume.value));
   });
   const cockpit = new Cockpit();
   function cameraChanged() {
@@ -721,9 +736,31 @@ export async function boot() {
       view.orbit.setDistance(view.orbit.distance * scale, world.ego.spec);
     },
   });
-  $("#camera-motion").addEventListener("change", (ev) => {
-    view.cameraMotion = ev.target.checked;
+  const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const motionPreference = preference("camera-motion", "");
+  const cameraMotion = $("#camera-motion");
+  let motionOverride = motionPreference.read();
+  const applyMotion = () => {
+    cameraMotion.checked = motionOverride ? motionOverride === "on" : !motionQuery.matches;
+    view.cameraMotion = cameraMotion.checked;
+  };
+  applyMotion();
+  motionQuery.addEventListener("change", applyMotion);
+  cameraMotion.addEventListener("change", () => {
+    motionOverride = cameraMotion.checked ? "on" : "off";
+    motionPreference.write(motionOverride);
+    applyMotion();
   });
+  for (const id of ["wipers", "letter-shortcuts", "left-handed-touch"]) {
+    const control = $(`#${id}`);
+    const setting = preference(id, control.checked);
+    control.checked = setting.read();
+    control.addEventListener("change", () => setting.write(control.checked));
+  }
+  const handedness = $("#left-handed-touch");
+  const applyHandedness = () => document.body.classList.toggle("left-handed-touch", handedness.checked);
+  handedness.addEventListener("change", applyHandedness);
+  applyHandedness();
   let pausedBeforePhoto = false;
   let photoHour, photoWeather;
   const photo = new PhotoMode({
@@ -746,16 +783,16 @@ export async function boot() {
       photoWeather = world.weather;
       pausedBeforePhoto = world.paused;
       world.paused = true;
-      input.keys.clear();
+      input.clear();
+      touch?.release();
       hud.toggleKeys(false);
     },
     onExit: () => {
       weatherView.apply(world.weather);
       applySky();
-      input.keys.clear();
+      input.clear();
       world.paused = lab?.reviewing ? true : pausedBeforePhoto;
       cameraChanged();
-      $("#view").focus({ preventScroll: true });
     },
   });
   $("#photo-mode").addEventListener("click", () => photo.enter());
@@ -776,13 +813,14 @@ export async function boot() {
     manualSignal = world.ego.signal ? { t: world.t, heading: world.ego.psi } : null;
   }
   const input = new Input({
+    shortcutsEnabled: () => $("#letter-shortcuts").checked,
     interceptKey: (key, repeat) => {
       if (photo.active) {
         if ([" ", "h"].includes(key)) {
           if (!repeat) photo.handleKey(key);
           return true;
         }
-        return ["i", "l", "t", "v", "x", "?", "/"].includes(key);
+        return !["escape", "o", "m", "c"].includes(key);
       }
       if (key !== " " || !lab?.isReviewing()) return false;
       if (!repeat) lab.togglePlay();
@@ -818,8 +856,9 @@ export async function boot() {
         photo.exit();
         return;
       }
-      hud.toggleKeys(false);
-      panel.toggle(false);
+      if (!hud.el.keysHelp.hidden) hud.toggleKeys(false);
+      else if (!panel.el.hidden) panel.toggle(false);
+      else hud.toggleSettings(false);
     },
   });
   // A gamepad and, on touch screens, the on-screen controls drive through the same input (ui/gamepad.js,
@@ -827,7 +866,7 @@ export async function boot() {
   input.addSource(
     new GamepadInput({
       actions: input.actions,
-      blocked: () => !!document.querySelector("dialog[open]"), // no buttons under a dialog, as with the keys
+      blocked: () => document.hidden || photo.active || !!document.querySelector("dialog[open]"),
       onConnect: (pad) =>
         hud.badge(
           `GAMEPAD CONNECTED · ${String(pad.id || "pad")
@@ -842,8 +881,26 @@ export async function boot() {
   );
   let touch = null;
   const coarsePointer = window.matchMedia?.("(pointer: coarse)");
+  const touchSetting = $("#touch-setting");
+  const touchPreference = preference("touch", "auto");
+  const touchOverride = params.get("touch");
+  touchSetting.value = ["1", "true"].includes(touchOverride)
+    ? "show"
+    : ["0", "false"].includes(touchOverride)
+      ? "hide"
+      : touchPreference.read();
+  if (!touchSetting.value) touchSetting.value = "auto";
+  touchSetting.addEventListener("change", () => {
+    touchPreference.write(touchSetting.value);
+    if (new URLSearchParams(location.search).has("touch")) {
+      const next = new URL(location.href);
+      next.searchParams.delete("touch");
+      history.replaceState(history.state, "", next);
+    }
+    showTouch();
+  });
   const showTouch = () => {
-    const on = touchWanted(location.search, coarsePointer?.matches);
+    const on = touchSetting.value === "auto" ? touchWanted("", coarsePointer?.matches) : touchSetting.value === "show";
     if (on && !touch) touch = input.addSource(new TouchControls({ actions: input.actions }));
     if (touch) {
       touch.el.hidden = !on;
@@ -991,7 +1048,13 @@ export async function boot() {
     onClose: () => {
       world.paused = pausedBeforeExplorer;
     },
-    onDrive: (d) => applyRoute(d.route, d.destination, d.title),
+    onDrive: async (d) => {
+      try {
+        await applyRoute(d.route, d.destination, d.title);
+      } catch (error) {
+        hud.badge(`Could not start the suggested drive: ${error.message}`, "safety", 2500);
+      }
+    },
     onMap: (id) => {
       if (drive && !drive.finished && drive.distance > 1) saveDrive(withDecidedBy(drive.finish("map changed")));
       autopilot.setEnabled(false);
@@ -1012,6 +1075,18 @@ export async function boot() {
 
   // Apply active routing rules to routes from Explorer and scenic drives. The latest choice wins.
   let routeGeneration = 0;
+  let routeRequest = null;
+  const routeStatus = $("#route-status");
+  function showRouteStatus(message = "") {
+    routeStatus.hidden = !message;
+    routeStatus.textContent = message;
+    $("#minimap").setAttribute("aria-busy", String(message === "Finding route…"));
+  }
+  function cancelRouteRequest() {
+    routeRequest?.abort();
+    routeRequest = null;
+    showRouteStatus();
+  }
   function replaceDriveRoute(route, destination) {
     autopilot.parker.clear(world);
     world.route = route;
@@ -1031,6 +1106,7 @@ export async function boot() {
   function clearDestination() {
     if (simulationError || lab?.reviewing) return;
     routeGeneration++;
+    cancelRouteRequest();
     replaceDriveRoute(null, null);
     autopilot.setEnabled(false);
     hud.setAutopilot(false);
@@ -1045,7 +1121,8 @@ export async function boot() {
   }
   async function applyRoute(data, pt, title, checked = false) {
     if (simulationError) return false;
-    const generation = ++routeGeneration;
+    const generation = checked ? routeGeneration : ++routeGeneration;
+    if (!checked) cancelRouteRequest();
     const routeOptions = featureRouteOptions(world);
     if (Object.keys(routeOptions).length && !checked) {
       const res = await api("/api/route", {
@@ -1213,23 +1290,33 @@ export async function boot() {
   async function setDestination(pt) {
     if (simulationError) return;
     if (lab?.reviewing) lab.live();
-    const generation = ++routeGeneration; // (a destination picked after this one, whose route comes back first, wins)
+    const generation = ++routeGeneration; // The latest destination wins.
+    cancelRouteRequest();
+    const request = (routeRequest = new AbortController());
+    showRouteStatus("Finding route…");
     try {
-      const res = await api("/api/route", {
-        bbox: status.map.bbox.join(","),
-        from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
-        to: { x: pt[0], y: pt[1] },
-        k: 1,
-        ...featureRouteOptions(world),
-      });
+      const res = await api(
+        "/api/route",
+        {
+          bbox: status.map.bbox.join(","),
+          from: { x: world.ego.x, y: world.ego.y, heading: world.ego.psi },
+          to: { x: pt[0], y: pt[1] },
+          k: 1,
+          ...featureRouteOptions(world),
+        },
+        { signal: request.signal },
+      );
       if (generation !== routeGeneration) return;
       if (!res.routes.length) {
-        hud.badge("no route to that point", "safety", 1500);
+        showRouteStatus("No route here. Choose another street.");
         return;
       }
       await applyRoute(res.routes[0], res.routes[0].polyline.at(-1), undefined, true);
+      if (generation === routeGeneration) showRouteStatus();
     } catch (err) {
-      if (generation === routeGeneration) hud.badge(`routing failed: ${err.message}`, "safety", 2000);
+      if (generation === routeGeneration) showRouteStatus(`Routing failed. ${err.message}`);
+    } finally {
+      if (routeRequest === request) routeRequest = null;
     }
   }
 
@@ -1262,6 +1349,7 @@ export async function boot() {
   }
 
   $("#loading").hidden = true;
+  $("#view").inert = false;
   hud.show();
   if (challenge) {
     const driver = params.get("drive") || "manual";

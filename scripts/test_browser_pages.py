@@ -8,6 +8,7 @@ Playwright and its Chromium browser (or --chromium /path/to/chromium).
 --group runs one part, so CI can run them side by side (each takes about 5 minutes there):
 pages (the /tests page, renderer and HUD layout), practice (Pothole season finishes) and parking
 (Squeeze in finishes, debrief replay and simulation error recovery). Without it, all three run.
+Use --group ui to run just the driving app controls and startup recovery from the pages group.
 """
 
 import argparse
@@ -234,13 +235,35 @@ def check_published_replay(page, url):
     replay.get_by_text("Could not load the browser replay. Request failed (503).", exact=True).wait_for()
     assert canvas.count() == 0
     page.unroute("**/jev-flagger.json")
+    replay.get_by_role("button", name="Retry replay").click()
+    replay.get_by_text("Open track · Pass", exact=False).wait_for()
+    recovered = canvas.count() == 1 and select.input_value() == "jev-flagger"
+    replay.get_by_role("button", name="Next decision", exact=True).click()
+    highlighted = replay.locator(".published-replay-log button[aria-current=step]").count() == 1
+    lifecycle = page.evaluate("""async () => {
+      const player = document.querySelector('.published-replay-player');
+      const button = player.querySelector('.published-replay-bar button');
+      button.click();
+      Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+      try { document.dispatchEvent(new Event('visibilitychange')); }
+      finally { delete document.hidden; }
+      const hidden = button.textContent === 'Play replay';
+      button.click();
+      player.remove();
+      await new Promise(requestAnimationFrame);
+      return { hidden, removed: button.textContent === 'Play replay' };
+    }""")
     return report(
         "published browser replay",
         [
             {
                 "name": "Play, pause, seek, restart and finish the recorded drive without a POST",
                 "ok": heading_visible and ended and changed and reached_last_frame and not writes,
-            }
+            },
+            {"name": "Retry loads the selected drive without changing it", "ok": recovered},
+            {"name": "The active decision history entry exposes its current step", "ok": highlighted},
+            {"name": "Switching tabs pauses replay immediately", "ok": lifecycle["hidden"]},
+            {"name": "Removing a replay stops its animation", "ok": lifecycle["removed"]},
         ],
     )
 
@@ -415,6 +438,214 @@ PRACTICE_KINDS = ["early", "arrived", "rules", "modified", "branched", "resume"]
 PARKING_KINDS = ["parked", "wide-kerb", "outside-space", "simulation-error"]
 
 
+def check_driving_ui(page):
+    """Exercise the wired controls without queueing extra software WebGL frames."""
+    ok = report(
+        "driving app controls",
+        page.evaluate("""async () => {
+          const app = window.__jev, $ = id => document.getElementById(id);
+          const results = [];
+          const check = (name, ok) => results.push({name, ok: !!ok});
+          const key = (node, k, extra = {}) => node.dispatchEvent(new KeyboardEvent('keydown',
+            { key: k, bubbles: true, cancelable: true, ...extra }));
+          const change = node => node.dispatchEvent(new Event('change', {bubbles: true}));
+          const settings = $('settings-toggle');
+          app.view.render = () => {};
+          app.world.paused = true;
+          check('The road canvas becomes focusable only after startup', !$('view').inert);
+          const cluster = $('speed-warning').closest('.cluster');
+          cluster.classList.add('speeding'); $('speed-warning').hidden = false;
+          check('Compact instruments keep the overspeed warning visible', $('speed-warning').getBoundingClientRect().height > 0);
+          cluster.classList.remove('speeding'); $('speed-warning').hidden = true;
+          settings.click();
+          $('weather').focus();
+          key($('weather'), 'Escape');
+          check('Escape closes Settings even within a field', $('settings').hidden && document.activeElement === settings);
+          settings.click();
+          const volume = $('drive-volume');
+          volume.value = '27'; volume.dispatchEvent(new Event('input'));
+          check('Volume changes update the audio gain setting and accessible percentage', app.audio.volume === 0.27
+            && volume.getAttribute('aria-valuetext') === '27 percent');
+          check('Volume is saved as a numeric percentage', localStorage.getItem('jev-fsd-ui-volume') === '27');
+          const deadzone = $('gamepad-deadzone');
+          deadzone.value = '50'; deadzone.dispatchEvent(new Event('input'));
+          check('The dead zone slider reaches 50 percent and announces the applied value',
+            deadzone.value === '50' && deadzone.getAttribute('aria-valuetext') === '50 percent');
+          const wipers = $('wipers');
+          wipers.checked = false; change(wipers);
+          check('Cabin wiper preference can remain off after reload', localStorage.getItem('jev-fsd-ui-wipers') === 'false');
+          const motion = $('camera-motion');
+          check('A fresh profile follows the system camera motion setting', !motion.checked && !app.view.cameraMotion);
+          motion.checked = true; change(motion);
+          check('An explicit camera motion choice can override the system setting', app.view.cameraMotion
+            && localStorage.getItem('jev-fsd-ui-camera-motion') === '"on"');
+          const shortcuts = $('letter-shortcuts');
+          shortcuts.checked = false; change(shortcuts);
+          $('view').focus(); key($('view'), 'c');
+          check('Disabling letter shortcuts suppresses the camera shortcut', app.view.mode === 'chase');
+          key($('view'), 'ArrowUp');
+          check('Arrow driving stays available with single-character shortcuts disabled', app.input.throttle === 1);
+          app.input.clear();
+          shortcuts.checked = true; change(shortcuts);
+          key($('view'), 'c', {isComposing: true});
+          check('An input-method composition cannot change the camera', app.view.mode === 'chase');
+          key($('view'), 'c', {repeat: true});
+          check('Holding a shortcut does not cycle cameras repeatedly', app.view.mode === 'chase');
+
+          const touchSetting = $('touch-setting');
+          touchSetting.value = 'show'; change(touchSetting);
+          check('Touch controls can be enabled without a touch screen', !app.touch.el.hidden && document.body.classList.contains('touch-driving'));
+          $('left-handed-touch').checked = true; change($('left-handed-touch'));
+          check('Swapping controls puts the accelerator side before the steering pad', app.touch.pedalEls.throttle.getBoundingClientRect().x
+            < app.touch.wheel.getBoundingClientRect().x);
+          touchSetting.value = 'hide'; change(touchSetting);
+          check('Touch controls can be hidden without changing the driving mode', app.touch.el.hidden && !document.body.classList.contains('touch-driving'));
+          check('The touch setting persists independently of the world URL', localStorage.getItem('jev-fsd-ui-touch') === '"hide"');
+
+          const edit = $('settings-inspect');
+          edit.focus(); edit.click();
+          check('Opening the inspector puts focus on its selected tab', document.activeElement.id === 'inspector-state');
+          key(document.activeElement, 'End');
+          check('The inspector panel is named by its active tab', $('panel-body').getAttribute('aria-labelledby') === 'inspector-meta');
+          check('The inspector has a focusable scrolling content region', $('panel-body').tabIndex === 0);
+          $('copy-json').click();
+          check('Copy JSON explains why an empty inspector cannot copy', $('badge').textContent.includes('No decision'));
+          $('copy-curl').click();
+          check('Copy request explains why the model request is missing', $('badge').textContent.includes('No model request'));
+          key(document.activeElement, 'Home');
+          $('pin-decision').click();
+          const sample = { meta: {}, candidates: [], questions: { vector: 'fixture' }, state: { sample: 42 } };
+          app.autopilot.onDecision(sample);
+          $('inspector-questions').click(); $('inspector-state').click();
+          check('Pinning before the first decision freezes the empty inspector', $('panel-body').textContent.includes('No decision'));
+          $('pin-decision').click();
+          $('inspector-questions').click(); $('inspector-state').click();
+          const baseFetch = window.fetch;
+          let resolveSave, saves = 0;
+          window.fetch = (url, options) => String(url).endsWith('/api/snapshot/save')
+            ? new Promise(resolve => { saves++; resolveSave = resolve; })
+            : baseFetch(url, options);
+          try {
+            $('save-snapshot').click();
+            $('panel-inline').requestSubmit();
+            $('panel-inline').requestSubmit();
+            $('edit-style').click();
+            check('An in-flight snapshot blocks additional submissions and edits',
+              saves === 1 && $('panel-inline-submit').disabled && $('panel-inline-submit').textContent === 'Save');
+            resolveSave({ok: true, json: async () => ({saved: 'fixture'})});
+            await new Promise(resolve => setTimeout(resolve, 0));
+          } finally { window.fetch = baseFetch; }
+          $('edit-style').focus(); $('edit-style').click();
+          key($('panel-inline-input'), 'Escape');
+          check('Canceling an inspector edit returns focus to its trigger', document.activeElement.id === 'edit-style');
+          app.autopilot.style = 'old style';
+          $('edit-style').click();
+          check('The style edit opens with its saved value', !$('panel-inline').hidden && $('panel-inline-input').value === 'old style');
+          $('panel-inline-input').value = '';
+          $('panel-inline').requestSubmit();
+          check('An empty custom style clears the previous override', app.autopilot.style === '');
+          $('panel-close').click();
+          check('The inspector returns focus to the control that opened it', document.activeElement === edit);
+          settings.click();
+
+          const menu = ['llm-menu-toggle', 'decision-menu-toggle'].map($).find(b => !b.hidden);
+          menu.focus(); key(menu, 'ArrowUp');
+          const popup = $(menu.getAttribute('aria-controls'));
+          check('Arrow Up opens the model menu at its last enabled item', popup.contains(document.activeElement)
+            && document.activeElement === popup.querySelector('button:last-child'));
+          key(document.activeElement, 'Home');
+          check('Home moves to the first enabled model action', document.activeElement === popup.querySelector('button:not([disabled])'));
+          $('view').focus();
+          check('Leaving a model menu closes it and clears expanded state', popup.hidden && menu.getAttribute('aria-expanded') === 'false');
+
+          const photo = $('photo-mode');
+          photo.focus(); photo.click();
+          check('Photo mode freezes an already paused drive', app.world.paused && app.photo.active);
+          const clock = app.photo.timeInput;
+          clock.value = '23.75'; clock.dispatchEvent(new Event('input'));
+          check('Photo lighting announces a clock time for keyboard users', clock.getAttribute('aria-valuetext') === '23:45');
+          const canvas = $('view'), capture = canvas.toBlob, render = app.view.render;
+          let complete, captures = 0;
+          canvas.toBlob = cb => { captures++; complete = cb; };
+          app.view.render = () => {};
+          app.photo.capture(); app.photo.capture();
+          check('Repeated capture requests wait for the current photo', app.photo.captureButton.disabled && captures === 1);
+          complete(null);
+          check('A failed photo capture reports the failure and can be retried', !app.photo.captureButton.disabled
+            && app.photo.status.textContent.includes('could not save'));
+          canvas.toBlob = () => { throw new DOMException('Capture denied', 'SecurityError'); };
+          app.photo.capture();
+          check('A synchronous capture error leaves the save control usable', !app.photo.captureButton.disabled);
+          canvas.toBlob = capture; app.view.render = render;
+          app.photo.exit();
+          check('Leaving Photo mode restores the invoking button', document.activeElement === photo);
+          check('Leaving Photo mode preserves an existing pause', app.world.paused);
+          check('Closing Photo mode restores the previous camera', app.view.mode === 'chase');
+
+          const routeFetch = window.fetch;
+          const requests = [];
+          window.fetch = (url, options) => String(url).endsWith('/api/route')
+            ? new Promise((resolve, reject) => {
+                const {signal} = options;
+                requests.push({resolve, signal});
+                signal?.addEventListener('abort', () => reject(signal.reason), {once: true});
+              })
+            : routeFetch(url, options);
+          try {
+            const map = $('minimap');
+            map.focus(); key(map, 'ArrowRight'); key(map, 'Enter');
+            check('Keyboard map selection calls the normal routing endpoint', requests.length === 1 && !app.input.anyDriving);
+            check('The minimap announces a pending route request', map.getAttribute('aria-busy') === 'true'
+              && $('route-status').textContent.includes('Finding route'));
+            key(map, 'ArrowRight'); key(map, 'Enter');
+            check('Selecting a newer destination cancels the old request', requests.length === 2 && requests[0].signal.aborted);
+            requests[1].resolve({ok: true, json: async () => ({routes: []})});
+            await new Promise(resolve => setTimeout(resolve, 0));
+            check('An unreachable destination has a persistent recovery message', !$('route-status').hidden
+              && $('route-status').textContent.includes('Choose another street') && map.getAttribute('aria-busy') === 'false');
+            const suggested = app.explorer.onDrive({ destination: [0, 0], route: null, title: 'Broken route' });
+            requests[2]?.resolve({ok: false, status: 503, json: async () => ({error: 'Route unavailable'})});
+            await suggested;
+            check('Suggested routing errors appear in a visible HUD message', $('badge').textContent.includes('Could not start the suggested drive'));
+          } finally { window.fetch = routeFetch; }
+          return results;
+        }"""),
+    )
+    menu = page.locator("#llm-menu-toggle")
+    menu.click()
+    expanded = menu.get_attribute("aria-expanded") == "true"
+    menu.click()
+    ok &= report(
+        "model menu pointer",
+        [
+            {
+                "name": "Clicking the same model menu button again closes it",
+                "ok": expanded and menu.get_attribute("aria-expanded") == "false",
+            }
+        ],
+    )
+    return ok
+
+
+def check_startup_recovery(page, url):
+    page.goto(url.rstrip("/") + "/?challenge=missing-challenge", wait_until="domcontentloaded")
+    retry = page.locator("#retry-start")
+    retry.wait_for()
+    return report(
+        "startup recovery",
+        page.evaluate("""() => {
+          const retry = document.querySelector('#retry-start'), free = document.querySelector('#start-free-drive');
+          return [
+            {name: 'Startup failures focus the retry action while the road canvas stays inert', ok: document.activeElement === retry
+              && document.querySelector('#view').inert},
+            {name: 'A broken deep link offers a URL without the failing parameters', ok: !free.hidden && new URL(free.href).search === '?drive=manual'},
+            {name: 'Startup errors stop the loading animation and are announced', ok: document.querySelector('.loading-mark').hidden
+              && document.querySelector('#loading-text').getAttribute('role') === 'alert'}
+          ];
+        }"""),
+    )
+
+
 def check(url, chromium=None, groups=GROUPS):
     ok = True
     with sync_playwright() as p:
@@ -454,6 +685,32 @@ def check(url, chromium=None, groups=GROUPS):
             ok &= report("HUD layout", page.evaluate(PILOT_ROW_FITS))
             check_snapshot_form(page)
             page.close()  # Release the renderer's software-WebGL workload before the finish fixtures.
+
+        if "pages" in groups or "ui" in groups:
+            page = open_page(None)
+            page.emulate_media(reduced_motion="reduce")
+            page.set_viewport_size({"width": 860, "height": 900})
+            page.goto(url.rstrip("/") + "/?drive=manual&quality=low", wait_until="domcontentloaded")
+            page.wait_for_function("!!window.__jev?.advance", timeout=TIMEOUT_MS)
+            ok &= check_driving_ui(page)
+            page.set_viewport_size({"width": 420, "height": 360})
+            ok &= report(
+                "short photo viewport",
+                page.evaluate("""() => {
+                  const app = window.__jev;
+                  app.photo.enter();
+                  const panel = app.photo.panel;
+                  const rect = panel.getBoundingClientRect();
+                  const ok = rect.top >= 0 && rect.bottom <= innerHeight
+                    && panel.scrollHeight > panel.clientHeight && getComputedStyle(panel).overflowY === 'auto';
+                  app.photo.exit();
+                  return [{ name: 'Photo controls can scroll on short screens', ok }];
+                }"""),
+            )
+            page.close()
+            page = open_page(None)
+            ok &= check_startup_recovery(page, url)
+            page.close()
 
         kinds = (PRACTICE_KINDS if "practice" in groups else []) + (PARKING_KINDS if "parking" in groups else [])
         for kind in kinds:
@@ -585,6 +842,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:8322")
     parser.add_argument("--chromium")
-    parser.add_argument("--group", choices=GROUPS, help="run only this part")
+    parser.add_argument("--group", choices=(*GROUPS, "ui"), help="run only this part")
     args = parser.parse_args()
     sys.exit(0 if check(args.url, args.chromium, [args.group] if args.group else GROUPS) else 1)

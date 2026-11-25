@@ -52,6 +52,7 @@ export class TouchControls {
       {
         class: "touch-steer",
         role: "slider",
+        tabindex: "0",
         "aria-label": "Steering: slide left or right",
         "aria-valuemin": "-100",
         "aria-valuemax": "100",
@@ -63,18 +64,18 @@ export class TouchControls {
     );
     this.pedalEls = {
       brake: h(
-        "div",
+        "button",
         {
           class: "touch-pedal touch-brake",
-          role: "button",
+          type: "button",
           "aria-label": "Brake (reverses when stopped)",
           "aria-pressed": "false",
         },
         "Brake",
       ),
       throttle: h(
-        "div",
-        { class: "touch-pedal touch-throttle", role: "button", "aria-label": "Accelerator", "aria-pressed": "false" },
+        "button",
+        { class: "touch-pedal touch-throttle", type: "button", "aria-label": "Accelerator", "aria-pressed": "false" },
         "Go",
       ),
     };
@@ -106,8 +107,10 @@ export class TouchControls {
     );
     this.el.addEventListener("contextmenu", (ev) => ev.preventDefault());
     this.bindSteering();
-    for (const [name, el] of Object.entries(this.pedalEls)) this.bindPedal(name, el);
-    this.bindHardBrakeKeys();
+    for (const [name, el] of Object.entries(this.pedalEls)) {
+      this.bindPedal(name, el);
+      this.bindPedalKeys(name, el);
+    }
     root.append(this.el);
     globalThis.addEventListener?.("blur", () => this.release());
   }
@@ -119,9 +122,11 @@ export class TouchControls {
       this.setSteer(0);
     };
     this.wheel.addEventListener("pointerdown", (ev) => {
-      if (this.steerPointer != null) return;
+      if (ev.button !== 0 || this.steerPointer != null) return;
       ev.preventDefault();
       this.steerPointer = ev.pointerId;
+      this.steerKeys.clear();
+      this.setSteer(0);
       this.steerStart = ev.clientX;
       try {
         this.wheel.setPointerCapture(ev.pointerId);
@@ -130,6 +135,23 @@ export class TouchControls {
       }
       this.wheel.classList.add("active");
     });
+    const keys = new Map();
+    const syncKeys = () => this.setSteer((keys.get("ArrowRight") || 0) - (keys.get("ArrowLeft") || 0));
+    for (const type of ["keydown", "keyup"]) {
+      this.wheel.addEventListener(type, (ev) => {
+        if (ev.ctrlKey || ev.metaKey || ev.altKey || !["ArrowLeft", "ArrowRight"].includes(ev.key)) return;
+        ev.preventDefault();
+        if (this.steerPointer != null) return;
+        if (type === "keydown") keys.set(ev.key, ev.shiftKey ? 1 : 0.5);
+        else keys.delete(ev.key);
+        syncKeys();
+      });
+    }
+    this.wheel.addEventListener("blur", () => {
+      keys.clear();
+      if (this.steerPointer == null) this.setSteer(0);
+    });
+    this.steerKeys = keys;
     this.wheel.addEventListener("pointermove", (ev) => {
       if (ev.pointerId === this.steerPointer) this.setSteer(steerFromDrag(ev.clientX - this.steerStart));
     });
@@ -142,6 +164,7 @@ export class TouchControls {
       if (held.delete(ev.pointerId)) this.showPedal(name);
     };
     el.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
       ev.preventDefault();
       held.add(ev.pointerId);
       try {
@@ -154,26 +177,25 @@ export class TouchControls {
     for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(type, release);
   }
 
-  bindHardBrakeKeys() {
-    const el = this.pedalEls.hardBrake;
-    const held = this.pedals.hardBrake;
+  bindPedalKeys(name, el) {
+    const held = this.pedals[name];
     for (const type of ["keydown", "keyup"]) {
       el.addEventListener(type, (ev) => {
         if (ev.key !== " " && ev.key !== "Enter") return;
         ev.preventDefault();
         if (type === "keydown") held.add(ev.key);
         else held.delete(ev.key);
-        this.showPedal("hardBrake");
+        this.showPedal(name);
       });
     }
     el.addEventListener("click", (ev) => {
       if (ev.detail !== 0) return;
       held.add("activate");
-      this.showPedal("hardBrake");
+      this.showPedal(name);
     });
     el.addEventListener("blur", () => {
       for (const key of [" ", "Enter", "activate"]) held.delete(key);
-      this.showPedal("hardBrake");
+      this.showPedal(name);
     });
   }
 
@@ -190,10 +212,14 @@ export class TouchControls {
   }
   // Let go of everything (the page lost focus, or a dialog opened over the controls).
   release() {
-    this.steerPointer = null;
-    this.setSteer(0);
-    for (const name of Object.keys(this.pedals)) {
-      this.pedals[name].clear();
+    if (this.steerPointer != null || this.steerKeys.size || this.steer) {
+      this.steerPointer = null;
+      this.steerKeys.clear();
+      this.setSteer(0);
+    }
+    for (const [name, held] of Object.entries(this.pedals)) {
+      if (!held.size) continue;
+      held.clear();
       this.showPedal(name);
     }
   }
@@ -217,7 +243,7 @@ export class TouchControls {
   }
   poll() {
     const state = this.state;
-    if (this.pedals.hardBrake.delete("activate")) this.showPedal("hardBrake");
+    for (const [name, held] of Object.entries(this.pedals)) if (held.delete("activate")) this.showPedal(name);
     return state;
   }
 }

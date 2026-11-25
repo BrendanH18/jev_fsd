@@ -17,14 +17,15 @@
   </script>
 </head>
 <body>
-  <canvas id="view" tabindex="0" aria-label="Driving view" aria-describedby="camera-help"></canvas>
+  <canvas id="view" tabindex="0" inert aria-keyshortcuts="Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown" aria-label="Driving view" aria-describedby="camera-help"></canvas>
 
   <div id="loading" class="overlay">
     <div class="card">
       <div class="loading-mark" aria-hidden="true"></div>
       <h1>JEV <small>DRIVE LAB</small></h1>
-      <p id="loading-text">Loading map…</p>
+      <p id="loading-text" role="status">Loading map…</p>
       <button id="retry-start" class="toggle" hidden>Retry loading</button>
+      <a id="start-free-drive" class="chip-button" href="?drive=manual" hidden>Open free drive</a>
     </div>
   </div>
 
@@ -58,8 +59,8 @@
           <button id="keys-toggle" class="tool" title="?" aria-pressed="false" aria-controls="keys-help" aria-label="Keyboard shortcuts">?</button>
         </div>
         <div class="orbit-toolbar" role="group" aria-label="360 camera controls">
-          <button id="camera-orbit" class="chip-button" aria-pressed="false" title="Rotate freely around the car">360° view</button>
-          <button id="photo-mode" class="chip-button" title="O · freeze the world and take a photo">Photo mode</button>
+          <button id="camera-orbit" aria-controls="orbit-actions camera-help" class="chip-button" aria-pressed="false" title="Rotate freely around the car">360° view</button>
+          <button id="photo-mode" aria-controls="photo-panel" class="chip-button" title="O · freeze the world and take a photo">Photo mode</button>
           <div id="orbit-actions" class="orbit-actions" hidden>
             <button id="camera-zoom-out" class="chip-button" aria-label="Zoom camera out">−</button>
             <button id="camera-zoom-in" class="chip-button" aria-label="Zoom camera in">+</button>
@@ -112,9 +113,9 @@
           <label><span class="label">world seed</span>
             <span class="seed-row"><input id="world-seed" type="number" min="1" max="2147483647" step="1" value="1" required><button id="randomize-seed" type="button" class="chip-button" title="Pick a random world seed">Random</button></span></label>
           <label class="wide"><span class="label">sound volume</span>
-            <span class="range-row"><input id="drive-volume" type="range" min="0" max="100" step="1" value="100" aria-label="Master sound volume"><output id="drive-volume-value" class="muted">100%</output></span></label>
+            <span class="range-row"><input id="drive-volume" type="range" min="0" max="100" step="1" value="100" aria-label="Master sound volume"><output id="drive-volume-value" for="drive-volume" class="muted">100%</output></span></label>
           <label class="wide"><span class="label">gamepad dead-zone</span>
-            <span class="range-row"><input id="gamepad-deadzone" type="range" min="0" max="40" step="1" value="15" aria-label="Gamepad stick dead-zone"><output id="gamepad-deadzone-value" class="muted">15%</output></span></label>
+            <span class="range-row"><input id="gamepad-deadzone" type="range" min="0" max="50" step="1" value="15" aria-label="Gamepad stick dead-zone"><output id="gamepad-deadzone-value" for="gamepad-deadzone" class="muted">15%</output></span></label>
           <section class="vehicle-garage" aria-labelledby="garage-heading">
             <div class="garage-heading"><h3 id="garage-heading">Your garage</h3><span>Six ways to drive</span></div>
             <div id="vehicle-options" class="vehicle-options" role="group" aria-label="Vehicle">
@@ -199,6 +200,11 @@
             <p id="vehicle-spec" class="vehicle-spec" role="status" aria-live="polite" aria-atomic="true">Touring sedan · Balanced comfort and control</p>
           </section>
           <div class="settings-checks">
+            <label class="check"><input id="letter-shortcuts" type="checkbox" checked> Letter and number shortcuts</label>
+            <label class="check"><input id="left-handed-touch" type="checkbox"> Swap touch pedals and steering</label>
+            <label><span class="label">Touch controls</span>
+              <select id="touch-setting"><option value="auto">Automatic</option><option value="show">Show</option><option value="hide">Hide</option></select>
+            </label>
             <label class="check"><input id="wipers" type="checkbox" checked> Wipers</label>
             <label class="check"><input id="camera-motion" type="checkbox" checked> Camera motion</label>
             <button id="settings-inspect" class="chip-button settings-inspect" data-inspect aria-controls="panel" aria-expanded="false">Inspect JSON</button>
@@ -222,7 +228,12 @@
 
     <div id="hud-right" class="hud-column hud-right">
       <section class="hud-top-right panel" aria-label="Map">
-        <canvas id="minimap" width="220" height="220" title="Click to set a destination" aria-label="Route minimap. Click to set a destination."></canvas>
+        <div class="minimap-picker">
+          <canvas id="minimap" width="220" height="220" tabindex="0" aria-keyshortcuts="Enter Home ArrowUp ArrowDown ArrowLeft ArrowRight" aria-label="Route minimap" aria-describedby="minimap-help"></canvas>
+          <span id="minimap-cursor" hidden aria-hidden="true"></span>
+        </div>
+        <span id="route-status" role="status" hidden></span>
+        <span id="minimap-help" class="sr-only">Click or move the marker with the arrow keys and press Enter to set a destination. Use Shift with an arrow key to move more precisely. Home returns the marker to your car.</span>
         <div class="minimap-footer">
           <div id="map-note" class="note"></div>
           <button id="clear-route" type="button" class="chip-button" hidden>Clear route</button>
@@ -299,14 +310,14 @@
     </div>
   </div>
 
-  <aside id="panel" class="panel drawer" hidden>
+  <aside id="panel" class="panel drawer" aria-labelledby="inspector-title" hidden>
     <header>
-      <strong>What Jev sees</strong>
+      <strong id="inspector-title">What Jev sees</strong>
       <div class="tabs" role="tablist" aria-label="Inspector tabs">
-        <button type="button" role="tab" data-tab="state" class="active" aria-selected="true" aria-controls="panel-body" tabindex="0">State</button>
-        <button type="button" role="tab" data-tab="questions" aria-selected="false" aria-controls="panel-body" tabindex="-1">Questions</button>
-        <button type="button" role="tab" data-tab="answers" aria-selected="false" aria-controls="panel-body" tabindex="-1">Answers</button>
-        <button type="button" role="tab" data-tab="meta" aria-selected="false" aria-controls="panel-body" tabindex="-1">Meta</button>
+        <button type="button" id="inspector-state" role="tab" data-tab="state" class="active" aria-selected="true" aria-controls="panel-body" tabindex="0">State</button>
+        <button type="button" id="inspector-questions" role="tab" data-tab="questions" aria-selected="false" aria-controls="panel-body" tabindex="-1">Questions</button>
+        <button type="button" id="inspector-answers" role="tab" data-tab="answers" aria-selected="false" aria-controls="panel-body" tabindex="-1">Answers</button>
+        <button type="button" id="inspector-meta" role="tab" data-tab="meta" aria-selected="false" aria-controls="panel-body" tabindex="-1">Meta</button>
       </div>
       <button id="panel-close" type="button" class="toggle" aria-label="Close inspector">×</button>
     </header>
@@ -321,12 +332,12 @@
     <form id="panel-inline" class="panel-inline" hidden>
       <label id="panel-inline-label" for="panel-inline-input" class="label"></label>
       <div class="panel-inline-row">
-        <input id="panel-inline-input" type="text" autocomplete="off">
+        <input id="panel-inline-input" type="text" autocomplete="off" required>
         <button id="panel-inline-submit" type="submit" class="toggle on">Apply</button>
         <button id="panel-inline-cancel" type="button" class="chip-button">Cancel</button>
       </div>
     </form>
-    <div id="panel-body" class="body" role="tabpanel"><pre>No decision yet.</pre></div>
+    <div id="panel-body" class="body" role="tabpanel" aria-labelledby="inspector-state" tabindex="0"><pre>No decision yet.</pre></div>
   </aside>
 
   <script type="module" src="/js/start.js"></script>

@@ -490,8 +490,22 @@ export class ModelMenu {
       "aria-label": toggle.getAttribute("aria-label") || label,
       hidden: true,
     });
+    this.menu.id = `${toggle.id}-menu`;
+    toggle.setAttribute("aria-controls", this.menu.id);
     toggle.after(this.menu);
-    toggle.addEventListener("click", () => this.setOpen(this.menu.hidden));
+    toggle.addEventListener("keydown", (ev) => {
+      if (ev.ctrlKey || ev.metaKey || ev.altKey || !["ArrowDown", "ArrowUp"].includes(ev.key)) return;
+      ev.preventDefault();
+      this.setOpen(true, ev.key === "ArrowUp");
+    });
+    // Keep the focused item until click, so focusout cannot close and reopen the same menu.
+    toggle.addEventListener("pointerdown", (ev) => {
+      if (!this.menu.hidden && ev.button === 0) ev.preventDefault();
+    });
+    toggle.addEventListener("click", () => {
+      this.setOpen(this.menu.hidden);
+      if (this.menu.hidden) toggle.focus();
+    });
     this.menu.addEventListener("keydown", (ev) => {
       const items = [...this.menu.querySelectorAll("[role^=menuitem]:not([disabled])")],
         i = items.indexOf(document.activeElement);
@@ -500,26 +514,36 @@ export class ModelMenu {
         ev.preventDefault();
         this.setOpen(false);
         toggle.focus();
+      } else if (ev.key === "Home" || ev.key === "End") {
+        ev.preventDefault();
+        (ev.key === "Home" ? items[0] : items.at(-1))?.focus();
       } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
         ev.preventDefault();
         items[(i + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
       }
     });
+    this.menu.addEventListener("focusout", (ev) => {
+      if (!this.menu.contains(ev.relatedTarget)) this.setOpen(false);
+    });
     document.addEventListener("pointerdown", (ev) => {
       if (!this.menu.hidden && !this.menu.contains(ev.target) && ev.target !== toggle) this.setOpen(false);
     });
   }
-  setOpen(open) {
+  setOpen(open, last = false) {
     if (open) this.render();
     this.menu.hidden = !open;
     this.toggle.setAttribute("aria-expanded", String(open));
-    if (open) this.menu.querySelector("[role^=menuitem]:not([disabled])")?.focus();
+    if (open) {
+      const items = [...this.menu.querySelectorAll("[role^=menuitem]:not([disabled])")];
+      (last ? items.at(-1) : items[0])?.focus();
+    }
   }
   render() {
     const current = this.current(),
       agents = this.agents();
     const pick = (id) => () => {
       this.setOpen(false);
+      this.toggle.focus();
       this.onPick(id);
     };
     const connected = agents.some((d) => !d.builtin);
@@ -546,6 +570,7 @@ export class ModelMenu {
           class: "llm-menu-setup",
           onclick: () => {
             this.setOpen(false);
+            this.toggle.focus();
             this.onSetup();
           },
         },
