@@ -519,7 +519,7 @@ export async function boot() {
   bindMapPicker($("#minimap"), $("#minimap-cursor"), {
     fromCar: () => minimap.toPx(world.ego.x, world.ego.y),
     bounds: () => minimap.pxBounds(),
-    onSelect: (x, y) => minimap.pick(x, y),
+    onSelect: (x, y) => minimap.pickKeyboard(x, y),
   });
   $("#feature-switches").hidden = Boolean(challenge || replay);
   const showMapNote = () =>
@@ -1546,6 +1546,8 @@ export async function boot() {
           break;
         }
       }
+    } else {
+      input.stepped(); // no live steps while paused, reviewing or in Photo mode: drop one-step pulses
     }
     hour = clock.update(world.t);
     syncClock();

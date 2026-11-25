@@ -380,6 +380,11 @@ export async function runUiTests() {
       "Assistive activation of a pedal lasts until a physics step reads it",
       framesWithoutStep && touch.state.throttle === 0,
     );
+    go.click();
+    input.poll();
+    const pulseFirst = input.throttle === 1;
+    input.stepped();
+    check("An assistive pedal pulse drives exactly one physics step", pulseFirst && input.throttle === 0);
     hard.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 5, button: 2, bubbles: true, cancelable: true }));
     check("Right-clicking a touch control cannot engage hard braking", !touch.state.hardBrake);
     go.click();

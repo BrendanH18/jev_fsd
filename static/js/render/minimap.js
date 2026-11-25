@@ -43,6 +43,17 @@ export class Minimap {
     return true;
   }
 
+  // The keyboard marker is clamped to pxBounds(), whose edges can convert back a rounding step
+  // outside the extent, so it is checked in pixels and clamped to the extent in world coordinates.
+  pickKeyboard(px, py) {
+    const [left, top, right, bottom] = this.pxBounds();
+    if (!(px >= left && px <= right && py >= top && py <= bottom)) return false;
+    const [x0, y0, x1, y1] = this.extent;
+    const [x, y] = this.toWorld(px, py);
+    this._onPick([Math.min(x1, Math.max(x0, x)), Math.min(y1, Math.max(y0, y))]);
+    return true;
+  }
+
   // The map's projected rectangle in canvas pixels, inside any letterbox.
   pxBounds() {
     const [x0, y0, x1, y1] = this.extent;

@@ -245,6 +245,12 @@ export class TouchControls {
   }
   // An assistive activation stays pressed until a physics step has read it (Input.stepped).
   stepped() {
-    for (const [name, held] of Object.entries(this.pedals)) if (held.delete("activate")) this.showPedal(name);
+    let consumed = false;
+    for (const [name, held] of Object.entries(this.pedals)) {
+      if (!held.delete("activate")) continue;
+      consumed = true;
+      this.showPedal(name);
+    }
+    return consumed;
   }
 }

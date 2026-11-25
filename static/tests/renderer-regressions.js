@@ -387,6 +387,19 @@ function minimapChecks(check) {
   );
   click(21, 35);
   check("Ignore destination clicks in the minimap's letterboxing", clicks.length === 1);
+  {
+    const [left, top, right, bottom] = minimap.pxBounds();
+    const [x0, y0, x1, y1] = map.extent;
+    const picked = minimap.pickKeyboard(right, bottom) && minimap.pickKeyboard(left, top);
+    const [east, south] = clicks.at(-2);
+    const [west, north] = clicks.at(-1);
+    check(
+      "Keyboard destinations at the map's projected edges stay inside its extent",
+      picked && east <= x1 && south >= y0 && west >= x0 && north <= y1,
+    );
+    check("Keyboard destinations in the letterbox are ignored", !minimap.pickKeyboard(left - 1, top));
+    clicks.length = 1;
+  }
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 0, height: 0 });
   click(0, 0);
   check("Ignore destination clicks while the minimap has no visible size", clicks.length === 1);

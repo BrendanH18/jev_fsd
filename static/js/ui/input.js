@@ -20,6 +20,7 @@ export class Input {
     this.manualActive = false;
     this.sources = []; // analog sources, each with a `state` (see poll)
     this.analog = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
+    this.blocked = false;
     window.addEventListener("keydown", (ev) => {
       if (ev.defaultPrevented) return;
       if (ev.isComposing || editing(ev.target) || document.querySelector("dialog[open]")) {
@@ -93,25 +94,35 @@ export class Input {
   // Reads the analog sources once a frame (main.js, before the physics steps). Nothing drives while
   // a dialog is open, as with the keys.
   poll() {
-    const sum = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
     const blocked = typeof document !== "undefined" && (document.hidden || document.querySelector?.("dialog[open]"));
     if (blocked) this.keys.clear();
-    for (const source of this.sources) {
+    const states = this.sources.map((source) => {
       if (blocked) source.release?.();
-      const s = source.poll ? source.poll() : source.state;
-      if (!s || blocked) continue;
+      return source.poll ? source.poll() : source.state;
+    });
+    this.blocked = !!blocked;
+    this.analog = this.combine(states);
+    return this.analog;
+  }
+  combine(states) {
+    const sum = { steer: 0, throttle: 0, brake: 0, hardBrake: false };
+    for (const s of states) {
+      if (!s || this.blocked) continue;
       sum.steer += amount(s.steer, -1);
       sum.throttle = Math.max(sum.throttle, amount(s.throttle));
       sum.brake = Math.max(sum.brake, amount(s.brake));
       sum.hardBrake ||= !!s.hardBrake;
     }
     sum.steer = Math.max(-1, Math.min(1, sum.steer));
-    this.analog = sum;
     return sum;
   }
-  // Called after each physics step, so one-step pulses from a source are read before they end.
+  // Called after each physics step (and while live driving is suspended), so a one-step pulse from a
+  // source drives exactly one step. Sources keep their latest sample in `state` (the gamepad caches
+  // its poll), so the merged input is rebuilt without polling again.
   stepped() {
-    for (const source of this.sources) source.stepped?.();
+    let changed = false;
+    for (const source of this.sources) changed = source.stepped?.() || changed;
+    if (changed) this.analog = this.combine(this.sources.map((source) => source.state));
   }
   get throttle() {
     return Math.max(Number(this.keys.has("w") || this.keys.has("arrowup")), this.analog.throttle);
