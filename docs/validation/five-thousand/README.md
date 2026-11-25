@@ -64,7 +64,12 @@ decision latency, start and save times, and the source commit, date and dirty fl
 | Every challenge and both road tests, Rules | 62/62 | 62/62 | match, full results and the CLI report |
 | Every challenge and both road tests, cautious agent | 62/62 | 62/62 | match, full results and the CLI report |
 
-The same comparison had matched at `78cbeb5`, before the review and performance fixes. The stub model
+The same comparison had matched at `78cbeb5`, before the review and performance fixes.
+
+Every published model tape (`scripts/report_replay_drift.py matrix`) was replayed on both trees with the
+same Node release and gave the same verdict on each: the six tapes from 20 and 21 November and the local
+Granite tape replay exactly, and the five 11 November tapes (Jev's and DeepSeek's arena runs and three
+single-drive tapes) drift on the same drives on both trees, the known drift of ROADMAP 7.7. The stub model
 recording replays exactly and the Jev fixtures are current.
 
 Combining the branches needed a few fixes of its own, each checked: tests that encoded an interface
