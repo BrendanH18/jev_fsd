@@ -234,12 +234,26 @@ for (const [key, value] of [
 
 const plan = soakPlan({ mode: "city", maps: ["kitsilano"], seeds: [1, 2, 3] });
 const [a, b, c] = plan;
-const policy = { audit_policy: "strict", require_count: true };
+const policy = { audit_policy: "all drive verdicts count", require_count: true };
 const coverage = soakCoverage(plan, [
   { id: a.id, status: "passed" },
   { id: b.id, status: "error" },
 ]);
-const previous = { schema: 1, shard: 0, shards: 1, ...policy, coverage, runs: [{ id: a.id }] };
+const passingRun = {
+  ...a,
+  config: {
+    brain: "rules",
+    mode: "lockstep",
+    map: a.map,
+    seed: a.seed,
+    count: a.count,
+    npcs: 40,
+    features: "city",
+    weather: "dry",
+  },
+  results: ["s1-1", "s1-2"].map((id) => ({ id, arrived: true, pass: true, failures: [] })),
+};
+const previous = { schema: 1, shard: 0, shards: 1, ...policy, coverage, runs: [passingRun] };
 const retried = retrySoakPlan(plan, previous, 0, 1, policy);
 assert.equal(retried.eligible.map(({ id }) => id).join(), [b.id, c.id].join());
 assert.equal(retried.passed[0].id, a.id);
@@ -250,6 +264,20 @@ assert.throws(() => retrySoakPlan(plan, previous, 0, 1, { ...policy, require_cou
 assert.throws(() => retrySoakPlan(plan, { ...previous, coverage: null }, 0, 1, policy), /full shard plan/);
 assert.throws(() => retrySoakPlan(plan, { ...previous, runs: [] }, 0, 1, policy), /one passed run/);
 assert.throws(() => retrySoakPlan([{ ...a, count: 7 }, b, c], previous, 0, 1, policy), /conditions differ/);
+for (const [run, reason] of [
+  [{ ...passingRun, seed: b.seed }, /saved task differs for seed/],
+  [{ ...passingRun, config: { ...passingRun.config, weather: "snow" } }, /config differs for weather/],
+  [{ ...passingRun, results: passingRun.results.slice(1) }, /Expected 2 routes; completed 1/],
+  [
+    {
+      ...passingRun,
+      results: [{ ...passingRun.results[0], pass: false, failures: ["red light"] }, passingRun.results[1]],
+    },
+    /results fail the soak verdict/,
+  ],
+]) {
+  assert.throws(() => retrySoakPlan(plan, { ...previous, runs: [run] }, 0, 1, policy), reason);
+}
 assert.throws(() => soakPlan({ heldout: "true" }), /heldout must be true/);
 assert.throws(() => soakPlan({ maps: ["kitsilano", "kitsilano"] }), /unique/);
 assert.throws(() => soakPlan({ seeds: [1, 1] }), /unique/);
