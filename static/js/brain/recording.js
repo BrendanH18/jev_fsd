@@ -424,10 +424,7 @@ function storedOutcome(res, body) {
   const { tick, epoch, ...kept } = copy;
   // A reply whose echo did not match its request was refused when it was recorded (model-contract.js):
   // keep it as it came, so the replay refuses it too.
-  if (
-    (Object.hasOwn(copy, "tick") && tick !== body?.tick) ||
-    (Object.hasOwn(copy, "epoch") && epoch !== body?.epoch)
-  )
+  if ((Object.hasOwn(copy, "tick") && tick !== body?.tick) || (Object.hasOwn(copy, "epoch") && epoch !== body?.epoch))
     return { response: copy, raw_response: true };
   const request = kept.trace?.request;
   // Do not interpret literal provider values as the compactor's placeholders.

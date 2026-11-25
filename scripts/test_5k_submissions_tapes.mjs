@@ -184,7 +184,9 @@ assert.equal(firstReplay.exact, true);
 const echoed = new ModelRecording({ header: model });
 await echoed.tape("echo", "record").record(autopilot, async () => ({ tick: 5, epoch: 1, answers: {} }), path, request);
 assert.equal(echoed.drives.echo[key][0].raw_response, true);
-const echoReplay = await ModelRecording.parse(echoed.serialize()).tape("echo", "replay").replay(autopilot, path, request);
+const echoReplay = await ModelRecording.parse(echoed.serialize())
+  .tape("echo", "replay")
+  .replay(autopilot, path, request);
 assert.equal(echoReplay.tick, 5);
 assert.equal(echoReplay.epoch, 1);
 const matched = new ModelRecording({ header: model });
