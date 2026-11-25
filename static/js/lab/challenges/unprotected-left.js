@@ -21,8 +21,9 @@ export const challenge = {
   difficulty: "Judgement",
   hazard: "oncoming",
   description:
-    "A left turn on a green in Centretown, with two oncoming cars close together. Wait for a gap you can use.",
-  lesson: "Oncoming traffic has the right of way. Pull into the junction, wait, and turn once the gap is long enough.",
+    "You have a green light for a left turn in Centretown. Two oncoming cars are travelling close together across the line of the turn.",
+  lesson:
+    "Wait for both cars to clear unless a gap is long enough to complete the turn without making anyone slow. Keep the wheels straight while waiting and scan the destination crosswalk before you turn.",
 };
 
 export const scenario = (map, challenge) =>

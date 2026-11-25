@@ -26,9 +26,9 @@ export const challenge = {
   contraflow: true,
   street: "Rue Villeneuve Est",
   description:
-    "You turn right from Rue Drolet into Rue Villeneuve Est, in the Plateau: one-way for cars, but with a painted lane for cyclists riding the other way. One is coming out of it toward the junction.",
+    "You're turning right from Rue Drolet onto Rue Villeneuve Est. The painted bike lane carries a rider toward you on a street that's one-way for motor traffic.",
   lesson:
-    "On a one-way street signed EXCEPT BICYCLES (in Québec, EXCEPTÉ VÉLOS), cyclists ride both ways, against the traffic on the driver's left. Look both ways before turning in, and let a cyclist coming out clear the junction first: at a junction without a sign, one coming from your right has the right of way anyway. Driving along such a street, keep right for a cyclist coming the other way, and stop to let them by where there isn't room to leave them at least 1 m.",
+    "Look both ways for bikes at the turn and let the rider clear the junction before entering. Keep right on the street and pause where the roadway is too narrow to give an approaching rider at least 1 m.",
 };
 
 export const CF_START_M = 45,

@@ -14,8 +14,10 @@ export const challenge = {
   icon: "◧",
   difficulty: "Sight lines",
   hazard: "occluded-pedestrian",
-  description: "A person emerges from behind a mapped building. Your view opens as you approach.",
-  lesson: "Leave stopping room when a building blocks your view of the sidewalk.",
+  description:
+    "A person starts across a Kitsilano street from behind a building. The building hides them until you're closer.",
+  lesson:
+    "Ease off while the building still blocks your view. Scan the sidewalk as it comes into view and keep enough room to stop short of anyone crossing your path.",
 };
 
 const blindSites = new WeakMap();

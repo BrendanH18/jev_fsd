@@ -31,9 +31,9 @@ export const challenge = {
   hazard: "junction-box",
   street: "Avenue du Mont-Royal Est",
   description:
-    "Avenue du Mont-Royal Est meets Rue Saint-Denis at a light that is green as you come up. Past it, traffic is backed up from Rue Rivard, behind a car waiting to turn left, to just beyond Saint-Denis.",
+    "The light at Rue Saint-Denis is green, but a queue from Rue Rivard is backed up to the far side of your intersection.",
   lesson:
-    "Even on a green, don't enter a junction unless there is room for all of your car past it: wait at the line until there is. That is Québec's Highway Safety Code, and Montréal police fine drivers who block an intersection. A driver who follows the queue in is stuck in the middle when the light changes, and the cross street can't go.",
+    "Use the space beyond the junction to decide whether to enter. Wait at the line until the whole car will fit on the far side without blocking cross traffic if the signal changes.",
 };
 
 const BOX_START_M = 60,

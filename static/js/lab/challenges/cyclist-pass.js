@@ -30,9 +30,9 @@ export const challenge = {
   passCyclists: true,
   street: "West 10th Avenue",
   description:
-    "A cyclist is riding the West 10th Avenue bikeway ahead of you, out in your lane: the kerb is lined with parked cars, and there's one lane each way. Two cars are coming the other way.",
+    "Parked cars put a cyclist into your lane on the West 10th Avenue bikeway. Two oncoming cars occupy the lane you'd need to pass.",
   lesson:
-    "Pass a cyclist with at least 1 m of room where the limit is 50 km/h or less, and 1.5 m above: that is BC's minimum passing distance law, and Québec and Ontario have one too. With one lane each way, that means moving into the oncoming lane, so stay well back until it is clear for the whole pass, then go by and move back in well ahead of them. Never squeeze past in the lane.",
+    "Stay back until you can see a gap long enough to pass and return well ahead of the rider. Leave at least 1 m at limits up to 50 km/h in BC and 1.5 m at higher limits.",
 };
 
 const CP_START_M = 20,

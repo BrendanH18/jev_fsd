@@ -26,9 +26,9 @@ export const challenge = {
   officers: true,
   street: "Spadina Avenue",
   description:
-    "A police officer is directing traffic in the middle of Bloor Street West at Spadina Avenue, in the Annex, a cruiser with its lights on at the corner. You're heading north up Spadina on a green light, but the officer is waving Bloor through.",
+    "You're northbound on Spadina Avenue with a green light. An officer in the junction is directing traffic on Bloor Street West to go first.",
   lesson:
-    "A police officer's directions override the traffic lights. Stop at the line when the officer holds you, even on a green, and go when they wave you through, even on a red, still yielding to anyone already in the junction. Canadian highway traffic acts and driver's handbooks all say so.",
+    "Follow the officer's directions at the stop line even when the signal shows something different. Before moving on the officer's signal, let any traffic already in the junction clear.",
 };
 
 // Spadina Avenue northbound (one-way carriageway, then its approach to Bloor), and Spadina Road beyond.

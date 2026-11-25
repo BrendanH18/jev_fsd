@@ -30,9 +30,9 @@ export const challenge = {
   hidden: true,
   street: "Stephens Street",
   description:
-    "A quiet street in Kitsilano, lined with parked cars on your side. The limit is 50 km/h, and you can't see the sidewalk behind them.",
+    "Parked cars line the kerb on Stephens Street. You can see the road ahead, but someone beside the cars could be hidden.",
   lesson:
-    "Cars parked at the kerb hide whoever is behind them, and a child can step out from between two of them before you can see them. Beside parked cars on a quiet street, drive at a speed you can stop from in the distance you can see: about 30 km/h on a dry road, slower in rain or snow. Driver's handbooks across Canada say the same.",
+    "Set your speed for the nearest gap someone could step through. Lower it again when rain or snow lengthens your stopping distance, even if the posted limit stays the same.",
 };
 
 const STEP_START_M = 110,

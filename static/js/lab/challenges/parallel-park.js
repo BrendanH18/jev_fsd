@@ -28,9 +28,9 @@ export const challenge = {
   park: true,
   street: "West 10th Avenue",
   description:
-    "Your destination is on a block in Kitsilano lined with parked cars, and there's one space left, a little over one and a half car lengths long. As you slow for it, a car comes up behind you.",
+    "You reach a gap a little over one and a half car lengths long on West 10th Avenue. A driver comes up behind you as you slow to park.",
   lesson:
-    "Signal early so the driver behind knows you're stopping. Pull up alongside the car in front of the space, about a door's width from it, with your rear bumpers level. Check behind, then reverse in on full lock toward the kerb, straighten, and turn the other way to swing the front in. Finish parallel, within 30 cm of the kerb. Never back into someone: wait until it's clear behind. That is BC's Motor Vehicle Act, and every province's driver's handbook teaches the same.",
+    "Signal and line up beside the car ahead of the gap with rear bumpers level. Check behind between moves, reverse toward the kerb, then countersteer to bring the front in. Finish parallel within 30 cm of the kerb.",
 };
 
 const SPACE_M = 6.8,

@@ -17,10 +17,9 @@ export const challenge = {
   icon: "✚",
   difficulty: "Awareness",
   hazard: "emergency",
-  description:
-    "An ambulance comes up behind you with its siren on, just before a junction. Get out of its way, but not into the junction.",
+  description: "An ambulance with lights and siren approaches from behind while you're still short of the junction.",
   lesson:
-    "When you hear a siren, pull over as close to the right-hand edge of the road as you can, clear of any junction, and stop until it has gone by. Then let it get well ahead before you follow.",
+    "Pull as far right as you safely can while staying clear of the junction. Hold still as the ambulance passes and let it move well ahead before pulling out again.",
 };
 
 const SIREN_EDGE_M = 135,

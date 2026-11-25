@@ -26,9 +26,9 @@ export const challenge = {
   difficulty: "Patience",
   hazard: "collection",
   description:
-    "It's collection day. A garbage truck is stopped in your lane ahead, beside the parked cars, its crew emptying the bins at the kerb, and there's one lane each way. As you come up behind it, one of the crew heads across the street behind the truck to the bins on the far side.",
+    "A collection truck stops in your lane on a two-way street. A crew member fetches bins from the far side and crosses behind the truck.",
   lesson:
-    "Stop well back from a garbage truck at work: its crew works at its rear, walking between it and the kerbs and across the street behind it, and they are often out of sight behind the truck. Go round only when the crew is back at the kerb or on the truck and the oncoming lane is clear for the whole way round, and go round slowly, with room to spare. On the move, stay behind it: it is about to stop again.",
+    "Wait far enough back to see the work area. Check the rear of the truck and both kerbs for crew, then check that the opposing lane is clear all the way around. Keep your distance when the truck starts moving again.",
 };
 
 const TR_START_M = 60,

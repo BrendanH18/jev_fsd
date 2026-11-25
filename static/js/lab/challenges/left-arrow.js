@@ -24,9 +24,9 @@ export const challenge = {
   hazard: "left-arrow",
   street: "Isabel Street",
   description:
-    "You're going straight on Isabel Street at William Avenue, first at a red light in the right lane. Beside you, cars wait in the left lane to turn left. Then a green arrow comes on, and they go.",
+    "You're first in the straight-through lane at Isabel Street and William Avenue. A green arrow starts the left-turn queue moving beside you.",
   lesson:
-    "A green arrow is for the way it points, and no other: going straight, your light is still red. Wait for your own green, even while the lane beside you moves.",
+    "Check which direction the green arrow serves. Hold at your own stop line while the straight-through signal stays red.",
 };
 
 const ARROW_START_M = 95,

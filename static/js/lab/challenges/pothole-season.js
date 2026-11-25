@@ -24,9 +24,9 @@ export const challenge = {
   potholes: true,
   street: "Rue Saint-Denis",
   description:
-    "Spring on Rue Saint-Denis, in the Plateau: the frost is coming out of the ground and the rain has filled a run of potholes in your lane. Some you can ease round without leaving the lane; one wide one you can't.",
+    "Rainwater fills several spring potholes on Rue Saint-Denis. One spans too much of your lane to avoid without crossing the lane line.",
   lesson:
-    "Look well ahead for potholes, especially when they are full of water and look like any puddle. Where your lane leaves room, ease over inside it so both wheels miss the hole; where it doesn't, slow to about 20 km/h before your wheels reach it. Never swerve across a lane line to avoid one.",
+    "Choose your line early enough to miss a hole with both wheels while staying in your lane. If the hole can't be avoided safely, slow before it and roll across at about 20 km/h in this drive.",
 };
 
 const EDGE = "e212",

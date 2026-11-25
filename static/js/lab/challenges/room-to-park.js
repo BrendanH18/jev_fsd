@@ -32,9 +32,9 @@ export const challenge = {
   parkers: true,
   street: "Larch Street",
   description:
-    "An afternoon on Larch Street in Kitsilano, a residential street with cars parked along both kerbs. The car ahead of you signals right, slows and pulls up alongside a parked car: there is a gap behind it, and it is about to reverse in.",
+    "On Larch Street, the car ahead signals right and pulls up beside a parked car, leaving a gap just behind it.",
   lesson:
-    "A car ahead signalling and stopping beside a gap is about to parallel park. Stop well back, leaving it the room to reverse into, and wait until it is in. Don't creep up behind it, and don't try to go round it while it signals or reverses.",
+    "Stop with enough space for the car to reverse and swing its front out. Keep that room available until the manoeuvre is finished and the lane is clear.",
 };
 
 // The gap (from the rear bumper of the car in front of it to the front bumper of the car behind), the

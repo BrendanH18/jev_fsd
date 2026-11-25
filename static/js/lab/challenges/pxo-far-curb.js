@@ -18,8 +18,9 @@ export const challenge = {
   pxo: true,
   street: "Metcalfe Street",
   description:
-    "A person crosses Metcalfe Street at a signed pedestrian crossover. Your lane clears before the whole road does.",
-  lesson: "At an Ontario PXO, stay stopped until everyone reaches the far curb across the whole roadway.",
+    "At the signed pedestrian crossover on Metcalfe Street, the person crossing reaches the far lane while your lane is already clear.",
+  lesson:
+    "Hold at the crossover until everyone crossing has reached the far kerb. Watch across the full road before releasing the brake.",
 };
 
 export function scenario(map, challenge) {

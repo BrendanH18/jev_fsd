@@ -26,9 +26,9 @@ export const challenge = {
   hazard: "crosswalk",
   street: "West Broadway",
   description:
-    "A car in the curb lane has stopped at a marked crosswalk on West Broadway. The lane beside it is open. Why did it stop?",
+    "A car stops at the West Broadway crosswalk in the kerb lane. Its body blocks your view of someone crossing from that side.",
   lesson:
-    "Never pass a vehicle stopped at a crosswalk: it may be hiding the person it stopped for. In BC it is the law. Stop beside it, look, and go on only once nobody is crossing in your path.",
+    "Stop before the crosswalk alongside the stopped car. Check the part of the crossing that the car hides and wait for the crossing to clear before proceeding.",
 };
 
 const THREAT_START_M = 110,

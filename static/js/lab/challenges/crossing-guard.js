@@ -24,10 +24,9 @@ export const challenge = {
   hazard: "crossing-guard",
   guards: true,
   street: "Rue Berri",
-  description:
-    "Rue Berri, beside École Louis-Hippolyte-Lafontaine, at 9 in the morning. A school crossing guard waits at the marked crosswalk ahead with three children, ready to walk them across.",
+  description: "A guard and three children are waiting at the marked crosswalk on Rue Berri beside the school.",
   lesson:
-    "A school crossing guard's STOP sign is a traffic sign. When the guard steps out holding it up, stop before the crosswalk and stay stopped until the guard and every child are off the road, not just out of your lane: that is Ontario's Highway Traffic Act, and BC's and Québec's rules are the same. Slow down whenever children wait at the curb with a guard.",
+    "Slow on the approach, then stop before the crosswalk when the guard raises the STOP sign. Wait until the guard and every child reach the far sidewalk before moving.",
 };
 
 const GUARD_AHEAD_M = 95,

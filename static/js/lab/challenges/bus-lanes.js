@@ -13,8 +13,10 @@ export const challenge = {
   hazard: "bus-lanes",
   busLanes: true,
   street: "Main Street",
-  description: "Keep out of the reserved lane, then enter in the final 50 m to turn right.",
-  lesson: "Keep the bus lane clear until the right-turn approach, then signal and merge safely.",
+  description:
+    "Your route turns right from Main Street. A reserved bus lane runs along the kerb between your lane and the turn.",
+  lesson:
+    "Keep out of the bus lane until the final 50 m for this turn. Signal, check for a bus approaching from behind, and merge into the turn approach only when it is clear.",
 };
 export function busLaneScenario(map, challenge) {
   for (const record of map.buslanes) {

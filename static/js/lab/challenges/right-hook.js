@@ -24,9 +24,9 @@ export const challenge = {
   difficulty: "Anticipation",
   hazard: "right-hook",
   description:
-    "A right turn off a Kitsilano bikeway, with a cyclist riding the empty parking lane. Catch them up, and they're on your right at the corner.",
+    "You're approaching a right turn on a Kitsilano bikeway. A cyclist riding beside the kerb can reach the turn alongside you.",
   lesson:
-    "Before a right turn, check your mirror and over your shoulder. A cyclist going straight on your right has the right of way: slow down, let them by, then turn behind them.",
+    "Check the right mirror and blind spot before steering across the cyclist's line. Let the rider go straight through, then make the turn behind them.",
 };
 
 const HOOK_START_M = 95,

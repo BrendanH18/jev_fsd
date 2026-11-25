@@ -28,9 +28,9 @@ export const challenge = {
   hazard: "level-crossing",
   street: "106 Street NW",
   description:
-    "106 Street crosses the High Level Bridge Streetcar's tracks on the level, with crossbucks and nothing else: no lights, no gates, no bell. Past them, traffic is backed up from 86 Avenue behind a car waiting to turn left.",
+    "The streetcar tracks cross 106 Street at crossbucks. A queue on the far side can leave too little room to clear the rails.",
   lesson:
-    "Never stop on the tracks: don't start across a level crossing unless there is room for all of your car past it. And when a train is coming, stop at least 5 m back from the nearest rail and wait until it has passed (Alberta's Use of Highway and Rules of the Road Regulation, s. 42). A streetcar can't steer round you, and takes far longer to stop than a car.",
+    "Wait before the rails until your entire car fits beyond them. In this Alberta drive, if a rail vehicle approaches, stop at least 5 m before the nearest rail and wait until it passes.",
 };
 
 const TRACKS_START_M = 95,

@@ -15,9 +15,9 @@ export const challenge = {
   redTurnSigns: true,
   street: "Harbord Street",
   description:
-    "Turn right from Harbord Street onto Spadina Avenue. The cross street is empty, but the mapped sign prohibits this turn on red.",
+    "Your Harbord Street approach faces an empty Spadina Avenue. A sign beside the light prohibits the right turn on red.",
   lesson:
-    "A no-turn-on-red sign still applies after a full stop and with no traffic coming. Wait for the green for your turn, then yield to anyone crossing before turning. The sign does not require a detour.",
+    "Treat the sign as the deciding cue even after a full stop on a quiet approach. Wait at the line for green and check the crosswalk before turning.",
 };
 
 // OSM relation 3726713: Harbord Street eastbound -> Spadina Avenue southbound.

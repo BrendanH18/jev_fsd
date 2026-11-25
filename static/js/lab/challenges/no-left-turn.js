@@ -15,9 +15,10 @@ export const challenge = {
   hazard: "turn-restriction",
   restrictions: true,
   street: "Bathurst Street",
-  description: "A signed left turn is prohibited. Take a legal route around the block.",
+  description:
+    "Your route approaches a signed no-left-turn junction on Bathurst Street, with a legal way around the block.",
   lesson:
-    "Follow the signed turn restriction while it applies. Take the legal detour even when the prohibited turn would be shorter; never turn across the sign just to follow a destination.",
+    "Check the sign before committing to the turn lane. While the restriction applies, follow the detour and use the allowed turn that brings you back toward the destination.",
 };
 
 export function scenario(map, challenge) {

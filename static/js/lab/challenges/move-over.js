@@ -24,9 +24,9 @@ export const challenge = {
   hazard: "roadside",
   street: "Princess Street",
   description:
-    "A tow truck is at the curb on Princess Street with its amber lights flashing, hooking up a car. You're in the lane right beside it.",
+    "A tow operator is working beside a stopped vehicle with amber lights flashing on Princess Street. You're in the lane beside the work.",
   lesson:
-    "Slow down and move over: passing a vehicle stopped at the roadside with its lights flashing, slow to 40 km/h where the limit is under 80 (70 where it is 80 or more), and move out of the lane next to it if you safely can. That is BC's law, and every province has one like it. The people working there stand at the edge of that lane, and step into it.",
+    "Reduce speed before you reach the people working at the kerb. In this BC drive, the reduced speed is 40 km/h where the posted limit is under 80. Check the neighbouring lane and move over if it's safe.",
 };
 
 const TOW_CLEAR_M = 25,
