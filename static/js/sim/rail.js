@@ -177,7 +177,7 @@ export function trainSpan(n) {
 // (ringing, on its way to it), gap_m (its front to the road, along the track: 0 on it), eta_s }, or
 // null.
 export function approach(n, c) {
-  if (!isTrain(n) || n.rail.track !== c.track || n.rail.gone) return null;
+  if (!isTrain(n) || !n.rail || n.rail.track !== c.track || n.rail.gone) return null;
   const { front, rear, dir } = trainSpan(n);
   const gap = dir * (c.s - front) - c.half_m,
     past = dir * (rear - c.s) - c.half_m;
@@ -192,7 +192,8 @@ export function approach(n, c) {
 export function trainAt(trains, c) {
   let best = null;
   for (const n of trains) {
-    const a = isTrain(n) && approach(n, c);
+    const a = approach(n, c);
+    if (a?.on) return { train: n, ...a };
     if (a && (!best || a.eta_s < best.eta_s)) best = { train: n, ...a };
   }
   return best;
@@ -404,10 +405,16 @@ export function stepTrain(n, track, dt, others, sees, random) {
 function nextStop(track, r, after = null) {
   const sp = HERITAGE_STREETCAR,
     front = r.s + r.dir * (sp.length - sp.rearOverhang);
-  const ahead = track.stops
-    .filter((st) => r.dir * (st.s - front) > 2 && st !== after)
-    .sort((a, b) => r.dir * (a.s - b.s));
-  return ahead[0]?.id ?? null;
+  let nearest = null;
+  let distance = Infinity;
+  for (const stop of track.stops) {
+    const gap = r.dir * (stop.s - front);
+    if (stop !== after && gap > 2 && gap < distance) {
+      nearest = stop;
+      distance = gap;
+    }
+  }
+  return nearest?.id ?? null;
 }
 
 // Put a train on `track`, its front `front` metres along it going `dir`, at `v`.

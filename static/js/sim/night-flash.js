@@ -11,6 +11,7 @@ const selections = new WeakMap();
 export function flashMain(inter, map) {
   if (!inter) return null;
   if (!selections.has(inter)) {
+    if (!inter.approaches?.every((a) => map.edges.has(a.edge))) return null;
     const ranks = (g) => inter.approaches.filter((a) => a.group === g).map((a) => roadRank(map.edges.get(a.edge)));
     const a = ranks("A"),
       b = ranks("B");
@@ -46,10 +47,12 @@ export function flashControl(world, control, edge) {
   if (control?.type !== "signal") return control;
   const state = flashState(world.map.intersections.get(control.id), control.group, world);
   if (state !== "flashing_red") return control;
-  let stop = stops.get(control);
+  let approaches = stops.get(control);
+  if (!approaches) stops.set(control, (approaches = new Map()));
+  let stop = approaches.get(edge);
   if (!stop)
-    stops.set(
-      control,
+    approaches.set(
+      edge,
       (stop = {
         ...control,
         id: `${control.id}@${edge}:flash`,
