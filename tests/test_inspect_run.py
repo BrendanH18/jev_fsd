@@ -185,7 +185,7 @@ class InspectRunTests(unittest.TestCase):
             "first-reroute": [{"id": "A", "time_s": 8}],
             "reroute-outcomes": {
                 "reroute observed": {"failed": 1},
-                "none observed": {"failed": 1},
+                "unknown (retention limit)": {"failed": 1},
                 "unknown": {"passed": 2},
             },
             "event-cap": ["C"],
@@ -602,7 +602,9 @@ class InspectRunTests(unittest.TestCase):
         listed = subprocess.check_output(
             [sys.executable, CLI, "--list-diagnostics", "--filter", "timestamp"], text=True
         )
-        self.assertEqual([line.split()[0] for line in listed.splitlines()], ["event-time-issues"])
+        self.assertEqual(
+            [line.split()[0] for line in listed.splitlines()], ["event-time-issues", "evidence-events-after-end"]
+        )
 
     def test_targeted_filters_keep_comparable_drives_and_validate_full_input(self):
         rows = [

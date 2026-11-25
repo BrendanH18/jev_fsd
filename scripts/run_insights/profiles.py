@@ -87,7 +87,9 @@ def measurement(row, field):
 
 
 def ratio(numerator, denominator, scale=1):
-    if numerator is None or not denominator:
+    if numerator is None or denominator is None or denominator <= 0:
+        return None
+    if not isfinite(numerator) or not isfinite(denominator):
         return None
     value = numerator / denominator * scale
     return value if isfinite(value) else None
@@ -126,13 +128,7 @@ def parking(row):
     return "unrecorded"
 
 
-def rerouting(row):
-    events = outcomes.events(row)
-    if events is None:
-        return None
-    if any(event["type"] == "reroute" for event in events):
-        return "reroute observed"
-    return "unknown (retention limit)" if len(events) >= 50 else "none observed"
+rerouting = outcomes.reroute_cohort
 
 
 # These are observable cohorts, not causal controls. Outcome and behavior cohorts may have
