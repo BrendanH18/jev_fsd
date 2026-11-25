@@ -4,7 +4,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 globalThis.document = { querySelector: () => null };
-const { MapData } = await import("../static/js/map/mapdata.js");
+const { load: loadMap, names } = await import("./drive_lab_maps.mjs");
+const { WEATHER } = await import("../static/js/sim/weather.js");
+const { parseHour } = await import("../static/js/sim/world-clock.js");
 const registry = await import("../static/js/lab/challenges.js");
 const { CHALLENGES, CHALLENGE_VERSION, challengeById, challengeScenario, challengeConfig } = registry;
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
@@ -99,51 +101,109 @@ await test("no challenge keeps its scripted parts outside lab/challenges/", () =
   );
 });
 
-// The maps, with every layer, as the server serves them.
-const names = {
-  saskatoon: "ca5573a8d934",
-  kitsilano: "623b012bc8b5",
-  mount_pleasant: "7165f1c807a8",
-  victoria: "d7454a9751b7",
-  montreal: "bb9df59633e0",
-  toronto: "4a96d42cb3f2",
-  ottawa: "d25b07def0d2",
-  calgary: "a53c5bcf6438",
-  edmonton: "3e794edbefcb",
-  winnipeg: "19bb885c9cae",
-  halifax: "49db0d437c8c",
+const cache = new Map();
+function load(id) {
+  if (!cache.has(id)) cache.set(id, loadMap(id));
+  return cache.get(id);
+}
+const drives = [...CHALLENGES, ...ROAD_TESTS];
+const scenarios = new Map();
+const scenarioFor = (c) => {
+  if (!scenarios.has(c.id)) scenarios.set(c.id, challengeScenario(load(c.map), c));
+  return scenarios.get(c.id);
 };
-const cache = {};
-const load = (id) =>
-  (cache[id] ||= (() => {
-    const file = (name) => new URL(`../data/maps/${names[id]}.${name}.json`, import.meta.url);
-    const pack = JSON.parse(fs.readFileSync(file("v6.pack")));
-    for (const name of [
-      "transit",
-      "zones",
-      "rail",
-      "calming",
-      "scrambles",
-      "buslanes",
-      "restrictions",
-      "contraflow",
-      "driveways",
-      "parks",
-      "bridges",
-    ]) {
-      if (fs.existsSync(file(`${name}.v1`))) pack[name] = JSON.parse(fs.readFileSync(file(`${name}.v1`)));
+const nonblank = (text) => typeof text === "string" && text.trim().length > 0;
+const coordinates = (point) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite);
+
+const metadataChecks = [
+  ["stable lowercase kebab-case IDs", (c) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(c.id)],
+  ["bundled map keys", (c) => Object.hasOwn(names, c.map)],
+  ["recognised weather conditions", (c) => Object.hasOwn(WEATHER, c.weather)],
+  ["parseable local starting times", (c) => typeof c.time === "string" && Number.isFinite(parseHour(c.time, NaN))],
+  ["positive safe scenario seeds", (c) => Number.isSafeInteger(c.seed) && c.seed > 0],
+  [
+    "positive version numbers when authored explicitly",
+    (c) => c.version === undefined || (Number.isSafeInteger(c.version) && c.version > 0),
+  ],
+  [
+    "positive finite time limits when specified",
+    (c) => c.limit_s === undefined || (Number.isFinite(c.limit_s) && c.limit_s > 0),
+  ],
+  ["an icon for the library card", (c) => nonblank(c.icon)],
+  ["a skill label for library filtering", (c) => nonblank(c.difficulty)],
+  ["nonblank briefings before the drive", (c) => nonblank(c.description)],
+  ["nonblank lessons with distinct wording for the debrief", (c) => nonblank(c.lesson) && c.lesson !== c.description],
+  ["nonblank street names when used as site selectors", (c) => c.street === undefined || nonblank(c.street)],
+  ["hazard keys that can be used for dispatch", (c) => typeof c.hazard === "string" && /^[a-z][a-z-]*$/.test(c.hazard)],
+];
+for (const [expectation, valid] of metadataChecks)
+  await test(`authored drives have ${expectation}`, () => {
+    for (const c of drives) assert.equal(valid(c), true, c.id);
+  });
+
+await test("scenario seeds do not overlap between drives", () => {
+  assert.equal(new Set(drives.map((c) => c.seed)).size, drives.length);
+});
+await test("each library title is nonblank and selects a distinct drive", () => {
+  assert.equal(
+    drives.every((c) => nonblank(c.title)),
+    true,
+  );
+  assert.equal(new Set(drives.map((c) => c.title)).size, drives.length);
+});
+await test("road tests have examiner style and region labels", () => {
+  for (const t of ROAD_TESTS) {
+    assert.equal(nonblank(t.style), true, t.id);
+    assert.equal(nonblank(t.region), true, t.id);
+  }
+});
+await test("road tests have nonnegative, integral demerit allowances", () => {
+  for (const t of ROAD_TESTS) assert.equal(Number.isSafeInteger(t.maxDemerits) && t.maxDemerits >= 0, true, t.id);
+});
+await test("road-test populations are whole nonnegative actor counts", () => {
+  for (const t of ROAD_TESTS) {
+    for (const kind of ["traffic", "pedestrians"]) {
+      const count = t.population[kind];
+      assert.equal(Number.isSafeInteger(count) && count >= 0, true, `${t.id} ${kind}`);
     }
-    const crossings = ["crossings.v2", "crossings.v1"].find((n) => fs.existsSync(file(n)));
-    if (crossings) pack.crossings = JSON.parse(fs.readFileSync(file(crossings)));
-    return new MapData(pack);
-  })());
+  }
+});
 
 await test("each challenge builds its own drive through the registry", () => {
   for (const c of CHALLENGES) {
-    const sc = challengeScenario(load(c.map), c);
+    const sc = scenarioFor(c);
     assert.equal(sc.id, c.id, `${c.id} builds its own drive`);
     assert.equal(sc.traffic_seed, c.seed, `${c.id} keeps its seed`);
     assert.ok(sc.route?.polyline?.length > 1, `${c.id} has a route`);
+  }
+});
+
+await test("each drive starts on a lane that exists in its map", () => {
+  for (const c of drives) {
+    const { start } = scenarioFor(c);
+    const edge = load(c.map).edges.get(start.edge);
+    assert.equal(!!edge && Number.isSafeInteger(start.lane) && start.lane >= 0 && start.lane < edge.lanes, true, c.id);
+  }
+});
+await test("each drive starts within its lane at a finite pose", () => {
+  for (const c of drives) {
+    const { start } = scenarioFor(c);
+    const lane = load(c.map).lane(start.edge, start.lane);
+    assert.equal(start.s >= 0 && start.s <= lane.length, true, c.id);
+    const pose = [start.x, start.y, start.psi];
+    assert.equal(pose.every((n) => n === undefined) || pose.every(Number.isFinite), true, c.id);
+  }
+});
+await test("all route points are finite two-dimensional coordinates", () => {
+  for (const c of drives) assert.equal(scenarioFor(c).route.polyline.every(coordinates), true, c.id);
+});
+await test("each target is within snapping distance of its route endpoint", () => {
+  for (const c of drives) {
+    const { route, goal } = scenarioFor(c);
+    assert.equal(coordinates(goal), true, c.id);
+    const [x, y] = route.polyline.at(-1);
+    const offset = Math.hypot(x - goal[0], y - goal[1]);
+    assert.equal(offset <= 5, true, `${c.id} goal is ${offset.toFixed(2)} m from the route endpoint`);
   }
 });
 
