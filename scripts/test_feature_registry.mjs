@@ -75,6 +75,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "workZones",
       "outages",
       "plows",
+      "closures",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -391,6 +392,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     vans: 2,
     scrambles: true,
     workZones: 1,
+    closures: 1,
     outages: 1,
   });
   for (const f of R.FEATURES) {

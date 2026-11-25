@@ -64,12 +64,6 @@ export class DriveScore {
     // (and with hidden traffic, sim/hidden-traffic.js: failures to yield to a vehicle the car could
     // not see as it pulled out, hidden behind another)
     this.hiddenCutoffs = 0;
-    // (with a lane closure, sim/lane-closure.js: merging out of turn, not letting someone in, and merging
-    // early; reported only for a drive a closure stood in)
-    this.closures = false;
-    this.mergeCutIns = 0;
-    this.mergeTurnsTaken = 0;
-    this.earlyMerges = 0;
     // (with traffic passing cyclists, sim/cyclist-pass.js: passing one closer than the minimum passing
     // distance, and into the way of oncoming traffic; reported only for such a drive)
     this.cyclists = !!world.passCyclists;
@@ -147,7 +141,7 @@ export class DriveScore {
     const offRoad = road?.on_road === false;
     const headingError = this.laneHeading === null ? road?.heading_error || 0 : ego.psi - this.laneHeading;
     const corridor =
-      featureCoachCorridor(world, road?.limit ?? 11.2) || world.laneClosures?.passing(road?.limit ?? 11.2) || null;
+      featureCoachCorridor(world, road?.limit ?? 11.2);
     const wrongWay =
       !!road?.on_road &&
       speed > 2 &&
@@ -199,30 +193,12 @@ export class DriveScore {
         });
       }
     }
-    if (world.closuresSeen) this.closures = true;
     const followingGuidance = featureCoachMessage("afterBlindSpeed", this, coachContext);
     if (world.amberLightsSeen) this.amberLightsSeen = true;
     if (world.busLanesSeen) this.busLanesSeen = true;
     observeFeatureCoach(this, world);
     for (const ev of world.events || []) {
       featureCoachEvent(this, ev);
-      if (ev.type === "merged_out_of_turn") {
-        this.mergeCutIns++;
-        this.incident("merge_cut_in", "Merged out of turn: forced in ahead of the car whose turn it was", {
-          zone: ev.zone,
-          cut: ev.cut,
-        });
-      }
-      if (ev.type === "took_merge_turn") {
-        this.mergeTurnsTaken++;
-        this.incident("merge_turn_taken", "Didn’t let the car in the closed lane take its turn at the merge", {
-          zone: ev.zone,
-        });
-      }
-      if (ev.type === "merged_early") {
-        this.earlyMerges++;
-        this.incident("early_merge", "Merged early instead of using the lane to the merge point", { zone: ev.zone });
-      }
       if (ev.type === "amber_light")
         this.incident(
           "amber_light",
@@ -415,8 +391,6 @@ export class DriveScore {
       "legality",
       this,
       featureCoachDeduct("followingRules", this, afterSpeed) -
-        this.mergeCutIns * 20 -
-        this.mergeTurnsTaken * 10 -
         this.closePasses * 20,
     );
     const comfort = featureCoachDeduct("comfort", this, 100 - this.harsh * 3 - this.cornering * 1.5 - this.jerk * 0.8);
@@ -469,14 +443,6 @@ export class DriveScore {
         "A vehicle waiting to turn left opposite you, or one stopped near a corner, can hide traffic in the lane beside it. Don't turn across a lane you can't see: wait until you can see that it is clear.",
       );
     featureCoachTips("beforeMerge", this, tips);
-    if (this.mergeCutIns || this.mergeTurnsTaken)
-      tips.push(
-        "Where a lane is closed, zipper merge: use both lanes right up to the merge point, then take turns, one vehicle from each lane. Don't force your way in out of turn, and don't close the gap on someone whose turn it is.",
-      );
-    if (this.earlyMerges)
-      tips.push(
-        "In slow traffic, don't merge early into the open lane. Stay in your lane to the merge point and take your turn there: using both lanes keeps the queue shorter, and everyone gets through sooner.",
-      );
     featureCoachTips("afterMerge", this, tips);
     if (this.closePasses)
       tips.push(
@@ -563,9 +529,6 @@ export class DriveScore {
       min_gap_m: Number.isFinite(this.minGap) ? round(this.minGap) : null,
       resets: this.resets,
       ...featureCoachReport("beforeMerge", this, round),
-      ...(this.closures
-        ? { merge_cut_ins: this.mergeCutIns, merge_turns_taken: this.mergeTurnsTaken, early_merges: this.earlyMerges }
-        : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
       ...(this.amberLightsSeen ? { amber_lights_run: delta("amber_lights_run") } : {}),

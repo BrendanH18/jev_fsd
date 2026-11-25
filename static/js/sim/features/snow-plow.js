@@ -100,7 +100,6 @@ class Plows {
       if (d < PLOW_SPAWN_M[0] || d > PLOW_SPAWN_M[1] || world.visibility.canSee(ego, p[0], p[1])) continue;
       if (
         this.fleet.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SNOW_PLOW.length + 8) ||
-        world.laneClosures?.covers(p[0], p[1]) ||
         this.fleet.spawnBlocked(p[0], p[1])
       )
         continue;

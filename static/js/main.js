@@ -30,7 +30,6 @@ import {
 import { createRoadsideMesh, syncRoadside } from "./render/roadside.js";
 import { createWorkZoneMesh, syncWorkZone } from "./render/work-zone.js";
 import { createLaneClosureMesh, syncLaneClosure } from "./render/lane-closure.js";
-import { laneClosureNotice } from "./sim/lane-closure.js";
 import { createVanMesh, syncVan } from "./render/delivery-van.js";
 import { isPlow } from "./sim/snow-plow.js";
 import { createPlowMesh, syncPlow } from "./render/snow-plow.js";
@@ -1425,7 +1424,6 @@ export async function boot() {
     announcedCrossing = null,
     announcedBox = null,
     announcedAdvance = null,
-    announcedClosure = null,
     announcedNightFlash = null,
     announcedPark = null,
     announcedHazard = null,
@@ -1761,13 +1759,6 @@ export async function boot() {
     }
     if (!advance) announcedAdvance = null;
     announceFeatureNotices("beforeMerge", world, autopilot, featureViews, announcedFeatures, hud);
-    // a lane closed ahead: use both lanes to the merge point, then take turns (said again as the turn changes)
-    const closure = laneClosureNotice(world);
-    if (closure && closure.key !== announcedClosure) {
-      announcedClosure = closure.key;
-      hud.badge(closure.text, closure.stop ? "safety" : "", 2500);
-    }
-    if (!closure) announcedClosure = null;
     // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
     const nightNotice = nightFlashNotice(world);
     if (nightNotice && nightNotice.key !== announcedNightFlash) {

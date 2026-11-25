@@ -145,7 +145,6 @@ export class DriveRecorder {
         "amber_light",
         "stop_sign",
         "failed_to_yield",
-        "merged_out_of_turn",
         "close_pass",
         "contraflow_conflict",
         "reversing_conflict",
@@ -192,7 +191,6 @@ export class DriveRecorder {
     setNightFlash(target.world);
     target.fleet.world = target.world;
     target.world.crowd.world = target.world;
-    target.world.laneClosures.world = target.world;
     target.world.stepOuts.world = target.world;
     for (const restore of CHECKPOINT) restore(target.world, target.fleet);
     target.world.npcs = target.fleet.vehicles;

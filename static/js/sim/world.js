@@ -49,14 +49,6 @@ import {
 } from "./streetcar.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
-import {
-  EGO_ID,
-  LET_IN_DECEL,
-  OWED_DECEL as LC_OWED_DECEL,
-  LaneClosures,
-  THROUGH_M,
-  canStop as canStopForMerge,
-} from "./lane-closure.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
 import { hideable, hiddenVehicle } from "./hidden-traffic.js";
@@ -89,6 +81,7 @@ const HIDES = hooks("hides"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
+const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
 const VISION_RANGE = hooks("visionRange");
@@ -212,16 +205,6 @@ const AUDIT_TRAIN_MOVING_MPS = 1;
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
-// Lane closures (sim/lane-closure.js). In the closed lane, the car owes its wait at the merge point once,
-// at the merge (the nearest in its lane to it), it could stop there braking at up to 3.5 m/s^2 and has not
-// been let in; going through the merge point owing it is merging out of turn, forcing in (counted once a
-// visit, with the vehicle in the open lane nearest it). Moving across from the closed lane into the open
-// one more than AUDIT_EARLY_M short of the merge point is merging early; and in the open lane, going
-// AUDIT_LET_IN_PAST_M past where it would let someone in, at more than 1 m/s, once it owed that (it could
-// stop there braking at 2.5 m/s^2), is taking another's turn. Both are events for coaching, once a visit.
-const AUDIT_EARLY_M = 5;
-const AUDIT_LET_IN_PAST_M = 2;
-const AUDIT_MERGE_MOVING_MPS = 1;
 // Passing cyclists (sim/cyclist-pass.js), with `passCyclists` on. A pass is the car's body going from
 // wholly behind a cyclist going its way (within 30 m) to wholly ahead of it; it is a close pass when,
 // beside it, the gap between their bodies was ever less than the minimum passing distance on the
@@ -238,7 +221,6 @@ export class World {
   // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
   // `hazards`, road vehicles also hide other vehicles and cyclists, and the car turns left, gives way
   // and turns right on red only once it can see the lanes it must give way to (sim/hidden-traffic.js).
-  // `closures`: how many lane closures with a zipper merge stand at a time (sim/lane-closure.js).
   // `passCyclists`: on two-way streets with one lane each way, traffic and the driven car pass a cyclist
   // riding in the lane through the oncoming lane, with the minimum passing distance (sim/cyclist-pass.js).
   // And the option of each registered feature (sim/features/index.js).
@@ -254,7 +236,6 @@ export class World {
       park = false,
       hazards = false,
       stepOuts = 0,
-      closures = 0,
       passCyclists = false,
       busLanes = false,
       nightFlash = false,
@@ -338,15 +319,12 @@ export class World {
       fallbacks: 0,
       deadlock_overrides: 0,
     };
-    this.mergeCall = null; // the lane closure the car is at, and what it owes and has counted there
-    this.closuresSeen = false; // whether a lane closure has stood this drive (sim/lane-closure.js)
     this.events = []; // transient per-step events for the UI
     this.lastRoad = null;
     this.lastSignal = null;
     this.arrowCheck = null; // the left arrow the car crossed the line on: which way did it go?
     this.spawnEgo();
     buildFeatures(this, features, seed, map, "afterSpawn");
-    this.laneClosures = new LaneClosures(this, { count: closures, seed });
     this.crowd = new Crowd(this, { seed, count: pedestrians });
     this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     buildFeatures(this, features, seed, map);
@@ -488,9 +466,6 @@ export class World {
     this.trainYields?.clear();
     this.onTracks = null;
     this.inBox = null;
-    this.mergeCall = null;
-    this.mergeWait = null;
-    this.mergeLetIn = null;
     this.bikePasses?.clear();
     this.cyclistPass = null;
     for (const reset of RESET_CONTACT) reset(this);
@@ -958,7 +933,7 @@ export class World {
     this.auditArrow();
     for (const audit of AUDIT_BEFORE_MERGE) audit(this);
     for (const audit of AUDIT_AFTER_FLAGGER) audit(this);
-    this.auditClosures();
+    for (const audit of AUDIT_AFTER_ROADSIDE_VEHICLES) audit(this);
     if (this.passCyclists) this.auditCyclistPasses(road);
     if (this.busLanes) auditBusLanes(this, dt);
     for (const audit of AUDIT_AFTER_CALMING) audit(this);
@@ -982,80 +957,6 @@ export class World {
     const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
     if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
     this.kerbContact = on;
-  }
-
-  // At a lane closure: merging out of turn, merging early, and not letting someone in (see AUDIT_EARLY_M).
-  auditClosures() {
-    const lc = this.laneClosures;
-    if (!lc.zones.length) {
-      this.mergeCall = null;
-      return;
-    }
-    this.closuresSeen = true;
-    const here = lc.egoAt();
-    if (!here) {
-      this.mergeCall = null;
-      return;
-    }
-    const z = here.zone,
-      ego = this.ego,
-      me = EGO_ID;
-    if (this.mergeCall?.zone !== z.id)
-      this.mergeCall = {
-        zone: z.id,
-        owed: false,
-        crossed: false,
-        lane: here.lane,
-        early: false,
-        letIn: false,
-        took: false,
-      };
-    const rec = this.mergeCall;
-    if (here.side === "closed" && here.front < z.m + THROUGH_M) {
-      rec.owed =
-        z.grant !== me &&
-        (rec.owed || (z.head === me && canStopForMerge(ego.v, z.m - 0.5 - here.front, LC_OWED_DECEL)));
-    } else if (here.side === "closed" && !rec.crossed) {
-      rec.crossed = true;
-      if (rec.owed) {
-        const e = this.map.edges.get(z.edge),
-          oo = e.lane_offsets[z.open];
-        const cut = lc
-          .movers(z)
-          .filter(
-            (x) =>
-              x.id !== me &&
-              Math.abs(x.body.lateral - oo) < 2.2 &&
-              x.body.front < here.front + 5 &&
-              x.body.front > z.m - 25,
-          )
-          .sort((a, b) => b.body.front - a.body.front)[0];
-        this.violations.merge_cut_ins = (this.violations.merge_cut_ins || 0) + 1;
-        this.events.push({ type: "merged_out_of_turn", zone: z.id, cut: cut?.id ?? null });
-      }
-    }
-    if (rec.lane === "closed" && here.lane === "open" && here.front < z.m - AUDIT_EARLY_M && !rec.early) {
-      rec.early = true;
-      this.events.push({ type: "merged_early", zone: z.id });
-    }
-    if (here.side === "open") {
-      const line = lc.letInLine(z, -Infinity),
-        owing = z.turn === "closed" && !!z.head && z.head !== me;
-      if (!owing) rec.letIn = false;
-      else if (!rec.letIn && here.front < line + 0.5 && lc.firstInOpen(z, me))
-        rec.letIn = canStopForMerge(ego.v, line - here.front, LET_IN_DECEL);
-      if (
-        rec.letIn &&
-        owing &&
-        !rec.took &&
-        here.front > line + AUDIT_LET_IN_PAST_M &&
-        ego.v > AUDIT_MERGE_MOVING_MPS
-      ) {
-        rec.took = true;
-        this.events.push({ type: "took_merge_turn", zone: z.id, from: z.head });
-      }
-    }
-    rec.lane = here.lane;
   }
 
   // The cyclist the car is passing now, through the oncoming lane (sim/cyclist-pass.js egoPassing), or null.

@@ -17,7 +17,7 @@ import { leftOnRedAllowed } from "./left-on-red.js";
 // the oncoming lane, the minimum passing distance clear, once that lane is clear (sim/cyclist-pass.js).
 
 import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, HERITAGE_STREETCAR, comfort } from "./vehicle.js";
-import { detourAt, lookahead, purePursuit, speedControl } from "./controller.js";
+import { lookahead, purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes, onStreet } from "../map/mapdata.js";
 import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
 import { rng } from "../common.js";
@@ -88,16 +88,6 @@ import {
   trainState,
 } from "./rail.js";
 import { boxHold } from "./junction-box.js";
-import {
-  AHEAD_M as LC_AHEAD_M,
-  HEAD_M as LC_HEAD_M,
-  LC_LIMIT_MPS,
-  LET_IN_DECEL,
-  OWED_DECEL as LC_OWED_DECEL,
-  THROUGH_M,
-  canStop as canStopForMerge,
-  detourOf as closureDetour,
-} from "./lane-closure.js";
 import {
   DECIDE_M as CP_DECIDE_M,
   RETURN_M as CP_RETURN_M,
@@ -173,6 +163,7 @@ import {
   stopRange,
 } from "./school-bus.js";
 
+const TRAFFIC_LANE_CONTROL = hooks("trafficLaneControl");
 const TRAFFIC_DISPATCH = hooks("trafficManage", "dispatch");
 const SPECIAL_LEADER = hooks("trafficFollowingLeader");
 const TRAFFIC_LEAD_POLICY = hooks("trafficLeadPolicy");
@@ -224,7 +215,6 @@ const PALETTE = [
 ];
 const LOOK_M = 60;
 const ZONE_AHEAD_M = 15;
-const ZONE_DECEL = 1.5;
 export const BIKES = 12;
 const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xdd6b20];
 const SHARP_TURN = (130 * Math.PI) / 180; // mirrors SHARP_TURN_DEG in jev/routing.py
@@ -668,10 +658,7 @@ function curveSpeed(path, s) {
   return best;
 }
 
-function closureLimit(lz, front) {
-  if (front > lz.to + 2) return Infinity;
-  return Math.sqrt(LC_LIMIT_MPS * LC_LIMIT_MPS + 2 * ZONE_DECEL * Math.max(0, lz.m - 5 - front));
-}
+
 
 export class NpcFleet {
   constructor(
@@ -833,7 +820,6 @@ export class NpcFleet {
         d < away[0] ||
         d > away[1] ||
         this.vehicles.some((v) => Math.hypot(v.x - p[0], v.y - p[1]) < SCHOOL_BUS.length + 6) ||
-        this.world.laneClosures?.covers(p[0], p[1]) ||
         this.spawnBlocked(p[0], p[1])
       )
         continue;
@@ -1269,9 +1255,7 @@ export class NpcFleet {
         if (leadsEmergency(call.ev, n)) n.yieldEv.lead = true;
       } else if (n.yieldEv && (n.yieldEv.clear += dt) > EV_RELEASE_S) n.yieldEv = null;
       const yielding = n.yieldEv && !n.yieldEv.lead ? n.yieldEv : null;
-      // a lane closure on its street (sim/lane-closure.js): no lane changes into or out of the closed lane
-      // on the way up to it, and from the closed lane, across into the open one at the merge point
-      const lz = world.laneClosures?.zones.length ? this.closureAhead(n, path, front) : null;
+      const laneControl = firstHookResult(TRAFFIC_LANE_CONTROL, world, n, path, front);
       if (n.lc) {
         n.lc.t += dt;
         if (n.lc.edge !== edge.id) n.lc = null; // ran out of edge: the next junction's join takes over
@@ -1284,8 +1268,8 @@ export class NpcFleet {
           /* on its track */
         } else if (n.transit && !n.yieldEv) {
           if (n.transit.phase === "drive") this.maybeChangeLane(n, edge, front, this.busStopSoon(n, front));
-        } else if (lz) {
-          /* keeping its lane: the zipper */
+        } else if (laneControl) {
+          /* keeping its lane through the temporary restriction */
         } else if (!n.yieldEv) this.maybeChangeLane(n, edge, front);
         else if (yielding && n.kind !== "bike") this.maybeChangeLane(n, edge, front, true);
       }
@@ -1317,7 +1301,7 @@ export class NpcFleet {
       const corridorShift = corridor?.shift ?? 0;
       const bypass = firstHookResult(TRAFFIC_BYPASS, world, n, front, all, IDM),
         bypassShift = bypass?.shift ?? 0;
-      const lzShift = lz?.detour ? detourAt(lz.detour, path.s + lookahead(n.v)) : 0;
+      const controlledShift = laneControl?.shift ?? 0;
       // a cyclist riding in its lane ahead on a two-way street with one lane each way: round it through
       // the oncoming lane once that is clear, the minimum passing distance clear of it (sim/cyclist-pass.js)
       // (one that has started and is now held up by something else eases back in)
@@ -1329,8 +1313,8 @@ export class NpcFleet {
         !featureObstacle(n)?.noCyclistPass &&
         !n.pull;
       const cyc =
-        passes && (n.cyc || (!yielding && !bypass && !lz && !corridor))
-          ? this.cyclistPass(n, edge, all, dt, !!(yielding || bypass || lz || corridor))
+        passes && (n.cyc || (!yielding && !bypass && !laneControl && !corridor))
+          ? this.cyclistPass(n, edge, all, dt, !!(yielding || bypass || laneControl || corridor))
           : null;
       let offset =
         (n.kind === "bike" ? n.side : keepRight) +
@@ -1340,7 +1324,7 @@ export class NpcFleet {
         (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) +
         corridorShift +
         bypassShift +
-        lzShift;
+        controlledShift;
       if (cyc) offset += n.cpShift;
       const earlyMoves = [];
       for (const run of BEFORE_LANE_MOVES) {
@@ -1352,7 +1336,7 @@ export class NpcFleet {
       // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
       // while changing lanes or going round something), and its speed ceiling for it; each is handed where
       // it keeps in the lane so far and the earlier moves (where each is heading, `aim`, and has got to, `now`)
-      const laneBusy = !!(n.lc || corridorShift || bypassShift || lzShift || cyc || n.pull),
+      const laneBusy = !!(n.lc || corridorShift || bypassShift || controlledShift || cyc || n.pull),
         laneMoves = [];
       let featureLimit = Infinity;
       for (const run of TRAFFIC_LANE) {
@@ -1426,7 +1410,7 @@ export class NpcFleet {
         // Obstacles bypassed by the temporary corridor.
         if (o === corridor?.ignore) continue;
         // (nor, from the closed lane, the lane closure's)
-        if (lz?.detour && o === lz.zone.closure) continue;
+        if (o === laneControl?.ignore) continue;
         if (o === bypass?.ignore) continue;
         // (a cyclist it is passing, until it is the minimum passing distance clear of it, near enough)
         const os = o.spec || CAR,
@@ -1436,7 +1420,7 @@ export class NpcFleet {
         // The pursuit line moves with the corridor and kerb clearance.
         const inWay = (lat, at) => {
           if (corridor?.lineAt) lat -= corridor.lineAt(at);
-          if (lz?.detour) lat -= detourAt(lz.detour, at) - lzShift;
+          if (laneControl?.lineAt) lat -= laneControl.lineAt(at);
           // (between snowbanks, say, the line it will keep to where `o` is)
           for (const m of keepMoves) if (m.lineAt) lat -= m.lineAt(at);
           // (the line for going round an obstruction moves over; what is at the curb stays there)
@@ -1879,12 +1863,10 @@ export class NpcFleet {
         gap = Math.max(0.05, bypass.waitGap);
         leadV = 0;
       }
-      // at a lane closure: in the closed lane, at the merge point until it is its turn; in the open lane,
-      // short of it while letting someone in (sim/lane-closure.js)
-      const forMerge = lz ? this.mergeHold(n, lz, path, front) : null;
-      if (forMerge && forMerge.gap < gap) {
-        gap = Math.max(0.05, forMerge.gap);
-        leadV = forMerge.v;
+      const controlledStop = laneControl?.stop();
+      if (controlledStop && controlledStop.gap < gap) {
+        gap = Math.max(0.05, controlledStop.gap);
+        leadV = controlledStop.v;
       }
       for (const plan of AFTER_MERGE) {
         const stop = plan(world, this, n, front, dt);
@@ -1931,7 +1913,7 @@ export class NpcFleet {
         featureTrafficSpeed(world, n, front, EDGE_TRAFFIC_SPEED, edge.limit),
         corridor?.limit ?? Infinity,
         bypass?.limit ?? Infinity,
-        lz ? closureLimit(lz, front) : Infinity,
+        laneControl?.limit ?? Infinity,
       );
       const vFollow = featureTrafficSpeed(world, n, front, FOLLOWING_TRAFFIC_SPEED, {
         leader,
@@ -2801,69 +2783,6 @@ export class NpcFleet {
       return null;
     }
     return { bike, min: rec.min };
-  }
-
-  // The lane closure on the street a driver is on, or the next it will be on (sim/lane-closure.js), from
-  // AHEAD_M short of its merge point to its end, with its marks along the driver's path: { zone, side
-  // ("closed" when the driver's lane is the one closed, or "open"), m (the merge point), to (its end), at
-  // (from the edge's `s` to the path's), detour (in the closed lane: across into the open lane and back) },
-  // or null.
-  closureAhead(_n, path, front) {
-    const lc = this.world.laneClosures;
-    for (const e of path.edges) {
-      if (e.sEnd < path.s) continue;
-      if (e.sStart - front > LC_AHEAD_M + 40) break;
-      const z = lc.on(e.id);
-      if (!z) continue;
-      const k = (e.sEnd - e.sStart) / Math.max(1, this.map.edges.get(e.id).length),
-        at = (s) => e.sStart + s * k;
-      if (front > at(z.to) + 2 || at(z.m) - front > LC_AHEAD_M) continue;
-      const side = e.lane === z.closed ? "closed" : "open",
-        d = side === "closed" ? closureDetour(z) : null;
-      return {
-        zone: z,
-        side,
-        m: at(z.m),
-        to: at(z.to),
-        at,
-        detour: d ? { from: at(d.from), full: at(d.full), back: at(d.back), to: at(d.to), shift: d.shift } : null,
-      };
-    }
-    return null;
-  }
-
-  // Where a driver at a lane closure waits, or keeps behind, or null: { gap, v (of what it keeps behind) }.
-  // In the closed lane, at the merge point until it is let in (one too close to stop there by then goes
-  // on). In the open lane, LET_IN_M short of it (and behind the one at the merge) on the closed lane's turn, once it could stop there braking
-  // at LET_IN_DECEL; and behind the one let in while it moves across in front of it, which it cannot yet
-  // see as in its lane (sim/lane-closure.js).
-  mergeHold(n, lz, path, front) {
-    const z = lz.zone,
-      lc = this.world.laneClosures;
-    if (lz.side === "closed") {
-      const toM = lz.m - front;
-      // (it decides at the merge, within HEAD_M of it: further back it drives on up the lane)
-      if (toM < -THROUGH_M || z.grant === n.id || (toM > LC_HEAD_M && n.mergeWait !== z.id)) {
-        n.mergeWait = null;
-        return null;
-      }
-      if (n.mergeWait !== z.id && !canStopForMerge(n.v, toM - 0.5, LC_OWED_DECEL)) return null;
-      n.mergeWait = z.id;
-      return { gap: toM - 0.5, v: 0 };
-    }
-    const toLine = lz.at(lc.letInLine(z, -Infinity)) - front;
-    if (!(z.turn === "closed" || z.merger) || toLine < -0.5) {
-      n.letIn = null;
-      return null;
-    }
-    if (n.letIn !== z.id && !canStopForMerge(n.v, toLine, LET_IN_DECEL)) return null;
-    n.letIn = z.id;
-    let hold = z.turn === "closed" ? { gap: Math.max(0, toLine), v: 0 } : null;
-    const rear = lc.mergerRear(z),
-      q = rear && projectPoint(path.pts, path.cum, [rear.x, rear.y], null);
-    if (q && q.s > path.s && (!hold || q.s - front - 2 < hold.gap))
-      hold = { gap: Math.max(0, q.s - front - 2), v: rear.v };
-    return hold;
   }
 
   // A driver yielding to a bus pulling out from its stop (sim/bus.js): where it stops, as metres from

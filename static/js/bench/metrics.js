@@ -109,8 +109,6 @@ export class DriveMetrics {
       stop_signs: v.stop_signs_run,
       failed_to_yield: v.failed_to_yield || 0,
       ...featureMetrics(world, v, "vehiclePassing"),
-      // (only for a drive a lane closure stood in: sim/lane-closure.js)
-      ...(world.closuresSeen ? { merge_cut_ins: v.merge_cut_ins || 0 } : {}),
       // (only for a drive in which traffic passes cyclists: sim/cyclist-pass.js)
       ...(world.passCyclists ? { close_passes: v.close_passes || 0 } : {}),
       ...(world.busLanesSeen ? { bus_lane_driving: v.bus_lane_driving || 0 } : {}),
@@ -177,7 +175,6 @@ export function failures(m) {
   if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
   f.push(...featureFailures(m, "vehiclePassing"));
-  if (m.merge_cut_ins) f.push("merged out of turn");
   if (m.close_passes) f.push("passed a cyclist too close");
   if (m.bus_lane_driving > 1) f.push("drove in a reserved bus lane");
   f.push(...featureFailures(m, "headlights"));

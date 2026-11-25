@@ -347,7 +347,6 @@ const CORE_FAIL_CATEGORY = {
   "stop sign": "right_of_way",
   "failed to yield": "right_of_way",
   "off road": "steering",
-  "merged out of turn": "right_of_way",
   "passed a cyclist too close": "space",
   "drove in a reserved bus lane": "steering",
   "not parked": "parking",

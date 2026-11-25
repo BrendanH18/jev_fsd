@@ -34,6 +34,7 @@ import {
   PRIORITY_IDS,
   featureObstacle,
   hooks,
+  laneControlDetour,
   primaryDetour,
 } from "../sim/features/index.js";
 
@@ -53,6 +54,7 @@ const CANDIDATES = {
   streetHazards: hooks("candidates", "streetHazards"),
   junctions: hooks("candidates", "junctions"),
   rearTraffic: hooks("candidates", "rearTraffic"),
+  beforeParking: hooks("candidates", "beforeParking"),
   parking: hooks("candidates", "parking"),
 };
 const PULL_OVER_DETOUR = hooks("pullOverDetour");
@@ -68,6 +70,7 @@ const SIMS = {
   streetHazards: hooks("sim", "streetHazards"),
   beforeEmergency: hooks("sim", "beforeEmergency"),
   parking: hooks("sim", "parking"),
+  merge: hooks("sim", "merge"),
   afterMerge: hooks("sim", "afterMerge"),
   end: hooks("sim"),
 };
@@ -160,7 +163,7 @@ export function sampleCandidates(snap, world) {
   // round was worked out for, and `hard_brake` keeps to it: see cyclistPass)
   const detourPlan =
     primaryDetour(snap) ||
-    snap.lane_closure?.detour ||
+    laneControlDetour(snap) ||
     featurePassingDetour(snap) ||
     (!snap.cyclist_pass?.detour && featureDetour(snap));
   const detour = detourPlan ? { detour: detourPlan } : {};
@@ -528,30 +531,7 @@ export function sampleCandidates(snap, world) {
     }
     for (const add of CANDIDATES.beforeMerge) add(featureCtx, out);
     for (const add of CANDIDATES.afterFlagger) add(featureCtx, out);
-    // A lane closed ahead (sim/lane-closure.js): in the closed lane, wait at the merge point for the car's
-    // turn; in the open lane, stop short of it to let in the one whose turn it is.
-    const lz = snap.lane_closure;
-    if (lz?.stop_s_route != null && lz.bumper_to_stop_m > 0.3) {
-      // (a metre short of the merge point, and half a metre short of where it lets one in, as a stop
-      // overshoots)
-      out.push(
-        lz.wait
-          ? {
-              id: "wait_to_merge",
-              laneUntil,
-              law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 1) }),
-              steer: "hold lane",
-              speed: "stop at the merge point and wait for the car's turn",
-            }
-          : {
-              id: "let_merge_in",
-              laneUntil,
-              law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lz.stop_s_route - FRONT - 0.5) }),
-              steer: "hold lane",
-              speed: "stop short of the merge point and let the car in the closed lane go first",
-            },
-      );
-    }
+    for (const add of CANDIDATES.beforeParking) add(featureCtx, out);
     for (const add of CANDIDATES.parking) add(featureCtx, out);
     // A cyclist riding in the lane ahead that the car can pass only through the oncoming lane
     // (sim/cyclist-pass.js): go round it at the pass speed, once the way is clear (or carry on round it);
@@ -840,12 +820,6 @@ export function simulateAll(candidates, snap, world) {
   const railStop = snap.level_crossing?.wait ? snap.level_crossing.stop_s_route : null;
   // where the car waits at a signal it could not clear
   const boxStop = snap.junction_box?.stop_s_route ?? null;
-  // at a lane closure: where the car waits for its turn at the merge point, or stops to let one in; and
-  // the lane changes the zipper rules out (sim/lane-closure.js)
-  const lz = snap.lane_closure;
-  const mergeStop = lz?.wait ? lz.stop_s_route : null,
-    letInStop = lz?.let_in_for ? lz.stop_s_route : null;
-  const zipper = lz ? lz.side : null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
@@ -873,6 +847,7 @@ export function simulateAll(candidates, snap, world) {
     ...sims.beforeEmergency,
     ...sims.beforeMerge,
     ...sims.parking,
+    ...sims.merge,
     ...sims.afterMerge,
     ...sims.end,
   ];
@@ -895,8 +870,6 @@ export function simulateAll(candidates, snap, world) {
       passesTram = false,
       passesRail = false,
       passesBox = false,
-      passesMerge = false,
-      passesLetIn = false,
       passesEv = false,
       pastTurnPoint = false,
       pastSpace = false,
@@ -988,10 +961,6 @@ export function simulateAll(candidates, snap, world) {
         if (railStop !== null && s + FRONT > railStop + 1.5) passesRail = true;
         // (and here: 1.5 m past the line is still short of the street across)
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
-        // (and here: a metre past the merge point has not gone through it, sim/lane-closure.js THROUGH_M; 1.5 m past
-        // where it lets one in is still behind it)
-        if (mergeStop !== null && s + FRONT > mergeStop + 1) passesMerge = true;
-        if (letInStop !== null && s + FRONT > letInStop + 1.5) passesLetIn = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
         // (stopping within PEEK_AT_M of where it looks from counts as having looked there)
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
@@ -1168,13 +1137,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if ((reject = rejectBy(sims.beforeMerge, c)));
     else if ((reject = rejectBy(sims.parking, c)));
-    else if (passesMerge && c.law.kind !== "hard_brake") reject = "merges_out_of_turn";
-    else if (passesLetIn && c.law.kind !== "hard_brake") reject = "takes_merge_turn";
-    // (the zipper: in the closed lane, no moving across before the merge point, and past it no lane
-    // change at all, the way across and back being the candidates' own; in the open lane, no moving into
-    // the closed one, to the end of the closure)
-    else if (zipper === "closed" && c.change) reject = lz.merged ? "into_closed_lane" : "merges_early";
-    else if (zipper === "open" && c.change && c.change.dir === lz.closed_lane) reject = "into_closed_lane";
+    else if ((reject = rejectBy(sims.merge, c)));
     else if ((reject = rejectBy(sims.afterMerge, c, s, FRONT, lateral)));
     else if (passesHold && c.law.kind !== "hard_brake")
       reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";

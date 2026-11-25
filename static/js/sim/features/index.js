@@ -193,6 +193,7 @@ import workZones from "./work-zones.js";
 import outages from "./outages.js";
 import { flashControl } from "../night-flash.js";
 import scrambles from "./scrambles.js";
+import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
 
@@ -225,6 +226,7 @@ export const FEATURES = [
   workZones,
   outages,
   plows,
+  closures,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -250,7 +252,7 @@ export const SLOTS = {
     "beforeMerge",
     "afterFlagger",
     "afterCalming",
-    "beforeDriveways",
+    "afterRoadsideVehicles", "beforeDriveways",
     "driveways",
     "streetHazards",
     "rearTraffic",
@@ -262,7 +264,7 @@ export const SLOTS = {
     "afterCalming",
     "beforeRunner",
     "afterParking",
-    "parking",
+    "beforeParking", "parking",
     "driveways",
     "streetHazards",
     "late",
@@ -272,7 +274,7 @@ export const SLOTS = {
     "end",
   ],
   finishLanes: ["end"],
-  limit: ["beforeWorkZone", "beforeRunner", "passing", "driveways", "streetHazards", "parking"],
+  limit: ["beforeWorkZone", "beforeRunner", "passing", "driveways", "streetHazards", "beforeParking", "parking"],
   target: [
     "beforeMerge",
     "beforeRunner",
@@ -285,13 +287,13 @@ export const SLOTS = {
     "driveways",
     "streetHazards",
     "beforeEmergency",
-    "parking",
+    "beforeParking", "parking",
   ],
   hazard: [
     "beforeWorkZone",
     "beforeRunner",
     "afterParking",
-    "parking",
+    "parkingApproach", "parking",
     "driveways",
     "streetHazards",
     "rearTraffic",
@@ -322,7 +324,7 @@ export const SLOTS = {
     "streetHazards",
     "junctions",
     "rearTraffic",
-    "parking",
+    "beforeParking", "parking",
   ],
   adjust: ["streetHazards", "end"],
   brakeDetour: ["end"],
@@ -335,7 +337,7 @@ export const SLOTS = {
     "streetHazards",
     "beforeEmergency",
     "parking",
-    "afterMerge",
+    "merge", "afterMerge",
     "end",
   ],
   state: [
@@ -352,7 +354,7 @@ export const SLOTS = {
     "streetHazards",
     "junctions",
     "rearTraffic",
-    "parking",
+    "beforeParking", "parking",
   ],
   greenSignalClause: ["end"],
   outcome: ["ids", "laneChange"],
@@ -372,9 +374,9 @@ export const SLOTS = {
     "streetHazards",
     "ice",
     "rearTraffic",
-    "parking",
+    "beforeParking", "parking",
   ],
-  holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "parking"],
+  holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "beforeParking", "parking"],
   prompt: [
     "headlights",
     "pedestrian",
@@ -393,7 +395,7 @@ export const SLOTS = {
     "snowbanks",
     "junctions",
     "rearTraffic",
-    "parking",
+    "beforeParking", "parking",
     "afterParking",
   ],
   metric: [
@@ -463,13 +465,14 @@ export const SLOTS = {
   evStop: ["end"],
   followingExclusion: ["end"],
   trafficBypass: ["end"],
+  trafficLaneControl: ["end"],
   trafficCorridor: ["end"],
   coachCorridor: ["end"],
   coachCorridorFrame: ["end"],
   examinerFail: ["beforeTracks"],
   passBlockReason: ["end"],
   trafficSpawnBlocked: ["end"],
-  detour: ["beforeMerge", "parking", "end"],
+  detour: ["beforeMerge", "laneControl", "parking", "end"],
   pullOverDetour: ["end"],
 };
 export const recordProblem = (record) => featureRecordProblem(record, SLOTS);
@@ -521,6 +524,9 @@ export const phaseBansRedTurns = (inter) => PHASE_BANS_RED_TURNS.some((blocked) 
 
 const PRIMARY_DETOURS = hooks("detour", "beforeMerge");
 export const primaryDetour = (snap) => firstHookResult(PRIMARY_DETOURS, snap);
+
+const LANE_CONTROL_DETOURS = hooks("detour", "laneControl");
+export const laneControlDetour = (snap) => firstHookResult(LANE_CONTROL_DETOURS, snap);
 
 const CONTROL_REPLACEMENTS = hooks("controlReplace");
 const SIGNAL_OVERRIDES = hooks("alternateSignal");

@@ -56,3 +56,7 @@ The project rule for this feature, moved here verbatim from `AGENTS.md`, which s
 pattern every opt-in feature shares ([AGENTS.md](../../AGENTS.md#opt-in-features)).
 
 - **Lane closures are opt-in.** `World` option `closures` (free drives, unless `?closures=0`) puts up a lane closure with a zipper merge from its own random stream (`sim/lane-closure.js`); the "Take turns" challenge places one itself. The audit's `merge_cut_ins` reaches the metrics, and fails a drive, only once a closure has stood in it (`World.closuresSeen`), so the seeded benchmark and the other challenges report exactly as before; keep it that way. The driven car has no `id`: closures know it as `EGO_ID` ("ego").
+
+The [lane-closure feature record](../../static/js/sim/features/lane-closure.js) installs and steps
+the closure manager and supplies the approach restriction, zipper stop, traffic detour and audit.
+The same record provides the model instructions, coaching and HUD notice.
