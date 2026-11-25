@@ -270,6 +270,7 @@ export const SLOTS = {
     "beforeBusLanes",
     "reservedLane",
     "afterBusLanes",
+    "passing",
     "afterPassing",
     "end",
     "beforeAmber",

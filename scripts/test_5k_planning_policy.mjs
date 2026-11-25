@@ -210,7 +210,7 @@ for (const [id, fields, props, selection, motionReason] of [
     "stationary_prediction",
   ],
   ["pull_out", {}, {}, "parking", "planned_stop"],
-  ["pass_cyclist", {}, {}, "pass_cyclist", "stationary_prediction"],
+  ["pass_cyclist", {}, {}, "feature_passing", "stationary_prediction"],
   ["stop_for_crossing_guard", {}, {}, "feature_after_passing", "stationary_prediction"],
   ["wait_for_geese", {}, { geese_crossing: { wait: true } }, "feature", "stationary_prediction"],
   ["wait_for_officer", {}, { traffic_officer: { direction: "stop" } }, "feature_before_amber", "feature_planned_stop"],

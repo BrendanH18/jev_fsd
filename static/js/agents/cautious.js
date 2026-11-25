@@ -4,6 +4,7 @@ import { featureDecisionFields, stopAtLineDrive, firstHookResult, hooks } from "
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
 const RESERVED_LANE = hooks("cautious", "reservedLane");
 const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
+const PASSING = hooks("cautious", "passing");
 const AFTER_PASSING = hooks("cautious", "afterPassing");
 const CAUTIOUS = hooks("cautious");
 const BEFORE_AMBER = hooks("cautious", "beforeAmber");
@@ -78,10 +79,7 @@ export class CautiousAgent {
         eligible.find((c) => c.id === "park" || c.id === "pull_out"),
         "parking",
       ) ||
-      picked(
-        eligible.find((c) => c.id === "pass_cyclist"),
-        "pass_cyclist",
-      ) ||
+      picked(firstHookResult(PASSING, snap, eligible, target), "feature_passing") ||
       picked(firstHookResult(AFTER_PASSING, snap, eligible, target), "feature_after_passing") ||
       picked(firstHookResult(CAUTIOUS, snap, eligible, target), "feature") ||
       picked(firstHookResult(BEFORE_AMBER, snap, eligible, target), "feature_before_amber") ||

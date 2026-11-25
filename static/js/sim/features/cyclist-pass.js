@@ -487,6 +487,9 @@ export default {
     },
   },
   priority: ["pass_cyclist", "follow_cyclist"],
+  // The cautious agent takes a pass the safety filter left eligible, after parking and before the
+  // features that come after passing.
+  cautious: { at: "passing", run: (_snap, eligible) => eligible.find((c) => c.id === "pass_cyclist") ?? null },
   activeManeuver: (snap, passing) =>
     snap.cyclist_pass?.going
       ? { keep: (c) => c.id === "pass_cyclist" || c.id === "follow_cyclist", brake: passing }

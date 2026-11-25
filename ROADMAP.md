@@ -330,7 +330,10 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   passing cyclists, bring the total to **34 of 41**, each in a commit of its own with the same
   before-and-after record, adding city rain, snow and 23:30 drives
   ([five-thousand batch](docs/validation/five-thousand/README.md)). Left: transit buses, emergency
-  vehicles, school buses, streetcars, trains, destination parking and hidden hazards.
+  vehicles, school buses, streetcars, trains, destination parking and hidden hazards. Still to move
+  out of the core: traffic and the World read a flashing signal's stand-in stop by its `night_flash`
+  flag (`sim/npc.js`, `sim/world.js`), and parking reads `world.laneClosures`
+  (`sim/parallel-park.js`).
 - [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
   under about 150 lines, with the same before-and-after record as 3.2.
