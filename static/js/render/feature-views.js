@@ -159,7 +159,13 @@ function createParkedActor(car, world) {
           : carView.create(car);
   if (zone) syncWorkZone(mesh, zone);
   else if (closure) syncLaneClosure(mesh, closure);
-  else (car.roadside ? syncRoadside : car.doubleParked ? syncVan : syncCar)(mesh, car);
+  else if (car.roadside) syncRoadside(mesh, car);
+  else if (car.doubleParked) syncVan(mesh, car);
+  else {
+    mesh.position.set(car.x, 0, -car.y);
+    mesh.rotation.y = car.psi;
+    mesh.userData.tail.emissiveIntensity = 0;
+  }
   return mesh;
 }
 

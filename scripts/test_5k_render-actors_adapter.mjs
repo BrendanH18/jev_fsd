@@ -307,6 +307,24 @@ test("moving, parking again and reinstating an earlier bay preserve one drawing"
   assert.equal(world.parked.removed.length, 2);
 });
 
+test("a traffic car that finishes parking has unlit rear lamps", () => {
+  const { view, world, fleet } = sample();
+  const car = pose("parker", { x: 70 });
+  fleet.vehicles.push(car);
+  const actors = mountActorViews(view, world, fleet);
+  fleet.vehicles.pop();
+  car.v = 0;
+  world.parked.list.push(car);
+  world.parked.added.push(car);
+  actors.sync();
+  const mesh = view.scene.children.find((node) => node.userData.style && node.position.x === car.x);
+  assert.equal(mesh.userData.tail.emissiveIntensity, 0);
+  assert.equal(
+    mesh.userData.brake.some((lamp) => lamp.visible),
+    false,
+  );
+});
+
 test("retired traffic frees its resources and a reused ID can show a new vehicle kind", () => {
   const { view, world, fleet } = sample();
   const actors = mountActorViews(view, world, fleet);
