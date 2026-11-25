@@ -1,4 +1,4 @@
-import { $, api, h } from "../common.js";
+import { $, api, appUrl, h } from "../common.js";
 import { HISTORY_KEY, readHistory } from "../sim/drive-score.js";
 import { exportDriveCard, copyDriveLink, driveLink, exportFilename } from "../lab/share.js";
 import { CHALLENGES, challengeById, challengeConfig } from "../lab/challenges.js";
@@ -8,7 +8,7 @@ import { decidedByText } from "../bench/metrics.js";
 
 import { driveScores } from "../bench/scores.js";
 import { CHALLENGE_SCORE_METHOD } from "../lab/score-inputs.js";
-import { checkResults, compatibleChallengeDrive } from "../lab/results.js";
+import { checkResults, compatibleChallengeDrive, driverDisplayName } from "../lab/results.js";
 import { incidentDrive, loadPublishedDrive } from "./published-replay.js";
 
 const time = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -218,12 +218,17 @@ export class DriveReport {
     const manualInputs = report.benchmarkMetrics;
     const method = manualInputs?.method === CHALLENGE_SCORE_METHOD ? manualInputs.method : null;
     const manualScore = method ? driveScores(manualInputs).score : null;
-    const manualDuration = Number.isFinite(report.elapsed_s) ? report.elapsed_s : null;
+    const manualDuration = Number.isFinite(report.elapsed_s) && report.elapsed_s >= 0 ? report.elapsed_s : null;
 
     const deltaTag = (diff, unit = "", higherBetter = true) => {
       if (!Number.isFinite(diff)) return null;
-      const cls = Math.abs(diff) < 0.05 ? "" : diff > 0 === higherBetter ? " better" : " worse";
-      return h("small", { class: `comparison-delta${cls}` }, `you ${signed(diff, 1)}${unit}`);
+      const tied = Math.abs(diff) < 0.05;
+      const cls = tied ? "" : diff > 0 === higherBetter ? " better" : " worse";
+      return h(
+        "small",
+        { class: `comparison-delta${cls}` },
+        tied ? "Tied at this precision" : `you ${signed(diff, 1)}${unit}`,
+      );
     };
 
     const row = (driver, verdict, seconds, score, incidents, { durationDelta = null, scoreDelta = null } = {}) =>
@@ -239,13 +244,16 @@ export class DriveReport {
 
     const manual = row(
       "You",
-      reasons.length ? "Fail" : "Pass",
+      reasons === null ? "Unavailable" : reasons.length ? "Fail" : "Pass",
       manualDuration,
       manualScore ?? "Unmeasured",
-      [...new Set([...reasons, ...report.incidents.map((i) => i.message)])].join(" · ") || "None recorded",
+      [...new Set([...(reasons ?? []), ...report.incidents.map((i) => i.message)])].join(" · ") || "None recorded",
     );
     const body = h("tbody", {}, manual);
     const status = h("p", { class: "muted", role: "status" }, "Loading published drives…");
+    const resultsPage = document.querySelector('meta[name="jev-demo"]') ? "results.html" : "results";
+    const leaderboard = new URL(appUrl(resultsPage, { "challenges-query": challenge.id }));
+    leaderboard.hash = "challenges-heading";
     const section = h(
       "section",
       { class: "drive-comparison", "aria-label": "Same-drive comparison" },
@@ -268,23 +276,33 @@ export class DriveReport {
       ),
       challenge.roadTest ? h("p", { class: "muted" }, "The examiner’s sheet determines road-test completion.") : null,
       status,
+      h("a", { href: leaderboard.href }, "Find this drive on the leaderboard"),
     );
     this.resultsRequest?.abort();
+    if (!report.config?.map_sha) {
+      status.textContent = "This report has no map fingerprint for matching published drives.";
+      return section;
+    }
     const request = new AbortController();
     this.resultsRequest = request;
     fetchResultsCached(request.signal)
       .then((data) => {
         if (request.signal.aborted || !body.isConnected) return;
+        let matched = 0;
         for (const id of ["rules", "jev", "llm:claude-haiku-5-5"]) {
           const cell = compatibleChallengeDrive(data, id, report.config);
-          const label = data.drivers[id]?.label || id;
+          const label = driverDisplayName(data, id);
           if (!cell) {
-            body.append(row(label, "No published drive", null, "—", "—"));
+            body.append(row(label, "No matching published drive", null, "—", "—"));
             continue;
           }
-          const counts = Object.entries(cell.incident_counts || {}).map(
-            ([key, value]) => `${key.replaceAll("_", " ")}: ${value}`,
-          );
+          matched++;
+          const counts = Object.entries(cell.incident_counts || {})
+            .filter(([, value]) => value > 0)
+            .map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`);
+          const incidents =
+            [...new Set([...cell.failures, ...counts])].join(" · ") ||
+            (cell.incident_counts ? "None recorded" : "Incident counts unavailable");
           const theirScore =
             method && cell.comparison_score_inputs?.method === method
               ? driveScores(cell.comparison_score_inputs).score
@@ -296,18 +314,15 @@ export class DriveReport {
           const scoreDelta =
             manualScore !== null && Number.isFinite(theirScore) ? deltaTag(manualScore - theirScore, "", true) : null;
           body.append(
-            row(
-              label,
-              cell.pass ? "Pass" : "Fail",
-              cell.time_s,
-              theirScore ?? "Unavailable",
-              [...cell.failures, ...counts].join(" · ") || "No incident data",
-              { durationDelta, scoreDelta },
-            ),
+            row(label, cell.pass ? "Pass" : "Fail", cell.time_s, theirScore ?? "Unavailable", incidents, {
+              durationDelta,
+              scoreDelta,
+            }),
           );
         }
-        status.textContent =
-          "Published rows use the guarded track. Deltas show your drive minus theirs; a score is available when both drives were measured from the car’s path.";
+        status.textContent = matched
+          ? "Published rows use the guarded track. Deltas show your drive minus theirs. Scores here use measurements from the car’s path."
+          : "No guarded results match this challenge version and map.";
       })
       .catch((err) => {
         if (!request.signal.aborted && err?.name !== "AbortError" && status.isConnected)
@@ -382,6 +397,7 @@ export class DriveReport {
         const request = new AbortController();
         this.comparisonRequest = request;
         compare.disabled = true;
+        compare.textContent = "Loading model replay…";
         try {
           const replay = await loadPublishedDrive(id, request.signal);
           if (
@@ -395,6 +411,7 @@ export class DriveReport {
           if (!request.signal.aborted) compare.textContent = "Model replay unavailable";
         } finally {
           compare.disabled = false;
+          if (request.signal.aborted) compare.textContent = "Compare with Jev";
           if (this.comparisonRequest === request) this.comparisonRequest = null;
         }
       };

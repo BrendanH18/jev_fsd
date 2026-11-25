@@ -12,6 +12,8 @@ Use --group ui to run just the driving app controls and startup recovery from th
 """
 
 import argparse
+import csv
+import json
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -268,6 +270,45 @@ def check_published_replay(page, url):
       await new Promise(requestAnimationFrame);
       return { hidden, removed: button.textContent === 'Play replay' };
     }""")
+    page.goto(url + "?replay=jev-flagger&at=12.345&city-weather=rain#replay-heading")
+    city = page.locator("#results-city")
+    city.get_by_role("combobox", name="Filter by weather").wait_for()
+    assert city.get_by_role("combobox", name="Filter by weather").input_value() == "rain"
+    assert city.locator("tbody tr").count() == 1
+    with page.expect_download() as event:
+        city.get_by_role("button", name="Export CSV").click()
+    with event.value.path().open(encoding="utf-8-sig") as saved:
+        headers, row = list(csv.reader(saved))
+    assert headers[:4] == ["Map", "Map ID", "Weather", "Suite version"]
+    assert row[1:3] == ["kitsilano", "rain"]
+    assert any(label.endswith(" total") for label in headers)
+    with page.expect_download() as event:
+        city.get_by_role("button", name="Export JSON").click()
+    with event.value.path().open(encoding="utf-8") as saved:
+        payload = json.load(saved)
+    assert payload["filters"]["weather"] == "rain"
+    assert payload["rows"][0]["map_name"] == "Kitsilano"
+    city.get_by_role("button", name="Reset filters").click()
+    assert page.evaluate("document.activeElement.getAttribute('aria-label')") == "Search city or weather"
+    assert page.evaluate("!new URL(location.href).searchParams.has('city-weather')")
+    slider.wait_for()
+    assert select.input_value() == "jev-flagger"
+    assert float(slider.input_value()) == 12.345
+    assert replay.get_by_role("combobox", name="Playback speed").locator("option[value='0.25']").count() == 1
+    replay.get_by_role("button", name="Start", exact=True).click()
+    assert float(slider.input_value()) == 0
+    replay.get_by_role("button", name="Next event", exact=True).click()
+    assert float(slider.input_value()) > 0
+    replay.get_by_role("button", name="End", exact=True).click()
+    assert slider.input_value() == slider.get_attribute("max")
+    with page.expect_download() as event:
+        replay.get_by_role("button", name="Download replay JSON").click()
+    assert event.value.suggested_filename == "jev-flagger-replay.json"
+    with event.value.path().open(encoding="utf-8") as saved:
+        assert json.load(saved)["challenge"] == "flagger"
+    terminal = page.locator("#results-replay")
+    terminal.get_by_role("searchbox", name="Search terminal replays").fill("no-such-recording")
+    assert terminal.get_by_role("status").inner_text() == "No terminal replays match."
     return report(
         "published browser replay",
         [
