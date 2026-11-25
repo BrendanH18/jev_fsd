@@ -4,6 +4,7 @@ import { redTurnBanned, redTurnExits, routeRedTurnBanned } from "../red-turn-sig
 
 export default {
   key: "redTurnSigns",
+  weekday: true,
   build: (_world, { enabled }) => !!enabled,
   redEntryBans: (world, edgeId) => (world.redTurnSigns ? redTurnExits(world, edgeId) : null),
   routeTurnOnRedBlocked: (world, control) => (routeRedTurnBanned(world, control) ? { no_turn_on_red: true } : null),

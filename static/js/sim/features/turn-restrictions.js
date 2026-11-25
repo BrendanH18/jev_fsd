@@ -28,6 +28,7 @@ export default {
   },
   cautiousStop: (snap) => !!(snap.turn_restriction?.banned && snap.turn_restriction.distance_m < 12),
   key: "restrictions",
+  weekday: true,
   coach: {
     init: () => ({
       illegalTurns: 0,

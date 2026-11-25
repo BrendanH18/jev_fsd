@@ -44,9 +44,14 @@ cost(candidate("keep", { sim: { heading_err_deg: -20 } }), "heading_error", 1);
 cost(candidate("keep", { sim: { end_speed: 6 } }), "speed_error", 0.8);
 cost(candidate("keep", { sim: { end_speed: 8.5 } }), "overspeed", 2);
 cost(candidate("keep", { sim: { end_speed: 7.5 } }), "overspeed", undefined);
-cost(candidate("return", { change: { offer: "return" }, law: { laneIdx: 1 } }), "exit_bus_lane", -20, exitBusLane);
-cost(candidate("stop_at_line"), "amber_stop", -12, { intersection: yellow });
-cost(candidate("stop_at_line"), "amber_stop", undefined, { intersection: yellow, emergency: {} });
+cost(
+  candidate("return", { change: { offer: "return" }, law: { laneIdx: 1 } }),
+  "feature_before_speed_cost_0",
+  -20,
+  exitBusLane,
+);
+cost(candidate("stop_at_line"), "feature_before_signal_stop_0", -12, { intersection: yellow });
+cost(candidate("stop_at_line"), "feature_before_signal_stop_0", undefined, { intersection: yellow, emergency: {} });
 cost(candidate("stop_at_line"), "control_line_stop", -6, { intersection: stop });
 cost(candidate("stop_at_line"), "control_line_stop", undefined, {
   intersection: { ...stop, control: "signal", signal: "red", right_on_red: { go: true } },
@@ -149,7 +154,7 @@ assert.equal(approached.holds.length, 0);
 assert.equal(approached.motion, "drive");
 assert.equal(
   rules.explain({ ...clear, intersection: yellow }, [candidate("stop_at_line")]).holdOverride,
-  "approach_amber",
+  "approach_signal",
 );
 for (const kind of ["turnaround", "park"]) {
   const explanation = rules.explain({ ...clear, intersection: stop }, [candidate("permitted", { law: { kind } })]);
@@ -194,7 +199,7 @@ for (const [id, fields, props, selection, motionReason] of [
     "return",
     { change: { offer: "return" }, law: { laneIdx: 1 } },
     exitBusLane,
-    "exit_bus_lane",
+    "feature_reserved_lane",
     "stationary_prediction",
   ],
   [
@@ -209,7 +214,7 @@ for (const [id, fields, props, selection, motionReason] of [
   ["stop_for_crossing_guard", {}, {}, "feature_after_passing", "stationary_prediction"],
   ["wait_for_geese", {}, { geese_crossing: { wait: true } }, "feature", "stationary_prediction"],
   ["wait_for_officer", {}, { traffic_officer: { direction: "stop" } }, "feature_before_amber", "feature_planned_stop"],
-  ["stop_at_line", {}, { intersection: yellow }, "approach_amber", "approach_amber"],
+  ["stop_at_line", {}, { intersection: yellow }, "approach_signal", "approach_signal"],
   [
     "ease_round_pothole",
     {},

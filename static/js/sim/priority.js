@@ -1,4 +1,4 @@
-import { flashState } from "./night-flash.js";
+import { hooks, firstHookResult } from "./features/index.js";
 // Right of way at a junction without a signal: a two-way stop, or streets meeting with no sign at
 // all (MapData.priorityOf). Each street leading into the junction holds the right of way at a level:
 // a stop sign is the lowest; a street without one ranks by its class (primary and secondary, then
@@ -18,6 +18,7 @@ import { wrap } from "./world.js";
 // has looked (World.egoPeek remembers it until the car leaves for the next junction).
 export const PEEK_SHORT_M = 0.3;
 export const PEEK_AT_M = 1.0;
+const PRIORITY_LEVEL = hooks("priorityLevel");
 const LOOK_AHEAD_M = 120; // a vehicle's path is searched this far ahead for the junction
 
 // The level of the street `edgeId` leads in on, or null where it has a signal, a roundabout's
@@ -25,10 +26,8 @@ const LOOK_AHEAD_M = 120; // a vehicle's path is searched this far ahead for the
 export function levelOf(map, edgeId, world = null) {
   const e = map.edges.get(edgeId);
   if (!e) return null;
-  if (world?.nightFlash && e.control?.type === "signal") {
-    const flash = flashState(map.intersections.get(e.control.id), e.control.group, world);
-    if (flash) return flash === "flashing_red" ? 0 : roadRank(e);
-  }
+  const override = firstHookResult(PRIORITY_LEVEL, world, e);
+  if (override) return override.level;
   if (e.control) return e.control.type === "stop" ? 0 : null;
   return map.priorityOf(edgeId) ? roadRank(e) : null;
 }

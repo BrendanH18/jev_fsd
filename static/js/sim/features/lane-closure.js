@@ -335,6 +335,8 @@ export default {
     at: "vehiclePassing",
     name: "merge_cut_ins",
     failure: "merged out of turn",
+    examinerRemark: "Moved into the queue ahead of the vehicle whose turn it was",
+    examinerIncident: "merge_cut_in",
     label: "Merged out of turn at a lane closure",
     category: "right_of_way",
     eventType: "merged_out_of_turn",

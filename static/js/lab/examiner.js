@@ -349,11 +349,9 @@ const CORE_FAIL_CATEGORY = {
   stuck: "other",
   collision: "space",
   "red light": "right_of_way",
-  "failed to stop safely for amber": "right_of_way",
   "stop sign": "right_of_way",
   "failed to yield": "right_of_way",
   "off road": "steering",
-  "drove in a reserved bus lane": "steering",
   "not parked": "parking",
 };
 const FAIL_CATEGORY = new Map([
@@ -363,7 +361,7 @@ const FAIL_CATEGORY = new Map([
     category,
   ]),
 ]);
-const FAIL_REMARK = {
+const CORE_FAIL_REMARK = {
   timeout: "Did not complete the route",
   stuck: "Did not complete the route: the car got stuck",
   collision: "Collision",
@@ -373,19 +371,22 @@ const FAIL_REMARK = {
   "off road": "Left the road",
   "not parked": "Did not finish parked within 30 cm of the kerb",
   "simulation error": "The simulator stopped before the test could be completed",
-  "failed to stop safely for amber": "Continued on amber when there was room to stop safely",
-  "drove in a reserved bus lane": "Used the reserved bus lane outside the permitted turn approach",
-  "passed plow on the right": "Passed an operating snow plow on the side that throws snow and debris",
-  "merged out of turn": "Moved into the queue ahead of the vehicle whose turn it was",
 };
+const FAIL_REMARK = new Map([
+  ...Object.entries(CORE_FAIL_REMARK),
+  ...FEATURE_METRICS.filter(({ examinerRemark }) => examinerRemark !== undefined).map(({ failure, examinerRemark }) => [
+    failure,
+    examinerRemark,
+  ]),
+]);
 const FAIL_INCIDENT = new Map([
   ["collision", "collisions"],
   ["red light", "red_lights_run"],
   ["stop sign", "stop_signs_run"],
   ["failed to yield", "failed_to_yield"],
-  ["passed plow on the right", "plow_right_pass"],
-  ["merged out of turn", "merge_cut_in"],
-  ["passed a cyclist too close", "close_pass"],
+  ...FEATURE_METRICS.filter(({ examinerIncident }) => examinerIncident !== undefined).map(
+    ({ failure, examinerIncident }) => [failure, examinerIncident],
+  ),
 ]);
 // Minor errors from the incident stream: the observer's and the coaching report's own.
 const MINOR = {
@@ -433,7 +434,7 @@ export function examine(test, report) {
   const incidentOf = (type) => (type ? (incidents.find((i) => i?.type === type) ?? null) : null);
   const fails = reasons.map((reason) => ({
     category: failureCategory(reason),
-    remark: Object.hasOwn(FAIL_REMARK, reason) ? FAIL_REMARK[reason] : capital(reason),
+    remark: FAIL_REMARK.get(reason) ?? capital(reason),
     reason,
     incident: incidentOf(FAIL_INCIDENT.get(reason)),
   }));

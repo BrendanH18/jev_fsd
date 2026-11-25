@@ -4,34 +4,37 @@ import { roadRank } from "../map/mapdata.js";
 // Simulator caution target, not a posted/statutory limit; grip and sight may require slower travel.
 export const NIGHT_CAUTION_MPS = 20 / 3.6;
 let activeWorld = null;
-export function setNightFlash(world) {
-  activeWorld = world?.nightFlash ? world : null;
+export function setNightFlash(world, enabled = world?.nightFlash) {
+  activeWorld = enabled ? world : null;
 }
 const selections = new WeakMap();
 export function flashMain(inter, map) {
-  if (!inter) return null;
-  if (!selections.has(inter)) {
-    if (!inter.approaches?.every((a) => map.edges.has(a.edge))) return null;
-    const ranks = (g) => inter.approaches.filter((a) => a.group === g).map((a) => roadRank(map.edges.get(a.edge)));
-    const a = ranks("A"),
-      b = ranks("B");
-    selections.set(
-      inter,
-      !a.length || !b.length
-        ? null
-        : Math.min(...a) > Math.max(...b)
-          ? "A"
-          : Math.min(...b) > Math.max(...a)
-            ? "B"
-            : null,
-    );
+  if (!inter || !map?.edges || !Array.isArray(inter.approaches)) return null;
+  let byIntersection = selections.get(map);
+  if (!byIntersection) selections.set(map, (byIntersection = new WeakMap()));
+  if (byIntersection.has(inter)) return byIntersection.get(inter);
+  const ranks = { A: { low: Infinity, high: -Infinity }, B: { low: Infinity, high: -Infinity } };
+  for (const approach of inter.approaches) {
+    if (approach?.group !== "A" && approach?.group !== "B") return null;
+    const edge = map.edges.get(approach.edge);
+    if (!edge) return null;
+    const rank = roadRank(edge);
+    const group = ranks[approach.group];
+    group.low = Math.min(group.low, rank);
+    group.high = Math.max(group.high, rank);
   }
-  return selections.get(inter);
+  const { A, B } = ranks;
+  const main = A.high === -Infinity || B.high === -Infinity ? null : A.low > B.high ? "A" : B.low > A.high ? "B" : null;
+  byIntersection.set(inter, main);
+  return main;
 }
+
 export function flashing(inter, world = activeWorld) {
   if (
     !world?.nightFlash ||
-    !world.clock ||
+    !Number.isFinite(world.clock?.hour) ||
+    world.clock.hour < 0 ||
+    world.clock.hour >= 24 ||
     !(world.clock.hour >= 23 || world.clock.hour < 5) ||
     world.outages?.isDark(inter?.id)
   )
@@ -44,7 +47,7 @@ export function flashState(inter, group, world = activeWorld) {
 }
 const stops = new WeakMap();
 export function flashControl(world, control, edge) {
-  if (control?.type !== "signal") return control;
+  if (control?.type !== "signal" || edge == null) return control;
   const state = flashState(world.map.intersections.get(control.id), control.group, world);
   if (state !== "flashing_red") return control;
   let approaches = stops.get(control);
@@ -65,7 +68,7 @@ export function flashControl(world, control, edge) {
   return stop;
 }
 export function nightFlashNotice(world) {
-  if (!world.nightFlash || !world.route) return null;
+  if (!world.nightFlash || !world.route || !world.clock) return null;
   const { ego, route } = world,
     p = route.project(ego.x, ego.y, route.hint);
   if (!p || p.distance > 4) return null;

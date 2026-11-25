@@ -2,11 +2,11 @@ import { FEATURE_METRICS, FEATURES, featureMetricEnabled } from "../sim/features
 
 const round = (value) => Math.round(value * 1000) / 1000;
 const auditPair = ({ name, label }) => [name, label];
-const COUNTER_AUDITS = FEATURE_METRICS.filter(({ traceType }) => !traceType);
+const COUNTER_AUDITS = FEATURE_METRICS.filter(({ trace, traceType }) => trace !== false && !traceType);
 const countersAt = (slot) => COUNTER_AUDITS.filter(({ at }) => at === slot).map(auditPair);
 const THRESHOLD_AUDITS = FEATURES.filter(({ metric }) => metric?.traceType);
 const CORE_AUDITS = {
-  amber_lights_run: "Ignored a safe amber stop or sped up to beat the light",
+  ...Object.fromEntries(countersAt("afterRedLights")),
   collisions: "Collision",
   red_lights_run: "Red light",
   stop_signs_run: "Missed stop",
@@ -24,7 +24,16 @@ const AUDITS = [
   ...countersAt("beforeRunner"),
   ...COUNTER_AUDITS.filter(
     ({ at }) =>
-      !["vehiclePassing", "beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
+      ![
+        "afterRedLights",
+        "vehiclePassing",
+        "beforeRunner",
+        "afterCalming",
+        "afterRestrictions",
+        "guards",
+        "pxo",
+        "turns",
+      ].includes(at),
   ).map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;

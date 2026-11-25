@@ -1,4 +1,3 @@
-import { flashing, flashState } from "./night-flash.js";
 // Signal phases as f(t), plus per-vehicle stop-sign memory.
 // Timing: yellow = 1 s reaction time + speed / (2 × 3.05 m/s²), clamped to 3–5 s; all-red clears the box;
 // cycle 60 s arterial / 50 s else; green split by lane×speed with walk + 1.2 m/s crossing floor.
@@ -30,6 +29,12 @@ export const WALK_S = 7;
 export const SCRAMBLE_WALK_S = 10;
 export const SCRAMBLE_CLEAR_S = 2;
 const SCRAMBLE_CORNER_M = 6; // (corner to corner is the diagonal across the junction's streets, plus this)
+// Keep map and timing code independent of the simulator modules that supply phase overrides.
+let specialSignalPhase = () => null;
+export function setSignalPhaseResolver(resolve) {
+  specialSignalPhase = resolve;
+}
+
 let scramblesOn = false;
 // Whether scramble junctions run their all-walk phase (World option `scrambles`).
 export function setScrambles(on) {
@@ -37,7 +42,9 @@ export function setScrambles(on) {
   return scramblesOn;
 }
 // Whether `intersection` runs a scramble now.
-export const isScramble = (intersection) => scramblesOn && !!intersection?.scramblePlan && !flashing(intersection);
+export function isScramble(intersection) {
+  return scramblesOn && !!intersection?.scramblePlan && !specialSignalPhase(intersection);
+}
 const PED_SPEED = 1.2;
 const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
 const MAJOR = new Set(["primary", "secondary"]);
@@ -187,13 +194,8 @@ function stateIn(p, u) {
 }
 
 export function phaseOf(intersection, t) {
-  const main = flashing(intersection);
-  if (main)
-    return {
-      A: main === "A" ? "flashing_amber" : "flashing_red",
-      B: main === "B" ? "flashing_amber" : "flashing_red",
-      u: 0,
-    };
+  const special = specialSignalPhase(intersection);
+  if (special) return special;
   const plan = planOf(intersection);
   const c = plan.cycle;
   const u = (((t + (intersection.offset_s || 0)) % c) + c) % c;
@@ -217,7 +219,7 @@ export function amberTimeLeft(intersection, shows, t) {
 // flashing hand: finish crossing, do not start), or "dont".
 // At a scramble every crossing, diagonals too, shows the all-walk phase, whatever the group.
 export function pedPhase(intersection, group, t) {
-  if (flashing(intersection)) return "dark";
+  if (specialSignalPhase(intersection)) return "dark";
   const plan = planOf(intersection);
   const p = plan[group];
   if (!p) return "dont";
@@ -249,8 +251,8 @@ export function pedPhase(intersection, group, t) {
 export function approachPhase(intersection, edgeId, t) {
   const group = intersection.approaches?.find((a) => a.edge === edgeId)?.group;
   if (group !== "A" && group !== "B") return "red";
-  const flash = flashState(intersection, group);
-  if (flash) return flash;
+  const special = specialSignalPhase(intersection)?.[group];
+  if (special) return special;
   const plan = planOf(intersection);
   const u = (((t + (intersection.offset_s || 0)) % plan.cycle) + plan.cycle) % plan.cycle;
   if (!Number.isFinite(u)) return "red";
@@ -269,7 +271,7 @@ export function approachPhase(intersection, edgeId, t) {
 // waits on its red: then a right turn on red from it would cut across the protected left turns
 // coming into the same street, and waits.
 export function advanceHolds(intersection, edgeId, t) {
-  if (flashing(intersection)) return false;
+  if (specialSignalPhase(intersection)) return false;
   const plan = planOf(intersection),
     adv = plan.advance;
   if (!adv || edgeId === adv.edge || intersection.approaches?.find((x) => x.edge === edgeId)?.group !== adv.group)
@@ -295,7 +297,7 @@ export const protectedLeft = (state, turn) => (state === "advance" || state === 
 // walk starts; 0 during it), ends_in_s (until the walk and its flashing hand are over, during them) },
 // or null where there is none.
 export function scrambleState(intersection, t) {
-  if (flashing(intersection)) return null;
+  if (specialSignalPhase(intersection)) return null;
   if (!isScramble(intersection)) return null;
   const plan = planOf(intersection),
     sc = plan.scramble,
@@ -314,7 +316,7 @@ export function scrambleState(intersection, t) {
 // a movement, until that movement does: behind an advance green held by another approach, or going
 // any way but left under an arrow, that is once the advance and its clearance are over.
 export function secondsToGreen(intersection, group, t, edgeId = null, turn = "straight") {
-  if ((group !== "A" && group !== "B") || !Number.isFinite(t) || flashing(intersection)) return null;
+  if ((group !== "A" && group !== "B") || !Number.isFinite(t) || specialSignalPhase(intersection)) return null;
   const plan = planOf(intersection);
   const p = plan[group];
   const c = plan.cycle;
@@ -398,7 +400,7 @@ export function advanceNotice(world) {
   if (
     !inter?.plan?.advance ||
     world.outages?.isDark(inter.id) ||
-    flashing(inter, world) ||
+    specialSignalPhase(inter, world) ||
     !world.visibility.canSee(ego, inter.x, inter.y)
   )
     return null;
@@ -421,7 +423,7 @@ export function scrambleNotice(world) {
   if (
     !isScramble(inter) ||
     world.outages?.isDark(inter.id) ||
-    flashing(inter, world) ||
+    specialSignalPhase(inter, world) ||
     !world.visibility.canSee(ego, inter.x, inter.y)
   )
     return null;

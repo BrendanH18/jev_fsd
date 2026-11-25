@@ -25,10 +25,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     park: on("park"),
     hazards,
     stepOuts: hazards ? STEP_OUT_COUNT : 0,
-    nightFlash: on("nightflash"),
-    busLanes: on("buslanes"),
-    leftOnRed: on("leftonred"),
-    amberLights: on("amberlights"),
   };
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)

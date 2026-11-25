@@ -6,9 +6,11 @@ counts, busway sides and conditional hours map onto existing directed edge/lane
 indices. Weekday/time windows are minutes since midnight; unknown schedules are
 retained and conservatively active. The day comes from the world clock's `weekday`
 (Monday = 0, the default; `?weekday=` in free drives, and the app clock moves it on at
-midnight), as for turn restrictions. No clock means inactive.
+midnight), as for turn restrictions. A clock outside the local day cannot activate a lane. An
+invalid window keeps its reservation active when the clock has a usable hour.
 
-`World.busLanes` enables `sim/bus-lanes.js`, sensing `bus_lane`, route lane choice,
+The [feature registry](../feature-interface.md) record in `sim/features/bus-lanes.js` enables
+`sim/bus-lanes.js` through `World.busLanes`. The policy covers sensing `bus_lane`, route lane choice,
 NPC lane choice and gap-checked lane changes, candidate filtering and both local
 agents. Cars may enter a reserved lane in the final **50 m** before a right turn,
 or during the actual curb parking/pull-out manoeuvre. Buses retain access;

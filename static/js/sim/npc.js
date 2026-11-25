@@ -1,9 +1,6 @@
 import { crossingGap, laneChangeBodyGap, laneChangeGap, pathLine, pickSpawnLane } from "./traffic-geometry.js";
 import { inspectTraffic } from "./traffic-inspection.js";
 import { reserveSlot } from "./parking.js";
-import { observeAmber } from "./amber.js";
-import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
-import { leftOnRedAllowed } from "./left-on-red.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
 // parked up ahead of the ego signals, waits for a gap, and pulls out into the lane. Buses drive
@@ -55,7 +52,6 @@ import {
   BUS_DWELL_S,
   BUS_SIGNAL_M,
   BUS_TAPER_M,
-  busTravelLane,
   busMayPullOut,
   busStopFront,
   busYield,
@@ -64,7 +60,6 @@ import {
   isBus,
 } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
-import { legalBusLane } from "./bus-lanes.js";
 import {
   DEPART_S,
   DOORS_DELAY_S,
@@ -92,6 +87,7 @@ import {
   controlAt,
   FLEET_FEATURES,
   featureObstacle,
+  applyTrafficPathPolicy,
   firstHookResult,
   hooks,
   isParkingTraffic,
@@ -133,8 +129,19 @@ const TRAFFIC_BYPASS = hooks("trafficBypass"),
   FOLLOWING_TRAFFIC_SPEED = hooks("trafficSpeed", "following"),
   ORDINARY_TRAFFIC_SPEED = hooks("trafficSpeed", "ordinary"),
   APPROACH_TRAFFIC_SPEED = hooks("trafficSpeed", "beforeControl"),
+  CLEARING_TRAFFIC_SPEED = hooks("trafficSpeed", "clearing"),
   SIGNAL_PROCEED = hooks("trafficSignalProceed"),
   SIGNAL_HOLD = hooks("trafficSignalHold"),
+  SIGNAL_POLICY = hooks("trafficSignalPolicy"),
+  SIGNAL_DECISION = hooks("trafficSignalDecision"),
+  TRAFFIC_LANE_INTO = hooks("trafficLaneInto"),
+  TRAFFIC_SUCCESSOR_POOL = hooks("trafficSuccessorPool"),
+  TRAFFIC_SPAWN_LANE_BLOCKED = hooks("trafficSpawnLaneBlocked"),
+  BUS_SPAWN_LANE = hooks("busSpawnLane"),
+  TRAFFIC_LANE_DIRECTION = hooks("trafficLaneDirection"),
+  RED_TURN_LANE = hooks("trafficRedTurnLane"),
+  PRIORITY_JUNCTION = hooks("priorityJunction"),
+  PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside"),
   TRAFFIC_SPEED = hooks("trafficSpeed"),
   TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import {
@@ -446,52 +453,8 @@ export class NpcPath {
   laneInto(from, lane, next) {
     const edge = this.map.edges.get(next),
       turn = this.map.classifyTurn(this.map.turnAngle(from, next));
-    if (this.busLanePolicy?.bus) return busTravelLane(this.map, edge, this.busLanePolicy.clock);
-    if (this.busLanePolicy) {
-      const desired = turn === "left" ? 0 : turn === "right" ? edge.lanes - 1 : Math.min(lane, edge.lanes - 1);
-      if (
-        !legalBusLane(
-          this.map,
-          next,
-          desired,
-          this.busLanePolicy.clock,
-          "straight",
-          Infinity,
-          false,
-          this.bike ? "bicycle" : "car",
-        )
-      ) {
-        for (let k = desired - 1; k >= 0; k--)
-          if (
-            legalBusLane(
-              this.map,
-              next,
-              k,
-              this.busLanePolicy.clock,
-              "straight",
-              Infinity,
-              false,
-              this.bike ? "bicycle" : "car",
-            )
-          )
-            return k;
-        // (a bus lane on the left, as on some one-way streets: the nearest lane to its right)
-        for (let k = desired + 1; k < edge.lanes; k++)
-          if (
-            legalBusLane(
-              this.map,
-              next,
-              k,
-              this.busLanePolicy.clock,
-              "straight",
-              Infinity,
-              false,
-              this.bike ? "bicycle" : "car",
-            )
-          )
-            return k;
-      }
-    }
+    const laneOverride = firstHookResult(TRAFFIC_LANE_INTO, this, edge, turn, lane);
+    if (laneOverride) return laneOverride.index;
     return this.bike
       ? edge.lanes - 1
       : turn === "left"
@@ -531,23 +494,7 @@ export class NpcPath {
       // no U-turns, nor turns so sharp they double back (the tip of a traffic island)
       const noU = succ.filter((e) => Math.abs(this.map.turnAngle(last.id, e)) < SHARP_TURN);
       let pool = noU.length ? noU : succ;
-      if (this.busLanePolicy && !this.busLanePolicy.bus) {
-        const legal = pool.filter((id) =>
-          Array.from({ length: this.map.edges.get(id).lanes }, (_, k) => k).some((k) =>
-            legalBusLane(
-              this.map,
-              id,
-              k,
-              this.busLanePolicy.clock,
-              "straight",
-              Infinity,
-              false,
-              this.bike ? "bicycle" : "car",
-            ),
-          ),
-        );
-        if (legal.length) pool = legal;
-      }
+      for (const filter of TRAFFIC_SUCCESSOR_POOL) pool = filter(this, pool);
       if (this.classes) {
         const kept = pool.filter((id) => this.classes.has(this.map.edges.get(id).cls));
         if (kept.length) pool = kept;
@@ -900,9 +847,7 @@ export class NpcFleet {
           e.id,
           tram
             ? Math.min(run.lane ?? 0, e.lanes - 1)
-            : this.world.busLanes
-              ? busTravelLane(map, e, this.world.clock)
-              : e.lanes - 1,
+            : (firstHookResult(BUS_SPAWN_LANE, this.world, e)?.index ?? e.lanes - 1),
         );
       if (!lane) continue;
       const s = Math.max(1, Math.min(lane.length - 1, (along * lane.length) / Math.max(1, e.length)));
@@ -929,7 +874,7 @@ export class NpcFleet {
         waiting: 0,
       });
       v.path = new NpcPath(map, random, { world: this.world });
-      if (this.world.busLanes && !tram) v.path.busLanePolicy = { clock: this.world.clock, bus: true };
+      if (!tram) applyTrafficPathPolicy(this.world, v.path, "bus");
       this.startRun(v, run.edges, k, lane.idx, s, tram);
       // the route's stops still ahead, as where its front stops along each street (see busStopFront)
       const firstAt =
@@ -994,8 +939,7 @@ export class NpcFleet {
         l.edgeRef.bike &&
         l.idx === l.edgeRef.lanes - 1 &&
         !l.edgeRef.ring &&
-        (!this.world.busLanes ||
-          legalBusLane(this.map, l.edge, l.idx, this.world.clock, "straight", Infinity, false, "bicycle")),
+        !TRAFFIC_SPAWN_LANE_BLOCKED.some((blocked) => blocked(this.world, l, "bicycle")),
     );
     if (!lanes.length) return;
     const totalLen = lanes.reduce((a, l) => a + l.length, 0);
@@ -1012,7 +956,7 @@ export class NpcFleet {
       v.kind = "bike";
       v.color = BIKE_COLORS[made % BIKE_COLORS.length];
       v.path = new NpcPath(this.map, this.random, { bike: true });
-      if (this.world.busLanes) v.path.busLanePolicy = { clock: this.world.clock };
+      applyTrafficPathPolicy(this.world, v.path);
       v.path.start(lane.edge, lane.idx, s);
       v.v0 = 4.2 + this.random() * 2.3;
       v.driver = driverProfile(this.drivers, true);
@@ -1025,7 +969,7 @@ export class NpcFleet {
 
   spawn(count) {
     const lanes = this.map.laneList.filter(
-      (l) => l.length > 25 && (!this.world.busLanes || legalBusLane(this.map, l.edge, l.idx, this.world.clock)),
+      (l) => l.length > 25 && !TRAFFIC_SPAWN_LANE_BLOCKED.some((blocked) => blocked(this.world, l, "car")),
     );
     if (!lanes.length) return;
     const totalLen = lanes.reduce((a, l) => a + l.length, 0);
@@ -1040,7 +984,7 @@ export class NpcFleet {
       v.id = `car_${this.vehicles.length + 1}`;
       v.color = PALETTE[this.vehicles.length % PALETTE.length];
       v.path = new NpcPath(this.map, this.random, { world: this.world });
-      if (this.world.busLanes) v.path.busLanePolicy = { clock: this.world.clock };
+      applyTrafficPathPolicy(this.world, v.path);
       v.path.start(lane.edge, lane.idx, s);
       v.v0 = lane.edgeRef.limit * (0.85 + this.random() * 0.2);
       v.driver = driverProfile(this.drivers);
@@ -1155,8 +1099,7 @@ export class NpcFleet {
         continue;
       }
       const path = n.path;
-      if (this.world.busLanes && !n.transit?.tram && !n.school)
-        path.busLanePolicy = { clock: this.world.clock, ...(n.transit ? { bus: true } : {}) };
+      if (!n.transit?.tram && !n.school) applyTrafficPathPolicy(world, path, n.transit ? "bus" : null);
       if (n.lc && n.lc.t >= n.lc.T) {
         const lane = this.map.lane(n.lc.edge, n.lc.to);
         if (lane && path.currentEdge().id === n.lc.edge)
@@ -1545,19 +1488,9 @@ export class NpcFleet {
       if (driverOverride?.leadSpeed) leadV = driverOverride.leadSpeed(leader, leadV);
       n.lead = gap < Infinity ? { gap, v: leadV, ...leadPolicy?.fields } : null;
       let stopAt = null,
-        flashCap = Infinity,
-        amberCap = Infinity;
+        controlCap = Infinity;
       const approachSpeed = featureTrafficSpeed(world, n, front, APPROACH_TRAFFIC_SPEED);
-      // Entry-stop checks stop at the line; an amber clearing speed stays in
-      // force until the rear is beyond the junction's crossing street.
-      if (world.amberLights)
-        for (const e of path.edges) {
-          const choice = e.control && n.amberChoices?.get(`${e.id}:${e.control.id}`);
-          if (!choice || choice.stop || world.t >= choice.stop_until) continue;
-          const lineS = pathLine(e, this.map.edges.get(e.id).length, e.control.s_line);
-          if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id))
-            amberCap = Math.min(amberCap, choice.speed_mps);
-        }
+      let signalCap = featureTrafficSpeed(world, n, front, CLEARING_TRAFFIC_SPEED);
       let heldAtControl = false;
       for (const start of TRAFFIC_CONTROL_START) start(world, n);
       for (const e of path.edges) {
@@ -1578,23 +1511,16 @@ export class NpcFleet {
             approachPhase(this.map.intersections.get(e.control.id), e.id, world.t),
             after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight",
           );
-          if (st === "flashing_amber") {
-            flashCap = NIGHT_CAUTION_MPS;
-            if (this.boxBusy(n, e)) stopAt = Math.max(0, bumperToLine);
+          const policy = firstHookResult(SIGNAL_POLICY, this, n, e, st);
+          if (policy) {
+            controlCap = policy.speed;
+            if (policy.hold) stopAt = Math.max(0, bumperToLine);
           }
-          const amber = world.amberLights
-            ? observeAmber(
-                n,
-                `${e.id}:${ctl.id}`,
-                st,
-                bumperToLine,
-                this.map.intersections.get(ctl.id),
-                approachPhase(this.map.intersections.get(ctl.id), e.id, world.t),
-                world.t,
-              )
-            : null;
-          const canStop = amber ? amber.stop : bumperToLine > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) + 1;
-          if (amber && !amber.stop) amberCap = Math.min(amberCap, amber.speed_mps);
+          const decision = firstHookResult(SIGNAL_DECISION, world, n, e, ctl, st, bumperToLine);
+          const canStop = decision
+            ? decision.stop
+            : bumperToLine > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) + 1;
+          if (decision && !decision.stop) signalCap = Math.min(signalCap, decision.speed_mps);
           const proceed = firstHookResult(SIGNAL_PROCEED, world, this, n, e, ctl, st, bumperToLine, canStop);
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
           else if (!proceed && (st === "red" || (st === "yellow" && canStop))) stopAt = bumperToLine;
@@ -1887,8 +1813,8 @@ export class NpcFleet {
         featureObstacle(n)?.fixedCruise ? n.v0 : n.v0 * weather.speed,
         limit * (n.transit || n.school ? 0.95 : (driverOverride?.speedFactor ?? 1.05)) * weather.speed,
         vCurve,
-        flashCap,
-        amberCap,
+        controlCap,
+        signalCap,
         approachSpeed,
         n.pull ? 5 : Infinity,
         vFollow,
@@ -3115,12 +3041,7 @@ export class NpcFleet {
       dir = edge.lane > 0 ? -1 : 1;
       if (PASSING_LANE_BLOCKED.some((blocked) => blocked(this.world, n, dir))) dir = 0;
     }
-    if (this.world.busLanes && !n.transit && !n.school) {
-      const allowed = (k) =>
-        legalBusLane(this.map, e.id, k, this.world.clock, turn, toEnd, !!n.pull || !!n.parking, n.kind || "car");
-      if (!allowed(edge.lane) && edge.lane > 0) dir = -1;
-      if (!allowed(edge.lane + dir)) dir = 0;
-    }
+    for (const choose of TRAFFIC_LANE_DIRECTION) dir = choose(this.world, n, edge, e, turn, toEnd, dir);
     if (!dir) return;
     const to = edge.lane + dir;
     if (to < 0 || to >= e.lanes) return;
@@ -3145,18 +3066,17 @@ export class NpcFleet {
   // At a red light: a right turn from the curb lane, or an enabled legal left from the
   // leftmost lane. Both require a full stop, a clear junction and a gap in crossing traffic.
   rightOnRed(n, e, bumperToLine, front, dt) {
-    if (!this.map.rightOnRed && !this.world.leftOnRed) return false;
     const path = n.path,
       i = path.edges.indexOf(e),
       next = path.edges[i + 1];
     const edge = this.map.edges.get(e.id);
     if (!e.control || !edge) return false;
-    const left = this.world.leftOnRed && next && leftOnRedAllowed(this.world, e.id, next.id);
+    const extraTurn = next && firstHookResult(RED_TURN_LANE, this.world, e.id, next.id);
     if (next && RED_TURN_BLOCKED.some((blocked) => blocked(this.world, e.id, next.id))) return false;
     if (
       !next ||
-      (left
-        ? e.lane !== 0
+      (extraTurn
+        ? e.lane !== extraTurn.lane
         : !this.map.rightOnRed ||
           e.lane !== edge.lanes - 1 ||
           this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) !== "right")
@@ -3287,16 +3207,12 @@ export class NpcFleet {
   }
 
   boxBusy(n, e) {
-    const inter =
-      this.world.nightFlash && e.control?.type === "signal" ? this.map.intersections.get(e.control.id) : null;
-    const night = inter && flashing(inter, this.world);
-    const node = night ? inter : this.map.nodes.get(e.to);
+    const junction = firstHookResult(PRIORITY_JUNCTION, this.world, e.control, true);
+    const node = junction ?? this.map.nodes.get(e.to);
     if (!node) return false;
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n) continue;
-      // A side-street car waiting at its red (or peeking short of the roadway) is not in the box.
-      const a = night ? approachTo(this.map, o, inter.id) : null;
-      if (a && a.to_node_m > this.map.crossingHalfWidth(a.edge) + 0.1) continue;
+      if (PRIORITY_TRAFFIC_OUTSIDE.some((outside) => outside(this.world, e.control, o, null, true, junction))) continue;
       if (Math.hypot(o.x - node.x, o.y - node.y) > BOX_M) continue;
       const diff = Math.abs(wrap(o.psi - n.psi));
       if (diff > Math.PI / 6 && diff < (Math.PI * 5) / 6) {

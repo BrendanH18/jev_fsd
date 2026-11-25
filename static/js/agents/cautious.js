@@ -1,11 +1,13 @@
 import { decisionContext } from "../brain/decision-trace.js";
-import { featureDecisionFields, firstHookResult, hooks } from "../sim/features/index.js";
+import { featureDecisionFields, stopAtLineDrive, firstHookResult, hooks } from "../sim/features/index.js";
 
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
+const RESERVED_LANE = hooks("cautious", "reservedLane");
 const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
 const AFTER_PASSING = hooks("cautious", "afterPassing");
 const CAUTIOUS = hooks("cautious");
 const BEFORE_AMBER = hooks("cautious", "beforeAmber");
+const SIGNAL_STOP = hooks("cautious", "signalStop");
 const AFTER_AMBER = hooks("cautious", "afterAmber");
 const FEATURE_STOP = hooks("cautiousStop");
 const FEATURE_DRIVE = hooks("cautiousDrive");
@@ -50,8 +52,6 @@ export class CautiousAgent {
   decideSync(snap, offered, policy) {
     // (the autopilot brakes without asking it when nothing unflagged is left: brain/brain.js)
     const eligible = offered.filter((c) => !c.flagged);
-    const i = snap.intersection;
-    const amberStop = i?.amber?.stop && !(i.right_on_red?.go || i.left_on_red?.go);
     // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.
     // A legal left on red uses the shared target: zero until stopped and clear.
     const featureStop = FEATURE_STOP.some((shouldStop) => shouldStop(snap));
@@ -60,12 +60,6 @@ export class CautiousAgent {
     // parking at the destination, or pulling out of a space, once on offer: carry on with it
     // passing a cyclist through the oncoming lane, once the way is clear: at the pass speed, so as to
     // spend no longer in that lane than the pass was judged clear for
-    // in a bus lane while it is in effect, short of the right-turn approach: out of it, after making way for an emergency vehicle
-    const inBusLane =
-      snap.bus_lane?.in_effect && !snap.bus_lane.entering_allowed && snap.bus_lane.lanes.includes(snap.lane?.index);
-    const exitBusLane = inBusLane
-      ? eligible.find((c) => c.change && !snap.bus_lane.lanes.includes(c.law.laneIdx))
-      : null;
     const scores = policy ? [] : null;
     let selection = null;
     const picked = (candidate, reason) => {
@@ -78,7 +72,7 @@ export class CautiousAgent {
         "pull_over",
       ) ||
       picked(firstHookResult(BEFORE_BUS_LANES, snap, eligible, target), "feature_before_bus_lanes") ||
-      picked(exitBusLane, "exit_bus_lane") ||
+      picked(firstHookResult(RESERVED_LANE, snap, eligible, target), "feature_reserved_lane") ||
       picked(firstHookResult(AFTER_BUS_LANES, snap, eligible, target), "feature_after_bus_lanes") ||
       picked(
         eligible.find((c) => c.id === "park" || c.id === "pull_out"),
@@ -91,7 +85,7 @@ export class CautiousAgent {
       picked(firstHookResult(AFTER_PASSING, snap, eligible, target), "feature_after_passing") ||
       picked(firstHookResult(CAUTIOUS, snap, eligible, target), "feature") ||
       picked(firstHookResult(BEFORE_AMBER, snap, eligible, target), "feature_before_amber") ||
-      picked(amberStop && eligible.find((c) => c.id === "stop_at_line"), "approach_amber") ||
+      picked(firstHookResult(SIGNAL_STOP, snap, eligible, target), "approach_signal") ||
       picked(firstHookResult(AFTER_AMBER, snap, eligible, target), "feature_after_amber") ||
       picked(bestCandidate(eligible, target, scores), "score");
 
@@ -99,7 +93,7 @@ export class CautiousAgent {
     // A pull-over or parking manoeuvre brings the car to a stop at the planned location.
     let motionReason = "moving_prediction";
     if (!candidate) motionReason = "no_candidate";
-    else if (amberStop && candidate.id === "stop_at_line") motionReason = "approach_amber";
+    else if (stopAtLineDrive(snap, candidate)) motionReason = "approach_signal";
     else if (candidate.sim.end_speed < 0.3) {
       if (["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id)) motionReason = "planned_stop";
       else if (FEATURE_DRIVE.some((drive) => drive(candidate, snap))) motionReason = "feature_planned_stop";
