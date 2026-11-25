@@ -140,7 +140,7 @@ globalThis.fetch = async () => {
   requests++;
   if (requests === 1) return new Response("unavailable", { status: 503 });
   if (requests === 2) return new Response("malformed");
-  return Response.json([{ id: "kitsilano", bbox: config.bbox }]);
+  return Response.json([{ id: "kitsilano", bbox: config.bbox, name: "Kitsilano", city: "Vancouver", utc_offset: -7 }]);
 };
 await assert.rejects(demoApi("/api/not-shipped"), /needs the local app/);
 assert.equal(requests, 0);

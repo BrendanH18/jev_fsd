@@ -6,7 +6,10 @@ TypeSafe receives the decision state and questions shown in the inspector: dista
 street names and manoeuvre descriptions, without map coordinates. Other decision models receive
 the same request, and LLM endpoint drivers the same information as a chat prompt, from whichever
 provider you configure. Drive reports stay in this
-browser's local storage unless you export them.
+browser's local storage unless you export them. The public demo serves the published results and
+curated replays as static files. Its free drivers send no model decision requests, and its
+benchmark and arena saves stay on the current browser origin.
+[Demo history and exports](../browser-demo.md#keep-runs-and-reports)
 
 Map tags and procedural geometry limit realism. There is no road elevation or camber, and
 visual body pitch and roll do not add a physical suspension model. Buildings, weather and darkness

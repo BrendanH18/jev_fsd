@@ -19,6 +19,10 @@ coaching and the pilot's latest decision visible while you drive.
 
 ## Quick start
 
+To try the simulator immediately, open the [public demo](https://brendanh18.github.io/jev_fsd/).
+It can run free drivers and show recorded model drives. To use live models or custom map
+downloads, start the local server below.
+
 Install [uv](https://docs.astral.sh/uv/) and use a modern browser with WebGL (keyboard, on-screen
 touch controls and gamepads are supported). The app needs
 Python 3.10 or newer; `uv` manages Python and the project dependency.
@@ -68,7 +72,7 @@ your search and keyboard focus while loading maps or finding routes, and offers 
 | Edmonton | Old Strathcona | [/?map=edmonton](http://127.0.0.1:8322/?map=edmonton) |
 | Saskatoon | Downtown & Nutana | [/?map=saskatoon](http://127.0.0.1:8322/?map=saskatoon) |
 
-**Explore cities** offers three reachable drives from your current position: **Neighbourhood
+**Explore cities** looks for up to three reachable drives from your current position: **Neighbourhood
 cruise**, **City precision** and **The long way home**. The world pauses while choosing a route
 or reading a drive report. Changing cities keeps your weather, time and graphics settings.
 Routing, rerouting, benchmarks and 3D benchmark replays use the selected city's map.
