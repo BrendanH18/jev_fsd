@@ -15,18 +15,30 @@ const DEFAULT_TIMEOUT_MS = 360_000;
 const usage = [
   "Usage: node --experimental-default-type=module scripts/driver_submission.mjs",
   "  pack --recording tape.json.gz --report report.json --out submission.json.gz",
-  "  inspect --bundle submission.json[.gz] [--json]",
+  "  inspect --bundle submission.json[.gz] [--json] [--expect-sha256 HASH]",
   "  verify --bundle submission.json.gz [--checkout path] [--port 8322] [--timeout ms]",
   "  publish --bundle submission.json.gz --submitter handle --out data/submissions/YYYY-MM-DD/name.json [--checkout path] [--port 8322] [--timeout ms]",
 ].join("\n");
 const MAX_BYTES = 128 * 1024 * 1024;
+const commandOptions = {
+  pack: { required: ["recording", "report", "out"], optional: [] },
+  inspect: { required: ["bundle"], optional: ["json", "expect-sha256"] },
+  verify: { required: ["bundle"], optional: ["checkout", "port", "timeout"] },
+  publish: { required: ["bundle", "submitter", "out"], optional: ["checkout", "port", "timeout"] },
+};
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const readBytes = (path) => {
   if (statSync(path).size > MAX_BYTES) throw new Error(`${path} exceeds 128 MiB.`);
   return readFileSync(path);
 };
-const parseBytes = (path, bytes) =>
-  JSON.parse(path.endsWith(".gz") ? gunzipSync(bytes, { maxOutputLength: MAX_BYTES }) : bytes);
+const parseBytes = (path, bytes) => {
+  try {
+    const raw = path.endsWith(".gz") ? gunzipSync(bytes, { maxOutputLength: MAX_BYTES }) : bytes;
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
+  } catch (error) {
+    throw new Error(`${path}: ${error.message}`, { cause: error });
+  }
+};
 const read = (path) => parseBytes(path, readBytes(path));
 const write = (path, value, indent) => {
   const text = `${JSON.stringify(value, null, indent)}\n`;
@@ -45,9 +57,13 @@ function parseTimeout(value) {
   return ms;
 }
 
-function inspect({ bundle: bundlePath, json }) {
+function inspect({ bundle: bundlePath, json, "expect-sha256": expectedSha }) {
+  if (expectedSha !== undefined && !/^[a-f0-9]{64}$/i.test(expectedSha))
+    throw new Error("--expect-sha256 needs 64 hexadecimal characters.");
   const rawBytes = readBytes(bundlePath);
   const fileSha256 = sha256(rawBytes);
+  if (expectedSha !== undefined && fileSha256 !== expectedSha.toLowerCase())
+    throw new Error(`File SHA-256 mismatch for ${bundlePath}: expected ${expectedSha}, actual ${fileSha256}.`);
   const parsed = parseBytes(bundlePath, rawBytes);
   let format;
   let report;
@@ -60,13 +76,14 @@ function inspect({ bundle: bundlePath, json }) {
     submitter = parsed.submitter ?? null;
     report = parsed.report;
     manifest = report?.manifest;
-    if (!manifest || !Array.isArray(report?.results)) {
+    if (manifest?.format !== "jev-run-manifest/2" || !Array.isArray(report?.results)) {
       throw new Error("Invalid published submission: missing report manifest or results.");
     }
     const tapePath = `${bundlePath}.gz`;
     const tapeStat = statSync(tapePath, { throwIfNoEntry: false });
     if (!tapeStat) throw new Error(`Published submission tape is missing: ${tapePath}`);
-    const actualTapeSha = sha256(readBytes(tapePath));
+    const tapeBytes = readBytes(tapePath);
+    const actualTapeSha = sha256(tapeBytes);
     tapeSha256 = actualTapeSha;
     tapeVerified = actualTapeSha === parsed.recording_sha256;
     if (!tapeVerified) {
@@ -74,6 +91,7 @@ function inspect({ bundle: bundlePath, json }) {
         `Recording SHA-256 mismatch for ${tapePath}: expected ${parsed.recording_sha256}, actual ${actualTapeSha}.`,
       );
     }
+    readSubmission({ format: SUBMISSION_FORMAT, recording: parseBytes(tapePath, tapeBytes), report });
   } else {
     const bundle = readSubmission(parsed);
     format = bundle.format;
@@ -236,27 +254,31 @@ try {
       checkout: { type: "string" },
       port: { type: "string" },
       timeout: { type: "string" },
+      "expect-sha256": { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
   const [command] = positionals;
   if (values.help) console.log(usage);
-  else if (positionals.length === 1 && command === "pack" && values.recording && values.report && values.out) {
-    const bundle = readSubmission({
-      format: SUBMISSION_FORMAT,
-      recording: read(values.recording),
-      report: read(values.report),
-    });
-    write(values.out, bundle);
-    console.log(`Packed ${bundle.report.results.length} drives to ${values.out}.`);
-  } else if (positionals.length === 1 && command === "inspect" && values.bundle) {
-    inspect(values);
-  } else if (positionals.length === 1 && command === "verify" && values.bundle) {
-    await verify(readSubmission(read(values.bundle)), values);
-  } else if (positionals.length === 1 && command === "publish" && values.bundle && values.submitter && values.out) {
-    await publish(values);
-  } else throw new Error(usage);
+  else {
+    if (positionals.length !== 1 || !Object.hasOwn(commandOptions, command)) throw new Error(usage);
+    const { required, optional } = commandOptions[command];
+    for (const key of required) if (!values[key]?.trim()) throw new Error(`${command} needs --${key}.`);
+    for (const key of Object.keys(values))
+      if (!required.includes(key) && !optional.includes(key)) throw new Error(`${command} does not use --${key}.`);
+    if (command === "pack") {
+      const bundle = readSubmission({
+        format: SUBMISSION_FORMAT,
+        recording: read(values.recording),
+        report: read(values.report),
+      });
+      write(values.out, bundle);
+      console.log(`Packed ${bundle.report.results.length} drives to ${values.out}.`);
+    } else if (command === "inspect") inspect(values);
+    else if (command === "verify") await verify(readSubmission(read(values.bundle)), values);
+    else await publish(values);
+  }
 } catch (error) {
   console.error(`Submission could not be processed: ${error.message}`);
   process.exitCode = 1;
