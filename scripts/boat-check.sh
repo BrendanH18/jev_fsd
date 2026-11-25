@@ -54,12 +54,18 @@ clone_url=${JEV_BOAT_CLONE_URL:-https://github.com/BrendanH18/jev_fsd.git}
 mode=checks action=run cmd=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --full) mode=full ;;
-        --save|--status|--stop|--done) action=${1#--} ;;
-        --) shift
+        --full)
+            [ "$mode" = checks ] || { echo "boat-check: specify --full once" >&2; exit 2; }
+            mode=full ;;
+        --save|--status|--stop|--done)
+            [ "$action" = run ] || { echo "boat-check: choose one sandbox action" >&2; exit 2; }
+            action=${1#--} ;;
+        --)
+            [ "$mode" = checks ] || { echo "boat-check: use --full or -- CMD, not both" >&2; exit 2; }
+            shift
             [ $# -gt 0 ] || { echo "boat-check: -- needs a command" >&2; exit 2; }
             if [ $# -eq 1 ]; then cmd=$1; else cmd=$(printf '%q ' "$@"); fi
-            [ -n "$cmd" ] || { echo "boat-check: -- needs a command" >&2; exit 2; }
+            [[ "$cmd" =~ [^[:space:]] ]] || { echo "boat-check: -- needs a command" >&2; exit 2; }
             mode=cmd
             break ;;
         -h|--help) sed -n '2,/^main()/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
@@ -71,6 +77,8 @@ done
 [ -n "$type" ] || { if [ "$mode" = full ]; then type=$full_type; else type=default; fi; }
 case "$type" in small|default|large|xlarge) ;; *) echo "boat-check: JEV_BOAT_TYPE is small, default, large or xlarge" >&2; exit 2 ;; esac
 case "$idle" in *[!0-9]*|"") echo "boat-check: JEV_BOAT_IDLE is a number of seconds (0 stops the sandbox when the check ends)" >&2; exit 2 ;; esac
+idle=${idle#"${idle%%[!0]*}"}   # normalize zeros without overflowing shell arithmetic
+idle=${idle:-0}
 case "$slot" in *[!A-Za-z0-9_-]*|"") echo "boat-check: JEV_BOAT_SLOT may use letters, digits, - and _" >&2; exit 2 ;; esac
 case "$jobs" in ""|[1-9]|[1-9][0-9]) ;; *) echo "boat-check: JEV_BOAT_JOBS is a whole number from 1 to 99" >&2; exit 2 ;; esac
 case "$cmd" in
@@ -83,15 +91,16 @@ esac
 for tool in boat jq git; do
     command -v "$tool" >/dev/null || { echo "boat-check: $tool is not installed" >&2; exit 2; }
 done
-cd "$(git rev-parse --show-toplevel)"
+root=$(git rev-parse --show-toplevel) || { echo "boat-check: run this from a Git working tree" >&2; exit 2; }
+cd "$root"
 state_dir=$(git rev-parse --path-format=absolute --git-path boat-check)
 mkdir -p "$state_dir"
 id_file=$state_dir/sandbox-$slot
 lock=$state_dir/lock-$slot
 name="jev-fsd-check-$(basename "$PWD" | tr -c 'A-Za-z0-9_\n-' '-' | cut -c1-80)-$slot"
 
-id=$(cat "$id_file" 2>/dev/null || true)
-armed=0 keepalive="" build="" saving=0 locked=0 stage="" start_log=""
+id=""
+armed=0 keepalive="" build="" saving=0 locked=0 stage="" start_log="" frame_status=""
 base="" tree="" files_b64="" paths_b64=""   # what run_remote syncs; send sets them
 # shellcheck disable=SC2317  # this and the functions below run from the exit trap
 stop_keepalive() {   # the keepalive loop and its sleep
@@ -105,7 +114,7 @@ stop_keepalive() {   # the keepalive loop and its sleep
 # shellcheck disable=SC2317
 started_id() {
     [ -n "$start_log" ] && [ -s "$start_log" ] || return 0
-    jq -rR 'fromjson? | objects | select(.event != "error") | (.id // .sandboxId // .sandbox.id // empty) | strings' \
+    jq -rR 'fromjson? | objects | select(.event != "error") | (.id // .sandboxId // .sandbox.id // empty) | strings | select(test("^[A-Za-z0-9_][A-Za-z0-9_-]*$"))' \
         "$start_log" 2>/dev/null | head -n 1
 }
 # Stop sandbox $1, or with JEV_BOAT_IDLE leave its auto-stop that many seconds ahead. Quiet when
@@ -155,10 +164,12 @@ cleanup() {
     fi
     [ -z "$stage" ] || rm -rf "$stage"
     [ -z "$start_log" ] || rm -f "$start_log"
+    [ -z "$frame_status" ] || rm -f "$frame_status"
     [ "$locked" = 0 ] || rm -rf "$lock"   # only a lock this run took
 }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 130' INT
+trap 'exit 143' TERM
 # One run at a time per slot, so two checks never race to create the slot's sandbox. Only
 # `mkdir` takes the lock, and the exit trap (set above, before the lock is taken) releases it
 # only when this run took it. A lock a killed run left behind is reported with its path, never
@@ -174,7 +185,13 @@ if ! mkdir "$lock" 2>/dev/null; then
 fi
 locked=1
 echo $$ > "$lock/pid"
+# The lock protects the read as well as the writes and deletion of the sandbox id.
+if [ -f "$id_file" ]; then
+    id=$(cat "$id_file")
+    case "$id" in *[!A-Za-z0-9_-]*|"-"*) echo "boat-check: invalid sandbox id in $id_file" >&2; exit 2 ;; esac
+fi
 start_log=$(mktemp)
+frame_status=$(mktemp)
 
 # look ID sets state to the sandbox's state, or "gone" when Boat no longer knows it, and size to
 # its machine size. Any other failure (network, auth, rate limit) is an error, so a passing hiccup
@@ -184,15 +201,18 @@ look() {
     state="" size=""
     if out=$(boat info "$1" --json 2>&1); then
         # An answer jq can't read is an error too, never an empty state that would make a new sandbox.
-        if state=$(printf '%s\n' "$out" | jq -er '.sandbox.state // "unknown"') \
-            && size=$(printf '%s\n' "$out" | jq -r '.sandbox.type // ""'); then
+        if state=$(printf '%s\n' "$out" | jq -er '(.sandbox.state // "unknown") | strings | select(length > 0)') \
+            && size=$(printf '%s\n' "$out" | jq -er '(.sandbox.type // "") | strings'); then
             return 0
         fi
         state="" size=""
-        echo "boat-check: couldn't read sandbox $1 from Boat's answer: $out" >&2
+        echo "boat-check: couldn't read sandbox $1 from Boat's answer" >&2
         return 1
     fi
-    case "$out" in *'"not_found"'*) state=gone; return 0 ;; esac
+    if printf '%s\n' "$out" | jq -eR 'fromjson? | objects | select(.code == "not_found" or .error == "not_found" or (try .error.code) == "not_found")' >/dev/null; then
+        state=gone
+        return 0
+    fi
     echo "boat-check: couldn't read sandbox $1 from Boat: $out" >&2
     return 1
 }
@@ -245,7 +265,7 @@ new_sandbox() {   # new_sandbox NAME [boat new ARGS...]: prints the new sandbox'
     # --no-env: no GitHub token, agent logins or model keys, so no check can spend credits.
     fast_start "a new sandbox" boat new --no-env --type "$type" --ttl "$budget" --name "$sandbox_name" "$@" \
         || start_failed "creating a sandbox" "$out"
-    new_id=$(printf '%s\n' "$out" | jq -r 'select(.event == "ready") | .id' 2>/dev/null | head -n 1)
+    new_id=$(printf '%s\n' "$out" | jq -r 'select(.event == "ready") | .id | strings | select(test("^[A-Za-z0-9_][A-Za-z0-9_-]*$"))' 2>/dev/null | head -n 1)
     [ -n "$new_id" ] || start_failed "creating a sandbox" "$out"
     echo "$new_id"
 }
@@ -267,15 +287,25 @@ flock -w 900 9 || { say "an earlier check is still running in this sandbox; try 
 # Toolchain: already in the warm snapshot, installed here on a bare sandbox.
 if ! node --version 2>/dev/null | grep -q "^v22\."; then
     say "installing Node 22"
-    arch=$(uname -m); case "$arch" in x86_64) arch=x64 ;; aarch64) arch=arm64 ;; esac
+    arch=$(uname -m); case "$arch" in
+        x86_64) arch=x64 ;;
+        aarch64|arm64) arch=arm64 ;;
+        *) say "cannot install Node 22 on $arch"; exit 2 ;;
+    esac
     dist=https://nodejs.org/dist/latest-v22.x
     line=$(curl -fsSL "$dist/SHASUMS256.txt" | grep -E " node-v22\.[0-9.]+-linux-$arch\.tar\.gz$")
-    tmp=$(mktemp -d)
+    tmp=$(mktemp -d "$HOME/.node22-XXXXXX")
+    cleanup_node() { rm -rf -- "$tmp"; }
+    trap cleanup_node EXIT
     curl -fsSL -o "$tmp/${line##* }" "$dist/${line##* }"
     (cd "$tmp" && printf "%s\n" "$line" | sha256sum -c --quiet)
-    rm -rf "$HOME/.local/node22"; mkdir -p "$HOME/.local/node22"
-    tar -xzf "$tmp/${line##* }" -C "$HOME/.local/node22" --strip-components=1
+    mkdir "$tmp/node22"
+    tar -xzf "$tmp/${line##* }" -C "$tmp/node22" --strip-components=1
+    mkdir -p "$HOME/.local"
+    rm -rf "$HOME/.local/node22"
+    mv "$tmp/node22" "$HOME/.local/node22"
     rm -rf "$tmp"
+    trap - EXIT
 fi
 if ! command -v uv >/dev/null; then
     say "installing uv"
@@ -283,7 +313,7 @@ if ! command -v uv >/dev/null; then
 fi
 [ -d "$repo/.git" ] || { say "cloning the repository"; git clone -q "$clone_url" "$repo"; }
 deps() {   # Biome when the lock file changed, and the Python environment
-    if ! cmp -s package-lock.json node_modules/.boat-check-lock; then
+    if [ ! -x node_modules/.bin/biome ] || ! cmp -s package-lock.json node_modules/.boat-check-lock; then
         npm ci --no-audit --no-fund --loglevel=error
         cp package-lock.json node_modules/.boat-check-lock
     fi
@@ -294,7 +324,8 @@ deps() {   # Biome when the lock file changed, and the Python environment
 if [ "$mode" = build ]; then   # --save: the default branch and its dependencies, nothing else
     cd "$repo"
     git fetch -q origin
-    git reset -q --hard "$(git rev-parse -q --verify origin/HEAD || git rev-parse --verify origin/main)"
+    upstream=$(git rev-parse -q --verify origin/HEAD || git rev-parse --verify origin/main)
+    git reset -q --hard "$upstream"
     git clean -fdqx -e node_modules -e .venv
     deps
     exit 0
@@ -412,16 +443,17 @@ frames() {
           else empty end'
 }
 unframe() {
-    local line rc=""
+    local line rc="" invalid=0
     while IFS= read -r line; do
         case "$line" in
-            O*) printf '%s' "${line#O}" | base64 -d ;;
-            E*) printf '%s' "${line#E}" | base64 -d >&2 ;;
+            O*) printf '%s' "${line#O}" | base64 -d || invalid=1 ;;
+            E*) printf '%s' "${line#E}" | base64 -d >&2 || invalid=1 ;;
             X*) rc=${line#X} ;;
         esac
     done
-    [ -n "$rc" ] || return 255
-    return "$rc"
+    [ "$invalid" = 0 ] || return 1
+    [[ "$rc" =~ ^[0-9]{1,3}$ ]] && [ "$rc" -le 255 ] || return 1
+    printf '%s\n' "$rc" > "$frame_status"
 }
 # keep_alive ID: from now until the exit trap, push sandbox ID's auto-stop back to $budget seconds
 # every $renew seconds, so a long check (its push, run and any resync) never reaches it. The loop
@@ -441,17 +473,16 @@ keep_alive() {
 # files to sync come from send (base, tree, files_b64, paths_b64).
 run_remote() {
     local codes rc
-    set +e
+    : > "$frame_status"
     boat exec "$1" --timeout 0 --json -- bash -c "$remote" boat-check "$2" "$3" "$4" "$clone_url" "$jobs" \
         "$base" "$tree" "$files_b64" "$paths_b64" | frames | unframe
     codes=("${PIPESTATUS[@]}")
-    set -e
-    rc=${codes[2]}
-    if [ "$rc" = 255 ]; then   # no exit frame: the CLI failed before or while running the command
-        rc=${codes[0]}
-        [ "$rc" != 0 ] || rc=1
-        echo "boat-check: boat exec ended without the command's exit code (exit ${codes[0]})" >&2
+    if [ "${codes[1]}" = 0 ] && [ "${codes[2]}" = 0 ] && read -r rc < "$frame_status"; then
+        return "$rc"
     fi
+    rc=${codes[0]}
+    [ "$rc" != 0 ] || rc=1
+    echo "boat-check: boat exec ended without a valid command exit (Boat ${codes[0]}, frames ${codes[1]}, decoder ${codes[2]})" >&2
     return "$rc"
 }
 
@@ -483,18 +514,24 @@ case "$action" in
         esac ;;
     status)
         if [ -z "$id" ]; then echo "boat-check: no sandbox for this worktree (slot $slot)"; exit 0; fi
-        echo "boat-check: $id ($(sandbox_state "$id" || echo unknown))"
-        boat info "$id"
+        look "$id" || exit 1
+        echo "boat-check: $id ($state)"
+        [ "$state" = gone ] || boat info "$id"
         exit 0 ;;
     stop)
         [ -n "$id" ] || { echo "boat-check: no sandbox for this worktree (slot $slot)" >&2; exit 0; }
+        look "$id" || exit 1
+        case "$state" in
+            gone|stopped|stopping) echo "boat-check: $id ($state)"; exit 0 ;;
+        esac
         boat stop "$id" --json >/dev/null || { echo "boat-check: couldn't stop $id: boat stop $id" >&2; exit 1; }
         echo "boat-check: stopped $id"
         exit 0 ;;
     done)
         [ -n "$id" ] || { echo "boat-check: no sandbox for this worktree (slot $slot)" >&2; exit 0; }
         if boat delete "$id" --yes --json >/dev/null 2>&1 || [ "$(sandbox_state "$id")" = gone ]; then
-            rm -f "$id_file"; id=""
+            rm -f "$id_file" "$state_dir/pushed-$slot" "$state_dir/index-$slot"
+            id=""
             echo "boat-check: deleted this worktree's sandbox"
             exit 0
         fi
@@ -546,15 +583,20 @@ case "$state" in
     "") ;;
     gone) echo "boat-check: Boat doesn't know $id any more; making a new sandbox" >&2; state="" ;;
     unknown) echo "boat-check: boat info $id gave no state; check it with boat info $id" >&2; exit 1 ;;
-    *)
+    failed|error|expired)
         echo "boat-check: $id is $state; deleting it and making a new one" >&2
-        boat delete "$id" --yes --json >/dev/null 2>&1 || echo "boat-check: couldn't delete $id: boat delete $id --yes" >&2
+        boat delete "$id" --yes --json >/dev/null || { echo "boat-check: couldn't delete $id: boat delete $id --yes" >&2; exit 1; }
         state="" ;;
+    *)
+        echo "boat-check: unrecognized sandbox state $state for $id; inspect it with boat info $id" >&2
+        exit 1 ;;
 esac
 if [ -z "$state" ]; then
     rm -f "$id_file"
     from=()
-    if boat snapshots --json 2>/dev/null | jq -e --arg n "$snapshot" '.named[]? | select(.name == $n and .status == "ready")' >/dev/null; then
+    snapshots=$(boat snapshots --json) || { echo "boat-check: cannot list snapshots" >&2; exit 1; }
+    available=$(jq -er --arg n "$snapshot" 'if (.named | type) != "array" then error("expected named snapshots") else any(.named[]; .name == $n and .status == "ready") | tostring end' <<<"$snapshots") || exit 1
+    if [ "$available" = true ]; then
         from=(--from "$snapshot")
     else
         echo "boat-check: no ready $snapshot snapshot, so this sandbox starts bare and installs everything; --save makes one" >&2
@@ -562,7 +604,8 @@ if [ -z "$state" ]; then
     echo "boat-check: creating $name" >&2
     id=""   # the trap reads a cut-short create's id from $start_log
     id=$(new_sandbox "$name" ${from[@]+"${from[@]}"})
-    echo "$id" > "$id_file"
+    printf '%s\n' "$id" > "$lock/sandbox"
+    mv -f "$lock/sandbox" "$id_file"
 fi
 boat extend "$id" --ttl "$budget" --json >/dev/null
 keep_alive "$id"
@@ -596,9 +639,20 @@ send() {
     if [ -n "$base" ]; then   # changed files from the working tree; the sandbox checks the result
         git diff-tree -r -z --no-renames --name-only "$base" "$tree" >"$stage/paths"
         git diff-tree -r -z --no-renames --name-only --diff-filter=d "$base" "$tree" >"$stage/list"
-        COPYFILE_DISABLE=1 tar -czf "$stage/files.tgz" --no-recursion --null -T "$stage/list"
+        if [ "$(wc -c <"$stage/list")" -le 65536 ]; then
+            local paths=() file
+            while IFS= read -r -d "" file; do paths+=("$file"); done <"$stage/list"
+            if [ "${#paths[@]}" -gt 0 ]; then
+                git --literal-pathspecs archive --format=tar.gz -o "$stage/files.tgz" "$tree" -- "${paths[@]}"
+            else
+                tar -czf "$stage/files.tgz" -T /dev/null
+            fi
+        else
+            base=""   # a path list too large for one archive invocation; send the whole tree
+        fi
         rm "$stage/list"
-    else   # every file, exactly as indexed
+    fi
+    if [ -z "$base" ]; then   # every file, exactly as indexed
         : >"$stage/paths"
         git archive --format=tar.gz -o "$stage/files.tgz" "$tree"
     fi
@@ -621,7 +675,8 @@ send() {
     fi
 }
 send "$base"
-echo "$id $tree" >"$pushed_file"
+printf '%s %s\n' "$id" "$tree" >"$lock/pushed"
+mv -f "$lock/pushed" "$pushed_file"
 status=0
 run_remote "$id" "$mode" "$push" "$cmd" || status=$?
 # The sandbox couldn't apply the change (its tree wasn't the one last pushed): push everything.
