@@ -235,7 +235,7 @@ try {
   );
   assert.match(
     run("driver_submission.mjs", "verify", "--bundle", bundle, "--port=1").stderr,
-    /http:\/\/127\.0\.0\.1:1\/bench.*uv run server\.py/,
+    /must name a clean source commit/,
   );
   const bytes = gzipSync(JSON.stringify(recording));
   const published = write("published.json", {

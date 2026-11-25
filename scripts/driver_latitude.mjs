@@ -17,37 +17,46 @@
 // PORT=8404 uv run server.py, then:
 // node --experimental-default-type=module scripts/driver_latitude.mjs --port 8404 [--only door-zone,four-way-stop]
 //   [--every 1] [--force 3] [--horizon 6] [--json out.json]
-const args = Object.fromEntries(
-  process.argv.slice(2).reduce((out, a, i, all) => {
-    if (a.startsWith("--")) out.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
-    return out;
-  }, []),
-);
+import { benchPage, checkFiles, commaList, parseOptions, wholeNumber } from "./cli_tools.mjs";
+import { writeJsonArtifact } from "./recording_artifacts.mjs";
+
+const usage = "Usage: driver_latitude.mjs [--only ID,ID] [--every SECONDS] [--force SECONDS] [--horizon SECONDS] [--port PORT] [--limit N] [--json FILE.json[.gz]] [--quiet] [--check]";
 const fail = (message) => {
   console.error(message);
   process.exit(1);
 };
-const OPTIONS = ["port", "only", "every", "force", "horizon", "json"];
-for (const [name, value] of Object.entries(args)) {
-  if (!OPTIONS.includes(name)) fail(`Unknown option --${name}: use ${OPTIONS.map((o) => `--${o}`).join(", ")}.`);
-  if (value === true) fail(`--${name} needs a value.`);
+const options = ["port", "only", "every", "force", "horizon", "json", "limit"];
+let parsed, only, limit;
+try {
+  parsed = parseOptions(process.argv.slice(2), options, ["quiet", "check"]);
+  if (parsed.help) {
+    console.log(usage);
+    process.exit(0);
+  }
+  only = commaList("only", parsed.args.only);
+  if (parsed.args.limit !== undefined) limit = wholeNumber("limit", parsed.args.limit, undefined, { min: 1 });
+  if (parsed.args.json) {
+    if (!/\.json(?:\.gz)?$/.test(parsed.args.json)) throw new Error("--json must end in .json or .json.gz.");
+    checkFiles({}, { json: parsed.args.json });
+  }
+} catch (error) {
+  fail(error.message);
 }
+const { args } = parsed;
 const seconds = (name, fallback) => {
-  const v = args[name] === undefined ? fallback : Number(args[name]);
-  if (!(v > 0)) fail(`--${name} must be a positive number of seconds.`);
-  return v;
+  const value = args[name] === undefined ? fallback : Number(args[name]);
+  if (!Number.isFinite(value) || value <= 0) fail(`--${name} must be a finite positive number of seconds.`);
+  return value;
 };
-const EVERY = seconds("every", 1),
-  FORCE = seconds("force", 3),
-  HORIZON = seconds("horizon", 6);
+const EVERY = seconds("every", 1);
+const FORCE = seconds("force", 3);
+const HORIZON = seconds("horizon", 6);
 if (FORCE > HORIZON) fail("--force must not exceed --horizon.");
 
-const base = `http://127.0.0.1:${args.port || process.env.PORT || 8331}`;
-const page = await (await fetch(`${base}/bench`)).text();
-const token = page.match(/name="jev-csrf" content="([^"]+)"/)?.[1] || "";
+const { base, token } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
 globalThis.document = { querySelector: (sel) => (sel.includes("jev-csrf") ? { content: token } : null) };
 const nativeFetch = globalThis.fetch;
-globalThis.fetch = (path, opts) => nativeFetch(String(path).startsWith("/") ? base + path : path, opts);
+globalThis.fetch = (path, opts) => nativeFetch(String(path).startsWith("/") ? base + path : path, { ...opts, redirect: "error" });
 
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
@@ -57,13 +66,18 @@ const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { failures } = await import("../static/js/bench/metrics.js");
 
-const only = args.only ? String(args.only).split(",") : null;
-const drives = only ? CHALLENGES.filter((c) => only.includes(c.id)) : CHALLENGES;
-if (only && drives.length !== only.length)
+const selected = only ? CHALLENGES.filter((c) => only.includes(c.id)) : CHALLENGES;
+if (only && selected.length !== only.length)
   fail(`Unknown challenge in --only: ${only.filter((id) => !CHALLENGES.some((c) => c.id === id)).join(", ")}.`);
+const drives = selected.slice(0, limit);
 const maps = {};
-for (const id of new Set(drives.map((c) => c.map)))
-  maps[id] = new MapData(await api(`/api/map?bbox=${encodeURIComponent(id)}`));
+for (const id of new Set(drives.map((c) => c.map))) {
+  try {
+    maps[id] = new MapData(await api(`/api/map?bbox=${encodeURIComponent(id)}`));
+  } catch (error) {
+    fail(`Cannot load latitude map ${id}: ${error.message}`);
+  }
+}
 
 const DT = 1 / 60;
 // The audit counters as a drive result names them, judged as failures() judges a finished drive.
@@ -107,7 +121,7 @@ async function latitude(challenge) {
     decisions.push({ t: ctx.world.t, ids, chosen: r.motion === "stop" ? "hard_brake" : r.candidateId });
     return null;
   });
-  const positions = [];
+  const positions = new Map();
   let arrived = false;
   ctx.autopilot.onEvent = (e) => {
     if (e.type === "arrived") arrived = true;
@@ -116,7 +130,7 @@ async function latitude(challenge) {
   while (ctx.world.t < limit && ctx.autopilot.enabled) {
     recorder.record(context);
     await stepOnce(ctx);
-    positions.push([ctx.world.t, ctx.world.ego.x, ctx.world.ego.y]);
+    positions.set(ctx.world.tick, { t: ctx.world.t, x: ctx.world.ego.x, y: ctx.world.ego.y });
   }
   const baseFailures = auditFailures(ctx.world.violations);
   // 2. branches into a second world of the same challenge
@@ -148,6 +162,7 @@ async function latitude(challenge) {
     const after = auditFailures(branchCtx.world.violations);
     return {
       t: branchCtx.world.t,
+      tick: branchCtx.world.tick,
       x: branchCtx.world.ego.x,
       y: branchCtx.world.ego.y,
       added: after.filter((f) => !before.includes(f)),
@@ -157,14 +172,16 @@ async function latitude(challenge) {
   // the null branch repeats the drive
   let exact = null;
   if (recorder.frames.length > 1) {
-    const b = await branch(0, null),
-      p = positions.find(([t]) => Math.abs(t - b.t) < DT / 2);
-    exact = !!p && Math.hypot(p[1] - b.x, p[2] - b.y) < 1e-6 && !b.added.length;
+    const b = await branch(0, null);
+    const p = positions.get(b.tick);
+    exact = !!p && !b.error && Math.abs(p.t - b.t) < DT / 2 && Math.hypot(p.x - b.x, p.y - b.y) < 1e-6 && !b.added.length;
   }
   const points = [];
+  let decisionIndex = 0;
   for (let i = 0; i < recorder.frames.length; i++) {
-    const t = recorder.frames[i].t,
-      next = decisions.find((d) => d.t > t + 1e-9);
+    const t = recorder.frames[i].t;
+    while (decisionIndex < decisions.length && decisions[decisionIndex].t <= t + 1e-9) decisionIndex++;
+    const next = decisions[decisionIndex];
     if (!next || next.t > t + EVERY) continue;
     const alternatives = next.ids.filter((id) => id !== next.chosen);
     const failing = [];
@@ -173,8 +190,8 @@ async function latitude(challenge) {
       const b = await branch(i, id);
       if (b.added.length || b.error) failing.push({ id, failures: b.added, ...(b.error ? { error: b.error } : {}) });
       // (a forced choice that left the car more than half a metre from where Rules had it: the branch drove differently)
-      const p = positions.find(([pt]) => Math.abs(pt - b.t) < DT / 2);
-      if (!p || Math.hypot(p[1] - b.x, p[2] - b.y) > 0.5) diverged++;
+      const p = positions.get(b.tick);
+      if (!p || Math.abs(p.t - b.t) >= DT / 2 || Math.hypot(p.x - b.x, p.y - b.y) > 0.5) diverged++;
     }
     points.push({
       t: Math.round(t * 10) / 10,
@@ -211,21 +228,24 @@ const out = [];
 for (const challenge of drives) {
   const r = await latitude(challenge);
   out.push(r);
-  console.log(
+  if (!args.quiet) console.log(
     `${r.challenge} pass=${r.pass} points=${r.points} with_alternatives=${r.with_alternatives} room_to_fail=${r.room_to_fail} branches=${r.branches} diverged=${r.diverged_branches} failing=${r.failing_branches} kinds=${r.failure_kinds.join("|") || "-"} exact=${r.exact_replay} wall=${r.wall_s}s`,
   );
-  if (args.json)
-    (await import("node:fs")).writeFileSync(
-      args.json,
-      JSON.stringify(
+  if (args.json) {
+    try {
+      writeJsonArtifact(args.json, JSON.stringify(
         { every_s: EVERY, force_s: FORCE, horizon_s: HORIZON, engine: `node ${process.version}`, results: out },
-        null,
-        1,
-      ),
-    );
+        null, 1,
+      ));
+    } catch (error) {
+      fail(error.message);
+    }
+  }
 }
 const total = (k) => out.reduce((a, r) => a + r[k], 0);
+const replayFailures = out.filter((r) => r.exact_replay !== true).map((r) => r.challenge);
+if (args.check && replayFailures.length) console.error(`Latitude baseline replay could not be verified for ${replayFailures.join(", ")}.`);
 process.stdout.write(
   `${JSON.stringify({ challenges: out.length, points: total("points"), room_to_fail: total("room_to_fail"), none_left_to_driver: out.filter((r) => !r.room_to_fail).map((r) => r.challenge) })}\n`,
-  () => process.exit(0),
+  () => process.exit(args.check && replayFailures.length ? 1 : 0),
 );

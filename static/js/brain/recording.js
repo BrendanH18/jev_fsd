@@ -107,9 +107,28 @@ function validOutcome(outcome) {
   const types = OUTCOME_TYPES.filter((type) => Object.hasOwn(outcome, type));
   if (types.length !== 1) return false;
   const [type] = types;
+  if (Object.hasOwn(outcome, "raw_response") && (type !== "response" || outcome.raw_response !== true))
+    return false;
   if (type === "timeout" || type === "cancelled") return outcome[type] === true;
   if (type === "response") return outcome.response !== undefined;
   return isObject(outcome.error) && typeof outcome.error.message === "string";
+}
+
+// Local-agent tapes use the same outcome envelope as server-backed tapes.
+export function validateAnswers(drives) {
+  if (!isObject(drives)) throw new Error("The recording's drives must be an object.");
+  for (const [driveId, answers] of Object.entries(drives)) {
+    if (!driveId.trim()) throw new Error("The recording has an empty drive ID.");
+    if (!isObject(answers)) throw new Error(`Drive "${driveId}" must have an object of answers.`);
+    for (const [key, outcomes] of Object.entries(answers)) {
+      if (!key.trim()) throw new Error(`Drive "${driveId}" has an empty request key.`);
+      if (!Array.isArray(outcomes) || !outcomes.length)
+        throw new Error(`Drive "${driveId}" request "${key}" must have a nonempty answer list.`);
+      for (let i = 0; i < outcomes.length; i++)
+        if (!validOutcome(outcomes[i]))
+          throw new Error(`Drive "${driveId}" request "${key}" has an invalid outcome at answer ${i + 1}.`);
+    }
+  }
 }
 
 // The header for a new recording. `brain` is the driver's brain (for its endpoint), `model` the model
@@ -146,7 +165,7 @@ export function recordingHeader({ driver, brain = null, model = null, ...context
 
 export class ModelRecording {
   constructor({ header, drives = {}, results = {}, scenarios = {} } = {}) {
-    if (!header?.driver || !driverKind(header.driver))
+    if (!isObject(header) || typeof header.driver !== "string" || !driverKind(header.driver))
       throw new Error("A recording needs a header with a model driver id.");
     this.header = header;
     this.drives = dictionary(drives); // drive id -> { key: [outcome, ...] }
@@ -161,15 +180,13 @@ export class ModelRecording {
     const { header, drives = {}, results = {}, scenarios = {} } = json;
     for (const [name, value] of Object.entries({ drives, results, scenarios }))
       if (!isObject(value)) throw new Error(`The recording's ${name} must be an object.`);
-    for (const [driveId, answers] of Object.entries(drives)) {
-      if (!isObject(answers)) throw new Error(`Drive "${driveId}" must have an object of answers.`);
-      for (const [key, outcomes] of Object.entries(answers)) {
-        if (!Array.isArray(outcomes)) throw new Error(`Drive "${driveId}" request "${key}" must have an answer list.`);
-        for (let i = 0; i < outcomes.length; i++)
-          if (!validOutcome(outcomes[i]))
-            throw new Error(`Drive "${driveId}" request "${key}" has an invalid outcome at answer ${i + 1}.`);
-      }
-    }
+    validateAnswers(drives);
+    if (header?.kind !== undefined && header.kind !== driverKind(header.driver))
+      throw new Error("The recording's driver and kind disagree.");
+    if (header?.endpoint !== undefined && !isObject(header.endpoint))
+      throw new Error("The recording endpoint must be an object.");
+    if (header?.endpoint?.id !== undefined && header.endpoint.id !== header.driver)
+      throw new Error("The recording endpoint and driver IDs disagree.");
     for (const [driveId, result] of Object.entries(results))
       if (!isObject(result)) throw new Error(`Drive "${driveId}" must have an object as its result.`);
     for (const [driveId, scenario] of Object.entries(scenarios))
@@ -189,7 +206,7 @@ export class ModelRecording {
   // A tape for one drive. `mode` is "record" (calls go to the server and are kept) or "replay"
   // (answers come from the recording; no call is made).
   tape(driveId, mode, { onRequest = null } = {}) {
-    if (!["record", "replay"].includes(mode)) throw new Error(`Unknown tape mode "${mode}".`);
+    validateTapeRequest(driveId, mode);
     if (mode === "record") this.drives[driveId] = dictionary();
     return new DriveTape(this, String(driveId), mode, onRequest);
   }
@@ -248,6 +265,15 @@ export function comparableResult(result) {
 }
 export const sameResult = (a, b) => canonicalJson(comparableResult(a)) === canonicalJson(comparableResult(b));
 
+export function validateTapeRequest(driveId, mode) {
+  if (!["record", "replay"].includes(mode)) throw new Error(`Unknown tape mode "${mode}".`);
+  if (
+    (typeof driveId !== "string" && !Number.isSafeInteger(driveId)) ||
+    !String(driveId).trim()
+  )
+    throw new Error("A tape needs a drive ID.");
+}
+
 export class DriveTape {
   constructor(recording, driveId, mode, onRequest) {
     this.recording = recording;
@@ -255,7 +281,7 @@ export class DriveTape {
     this.mode = mode;
     this.onRequest = onRequest;
     this.hasDrive = Object.hasOwn(recording.drives, driveId);
-    this.answers = recording.drives[driveId] || dictionary();
+    this.answers = this.hasDrive ? recording.drives[driveId] : dictionary();
     this.cursor = new Map();
     this.stats = { calls: 0, served: 0, missing: 0, drift: 0 };
   }
@@ -295,7 +321,7 @@ export class DriveTape {
     outcomes.push(null);
     try {
       const res = await untilAborted(() => inner(path, body, { signal }), signal);
-      outcomes[index] = { response: storedResponse(res, body) };
+      outcomes[index] = storedOutcome(res, body);
       return res;
     } catch (err) {
       if (err?.name === "AbortError" || signal?.aborted)
@@ -317,7 +343,7 @@ export class DriveTape {
     const key = this.key(path, body);
     this.stats.calls++;
     const n = this.cursor.get(key) || 0;
-    const outcome = this.answers[key]?.[n];
+    const outcome = Object.hasOwn(this.answers, key) ? this.answers[key][n] : undefined;
     this.cursor.set(key, n + 1);
     if (!outcome) {
       this.stats.missing++;
@@ -345,7 +371,7 @@ export class DriveTape {
         status: outcome.error.status,
         jevStatus: outcome.error.jev_status,
       });
-    return restoredResponse(outcome.response, body);
+    return restoredResponse(outcome.response, body, outcome.raw_response);
   }
 
   // Whether every call was answered from the recording and every recorded answer was used.
@@ -396,11 +422,19 @@ function anthropicPrompt(messages) {
 
 // The server's JSON as kept: without the echoed tick and epoch, and with trace.request fields that
 // repeat the request body (including Anthropic's transformed prompt) marked to rebuild on replay.
-function storedResponse(res, body) {
+function storedOutcome(res, body) {
   const copy = JSON.parse(JSON.stringify(res ?? null));
-  if (!isObject(copy)) return copy;
+  if (!isObject(copy)) return { response: copy };
   const { tick, epoch, ...kept } = copy;
   const request = kept.trace?.request;
+  // Do not interpret literal provider values as the compactor's placeholders.
+  if (
+    (kept.trace?.meta === META && kept.meta) ||
+    Object.hasOwn(kept.trace ?? {}, "anthropic_prompt") ||
+    (isObject(request) && Object.entries(request).some(([key, value]) =>
+      value === BODY && Object.hasOwn(body, key) && body[key] && typeof body[key] === "object",
+    ))
+  ) return { response: kept, raw_response: true };
   if (request && typeof request === "object") {
     for (const [k, v] of Object.entries(request)) {
       if (Object.hasOwn(body, k) && v !== null && typeof v === "object" && canonicalJson(v) === canonicalJson(body[k]))
@@ -418,11 +452,12 @@ function storedResponse(res, body) {
   }
   if (kept.trace?.meta && kept.meta && canonicalJson(kept.trace.meta) === canonicalJson(kept.meta))
     kept.trace.meta = META;
-  return kept;
+  return { response: kept };
 }
-function restoredResponse(stored, body) {
+function restoredResponse(stored, body, raw) {
   const res = JSON.parse(JSON.stringify(stored));
   if (!isObject(res)) return res;
+  if (raw) return { tick: body.tick, epoch: body.epoch, ...res };
   const request = res.trace?.request;
   if (request && typeof request === "object") {
     for (const [k, v] of Object.entries(request))
