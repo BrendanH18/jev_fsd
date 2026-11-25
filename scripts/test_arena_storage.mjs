@@ -655,6 +655,34 @@ await test("a version 1 IndexedDB history still prevents stale deletions after u
   assert.deepEqual(times(await b.remove(stale)), minutes(2));
 });
 
+await test("a save after a migration reorders a version 1 history takes an unused id", async () => {
+  // (id 2 holds an older run imported after id 1; the fallback's only run is already there)
+  const entry = (id, m) => [
+    id,
+    { id, created_at: at(m).created_at, status: "complete", count: 1, bytes: new Blob([JSON.stringify(at(m))]).size },
+  ];
+  const idb = new FakeIndexedDB();
+  idb.dbs.set(EVALUATION_DB, {
+    version: 1,
+    stores: new Map([
+      [
+        "evaluations",
+        {
+          records: new Map([
+            [1, at(3)],
+            [2, at(1)],
+          ]),
+        },
+      ],
+      ["evaluation-index", { keyPath: "id", records: new Map([entry(1, 3), entry(2, 1)]) }],
+    ]),
+  });
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(1)])]]);
+  const history = await openEvaluationHistory({ indexedDB: idb, storage });
+  assert.deepEqual(times(await history.list()), minutes(3, 1));
+  assert.deepEqual(times(await history.save(at(4))), minutes(4, 3, 1));
+});
+
 await test("a damaged record is left out, and runs saved in another tab are picked up", async () => {
   const idb = new FakeIndexedDB(),
     a = await openEvaluationHistory({ indexedDB: idb, storage: local() }),

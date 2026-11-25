@@ -473,7 +473,7 @@ function databaseHistory(db, { maxRuns, maxBytes }) {
           const old = sorted(stored);
           // (never an id used before, even after the newest run is deleted: another tab may still map the
           // old id to the run it named, and would delete the new one in its place)
-          const id = Math.max(old[0]?.id ?? 0, count(lastId) ? lastId : 0) + 1;
+          const id = old.reduce((max, i) => Math.max(max, i.id), count(lastId) ? lastId : 0) + 1;
           if (!Number.isSafeInteger(id)) throw new Error("Evaluation history has exhausted its record IDs.");
           const drop = new Set();
           const droppable = () =>
