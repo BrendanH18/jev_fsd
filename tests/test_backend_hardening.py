@@ -768,7 +768,7 @@ class HealthDiagnosticsVersionTests(unittest.TestCase):
             def __exit__(self, *_args):
                 return False
 
-            def read(self):
+            def read(self, _limit=-1):
                 return b'{"ok": true}'
 
         def fake_urlopen(req, timeout=None):
