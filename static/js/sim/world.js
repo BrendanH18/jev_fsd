@@ -1,4 +1,3 @@
-import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
 import { auditBusLanes } from "./bus-lanes.js";
@@ -98,6 +97,8 @@ const CONTROL_EVENT = hooks("controlEvent");
 const RED_LIGHT_EVENT = hooks("redLightEvent");
 const AUDIT_SIGNAL = hooks("auditSignal");
 const OBSERVE_CONTROL = hooks("observeControl");
+const OBSERVE_SIGNAL = hooks("observeSignal");
+const ARROW_EXIT_AUDIT = hooks("arrowExitAudit");
 const RED_TURN_MEMORY = hooks("redTurnMemory");
 const RED_TURN_EXIT = hooks("redTurnExit");
 const RESET_CONTACT = hooks("resetContact");
@@ -267,13 +268,10 @@ export class World {
       closures = 0,
       passCyclists = false,
       busLanes = false,
-      amberLights = false,
       ...features
     } = {},
   ) {
     this.map = map;
-    this.amberLights = !!amberLights;
-    this.amberLightsSeen = false;
     buildFeatures(this, features, seed, map, "early");
     this.seed = seed;
     this.visibility = new Visibility(map);
@@ -729,44 +727,16 @@ export class World {
       const entered = this.lastRoad?.edgeId === key && !this.lastRoad.crossed && crossed;
       const handled =
         control.type === "signal" && firstHookResult(CONTROL_AUDIT, this, control, edge, rc, past, entered);
-      // Observe independently of the selected manoeuvre, before auditing the real line crossing.
-      const amberInter =
-        this.amberLights && control.type === "signal" && !handled ? this.map.intersections.get(control.id) : null;
-      const amberShows = amberInter ? approachPhase(amberInter, edge.id, this.t) : null;
-      // A manual takeover can keep navigation for a different turn. Observe the
-      // physical arrow independently; auditArrow judges the actual exit.
-      const amberArrow = amberShows === "arrow_yellow";
-      const amberSignal = amberInter ? movementSignal(amberShows, amberArrow ? "left" : rc?.turn || "straight") : null;
-      const amber =
-        amberInter && this.visibility.canSee(this.ego, amberInter.x, amberInter.y)
-          ? observeAmber(
-              this.ego,
-              `${edge.id}:${control.id}${amberArrow ? ":arrow" : ""}`,
-              amberSignal,
-              -past,
-              amberInter,
-              amberShows,
-              this.t,
-            )
+      const signalAudit =
+        control.type === "signal" && !handled
+          ? firstHookResult(OBSERVE_SIGNAL, this, control, edge, rc, past, crossed)
           : null;
-      if (amber && !crossed) this.amberLightsSeen = true;
       if (control.type === "signal" && !handled)
         for (const audit of AUDIT_SIGNAL) audit(this, control, edge, rc, past, entered);
       if (entered && handled) this.giveWay = null;
       if (entered && !handled) {
         if (control.type === "signal") {
-          const amberViolation =
-            amberSignal === "yellow" &&
-            amber &&
-            (amber.stop
-              ? "safe_stop"
-              : amber.max_speed_mps > amber.speed_mps + AMBER_SPEED_SLACK_MPS
-                ? "sped_up"
-                : null);
-          if (amberViolation && amberShows !== "arrow_yellow") {
-            this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
-            this.events.push({ type: "amber_light", reason: amberViolation });
-          }
+          const arrowAudit = signalAudit?.();
           const inter = this.map.intersections.get(control.id);
           const shows = inter?.plan?.advance
             ? approachPhase(inter, rc ? rc.edge : edge.id, this.t)
@@ -800,7 +770,7 @@ export class World {
                   id: control.id,
                   centre: [inter.x, inter.y],
                   approach: rc ? this.route.headingAt(rc.sRoute) : this.map.headingIn(edge.id),
-                  ...(amberShows === "arrow_yellow" && amberViolation ? { amberViolation } : {}),
+                  ...arrowAudit,
                   ...signed,
                   stopped: this.map.rightOnRed && this.egoStop.controlId === control.id && this.egoStop.completed,
                 }
@@ -1178,10 +1148,7 @@ export class World {
     const turned = wrap(ego.psi - a.approach);
     const exit = a.bannedExits?.length ? this.map.nearestLane(ego.x, ego.y, ego.psi, 8)?.lane.edge : null;
     if (turned > Math.PI / 4) {
-      if (a.amberViolation) {
-        this.violations.amber_lights_run = (this.violations.amber_lights_run || 0) + 1;
-        this.events.push({ type: "amber_light", reason: a.amberViolation });
-      }
+      for (const audit of ARROW_EXIT_AUDIT) audit(this, a);
       return;
     }
     if (a.stopped && turned < -Math.PI / 4 && !a.bannedExits?.includes(exit)) return;

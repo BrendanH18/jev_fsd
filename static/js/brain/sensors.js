@@ -1,4 +1,3 @@
-import { observeAmber } from "../sim/amber.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
 
@@ -104,6 +103,7 @@ import {
 } from "../sim/lane-closure.js";
 import {
   alternateSignal,
+  signalDecision,
   extraRedTurn,
   redTurnAllowed,
   specialSignalPhase,
@@ -192,6 +192,10 @@ export const featureDetour = (snap) => {
 };
 export const featurePassingDetour = (snap) => firstHookResult(PASSING_DETOURS, snap);
 const CONTROL_SENSE = hooks("controlSense");
+const ROUTE_CONTROL_SENSE = hooks("routeControlSense");
+const INTERSECTION_FIELDS_BEFORE_LINE = hooks("intersectionFields", "beforeLine");
+const INTERSECTION_FIELDS_AFTER_ENTRY = hooks("signalEntryFields");
+const CLEARING_LIMIT = hooks("clearingLimit");
 const VISIBLE_SIGNAL_POLICY = hooks("visibleSignalPolicy");
 const PRIORITY_JUNCTION = hooks("priorityJunction");
 const PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside");
@@ -429,22 +433,7 @@ function crossingTraffic(world, control, entry, junction, bumperToLine, visibleN
 
 function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
   const { ego, map, route } = world;
-  // Keep a legal amber entry's speed ceiling until the rear clears the
-  // crossing street, even after the ordinary control-look window moves on.
-  if (world.amberLights)
-    for (const c of route.controls) {
-      const choice = ego.amberChoices?.get(`${c.edge}:${c.control.id}`);
-      const clearAt = (c.sJunction ?? c.sRoute + 8) + map.crossingHalfWidth(c.edge);
-      if (
-        choice &&
-        !choice.stop &&
-        world.t < choice.stop_until &&
-        frontS >= c.sRoute &&
-        p.s - ego.spec.rearOverhang <= clearAt &&
-        (!snap.amber_clear || choice.speed_mps < snap.amber_clear.speed_mps)
-      )
-        snap.amber_clear = choice;
-    }
+  for (const sense of ROUTE_CONTROL_SENSE) sense(world, snap, p, frontS);
   for (let k = 0; k < route.controls.length; k++) {
     const c = route.controls[k],
       next = route.controls[k + 1];
@@ -542,7 +531,7 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
     )
       continue;
     const signed = control.type === "signal" && !directive ? firstHookResult(ROUTE_RED_BANS, world, c) : null;
-    const phaseContext = { control, replacement, policy };
+    const phaseContext = { control, replacement, policy, c, directive, signal, shows, bumperToLine, entered };
     snap.intersection = {
       id: control.id,
       control: control.type,
@@ -550,13 +539,11 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
       group: control.group || null,
       advance,
       ...directive?.fields(phaseOverride ?? signal),
-      ...(world.amberLights && control.type === "signal" && inter && !directive
-        ? { amber: observeAmber(ego, `${c.edge}:${control.id}`, signal, bumperToLine, inter, shows, world.t) }
-        : {}),
+      ...Object.assign({}, ...INTERSECTION_FIELDS_BEFORE_LINE.map((fields) => fields(world, inter, phaseContext))),
       bumper_to_line_m: bumperToLine,
       s_line_route: c.sRoute,
       entered,
-      ...(world.amberLights && entered && control.type === "signal" ? { clear_entered: true } : {}),
+      ...Object.assign({}, ...INTERSECTION_FIELDS_AFTER_ENTRY.map((fields) => fields(world, inter, phaseContext))),
       turn: c.turn || "straight",
       oncoming,
       right_on_red:
@@ -2520,6 +2507,7 @@ export function desiredSpeed(snap) {
     reasons.push(cp.going ? "passing a cyclist" : "cyclist ahead: way clear to pass");
   const i = snap.intersection;
   const directive = junctionPlan(i);
+  const decision = signalDecision(i);
   // (a car just past a signal's line, short of CLEARING_M, still stops for it, unless it is turning
   // right or left on red)
   if (
@@ -2529,15 +2517,15 @@ export function desiredSpeed(snap) {
     ((i.control === "signal" && directive?.direction === "stop") ||
       (i.control === "signal" &&
         !directive &&
-        (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") &&
+        (i.signal === "red" || (i.signal === "yellow" && decision?.stop !== false) || i.signal === "unknown") &&
         !redTurnAllowed(i)) ||
       (i.control === "stop" && !i.stop_completed))
   ) {
     // inside the stop zone the target is a full stop; before it, the speed from which the car can still stop at the line
-    const vs = i.amber?.stop
+    const vs = decision?.stop
       ? stopSpeedFor(
-          Math.max(0, i.bumper_to_line_m - 0.5 - Math.max(0, snap.ego.v) * i.amber.reaction_s),
-          i.amber.stop_decel,
+          Math.max(0, i.bumper_to_line_m - 0.5 - Math.max(0, snap.ego.v) * decision.reaction_s),
+          decision.stop_decel,
         )
       : i.bumper_to_line_m < STOP_ZONE_M
         ? 0
@@ -2547,10 +2535,11 @@ export function desiredSpeed(snap) {
       reasons.push(directive?.stopReason ?? (i.control === "signal" ? `${i.signal} light` : "stop sign"));
     }
   }
-  const amber = snap.amber_clear || i?.amber;
-  if (amber && !amber.stop) {
-    v = Math.min(v, amber.speed_mps);
-    reasons.push("too close to stop safely for amber: do not speed up");
+  for (const limit of CLEARING_LIMIT) {
+    const cap = limit(snap);
+    if (!cap) continue;
+    v = Math.min(v, cap.speed);
+    reasons.push(cap.reason);
   }
   if (i && i.control === "stop" && i.stop_completed && i.cross_traffic_moving && !i.entered) {
     v = 0;

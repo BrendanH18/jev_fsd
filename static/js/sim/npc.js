@@ -1,5 +1,4 @@
 import { reserveSlot } from "./parking.js";
-import { observeAmber } from "./amber.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
 // parked up ahead of the ego signals, waits for a gap, and pulls out into the lane. Buses drive
@@ -166,9 +165,11 @@ const TRAFFIC_BYPASS = hooks("trafficBypass"),
   FOLLOWING_TRAFFIC_SPEED = hooks("trafficSpeed", "following"),
   ORDINARY_TRAFFIC_SPEED = hooks("trafficSpeed", "ordinary"),
   APPROACH_TRAFFIC_SPEED = hooks("trafficSpeed", "beforeControl"),
+  CLEARING_TRAFFIC_SPEED = hooks("trafficSpeed", "clearing"),
   SIGNAL_PROCEED = hooks("trafficSignalProceed"),
   SIGNAL_HOLD = hooks("trafficSignalHold"),
   SIGNAL_POLICY = hooks("trafficSignalPolicy"),
+  SIGNAL_DECISION = hooks("trafficSignalDecision"),
   RED_TURN_LANE = hooks("trafficRedTurnLane"),
   PRIORITY_JUNCTION = hooks("priorityJunction"),
   PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside"),
@@ -1608,19 +1609,9 @@ export class NpcFleet {
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
       let stopAt = null,
         controlCap = Infinity,
-        amberCap = Infinity;
+        signalCap = Infinity;
       const approachSpeed = featureTrafficSpeed(world, n, front, APPROACH_TRAFFIC_SPEED);
-      // Entry-stop checks stop at the line; an amber clearing speed stays in
-      // force until the rear is beyond the junction's crossing street.
-      if (world.amberLights)
-        for (const e of path.edges) {
-          const choice = e.control && n.amberChoices?.get(`${e.id}:${e.control.id}`);
-          if (!choice || choice.stop || world.t >= choice.stop_until) continue;
-          const lineS =
-            e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
-          if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id))
-            amberCap = Math.min(amberCap, choice.speed_mps);
-        }
+      signalCap = featureTrafficSpeed(world, n, front, CLEARING_TRAFFIC_SPEED);
       let heldAtControl = false;
       for (const start of TRAFFIC_CONTROL_START) start(world, n);
       for (const e of path.edges) {
@@ -1646,19 +1637,11 @@ export class NpcFleet {
             controlCap = policy.speed;
             if (policy.hold) stopAt = Math.max(0, bumperToLine);
           }
-          const amber = world.amberLights
-            ? observeAmber(
-                n,
-                `${e.id}:${ctl.id}`,
-                st,
-                bumperToLine,
-                this.map.intersections.get(ctl.id),
-                approachPhase(this.map.intersections.get(ctl.id), e.id, world.t),
-                world.t,
-              )
-            : null;
-          const canStop = amber ? amber.stop : bumperToLine > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) + 1;
-          if (amber && !amber.stop) amberCap = Math.min(amberCap, amber.speed_mps);
+          const decision = firstHookResult(SIGNAL_DECISION, world, n, e, ctl, st, bumperToLine);
+          const canStop = decision
+            ? decision.stop
+            : bumperToLine > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) + 1;
+          if (decision && !decision.stop) signalCap = Math.min(signalCap, decision.speed_mps);
           const proceed = firstHookResult(SIGNAL_PROCEED, world, this, n, e, ctl, st, bumperToLine, canStop);
           if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
           else if (!proceed && (st === "red" || (st === "yellow" && canStop))) stopAt = bumperToLine;
@@ -1960,7 +1943,7 @@ export class NpcFleet {
         limit * (n.transit || n.school ? 0.95 : (driverOverride?.speedFactor ?? 1.05)) * weather.speed,
         vCurve,
         controlCap,
-        amberCap,
+        signalCap,
         approachSpeed,
         n.pull ? 5 : Infinity,
         vFollow,

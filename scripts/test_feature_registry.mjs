@@ -76,6 +76,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "outages",
       "nightFlash",
       "leftOnRed",
+      "amberLights",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -109,6 +110,8 @@ test("the core runs every slot, and names no registered feature", () => {
     priorityLevel: source("sim/priority.js"),
     controlReplace: source("sim/features/index.js"),
     alternateSignal: source("sim/features/index.js"),
+    signalDecision: source("sim/features/index.js"),
+    stopAtLineDrive: source("sim/features/index.js"),
     extraRedTurn: source("sim/features/index.js"),
     phaseBansRedTurns: source("sim/features/index.js"),
     detour: [core, source("sim/features/index.js")].join("\n"),
@@ -398,6 +401,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     outages: 1,
     nightFlash: true,
     leftOnRed: true,
+    amberLights: true,
   });
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;

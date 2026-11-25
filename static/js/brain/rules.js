@@ -4,7 +4,9 @@
 import { desiredSpeed, waitsItsTurn } from "./sensors.js";
 import { comfort } from "../sim/vehicle.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
-import { featureDecisionFields, redTurnAllowed, hooks, junctionPlan } from "../sim/features/index.js";
+import { featureDecisionFields, signalDecision, stopAtLineDrive, redTurnAllowed, hooks, junctionPlan } from "../sim/features/index.js";
+
+const BEFORE_SIGNAL_STOP_COST = hooks("rulesCost", "beforeSignalStop");
 
 const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
 const FEATURE_STOP = hooks("rulesStop");
@@ -27,7 +29,7 @@ export class RulesBrain {
     // Flashing red arrives as a two-way stop; amber supplies the shared caution speed and give-way hold.
     const i = snap.intersection;
     const directive = junctionPlan(i);
-    const amberStop = i?.amber?.stop && !redTurnAllowed(i);
+    const decision = signalDecision(i);
     const v = snap.ego.v;
     let stop = STOP_BEFORE_SIGNAL.some((shouldStop) => shouldStop(snap, eligible));
     if (i) {
@@ -35,7 +37,7 @@ export class RulesBrain {
       if (
         i.control === "signal" &&
         !directive &&
-        (i.signal === "red" || (i.signal === "yellow" && i.amber?.stop !== false) || i.signal === "unknown") &&
+        (i.signal === "red" || (i.signal === "yellow" && decision?.stop !== false) || i.signal === "unknown") &&
         !redTurnAllowed(i) &&
         !i.entered &&
         i.bumper_to_line_m < brakeDist + 6 &&
@@ -91,14 +93,14 @@ export class RulesBrain {
         cost -= 20;
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += 2.0 * (s.end_speed - vWant - 0.5);
-      if (c.id === "stop_at_line" && amberStop && !snap.emergency) cost -= 12;
+      for (const adjust of BEFORE_SIGNAL_STOP_COST) cost += adjust(c, snap);
       if (
         c.id === "stop_at_line" &&
         i &&
         !i.entered &&
         !directive &&
         ((i.signal === "red" && !redTurnAllowed(i)) ||
-          (i.signal === "yellow" && i.amber?.stop !== false) ||
+          (i.signal === "yellow" && decision?.stop !== false) ||
           i.signal === "unknown" ||
           (i.control === "stop" && !i.stop_completed) ||
           waitsItsTurn(i) ||
@@ -153,7 +155,7 @@ export class RulesBrain {
     // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
     const motion =
       stop &&
-      !(amberStop && best?.c.id === "stop_at_line") &&
+      !stopAtLineDrive(snap, best?.c) &&
       best?.c.law.kind !== "turnaround" &&
       best?.c.law.kind !== "park"
         ? "stop"

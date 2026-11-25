@@ -194,6 +194,7 @@ import workZones from "./work-zones.js";
 import outages from "./outages.js";
 import nightFlash from "./night-flash.js";
 import leftOnRed from "./left-on-red.js";
+import amber from "./amber.js";
 import scrambles from "./scrambles.js";
 import runners from "./red-light-runner.js";
 
@@ -227,6 +228,7 @@ export const FEATURES = [
   outages,
   nightFlash,
   leftOnRed,
+  amber,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -239,8 +241,8 @@ export const SLOTS = {
   notice: ["beforeMerge", "beforePlow", "beforeLeftOnRed", "afterTurnNotice", "end", "beforeZone"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
-  rulesCost: ["beforeStops", "stops", "beforePassing", "end"],
-  cautious: ["beforeBusLanes", "afterBusLanes", "afterPassing", "end", "beforeAmber", "afterAmber"],
+  rulesCost: ["beforeSignalStop", "beforeStops", "stops", "beforePassing", "end"],
+  cautious: ["beforeBusLanes", "afterBusLanes", "afterPassing", "end", "beforeAmber", "signalStop", "afterAmber"],
   cautiousStop: ["end"],
   cautiousDrive: ["end"],
   legitimateStop: ["end"],
@@ -291,13 +293,21 @@ export const SLOTS = {
   laneOffer: ["afterPassing", "end"],
   laneChangeCandidate: ["end"],
   laneChangeStyle: ["end"],
-  lineStop: ["end"],
+  lineStop: ["beforeFollower", "end"],
   predictionIgnore: ["end"],
   candidateSettle: ["end"],
   controlDirection: ["end"],
   controlAudit: ["end"],
   auditSignal: ["end"],
   observeControl: ["end"],
+  observeSignal: ["end"],
+  arrowExitAudit: ["end"],
+  routeControlSense: ["end"],
+  signalDecision: ["end"],
+  clearingLimit: ["end"],
+  yellowSignalClause: ["end"],
+  stopAtLineDrive: ["end"],
+  trafficSignalDecision: ["end"],
   specialSignalPhase: ["end"],
   priorityLevel: ["end"],
   priorityJunction: ["end"],
@@ -323,7 +333,7 @@ export const SLOTS = {
     "rearTraffic",
     "parking",
   ],
-  adjust: ["streetHazards", "end"],
+  adjust: ["streetHazards", "end", "finish"],
   brakeDetour: ["end"],
   sim: [
     "beforeRunner",
@@ -382,6 +392,7 @@ export const SLOTS = {
     "beforeBusLanes",
     "afterBusLanes",
     "beforeRightOnRed",
+    "amberDecision",
     "afterGlare",
     "beforeRunner",
     "restrictions",
@@ -394,6 +405,7 @@ export const SLOTS = {
     "afterParking",
   ],
   metric: [
+    "afterRedLights",
     "headlights",
     "afterHeadlights",
     "pxo",
@@ -421,7 +433,7 @@ export const SLOTS = {
   trafficActors: ["end"],
   trafficLane: ["beforeLaneMoves", "laneMoves", "late"],
   trafficYield: ["end"],
-  trafficSpeed: ["beforeControl", "limit", "following", "ordinary", "end"],
+  trafficSpeed: ["beforeControl", "clearing", "limit", "following", "ordinary", "end"],
   trafficParkingReach: ["end"],
   trafficTurnBlocked: ["end"],
   visionRange: ["end"],
@@ -440,9 +452,10 @@ export const SLOTS = {
   senseSignalControl: ["end"],
   controlEvent: ["end"],
   trafficReleaseControl: ["end"],
-  intersectionModelFields: ["beforeCrossTraffic"],
+  intersectionModelFields: ["beforeCrossTraffic", "afterCrossTraffic"],
   redLightEvent: ["end"],
-  intersectionFields: ["afterRightTurn"],
+  intersectionFields: ["beforeLine", "afterRightTurn"],
+  signalEntryFields: ["end"],
   followingPolicy: ["end"],
   handlesPedestrian: ["end"],
   returnClause: ["end"],
@@ -509,6 +522,12 @@ const CONTROL_DIRECTION = hooks("controlDirection");
 const JUNCTION_PLAN = hooks("junctionPlan");
 export const controlDirection = (world, vehicle, edgeId) => firstHookResult(CONTROL_DIRECTION, world, vehicle, edgeId);
 export const junctionPlan = (intersection) => firstHookResult(JUNCTION_PLAN, intersection);
+
+const SIGNAL_DECISIONS = hooks("signalDecision");
+export const signalDecision = (intersection) => firstHookResult(SIGNAL_DECISIONS, intersection);
+const STOP_AT_LINE_DRIVE = hooks("stopAtLineDrive");
+export const stopAtLineDrive = (snap, candidate) =>
+  STOP_AT_LINE_DRIVE.some((keepDriving) => keepDriving(snap, candidate));
 
 const PHASE_BANS_RED_TURNS = hooks("phaseBansRedTurns");
 export const phaseBansRedTurns = (inter) => PHASE_BANS_RED_TURNS.some((blocked) => blocked(inter));

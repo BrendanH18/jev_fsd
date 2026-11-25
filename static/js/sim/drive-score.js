@@ -41,7 +41,6 @@ export class DriveScore {
     this.route = route;
     this.baseline = { ...world.violations };
     this.lastCounters = { ...world.violations };
-    this.amberLightsSeen = false;
     this.elapsed = 0;
     this.distance = 0;
     this.moving = 0;
@@ -224,7 +223,6 @@ export class DriveScore {
         this.incident("plow_close", "Followed a snow plow too closely", { plow: plow.plow.id });
       }
     }
-    if (world.amberLightsSeen) this.amberLightsSeen = true;
     if (world.busLanesSeen) this.busLanesSeen = true;
     observeFeatureCoach(this, world);
     for (const ev of world.events || []) {
@@ -254,11 +252,6 @@ export class DriveScore {
         this.plowCutIns++;
         this.incident("plow_cut_in", "Moved back in too close in front of a snow plow", { plow: ev.plow });
       }
-      if (ev.type === "amber_light")
-        this.incident(
-          "amber_light",
-          ev.reason === "sped_up" ? "Sped up to beat an amber light" : "Passed amber when a safe stop was possible",
-        );
       if (ev.type === "close_pass") {
         this.closePasses++;
         this.incident("close_pass", "Passed a cyclist closer than the minimum passing distance", {
@@ -425,8 +418,12 @@ export class DriveScore {
     }
   }
 
+  counterDelta(name) {
+    return Math.max(0, (this.lastCounters[name] || 0) - (this.baseline[name] || 0));
+  }
+
   snapshot() {
-    const delta = (k) => Math.max(0, (this.lastCounters[k] || 0) - (this.baseline[k] || 0));
+    const delta = (k) => this.counterDelta(k);
     const collisions = delta("collisions"),
       atFault = delta("collisions_at_fault");
     const reds = delta("red_lights_run"),
@@ -443,11 +440,12 @@ export class DriveScore {
         this.blindSpeeding * 1.2 -
         this.plowClose * 0.6,
     );
-    const afterAmber = featureCoachDeduct("beforeLegality", this, 100 - delta("amber_lights_run") * 25);
+    const initialLegality = featureCoachDeduct("firstLegality", this, 100);
+    const beforeLegality = featureCoachDeduct("beforeLegality", this, initialLegality);
     const afterSpeed = featureCoachDeduct(
       "afterSpeed",
       this,
-      afterAmber - delta("bus_lane_driving") * 0.5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2,
+      beforeLegality - delta("bus_lane_driving") * 0.5 - reds * 35 - stops * 20 - yields * 25 - this.speeding * 1.2,
     );
     const legality = featureCoachDeduct(
       "legality",
@@ -472,7 +470,7 @@ export class DriveScore {
     );
     // A collision or a red-light violation cannot be averaged into an excellent drive.
     if (collisions) score = Math.min(score, 59);
-    if (reds || yields || delta("amber_lights_run") || featureCoachCap(this)) score = Math.min(score, 69);
+    if (reds || yields || featureCoachCap(this)) score = Math.min(score, 69);
     const qualified = this.distance >= 100 && this.elapsed >= 10;
     const grade = !qualified
       ? "—"
@@ -488,10 +486,7 @@ export class DriveScore {
     const tips = [];
     if (collisions)
       tips.push("Leave more stopping room and anticipate crossing traffic. Collision fault is reported separately.");
-    if (delta("amber_lights_run"))
-      tips.push(
-        "When the light turns amber, stop if you can do so safely. If you are too close to stop safely, continue carefully without speeding up; keep yielding to people and traffic, and never enter on red.",
-      );
+    featureCoachTips("beforeGeneralJunction", this, tips);
     if (reds || stops || yields) tips.push("Slow early for junctions. Stop fully and check crossings before entering.");
     if (this.zoneSpeeding > 1)
       tips.push(
@@ -621,7 +616,7 @@ export class DriveScore {
         : {}),
       ...(this.cyclists ? { close_passes: this.closePasses, cyclist_cutoffs: this.cyclistCutoffs } : {}),
       ...(this.busLanesSeen ? { bus_lane_driving: delta("bus_lane_driving") } : {}),
-      ...(this.amberLightsSeen ? { amber_lights_run: delta("amber_lights_run") } : {}),
+      ...featureCoachReport("beforeFeatureSummary", this, round),
       ...featureCoachReport("end", this, round),
       ...(this.hazards ? { blind_spot_speeding_s: round(this.blindSpeeding), hidden_cutoffs: this.hiddenCutoffs } : {}),
       ...(this.parking || this.kerbStrikes

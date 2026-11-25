@@ -6,7 +6,7 @@ const COUNTER_AUDITS = FEATURE_METRICS.filter(({ traceType }) => !traceType);
 const countersAt = (slot) => COUNTER_AUDITS.filter(({ at }) => at === slot).map(auditPair);
 const THRESHOLD_AUDITS = FEATURES.filter(({ metric }) => metric?.traceType);
 const CORE_AUDITS = {
-  amber_lights_run: "Ignored a safe amber stop or sped up to beat the light",
+  ...Object.fromEntries(countersAt("afterRedLights")),
   collisions: "Collision",
   red_lights_run: "Red light",
   stop_signs_run: "Missed stop",
@@ -25,7 +25,7 @@ const AUDITS = [
   ...Object.entries(CORE_AUDITS),
   ...countersAt("beforeRunner"),
   ...COUNTER_AUDITS.filter(
-    ({ at }) => !["beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
+    ({ at }) => !["afterRedLights", "beforeRunner", "afterCalming", "afterRestrictions", "guards", "pxo", "turns"].includes(at),
   ).map(auditPair),
 ];
 export const MAX_TRACE_DECISIONS = 600;

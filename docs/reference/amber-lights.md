@@ -1,6 +1,7 @@
 # Amber-light decisions
 
-`sim/amber.js` provides `amberStoppingDistance` and `observeAmber` for opt-in
+The [feature registry](../feature-interface.md) record in `sim/features/amber.js` owns the
+option, decision hooks and auditing. `sim/amber.js` provides `amberStoppingDistance` and `observeAmber` for opt-in
 `World.amberLights`. Free drives enable it unless `?amberlights=0`; only the paired
 **Room to stop** and **Keep going safely** challenges enable it in the lab. Other challenges
 and seeded benchmarks retain their existing amber handling and metric keys.

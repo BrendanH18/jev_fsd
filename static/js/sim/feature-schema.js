@@ -3,6 +3,7 @@ import { CATEGORIES } from "../lab/examiner-categories.js";
 // The coach dispatch and its validation use the same stages.
 export const COACH_SLOTS = {
   tips: [
+    "beforeGeneralJunction",
     "afterSpeed",
     "afterBlind",
     "afterMerge",
@@ -11,9 +12,9 @@ export const COACH_SLOTS = {
     "afterFollowing",
     "afterBusLanes",
   ],
-  reports: ["afterSpeed", "afterFlagger", "afterBrakes", "end"],
+  reports: ["afterSpeed", "afterFlagger", "afterBrakes", "beforeFeatureSummary", "end"],
   guidance: ["afterDirection", "afterBlind", "beforeSample", "afterSample"],
-  deductions: ["safety", "beforeLegality", "afterSpeed", "legality", "comfort", "post"],
+  deductions: ["safety", "firstLegality", "beforeLegality", "afterSpeed", "legality", "comfort", "post"],
 };
 
 const WORLD_FIELDS = ["property", "seen", "calls"];
@@ -119,7 +120,7 @@ function coachProblem(coach, seen) {
         const problem = coachEntryProblem(field, entry);
         if (problem) return problem;
       }
-    } else if (field === "seen" || field === "cap") {
+    } else if (field === "seen" || field === "cap" || field === "capDelta") {
       if (!fieldName(value)) return `coach.${field} must be a counter or flag name`;
       if (field === "seen" && !seen) return "coach.seen requires a World seen flag";
     } else if (field === "events") {

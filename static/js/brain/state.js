@@ -10,7 +10,7 @@ import { FOLLOW_M } from "../sim/emergency.js";
 import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
 import { STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { isCyclistPass } from "../sim/cyclist-pass.js";
-import { extraRedTurn, featureMotion, hooks, junctionPlan } from "../sim/features/index.js";
+import { extraRedTurn, featureMotion, signalDecision, hooks, junctionPlan } from "../sim/features/index.js";
 import { flagText } from "./tracks.js";
 
 // The registered features' decision state and wording (sim/features/index.js), each where that feature's
@@ -19,6 +19,8 @@ const INTERSECTION_MODEL_FIELDS = hooks("intersectionModelFields", "beforeCrossT
 const PASS_BLOCK_REASON = hooks("passBlockReason");
 const GREEN_SIGNAL_CLAUSES = hooks("greenSignalClause");
 const SIGNAL_CLAUSES = hooks("signalClause");
+const YELLOW_SIGNAL_CLAUSES = hooks("yellowSignalClause");
+const AFTER_CROSS_TRAFFIC = hooks("intersectionModelFields", "afterCrossTraffic");
 const STATE = {
   beforeMerge: hooks("state", "beforeMerge"),
   signal: hooks("state", "signal"),
@@ -208,13 +210,7 @@ export function toJevState(snap, candidates, meta, style = DEFAULT_STYLE) {
         ? { roundabout: true, ring_traffic: i.cross_traffic_moving }
         : { cross_traffic_moving: i.cross_traffic_moving }),
     };
-    if (i.amber)
-      state.intersection.amber = {
-        stop: i.amber.stop,
-        speed_at_observation_mps: r1(i.amber.speed_mps),
-        distance_at_observation_m: r1(i.amber.distance_m),
-        stopping_distance_m: r1(i.amber.stopping_distance_m),
-      };
+    for (const add of AFTER_CROSS_TRAFFIC) Object.assign(state.intersection, add(i));
     if (i.control === "uncontrolled") state.intersection.right_of_way = RIGHT_OF_WAY[i.rule];
     if (
       (i.control === "signal" || i.control === "stop" || i.control === "uncontrolled") &&
@@ -678,11 +674,8 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
       );
     } else if (i.signal === "yellow")
       out.push(
-        i.amber
-          ? i.amber.stop
-            ? `The signal ${m} m ahead is yellow. A safe stop was possible when amber was first observed: stop before the line and wait for green.`
-            : `The signal ${m} m ahead is yellow. The car was too close for a safe stop when amber was first observed: continue carefully if the path is clear, without speeding up above ${r1(i.amber.speed_mps)} m/s. Amber never overrides pedestrians, oncoming traffic or a blocked exit; red does not grant a new entry.`
-          : `The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`,
+        firstOf(YELLOW_SIGNAL_CLAUSES, snap, m) ??
+          `The signal ${m} m ahead is yellow: stop before the line if that is comfortable, otherwise clear the intersection.`,
       );
     else
       out.push(
@@ -996,7 +989,7 @@ function advanceClause(i) {
       ? "A green left arrow shows: the car's left turn is protected, and oncoming traffic is held on red."
       : `A green left arrow shows, for left turns only. The car ${way}, so its light is red: do not go with the cars turning left beside it, and wait for its own green.`;
   return left
-    ? i.amber
+    ? signalDecision(i)
       ? "The left arrow has turned yellow: the protected turn is ending. Follow the amber stop decision above; once the arrow goes out, yield to oncoming traffic."
       : "The left arrow has turned yellow: the protected turn is ending. Stop before the line if that is comfortable; once the arrow goes out, oncoming traffic has the green and the car must yield to it."
     : `The left arrow beside the car is turning yellow, but it is for left turns only. The car ${way}, and its light is still red.`;

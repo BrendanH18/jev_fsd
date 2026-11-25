@@ -343,7 +343,6 @@ const CORE_FAIL_CATEGORY = {
   stuck: "other",
   collision: "space",
   "red light": "right_of_way",
-  "failed to stop safely for amber": "right_of_way",
   "stop sign": "right_of_way",
   "failed to yield": "right_of_way",
   "off road": "steering",

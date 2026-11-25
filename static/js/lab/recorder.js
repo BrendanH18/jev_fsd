@@ -141,7 +141,6 @@ export class DriveRecorder {
       [
         "collision",
         "red_light",
-        "amber_light",
         "stop_sign",
         "failed_to_yield",
         "merged_out_of_turn",

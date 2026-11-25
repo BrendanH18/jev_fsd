@@ -1,10 +1,11 @@
-import { featureDecisionFields, redTurnAllowed, firstHookResult, hooks } from "../sim/features/index.js";
+import { featureDecisionFields, stopAtLineDrive, firstHookResult, hooks } from "../sim/features/index.js";
 
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
 const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
 const AFTER_PASSING = hooks("cautious", "afterPassing");
 const CAUTIOUS = hooks("cautious");
 const BEFORE_AMBER = hooks("cautious", "beforeAmber");
+const SIGNAL_STOP = hooks("cautious", "signalStop");
 const AFTER_AMBER = hooks("cautious", "afterAmber");
 const FEATURE_STOP = hooks("cautiousStop");
 const FEATURE_DRIVE = hooks("cautiousDrive");
@@ -37,8 +38,6 @@ export class CautiousAgent {
   decideSync(snap, offered) {
     // (the autopilot brakes without asking it when nothing unflagged is left: brain/brain.js)
     const eligible = offered.filter((c) => !c.flagged);
-    const i = snap.intersection;
-    const amberStop = i?.amber?.stop && !redTurnAllowed(i);
     // Shared sensing and candidate safety enforce flashing-red stops and amber caution/yields.
     // A legal left on red uses the shared target: zero until stopped and clear.
     const target = FEATURE_STOP.some((shouldStop) => shouldStop(snap))
@@ -64,7 +63,7 @@ export class CautiousAgent {
       firstHookResult(AFTER_PASSING, snap, eligible, target) ||
       firstHookResult(CAUTIOUS, snap, eligible, target) ||
       firstHookResult(BEFORE_AMBER, snap, eligible, target) ||
-      (amberStop && eligible.find((c) => c.id === "stop_at_line")) ||
+      firstHookResult(SIGNAL_STOP, snap, eligible, target) ||
       firstHookResult(AFTER_AMBER, snap, eligible, target) ||
       bestCandidate(eligible, target);
     // (pulling over stops on its own, at the side of the road: braking now would stop in the lane; and
@@ -72,7 +71,7 @@ export class CautiousAgent {
     return {
       ...featureDecisionFields(snap),
       motion:
-        !(amberStop && candidate?.id === "stop_at_line") &&
+        !stopAtLineDrive(snap, candidate) &&
         candidate?.sim.end_speed < 0.3 &&
         !["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id) &&
         !FEATURE_DRIVE.some((drive) => drive(candidate, snap))

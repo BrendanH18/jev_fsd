@@ -105,7 +105,7 @@ export class DriveMetrics {
       collisions: v.collisions,
       at_fault: v.collisions_at_fault,
       red_lights: v.red_lights_run,
-      ...(world.amberLightsSeen ? { amber_lights_run: v.amber_lights_run || 0 } : {}),
+      ...featureMetrics(world, v, "afterRedLights"),
       stop_signs: v.stop_signs_run,
       failed_to_yield: v.failed_to_yield || 0,
       // (only for a drive a snow plow worked in: sim/snow-plow.js)
@@ -173,7 +173,7 @@ export function failures(m) {
   else if (!m.arrived) f.push(m.deadlocks ? "stuck" : "timeout");
   if (m.collisions) f.push("collision");
   if (m.red_lights) f.push("red light");
-  if (m.amber_lights_run) f.push("failed to stop safely for amber");
+  f.push(...featureFailures(m, "afterRedLights"));
   if (m.stop_signs) f.push("stop sign");
   if (m.failed_to_yield) f.push("failed to yield");
   if (m.off_road_s >= 1) f.push("off road");
