@@ -8,6 +8,7 @@ import { agentAvailable, agentDefinition } from "../static/js/brain/registry.js"
 import { MapData } from "../static/js/map/mapdata.js";
 import { CHALLENGES } from "../static/js/lab/challenges.js";
 import { setupChallenge } from "../static/js/lab/evaluation.js";
+import { stepWorld } from "../static/js/sim/step.js";
 
 globalThis.document = { querySelector: () => null };
 let checks = 0;
@@ -318,12 +319,19 @@ await test("Decision diagnostics identify the applied driver and fallback paths 
   await fire(autopilot);
   assert.equal(autopilot.lastDecision.decidedBy, "local");
 });
-await test("A decision observer failure propagates without applying a second decision", async () => {
-  const { autopilot, world } = makeDrive(valid);
+await test("A decision observer failure reaches the next live step and also rejects in lockstep", async () => {
+  const ctx = makeDrive(valid);
+  const { autopilot, world } = ctx;
   autopilot.onDecision = () => {
+    autopilot.bumpEpoch();
     throw new Error("observer failed");
   };
-  await assert.rejects(fire(autopilot), /observer failed/);
+  stepWorld(ctx, 1 / 60, 0);
+  await new Promise((resolve) => setImmediate(resolve));
+  const t = world.t;
+  assert.throws(() => stepWorld(ctx, 1 / 60, t * 1000), /observer failed/);
+  assert.equal(world.t, t);
+  await assert.rejects(autopilot.firing, /observer failed/);
   assert.equal(autopilot.totals.decisions, 1);
   assert.equal(autopilot.inFlight, null);
   assert.equal(world.violations.fallbacks, 0);

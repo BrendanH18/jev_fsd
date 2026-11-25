@@ -17,7 +17,8 @@ import { pxoPedestrian } from "./pxo.js";
 
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { sidewalkOffset } from "../map/streets.js";
-import { isScramble, pedPhase } from "./signals.js";
+import { pedPhase } from "./signals.js";
+import { alternateSignal, hooks } from "./features/index.js";
 import { officerWalk } from "./traffic-officer.js";
 import { rng } from "../common.js";
 import { CROSS_AHEAD_M, redsOn } from "./school-bus.js";
@@ -26,6 +27,7 @@ import { obbOverlap } from "./collision.js";
 import { segmentHitsBox } from "./crosswalk.js";
 
 export const PEDESTRIANS = 60;
+const DIAGONAL_CROSSINGS = hooks("diagonalCrossing");
 export const PED = { kind: "pedestrian", length: 0.5, width: 0.6, rearOverhang: 0.25 }; // footprint for collisions
 // Part-way across, held up this long by a vehicle standing just short of their way (one stopped for them,
 // its bumper at their line, say), someone walks round its nearer end, ROUND_CLEAR_M clear of it.
@@ -398,7 +400,12 @@ export class Crowd {
       }
     // at a scramble crossing, now and then straight across the junction to the farthest corner, on the
     // all-walk (only there is anything drawn for it)
-    if (info.junction && isScramble(info.inter) && others.length >= 2 && this.random() < DIAGONAL_P) {
+    if (
+      info.junction &&
+      DIAGONAL_CROSSINGS.some((allows) => allows(info.inter)) &&
+      others.length >= 2 &&
+      this.random() < DIAGONAL_P
+    ) {
       let far = null;
       for (const l of others)
         for (const sd of [1, -1]) {
@@ -636,7 +643,7 @@ export class Crowd {
     if (
       info.inter &&
       cross.leg.group &&
-      !this.world.outages?.isDark(info.inter.id) &&
+      alternateSignal(this.world, info.inter.id) !== "dark" &&
       !flashing(info.inter, this.world)
     ) {
       // walk with the parallel traffic, and only step off on the walk signal
@@ -727,7 +734,8 @@ export function kerbConflict(pts, cum, sFrom, sTo, crowd, peds, t, within) {
     const c = wp?.cross;
     if (!c || c.jaywalk || dist([ped.x, ped.y], c.from) > KERB_M) continue;
     const info = crowd.legsAt.get(c.node);
-    if (!info?.inter || !c.leg?.group || crowd.world?.outages?.isDark(info.inter.id)) continue;
+    if (!info?.inter || !c.leg?.group || (crowd.world && alternateSignal(crowd.world, info.inter.id) === "dark"))
+      continue;
     const group = c.leg.group === "A" ? "B" : "A";
     // (a police officer directing traffic there: they walk with the axis waved, sim/traffic-officer.js)
     const officer = crowd.world?.officers?.list.length ? officerWalk(crowd.world, info.inter.id, group) : null;

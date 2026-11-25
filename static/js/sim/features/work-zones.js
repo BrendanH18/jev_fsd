@@ -267,7 +267,8 @@ export default {
     read: workZoneNotice,
     style: (line) => (line.stop ? "safety" : ""),
   },
-  obstacle: { test: isWorkZone, traffic: true, label: "work zone" },
+  obstacle: { test: isWorkZone, traffic: true },
+  standingVehicleLabel: (o) => (isWorkZone(o) ? "work zone" : null),
   trafficSpawnBlocked: (world, x, y) => world.workZones?.covers(x, y),
   trafficCorridor(world, vehicle, path, front) {
     const wz = workZoneAhead(world, path, front);

@@ -24,6 +24,7 @@ export default {
     ],
   },
   phaseBansRedTurns: isScramble,
+  diagonalCrossing: isScramble,
   redLightEvent(event, inter) {
     if (isScramble(inter)) event.scramble = true;
   },

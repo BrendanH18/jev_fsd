@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { BUS, HERITAGE_STREETCAR, Vehicle } from "../static/js/sim/vehicle.js";
 globalThis.document = { querySelector: () => null };
 const S = await import("../static/js/sim/signals.js");
-const { Outages, controlAt, darkControl } = await import("../static/js/sim/outage.js");
+const { Outages, darkControl } = await import("../static/js/sim/outage.js");
+const { controlAt } = await import("../static/js/sim/features/index.js");
 const { flashControl, flashMain, setNightFlash } = await import("../static/js/sim/night-flash.js");
 const { approachTo } = await import("../static/js/sim/priority.js");
 const { busLaneActive, legalBusLane, reservedLane, routeBusLane } = await import("../static/js/sim/bus-lanes.js");
@@ -172,7 +173,9 @@ test("Return a flashing side street to its two-way stop after power is restored"
   assert.equal(controlAt(world, ctl, "side").all_way, true);
   assert.equal(world.outages.since("signal"), 10);
   world.outages.restore("signal");
-  assert.equal(controlAt(world, ctl, "side").night_flash, true);
+  const restored = controlAt(world, ctl, "side");
+  assert.equal(restored.night_flash, true);
+  assert.equal(restored.all_way, false);
   assert.equal(world.outages.since("signal"), null);
 });
 

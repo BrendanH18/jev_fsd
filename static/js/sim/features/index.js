@@ -110,6 +110,7 @@
 //   intersectionModelFields(intersection) decision fields before cross-traffic data
 //   controlReplace(world, control, edgeId) replacement control, or the original to prevent later overrides
 //   alternateSignal(world, id)         temporary signal state or null
+//   diagonalCrossing(intersection)     true if pedestrians may choose the opposite corner
 //   senseSignalControl(world, routeControl, signal) { control, fields } for a visible replacement
 //   controlEvent(control)             extra fields on an audited stop or all-way yield event
 //   trafficReleaseControl(world, n, edge, control, memory, distance) true when traffic clears a replaced stop
@@ -416,6 +417,7 @@ export const SLOTS = {
   phaseBansRedTurns: ["end"],
   controlReplace: ["end"],
   alternateSignal: ["end"],
+  diagonalCrossing: ["end"],
   senseSignalControl: ["end"],
   controlEvent: ["end"],
   trafficReleaseControl: ["end"],

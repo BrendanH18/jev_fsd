@@ -367,7 +367,13 @@ export class Autopilot {
     }
     const flags = hazardFlags(snap);
     const interval = flags.length ? INTERVAL_HAZARD_MS : INTERVAL_CLEAR_MS;
-    if (!this.inFlight && now - this.lastStart >= interval) this.firing = this.fire(snap, now, flags);
+    if (!this.inFlight && now - this.lastStart >= interval) {
+      this.firing = this.fire(snap, now, flags);
+      // The live loop has no await. Hand its next step the error and keep firing rejectable for lockstep.
+      this.firing.catch((error) => {
+        this.stepFailure = { error };
+      });
+    }
   }
 
   async fire(snap, now, flags) {
