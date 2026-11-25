@@ -1,4 +1,4 @@
-import { flashing } from "./night-flash.js";
+import { specialSignalPhase } from "./features/index.js";
 import { pxoPedestrian } from "./pxo.js";
 // Pedestrians walk sidewalks and cross at junctions; drivers yield to crossings in their path.
 // Signal crossings only during walk; unmarked corners when no vehicle arrives within a few seconds.
@@ -644,7 +644,7 @@ export class Crowd {
       info.inter &&
       cross.leg.group &&
       alternateSignal(this.world, info.inter.id) !== "dark" &&
-      !flashing(info.inter, this.world)
+      !specialSignalPhase(info.inter, this.world)
     ) {
       // walk with the parallel traffic, and only step off on the walk signal
       return pedPhase(info.inter, cross.leg.group === "A" ? "B" : "A", t) === "walk";

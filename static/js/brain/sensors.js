@@ -1,5 +1,4 @@
 import { observeAmber } from "../sim/amber.js";
-import { flashControl, flashState, NIGHT_CAUTION_MPS } from "../sim/night-flash.js";
 import { leftOnRedExit } from "../sim/left-on-red.js";
 // What the car "senses" each decision: everything below is computed by code from the world and
 // handed to the brains. Distances in meters, speeds in m/s, ego frame: ahead (+forward), right (+).
@@ -106,6 +105,7 @@ import {
 } from "../sim/lane-closure.js";
 import {
   alternateSignal,
+  specialSignalPhase,
   controlDirection,
   firstHookResult,
   phaseBansRedTurns,
@@ -190,6 +190,9 @@ export const featureDetour = (snap) => {
 };
 export const featurePassingDetour = (snap) => firstHookResult(PASSING_DETOURS, snap);
 const CONTROL_SENSE = hooks("controlSense");
+const VISIBLE_SIGNAL_POLICY = hooks("visibleSignalPolicy");
+const PRIORITY_JUNCTION = hooks("priorityJunction");
+const PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside");
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -451,11 +454,11 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
       !directive && phaseOverride && world.visibility.canSee(ego, ...junction)
         ? firstHookResult(SENSE_SIGNAL_CONTROL, world, c, phaseOverride)
         : null;
-    const seenFlash =
-      !directive && inter && junction && world.nightFlash && world.visibility.canSee(ego, ...junction)
-        ? flashState(inter, c.control.group, world)
+    const policy =
+      !directive && inter && junction && world.visibility.canSee(ego, ...junction)
+        ? firstHookResult(VISIBLE_SIGNAL_POLICY, world, c, inter)
         : null;
-    const control = replacement?.control ?? (seenFlash ? flashControl(world, c.control, c.edge) : c.control);
+    const control = replacement?.control ?? policy?.control ?? c.control;
     const leftTurn =
       (control.type === "signal" || control.type === "stop" || control.type === "uncontrolled") &&
       (c.turn === "left" || c.turn === "uturn") &&
@@ -477,9 +480,9 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
       inter && !replacement && junction && world.visibility.canSee(ego, ...junction)
         ? approachPhase(inter, c.edge, world.t)
         : null;
-    if (seenFlash === "flashing_amber") snap.limit = Math.min(snap.limit, NIGHT_CAUTION_MPS);
+    if (policy?.speed !== undefined) snap.limit = Math.min(snap.limit, policy.speed);
     const signal =
-      seenFlash ||
+      policy?.signal ||
       (control.type === "signal" ? (shows ? movementSignal(shows, c.turn || "straight") : "unknown") : null);
     const advance =
       !shows || directive
@@ -504,11 +507,11 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
           entered ||
           signal === "green" ||
           signal === "yellow" ||
-          signal === "flashing_amber";
+          policy?.allowsTurn;
     // Amber gives way only to traffic already crossing; red reuses two-way-stop gap and sight checks.
     const giveWay =
-      seenFlash === "flashing_amber"
-        ? giveWayAt(world, { ...c, control: { ...control, type: "uncontrolled", rule: "major" } }, frontS)
+      policy?.yieldControl
+        ? giveWayAt(world, { ...c, control: policy.yieldControl }, frontS)
         : (control.type === "uncontrolled" && control.rule !== "major") ||
             (control.type === "stop" && !control.all_way && stopCompleted)
           ? giveWayAt(world, { ...c, control }, frontS)
@@ -537,7 +540,7 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
     )
       continue;
     const signed = control.type === "signal" && !directive ? firstHookResult(ROUTE_RED_BANS, world, c) : null;
-    const phaseContext = { control, replacement, seenFlash };
+    const phaseContext = { control, replacement, policy };
     snap.intersection = {
       id: control.id,
       control: control.type,
@@ -587,7 +590,7 @@ function senseRouteControls(world, snap, p, frontS, visible, visibleNpcs) {
       give_way: giveWay,
       roundabout: rb ? { exit: snap.nav && snap.nav.next_turn === "roundabout" ? snap.nav.exit : null } : null,
       cross_traffic_moving: crossTraffic,
-      seconds_to_green: c.secondsToGreen && !replacement && !seenFlash && !directive ? c.secondsToGreen(world.t) : null,
+      seconds_to_green: c.secondsToGreen && !replacement && !policy && !directive ? c.secondsToGreen(world.t) : null,
     };
     break;
   }
@@ -1098,7 +1101,7 @@ function oncomingYield(world, c, frontS, look = true) {
       ctl?.type === "signal" &&
       ctl.id === c.control.id &&
       !alternateSignal(world, ctl.id) &&
-      !flashState(world.map.intersections.get(ctl.id), ctl.group, world) &&
+      !specialSignalPhase(world.map.intersections.get(ctl.id), world) &&
       controlDirection(world, n, lane.edge) !== "stop" &&
       movementSignal(approachPhase(world.map.intersections.get(ctl.id), lane.edge, world.t), "straight") === "green";
     if (n.v < 1 && !(n.v > 0.05 && n.a > 0.3) && !starting) continue;
@@ -2178,10 +2181,10 @@ function alongApproach(map, e, back) {
 // Only vehicles it can see count, and only where they are: not where they plan to go.
 function giveWayAt(world, c, frontS) {
   const { ego, route, map } = world;
-  const edge = map.edges.get(c.edge),
-    flashInter = c.control.night_flash ? map.intersections.get(c.control.junction) : null;
-  const node = flashInter?.id ?? edge.to,
-    centre = flashInter ? [flashInter.x, flashInter.y] : c.junction;
+  const edge = map.edges.get(c.edge);
+  const inter = firstHookResult(PRIORITY_JUNCTION, world, c.control);
+  const node = inter?.id ?? edge.to,
+    centre = inter ? [inter.x, inter.y] : c.junction;
   const rule = c.control.type === "stop" ? "stop" : c.control.rule;
   const sCentre = c.sJunction ?? c.sRoute + 8;
   const half = map.crossingHalfWidth(c.edge);
@@ -2214,11 +2217,7 @@ function giveWayAt(world, c, frontS) {
       d = Math.hypot(dx, dy);
     if (d > ONCOMING_LOOK_M || !world.sees(ego, n)) continue;
     const rel = wrap(n.psi - inward);
-    if (rule === "major" && world.nightFlash) {
-      const inter = map.intersections.get(c.control.id),
-        a = inter ? approachTo(map, n, inter.id, false) : null;
-      if (a && a.to_node_m > map.crossingHalfWidth(a.edge) + 0.1) continue;
-    }
+    if (PRIORITY_TRAFFIC_OUTSIDE.some((outside) => outside(world, c.control, n, rule, false))) continue;
     if (d < JUNCTION_BOX_M) {
       // moving across the junction (not coming straight on toward the car, and heading the car's way
       // out of it only short of the centre: one just ahead of it, gone the same way, is a leader)
@@ -2248,7 +2247,7 @@ function giveWayAt(world, c, frontS) {
   const atPeek = (frontS >= peekS - PEEK_AT_M && Math.abs(ego.v) < 0.2) || world.egoPeek === c.control.id;
   if (!out.wait_for && c.sRoute - frontS < VIEW_CHECK_M) {
     out.view_clear = true;
-    for (const id of flashInter ? flashInter.approaches.map((a) => a.edge) : map.inn.get(node) || []) {
+    for (const id of inter ? inter.approaches.map((a) => a.edge) : map.inn.get(node) || []) {
       if (!outranks(map, id, c.edge, world)) continue;
       const e = map.edges.get(id),
         far = JUNCTION_BOX_M / 2 + (e.limit || 13.9) * weather.speed * need;

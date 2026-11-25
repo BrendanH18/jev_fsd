@@ -1,6 +1,5 @@
 import { reserveSlot } from "./parking.js";
 import { observeAmber } from "./amber.js";
-import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
@@ -170,6 +169,9 @@ const TRAFFIC_BYPASS = hooks("trafficBypass"),
   APPROACH_TRAFFIC_SPEED = hooks("trafficSpeed", "beforeControl"),
   SIGNAL_PROCEED = hooks("trafficSignalProceed"),
   SIGNAL_HOLD = hooks("trafficSignalHold"),
+  SIGNAL_POLICY = hooks("trafficSignalPolicy"),
+  PRIORITY_JUNCTION = hooks("priorityJunction"),
+  PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside"),
   TRAFFIC_SPEED = hooks("trafficSpeed"),
   TRAFFIC_PULL_OUT = hooks("trafficPullOut");
 import {
@@ -1605,7 +1607,7 @@ export class NpcFleet {
       if (driverOverride?.leadSpeed) leadV = driverOverride.leadSpeed(leader, leadV);
       n.lead = gap < Infinity ? { gap, v: leadV, ...(isPlow(leader) ? { plow: true } : {}) } : null;
       let stopAt = null,
-        flashCap = Infinity,
+        controlCap = Infinity,
         amberCap = Infinity;
       const approachSpeed = featureTrafficSpeed(world, n, front, APPROACH_TRAFFIC_SPEED);
       // Entry-stop checks stop at the line; an amber clearing speed stays in
@@ -1639,9 +1641,10 @@ export class NpcFleet {
             approachPhase(this.map.intersections.get(e.control.id), e.id, world.t),
             after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight",
           );
-          if (st === "flashing_amber") {
-            flashCap = NIGHT_CAUTION_MPS;
-            if (this.boxBusy(n, e)) stopAt = Math.max(0, bumperToLine);
+          const policy = firstHookResult(SIGNAL_POLICY, this, n, e, st);
+          if (policy) {
+            controlCap = policy.speed;
+            if (policy.hold) stopAt = Math.max(0, bumperToLine);
           }
           const amber = world.amberLights
             ? observeAmber(
@@ -1956,7 +1959,7 @@ export class NpcFleet {
         isPlow(n) ? n.v0 : n.v0 * weather.speed,
         limit * (n.transit || n.school ? 0.95 : (driverOverride?.speedFactor ?? 1.05)) * weather.speed,
         vCurve,
-        flashCap,
+        controlCap,
         amberCap,
         approachSpeed,
         n.pull ? 5 : Infinity,
@@ -3619,16 +3622,11 @@ export class NpcFleet {
   }
 
   boxBusy(n, e) {
-    const inter =
-      this.world.nightFlash && e.control?.type === "signal" ? this.map.intersections.get(e.control.id) : null;
-    const night = inter && flashing(inter, this.world);
-    const node = night ? inter : this.map.nodes.get(e.to);
+    const node = firstHookResult(PRIORITY_JUNCTION, this.world, e.control, true) ?? this.map.nodes.get(e.to);
     if (!node) return false;
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n) continue;
-      // A side-street car waiting at its red (or peeking short of the roadway) is not in the box.
-      const a = night ? approachTo(this.map, o, inter.id) : null;
-      if (a && a.to_node_m > this.map.crossingHalfWidth(a.edge) + 0.1) continue;
+      if (PRIORITY_TRAFFIC_OUTSIDE.some((outside) => outside(this.world, e.control, o, null, true))) continue;
       if (Math.hypot(o.x - node.x, o.y - node.y) > BOX_M) continue;
       const diff = Math.abs(wrap(o.psi - n.psi));
       if (diff > Math.PI / 6 && diff < (Math.PI * 5) / 6) {

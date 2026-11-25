@@ -1,6 +1,8 @@
 # Overnight flashing signals
 
-`sim/night-flash.js` implements opt-in `World.nightFlash`, enabled in free drives unless
+The [feature registry](../feature-interface.md) record in `sim/features/night-flash.js`
+registers `World.nightFlash` and uses the signal policy in `sim/night-flash.js`.
+Free drives enable it unless
 `?nightflash=0` and in the `after-midnight` challenge (Halifax, Morris at Barrington, seed 39042).
 It requires a clock: 23:00 <= hour or hour < 05:00. Selection draws no randomness and uses the
 pack's existing `roadRank`: primary/secondary and links = 3, tertiary and links = 2, others = 1.

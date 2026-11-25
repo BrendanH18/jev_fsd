@@ -1,5 +1,4 @@
 import { observeAmber, AMBER_SPEED_SLACK_MPS } from "./amber.js";
-import { setNightFlash, flashState } from "./night-flash.js";
 import { leftOnRedAllowed } from "./left-on-red.js";
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
@@ -67,6 +66,7 @@ import {
   controlDirection,
   controlAt,
   alternateSignal,
+  specialSignalPhase,
   featureNeedsDay,
   featureNeedsUtcOffset,
   featureObstacle,
@@ -98,6 +98,7 @@ const CONTROL_AUDIT = hooks("controlAudit");
 const CONTROL_EVENT = hooks("controlEvent");
 const RED_LIGHT_EVENT = hooks("redLightEvent");
 const AUDIT_SIGNAL = hooks("auditSignal");
+const OBSERVE_CONTROL = hooks("observeControl");
 const RESET_CONTACT = hooks("resetContact");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
@@ -265,7 +266,6 @@ export class World {
       closures = 0,
       passCyclists = false,
       busLanes = false,
-      nightFlash = false,
       leftOnRed = false,
       amberLights = false,
       ...features
@@ -280,9 +280,6 @@ export class World {
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
-    this.nightFlash = !!nightFlash;
-    this.nightFlashSeen = false;
-    setNightFlash(this);
     this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
     this.t = 0;
     this.tick = 0;
@@ -466,8 +463,8 @@ export class World {
     const override = alternateSignal(this, intersectionId);
     if (override) return override;
     const inter = this.map.intersections.get(intersectionId);
-    const flash = flashState(inter, this.map.edges.get(edgeId)?.control?.group, this);
-    if (flash) return flash;
+    const special = specialSignalPhase(inter, this)?.[this.map.edges.get(edgeId)?.control?.group];
+    if (special) return special;
     if (!inter?.plan?.advance) return this.phase(intersectionId)[this.map.edges.get(edgeId)?.control?.group];
     return movementSignal(approachPhase(inter, edgeId, this.t), turn);
   }
@@ -728,13 +725,7 @@ export class World {
       // sensors measure it (a lane polyline's length differs from the centerline's on a bend), else
       // along the lane
       const past = rc ? frontS - rc.sRoute : road.s + FRONT - control.s_line;
-      if (
-        this.nightFlash &&
-        Math.abs(past) < 60 &&
-        (control.night_flash ||
-          (control.type === "signal" && flashState(this.map.intersections.get(control.id), control.group, this)))
-      )
-        this.nightFlashSeen = true;
+      for (const observe of OBSERVE_CONTROL) observe(this, control, past);
       const key = rc ? `${rc.edge}:${control.id}` : `${edge.id}`;
       const crossed = past >= 0;
       const entered = this.lastRoad?.edgeId === key && !this.lastRoad.crossed && crossed;

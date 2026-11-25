@@ -4,8 +4,8 @@ import { roadRank } from "../map/mapdata.js";
 // Simulator caution target, not a posted/statutory limit; grip and sight may require slower travel.
 export const NIGHT_CAUTION_MPS = 20 / 3.6;
 let activeWorld = null;
-export function setNightFlash(world) {
-  activeWorld = world?.nightFlash ? world : null;
+export function setNightFlash(world, enabled = world?.nightFlash) {
+  activeWorld = enabled ? world : null;
 }
 const selections = new WeakMap();
 export function flashMain(inter, map) {

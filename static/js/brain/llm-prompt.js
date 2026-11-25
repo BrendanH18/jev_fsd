@@ -28,8 +28,7 @@ const OPEN_CHECKS =
   'Every manoeuvre in `candidates` already passed a 3-second collision check against the objects the car can see, but not the road rules: one whose `outcome` begins "flagged:" broke a road rule in its 3-second prediction, and the outcome says which. Your job is to choose the one that best fits `driving_style` and `situation`; the drive is judged on what the car does. Unseen objects and later changes are still possible.';
 
 const systemPrompt = (CHECKED) => `
-Flashing amber means slow and proceed cautiously, yielding to pedestrians and vehicles already in the junction. Flashing red means a full stop, then yield to main-street traffic as at a two-way stop; neither is an advance green or a right-on-red decision.
-
+${promptLines("introduction")}
 ${promptLines("restrictions")}${promptLines("headlights")}You are the driving policy of a car in a city traffic simulator. Several times a second you receive what the car's sensors observe and the manoeuvres it can make next, and you choose one.
 
 ${CHECKED}

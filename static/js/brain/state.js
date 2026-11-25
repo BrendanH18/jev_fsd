@@ -18,6 +18,7 @@ import { flagText } from "./tracks.js";
 const INTERSECTION_MODEL_FIELDS = hooks("intersectionModelFields", "beforeCrossTraffic");
 const PASS_BLOCK_REASON = hooks("passBlockReason");
 const GREEN_SIGNAL_CLAUSES = hooks("greenSignalClause");
+const SIGNAL_CLAUSES = hooks("signalClause");
 const STATE = {
   beforeMerge: hooks("state", "beforeMerge"),
   signal: hooks("state", "signal"),
@@ -664,11 +665,9 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
   const atLine = i && i.bumper_to_line_m < STOP_ZONE_M;
   if (i && i.control === "signal") {
     const directive = junctionPlan(i);
+    const special = directive ? null : firstOf(SIGNAL_CLAUSES, snap, m, atLine);
     if (directive) out.push(directive.clause(m, atLine));
-    else if (i.signal === "flashing_amber")
-      out.push(
-        "Flashing amber: proceed cautiously at no more than 20 km/h, yielding to pedestrians and vehicles already in the junction.",
-      );
+    else if (special) out.push(special);
     else if ((i.clear_entered || i.bumper_to_line_m < -CLEARING_M) && i.signal !== "green")
       out.push(
         `The car is already inside the intersection and the signal has turned ${i.signal}: clear the intersection${i.oncoming ? " once oncoming traffic has passed" : ""}.`,
@@ -703,10 +702,6 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
     if (i.oncoming) out.push(oncomingClause(i));
   } else if (i && i.control === "stop") {
     const p = i.priority;
-    if (i.signal === "flashing_red")
-      out.push(
-        "Flashing red: make a full stop, then yield to the main street until clear. This is a two-way stop, not an all-way stop.",
-      );
     for (const clause of CLAUSE.stopStart) {
       const line = clause(snap, m);
       if (line) out.push(line);

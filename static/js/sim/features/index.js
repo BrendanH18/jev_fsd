@@ -166,6 +166,7 @@
 // reaches sim/npc.js, which loads this registry while that record is still loading
 // (scripts/test_feature_registry.mjs checks each record loads after it).
 import { featureRecordProblem, featureRegistryProblem, slotOf } from "../feature-schema.js";
+import { setSignalPhaseResolver } from "../signals.js";
 import balls from "./balls.js";
 import contraflow from "./contraflow.js";
 import collection from "./collection-truck.js";
@@ -191,7 +192,7 @@ import highBeams from "./high-beams.js";
 import redTurnSigns from "./red-turn-signs.js";
 import workZones from "./work-zones.js";
 import outages from "./outages.js";
-import { flashControl } from "../night-flash.js";
+import nightFlash from "./night-flash.js";
 import scrambles from "./scrambles.js";
 import runners from "./red-light-runner.js";
 
@@ -223,6 +224,7 @@ export const FEATURES = [
   scrambles,
   workZones,
   outages,
+  nightFlash,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -293,6 +295,14 @@ export const SLOTS = {
   controlDirection: ["end"],
   controlAudit: ["end"],
   auditSignal: ["end"],
+  observeControl: ["end"],
+  specialSignalPhase: ["end"],
+  priorityLevel: ["end"],
+  priorityJunction: ["end"],
+  priorityTrafficOutside: ["end"],
+  trafficSignalPolicy: ["end"],
+  visibleSignalPolicy: ["end"],
+  signalClause: ["end"],
   resetContact: ["end"],
   controlSense: ["end"],
   junctionPlan: ["end"],
@@ -360,6 +370,7 @@ export const SLOTS = {
   ],
   holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "parking"],
   prompt: [
+    "introduction",
     "headlights",
     "pedestrian",
     "beforeSchoolBus",
@@ -499,8 +510,10 @@ export const primaryDetour = (snap) => firstHookResult(PRIMARY_DETOURS, snap);
 
 const CONTROL_REPLACEMENTS = hooks("controlReplace");
 const SIGNAL_OVERRIDES = hooks("alternateSignal");
+const SPECIAL_SIGNAL_PHASE = hooks("specialSignalPhase");
+export const specialSignalPhase = (inter, world) => firstHookResult(SPECIAL_SIGNAL_PHASE, inter, world);
 export const controlAt = (world, control, edge) =>
-  firstHookResult(CONTROL_REPLACEMENTS, world, control, edge) ?? flashControl(world, control, edge);
+  firstHookResult(CONTROL_REPLACEMENTS, world, control, edge) ?? control;
 export const alternateSignal = (world, id) => firstHookResult(SIGNAL_OVERRIDES, world, id);
 
 // The records with field `name` at `slot` (for data fields such as `metric` and `prompt`).
@@ -622,3 +635,4 @@ export const FEATURE_SNAPSHOT_FIELDS = Object.assign({}, ...FEATURES.map((f) => 
 hooks.ready = true;
 for (const [out, name, slot] of hooks.pending || []) fillHooks(out, name, slot);
 hooks.pending = null;
+setSignalPhaseResolver(specialSignalPhase);

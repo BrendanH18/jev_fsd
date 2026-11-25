@@ -1,4 +1,3 @@
-import { nightFlashNotice } from "./sim/night-flash.js";
 import { npcHighBeam } from "./sim/high-beams.js";
 // Bootstrap: load the map, build the scene, wire the UI, run the loop.
 
@@ -1426,7 +1425,6 @@ export async function boot() {
     announcedBox = null,
     announcedAdvance = null,
     announcedClosure = null,
-    announcedNightFlash = null,
     announcedPlow = null,
     announcedPark = null,
     announcedHazard = null,
@@ -1769,13 +1767,6 @@ export async function boot() {
       hud.badge(closure.text, closure.stop ? "safety" : "", 2500);
     }
     if (!closure) announcedClosure = null;
-    // a signal ahead with its lights out: an all-way stop, said once each time the car's part changes
-    const nightNotice = nightFlashNotice(world);
-    if (nightNotice && nightNotice.key !== announcedNightFlash) {
-      announcedNightFlash = nightNotice.key;
-      hud.badge(nightNotice.text, "stop", 2500);
-    }
-    if (!nightNotice) announcedNightFlash = null;
     announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
     // a snow plow ahead: stay back of it, never pass it on the right, back in only well ahead of it
     const plowLine = plowNotice(world);

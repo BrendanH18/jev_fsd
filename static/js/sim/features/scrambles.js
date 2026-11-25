@@ -23,15 +23,15 @@ export default {
       },
     ],
   },
-  phaseBansRedTurns: isScramble,
+  phaseBansRedTurns: (inter) => isScramble(inter),
   diagonalCrossing: isScramble,
   redLightEvent(event, inter) {
     if (isScramble(inter)) event.scramble = true;
   },
   intersectionFields: {
     at: "afterRightTurn",
-    run(world, inter, { control, replacement, seenFlash }) {
-      if (control.type === "signal" && isScramble(inter) && !replacement && !seenFlash)
+    run(world, inter, { control, replacement, policy }) {
+      if (control.type === "signal" && isScramble(inter) && !replacement && !policy)
         return { scramble: { ...scrambleState(inter, world.t), right_on_red: false } };
       return null;
     },
