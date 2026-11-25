@@ -76,9 +76,7 @@ class DemoArtifactTests(unittest.TestCase):
         self.rejects_change("demo-data/results.json", change("format", "broken"), "unsupported results format")
         self.rejects_change("demo-data/results.json", change("maps", {"new": "Unknown"}), "outside the catalog")
         self.rejects_change("replays/jev-flagger.json", lambda _: "{}", "replay differs from source")
-        self.rejects_change(
-            "demo-data/results.json", lambda _: json.dumps({"format": "jev-results/1"}), "no map list"
-        )
+        self.rejects_change("demo-data/results.json", lambda _: json.dumps({"format": "jev-results/1"}), "no map list")
         stale = self.output / "replays" / "deleted-from-source.json"
         stale.write_text("{}", encoding="utf-8")
         try:
