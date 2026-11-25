@@ -10,6 +10,7 @@
 // streetcars and the driven car all do; cyclists, who keep right of the queue, and emergency vehicles
 // with their sirens on do not. Junctions without a signal, and roundabouts, are left out.
 
+import { pathLine } from "./traffic-geometry.js";
 import { projectPoint } from "../map/mapdata.js";
 import { QUEUE_MPS, ROOM_M as SPARE_M } from "./rail.js";
 import { isEmergency } from "./emergency.js";
@@ -83,7 +84,7 @@ export function signalBoxesAhead(map, path, front, v) {
     if (e.sEnd < front - 30) continue;
     const c = e.control;
     if (c?.type !== "signal") continue;
-    const line = e.sStart + (c.s_line / Math.max(1, map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
+    const line = pathLine(e, map.edges.get(e.id).length, c.s_line);
     if (line - front > LOOK_M) break;
     if (!waitsAt(line - front, boxStart(map, e.id, e.sEnd) - front, v)) continue;
     const node = map.nodes.get(map.edges.get(e.id).to);

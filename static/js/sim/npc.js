@@ -1,3 +1,5 @@
+import { crossingGap, laneChangeBodyGap, laneChangeGap, pathLine, pickSpawnLane } from "./traffic-geometry.js";
+import { inspectTraffic } from "./traffic-inspection.js";
 import { reserveSlot } from "./parking.js";
 import { observeAmber } from "./amber.js";
 import { flashing, NIGHT_CAUTION_MPS } from "./night-flash.js";
@@ -466,6 +468,7 @@ export class NpcPath {
   switchLane(laneIdx, s) {
     const i = this.edges.indexOf(this.currentEdge());
     const cur = this.edges[i];
+    if (!cur || !this.map.lane(cur.id, laneIdx)) return;
     let prev = { id: cur.id, lane: laneIdx };
     const planned = this.edges
       .slice(i + 1)
@@ -555,6 +558,7 @@ export class NpcPath {
     });
   }
   extend() {
+    if (!this.edges.length) return false;
     // bounded: joining a very short lane after a rounded corner can add almost no length
     for (let guard = 0; guard < 24 && this.length - this.s < LOOK_M * 2.5; guard++) {
       const last = this.edges[this.edges.length - 1];
@@ -619,8 +623,7 @@ export class NpcPath {
       const x = this.edges[k],
         xe = this.map.edges.get(x.id);
       let end = x.sEnd - LC_END_M;
-      if (x.control)
-        end = Math.min(end, x.sStart + (x.control.s_line / Math.max(1, xe.length)) * (x.sEnd - x.sStart) - LC_END_M);
+      if (x.control) end = Math.min(end, pathLine(x, xe.length, x.control.s_line) - LC_END_M);
       // (a street with fewer lanes than the turn's has none to change into)
       if (xe.lanes >= e.lanes) room += Math.max(0, end - Math.max(x.sStart, this.s ?? 0));
       const before = this.edges[k - 1];
@@ -632,9 +635,11 @@ export class NpcPath {
   trim() {
     // drop edges fully behind us to keep the polyline short
     while (this.edges.length > 2 && this.edges[1].sStart + 30 < this.s) {
-      const drop = this.edges.shift();
-      const cut = this.cum.findIndex((c) => c >= drop.sEnd);
-      if (cut <= 0) break;
+      const cut = this.cum.findIndex((c) => c >= this.edges[0].sEnd);
+      if (cut < 0) break;
+      this.edges.shift();
+      // A previous trim may already have removed this short edge's geometry.
+      if (cut === 0) break;
       const removed = this.cum[cut];
       this.pts = this.pts.slice(cut);
       this.cum = cumulative(this.pts);
@@ -768,6 +773,10 @@ export class NpcFleet {
       });
     }
     world.npcs = this.vehicles;
+  }
+
+  inspectTraffic() {
+    return inspectTraffic(this);
   }
 
   // Put a train on a track of the map (sim/rail.js): `anywhere`, somewhere along it going either way,
@@ -1049,15 +1058,7 @@ export class NpcFleet {
     let made = 0,
       attempts = 0;
     while (made < count && attempts++ < count * 20) {
-      let pick = this.random() * totalLen;
-      let lane = lanes[0];
-      for (const l of lanes) {
-        pick -= l.length;
-        if (pick <= 0) {
-          lane = l;
-          break;
-        }
-      }
+      const lane = pickSpawnLane(lanes, totalLen, this.random);
       const s = 5 + this.random() * (lane.length - 10);
       const p = pointAt(lane.pts, lane.cum, s);
       if (Math.hypot(p[0] - this.world.ego.x, p[1] - this.world.ego.y) < 30) continue;
@@ -1082,18 +1083,11 @@ export class NpcFleet {
     const lanes = this.map.laneList.filter(
       (l) => l.length > 25 && (!this.world.busLanes || legalBusLane(this.map, l.edge, l.idx, this.world.clock)),
     );
+    if (!lanes.length) return;
     const totalLen = lanes.reduce((a, l) => a + l.length, 0);
     let attempts = 0;
     while (this.vehicles.length < count && attempts++ < count * 20) {
-      let pick = this.random() * totalLen;
-      let lane = lanes[0];
-      for (const l of lanes) {
-        pick -= l.length;
-        if (pick <= 0) {
-          lane = l;
-          break;
-        }
-      }
+      const lane = pickSpawnLane(lanes, totalLen, this.random);
       const s = 5 + this.random() * (lane.length - 10);
       const p = pointAt(lane.pts, lane.cum, s);
       if (Math.hypot(p[0] - this.world.ego.x, p[1] - this.world.ego.y) < 30) continue;
@@ -1614,8 +1608,7 @@ export class NpcFleet {
         for (const e of path.edges) {
           const choice = e.control && n.amberChoices?.get(`${e.id}:${e.control.id}`);
           if (!choice || choice.stop || world.t >= choice.stop_until) continue;
-          const lineS =
-            e.sStart + (e.control.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
+          const lineS = pathLine(e, this.map.edges.get(e.id).length, e.control.s_line);
           if (front >= lineS && path.s - spec.rearOverhang <= e.sEnd + this.map.crossingHalfWidth(e.id))
             amberCap = Math.min(amberCap, choice.speed_mps);
         }
@@ -1624,7 +1617,7 @@ export class NpcFleet {
       for (const e of path.edges) {
         if (!e.control || e.sEnd < path.s) continue;
         const ctl = controlAt(world, e.control, e.id);
-        const lineS = e.sStart + (ctl.s_line / Math.max(1, this.map.edges.get(e.id).length)) * (e.sEnd - e.sStart);
+        const lineS = pathLine(e, this.map.edges.get(e.id).length, ctl.s_line);
         const bumperToLine = lineS - front;
         if (bumperToLine < -1) continue;
         if (bumperToLine > 70) break;
@@ -1789,10 +1782,7 @@ export class NpcFleet {
         }
         const rule = next && !next.control ? this.map.priorityOf(next.id) : null;
         if (rule && rule.rule !== "major" && toNode < GIVE_WAY_LOOK_M) {
-          const toLine =
-            next.sStart +
-            (rule.s_line / Math.max(1, this.map.edges.get(next.id).length)) * (next.sEnd - next.sStart) -
-            front;
+          const toLine = pathLine(next, this.map.edges.get(next.id).length, rule.s_line) - front;
           if (toLine > -1 && this.givesWay(n, next.id, toNode)) {
             gap = Math.min(gap, Math.max(0.05, toLine));
             leadV = 0;
@@ -1801,9 +1791,7 @@ export class NpcFleet {
       }
       // intersection box rule for signals too: don't enter while a crossing car is inside
       if (stopAt === null && edge.control && controlAt(world, edge.control, edge.id).type === "signal") {
-        const lineS =
-          edge.sStart +
-          (edge.control.s_line / Math.max(1, this.map.edges.get(edge.id).length)) * (edge.sEnd - edge.sStart);
+        const lineS = pathLine(edge, this.map.edges.get(edge.id).length, edge.control.s_line);
         const b = lineS - front;
         if (b > -1 && b < 6 && this.boxBusy(n, edge)) {
           gap = Math.min(gap, Math.max(0.05, b));
@@ -2213,9 +2201,7 @@ export class NpcFleet {
       const half = map.crossingHalfWidth(c.id);
       if (toNode < -half - 3) continue;
       const control = controlAt(world, c.control, c.id);
-      const lineS = control
-        ? c.sStart + (control.s_line / Math.max(1, map.edges.get(c.id).length)) * (c.sEnd - c.sStart)
-        : c.sEnd - half;
+      const lineS = control ? pathLine(c, map.edges.get(c.id).length, control.s_line) : c.sEnd - half;
       const toLine = lineS - front;
       if (!control && !junctionAt(map, c.to)) continue;
       const after = path.edges[path.edges.indexOf(c) + 1];
@@ -3035,11 +3021,7 @@ export class NpcFleet {
         const half = this.map.crossingHalfWidth(cur.id),
           toNode = cur.sEnd - front;
         const control = cur.control,
-          toLine = control
-            ? cur.sStart +
-              (control.s_line / Math.max(1, this.map.edges.get(cur.id).length)) * (cur.sEnd - cur.sStart) -
-              front
-            : Infinity;
+          toLine = control ? pathLine(cur, this.map.edges.get(cur.id).length, control.s_line) - front : Infinity;
         const short = Math.min(toNode - half - 2.5, toLine - 0.5);
         if (short < dist)
           dist = short >= (n.v * n.v) / (2 * EV_FIRM_DECEL) ? Math.max(0.3, short) : toNode + half + n.spec.length + 3;
@@ -3290,6 +3272,7 @@ export class NpcFleet {
   // left or the next street has no parking lane. Looked for along this street and the next two.
   stripEnd(path, pe, front) {
     const k = path.edges.indexOf(pe);
+    if (k < 0) return Infinity;
     for (let i = k; i < path.edges.length && i <= k + 2; i++) {
       const pi = path.edges[i],
         e = this.map.edges.get(pi.id),
@@ -3315,8 +3298,9 @@ export class NpcFleet {
       this.bays = new Map();
       for (const slot of parked.slots) {
         if (slot.curb !== "right") continue;
-        const edge = this.map.edges.get(slot.edge),
-          s = projectPoint(edge.pts, edge.cum, [slot.x, slot.y], null).s - CAR.rearOverhang;
+        const edge = this.map.edges.get(slot.edge);
+        if (!edge) continue;
+        const s = projectPoint(edge.pts, edge.cum, [slot.x, slot.y], null).s - CAR.rearOverhang;
         if (!this.bays.has(slot.edge)) this.bays.set(slot.edge, []);
         this.bays.get(slot.edge).push({ slot, s });
       }
@@ -3419,7 +3403,7 @@ export class NpcFleet {
     const toEnd = edge.sEnd - front;
     if (toEnd < (curbward ? 15 : LC_END_M)) return;
     if (edge.control && !curbward) {
-      const lineS = edge.sStart + (edge.control.s_line / Math.max(1, e.length)) * (edge.sEnd - edge.sStart);
+      const lineS = pathLine(edge, e.length, edge.control.s_line);
       if (lineS - front < LC_END_M && lineS - front > -5) return;
     }
     const path = n.path;
@@ -3457,19 +3441,19 @@ export class NpcFleet {
     const to = edge.lane + dir;
     if (to < 0 || to >= e.lanes) return;
     const lane = this.map.lane(edge.id, to);
+    if (!lane) return;
     const me = projectPoint(lane.pts, lane.cum, [n.x, n.y], null);
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n || Math.abs(o.x - n.x) > 60 || Math.abs(o.y - n.y) > 60) continue;
       const p = projectPoint(lane.pts, lane.cum, [o.x, o.y], null);
       if (!p || Math.abs(p.lateral) > 2.2) continue;
       const ds = p.s - me.s;
-      let need = ds >= 0 ? 8 + Math.max(0, n.v - o.v) * 2 : 8 + Math.max(0, o.v - n.v) * 2.5;
+      let need = laneChangeGap(ds, n.v, o.v);
       // (never in front of a snow plow closer than the distance to stay back from it)
       if (ds < 0 && isPlow(o)) need = Math.max(need, stayBack(e.limit));
       const ns = n.spec || CAR,
         os = o.spec || CAR;
-      const bodyGap =
-        ds >= 0 ? ns.length - ns.rearOverhang + os.rearOverhang : os.length - os.rearOverhang + ns.rearOverhang;
+      const bodyGap = laneChangeBodyGap(ds, ns, os);
       if (Math.abs(ds) < need + bodyGap) return;
     }
     n.lc = { dir, to, edge: edge.id, width: Math.abs(e.lane_offsets[to] - e.lane_offsets[edge.lane]), t: 0, T: 3.5 };
@@ -3483,6 +3467,7 @@ export class NpcFleet {
       i = path.edges.indexOf(e),
       next = path.edges[i + 1];
     const edge = this.map.edges.get(e.id);
+    if (!e.control || !edge) return false;
     const left = this.world.leftOnRed && next && leftOnRedAllowed(this.world, e.id, next.id);
     if (next && RED_TURN_BLOCKED.some((blocked) => blocked(this.world, e.id, next.id))) return false;
     if (
@@ -3525,7 +3510,7 @@ export class NpcFleet {
   crossComing(n, nodeId, extra = 0) {
     const node = this.map.nodes.get(nodeId);
     if (!node) return false;
-    const gapS = (n.driver ? 3.2 + n.driver.T * 1.7 : 5) + extra;
+    const gapS = crossingGap(n.driver) + extra;
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n || o.v < 1) continue;
       if (Math.abs(wrap(o.psi - n.psi)) < Math.PI / 6) continue; // going our way
@@ -3544,6 +3529,7 @@ export class NpcFleet {
   // (in which case it could not clear the junction in time).
   givesWay(n, edgeId, toNode) {
     const edge = this.map.edges.get(edgeId);
+    if (!edge) return false;
     const ctl = controlAt(this.world, edge.control, edgeId);
     const node = ctl?.night_flash ? this.map.intersections.get(ctl.junction) : this.map.nodes.get(edge.to);
     if (!node) return false;
@@ -3568,10 +3554,10 @@ export class NpcFleet {
   // within a few seconds, or is moving within UNSIGNED_NEAR_M of it: it does not stop, and has the
   // right of way.
   unsignedComing(n, edgeId) {
-    const nodeId = this.map.edges.get(edgeId).to,
+    const nodeId = this.map.edges.get(edgeId)?.to,
       node = this.map.nodes.get(nodeId);
     if (!node) return false;
-    const gapS = n.driver ? 3.2 + n.driver.T * 1.7 : 5;
+    const gapS = crossingGap(n.driver);
     for (const o of [this.world.ego, ...this.vehicles]) {
       if (o === n || o.v < 0.3 || Math.abs(wrap(o.psi - n.psi)) < Math.PI / 6) continue;
       if (Math.abs(node.x - o.x) > 90 || Math.abs(node.y - o.y) > 90) continue;
@@ -3607,12 +3593,11 @@ export class NpcFleet {
     if (!this.junctions) this.junctions = new Map();
     if (!this.junctions.has(nodeId)) {
       const ids = [...(this.map.inn.get(nodeId) || []), ...(this.map.out.get(nodeId) || [])];
-      const neighbors = new Set(
-        ids.map((id) => {
-          const e = this.map.edges.get(id);
-          return e.from === nodeId ? e.to : e.from;
-        }),
-      );
+      const neighbors = new Set();
+      for (const id of ids) {
+        const e = this.map.edges.get(id);
+        if (e) neighbors.add(e.from === nodeId ? e.to : e.from);
+      }
       this.junctions.set(nodeId, neighbors.size >= 3);
     }
     return this.junctions.get(nodeId);
