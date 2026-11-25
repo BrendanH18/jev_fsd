@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   lstatSync,
   mkdtempSync,
   readFileSync,
@@ -8,11 +9,22 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 
+export function isMain(url, entry = process.argv[1]) {
+  if (!entry) return false;
+  if (url === pathToFileURL(entry).href) return true;
+  try {
+    return realpathSync.native(entry) === realpathSync.native(fileURLToPath(url));
+  } catch {
+    return false;
+  }
+}
+
 export function parseOptions(argv, names, switches = []) {
-  const args = {};
+  const args = Object.create(null);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === "--help" || token === "-h") return { help: true, args };
@@ -37,7 +49,8 @@ export function parseOptions(argv, names, switches = []) {
 }
 
 export function wholeNumber(name, value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
-  const n = value === undefined ? fallback : value && !/[^0-9]/.test(value) ? Number(value) : NaN;
+  let n = value === undefined ? fallback : value;
+  if (typeof n === "string") n = n && !/[^0-9]/.test(n) ? Number(n) : NaN;
   if (!Number.isSafeInteger(n) || n < min || n > max) {
     const range = max === Number.MAX_SAFE_INTEGER ? `at least ${min}` : `from ${min} to ${max}`;
     throw new Error(`--${name} must be a decimal whole number ${range}.`);
@@ -47,6 +60,7 @@ export function wholeNumber(name, value, fallback, { min = 0, max = Number.MAX_S
 
 export function commaList(name, value) {
   if (value === undefined) return null;
+  if (typeof value !== "string") throw new Error(`--${name} needs a comma-separated string.`);
   const items = value.split(",").map((item) => item.trim());
   if (items.some((item) => !item)) throw new Error(`--${name} contains an empty item.`);
   if (new Set(items).size !== items.length) throw new Error(`--${name} contains duplicate items.`);
@@ -57,10 +71,16 @@ export function checkMode(value, modes) {
   if (value !== undefined && !modes.includes(value)) throw new Error(`--check must be one of ${modes.join(", ")}.`);
 }
 
-export function readJson(file) {
+// CLI artifacts are UTF-8 JSON, optionally compressed. A BOM from an editor is harmless.
+export function readJson(file, { maxBytes, reviver } = {}) {
   try {
+    const stats = statSync(file);
+    if (!stats.isFile()) throw new Error("expected a regular file");
+    if (maxBytes !== undefined && stats.size > maxBytes) throw new Error(`file exceeds ${maxBytes} bytes`);
     const bytes = readFileSync(file);
-    return JSON.parse((file.endsWith(".gz") ? gunzipSync(bytes) : bytes).toString("utf8"));
+    const decoded = file.endsWith(".gz") ? gunzipSync(bytes, { maxOutputLength: maxBytes }) : bytes;
+    if (maxBytes !== undefined && decoded.length > maxBytes) throw new Error(`JSON exceeds ${maxBytes} bytes`);
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decoded), reviver);
   } catch (error) {
     throw new Error(`Cannot read ${file}: ${error.message}`, { cause: error });
   }
@@ -68,9 +88,11 @@ export function readJson(file) {
 
 function fileIdentity(file) {
   // Native realpath follows symlinks before interpreting any subsequent "..".
+  if (file.endsWith(sep)) throw new Error(`Expected a file path without a trailing separator: ${file}`);
   const stats = statSync(file, { throwIfNoEntry: false });
   if (stats) return { path: realpathSync.native(file), inode: `${stats.dev}:${stats.ino}`, stats };
   const realParent = realpathSync.native(dirname(file));
+  if (!statSync(realParent).isDirectory()) throw new Error(`Parent is not a directory: ${dirname(file)}`);
   // A dangling symlink has no inode for its target. Refuse it rather than risk writing through it.
   if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink())
     throw new Error(`Path is a dangling symbolic link: ${file}`);
@@ -82,16 +104,22 @@ function checkOutput(option, file, identity) {
 }
 
 export function checkFiles(inputs, outputs) {
-  const seen = [];
-  for (const [option, file] of [...Object.entries(inputs), ...Object.entries(outputs)]) {
-    if (!file) continue;
-    const identity = fileIdentity(file);
-    const previous = seen.find(
-      (entry) => entry.path === identity.path || (identity.inode && entry.inode === identity.inode),
-    );
-    if (previous) throw new Error(`--${option} and --${previous.option} need different files.`);
-    if (Object.hasOwn(outputs, option)) checkOutput(option, file, identity);
-    seen.push({ ...identity, option });
+  const seenPaths = new Map();
+  const seenInodes = new Map();
+  for (const [group, output] of [
+    [inputs, false],
+    [outputs, true],
+  ]) {
+    for (const [option, file] of Object.entries(group)) {
+      if (file === undefined || file === null) continue;
+      if (!file) throw new Error(`--${option} needs a non-empty path.`);
+      const identity = fileIdentity(file);
+      const previous = seenPaths.get(identity.path) ?? seenInodes.get(identity.inode);
+      if (previous !== undefined) throw new Error(`--${option} and --${previous} need different files.`);
+      if (output) checkOutput(option, file, identity);
+      seenPaths.set(identity.path, option);
+      if (identity.inode) seenInodes.set(identity.inode, option);
+    }
   }
 }
 
@@ -99,38 +127,48 @@ export function writeArtifact(file, text, { gzip = false } = {}) {
   const identity = fileIdentity(file);
   checkOutput("output", file, identity);
   const destination = identity.path;
-  const directory = mkdtempSync(join(dirname(destination), ".jev-artifact-"));
-  const temporary = join(directory, "artifact");
+  let directory;
   try {
-    writeFileSync(temporary, gzip ? gzipSync(text, { level: 9 }) : text);
+    directory = mkdtempSync(join(dirname(destination), ".jev-artifact-"));
+    const temporary = join(directory, "artifact");
+    const mode = identity.stats ? identity.stats.mode & 0o777 : 0o666;
+    writeFileSync(temporary, gzip ? gzipSync(text, { level: 9 }) : text, { mode, flag: "wx" });
+    if (identity.stats) chmodSync(temporary, mode);
     renameSync(temporary, destination);
   } catch (error) {
     throw new Error(`Cannot write ${file}: ${error.message}`, { cause: error });
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    if (directory) rmSync(directory, { recursive: true, force: true });
   }
 }
 
 export function loopbackPort(value) {
-  const port = Number(value);
-  if (!value || /[^0-9]/.test(value) || port < 1 || port > 65_535) {
+  const text = typeof value === "string" || typeof value === "number" ? String(value) : "";
+  const port = Number(text);
+  if (!text || /[^0-9]/.test(text) || port < 1 || port > 65_535) {
     throw new Error("The local server port must be a decimal integer from 1 to 65535.");
   }
   return String(port);
 }
 
-export async function benchPage(value) {
+export async function benchPage(value, { timeoutMs = 10_000, signal } = {}) {
   const port = loopbackPort(value);
   const base = `http://127.0.0.1:${port}`;
   const url = `${base}/bench`;
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10_000), redirect: "manual" });
-    if (response.status >= 300 && response.status < 400)
-      throw new Error(`HTTP ${response.status}: redirects are not allowed`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const response = await fetch(url, {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      redirect: "manual",
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      const detail = response.status >= 300 && response.status < 400 ? ": redirects are not allowed" : "";
+      throw new Error(`HTTP ${response.status}${detail}`);
+    }
     const page = await response.text();
     const token = page.match(/name="jev-csrf" content="([^"]+)"/)?.[1];
-    if (!token) throw new Error("the page has no Jev session token");
+    if (!token?.trim()) throw new Error("the page has no Jev session token");
     return { base, port, page, token };
   } catch (error) {
     const detail = error.cause?.code ?? error.message;
@@ -155,20 +193,25 @@ export function jsonDifferences(expected, actual, canonicalJson, { limit = 12, p
       typeof right === "object" &&
       Array.isArray(left) === Array.isArray(right)
     ) {
-      const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])].sort();
+      const arrays = Array.isArray(left);
+      const keys = [...new Set([...Object.keys(left), ...Object.keys(right)])];
+      if (arrays) {
+        keys.sort((a, b) => Number(a) - Number(b));
+        if (left.length !== right.length && keys.length < Math.max(left.length, right.length)) keys.push("length");
+      } else keys.sort();
       for (const key of keys) {
         if (diffs.length >= limit) break;
         compare(
           Object.hasOwn(left, key) ? left[key] : undefined,
           Object.hasOwn(right, key) ? right[key] : undefined,
-          keyPath ? `${keyPath}.${key}` : key,
+          /^[A-Za-z0-9_$-]+$/.test(key) ? (keyPath ? `${keyPath}.${key}` : key) : `${keyPath}[${JSON.stringify(key)}]`,
         );
       }
       return;
     }
     const snippet = (value) => {
       if (value === undefined) return "<missing>";
-      const text = canonicalJson(value);
+      const text = canonicalJson(value) ?? String(value);
       return text.length > 120 ? `${text.slice(0, 117)}...` : text;
     };
     diffs.push(`${keyPath || "<root>"}: expected ${snippet(left)}, actual ${snippet(right)}`);
