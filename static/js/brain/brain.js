@@ -625,7 +625,7 @@ export class Autopilot {
       this.pendingRoutes = null;
       this.bumpEpoch();
     } else if (
-      this.pendingRoutes &&
+      this.pendingRoutes?.length &&
       request.questions?.route &&
       !["rules_fallback", "local"].includes(result.meta?.source)
     ) {
