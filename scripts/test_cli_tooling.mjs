@@ -31,13 +31,16 @@ try {
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /Usage:/);
   }
-  for (const script of ["bench_node.mjs", "arena_node.mjs"]) {
+  for (const [script, invalidAmount] of [
+    ["bench_node.mjs", /--reserve needs a positive decimal dollar amount/],
+    ["arena_node.mjs", /--reserve needs --record and a positive number of dollars/],
+  ]) {
     const missingRecord = run(script, "--reserve", "1");
     assert.equal(missingRecord.status, 1);
     assert.match(missingRecord.stderr, /--reserve needs --record/);
     const invalidReserve = run(script, "--record", "tape.json", "--reserve", "Infinity");
     assert.equal(invalidReserve.status, 1);
-    assert.match(invalidReserve.stderr, /positive number/);
+    assert.match(invalidReserve.stderr, invalidAmount);
   }
   for (const script of ["bench_node.mjs", "arena_node.mjs", "soak.mjs"]) {
     const missingServer = run(script, "--port=1");
