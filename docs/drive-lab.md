@@ -107,6 +107,24 @@ seconds before that event. If the event is near the oldest retained checkpoint, 
 there. An event outside the rolling recording, a drive from another session, or an earlier replay
 branch keeps its event text but shows **Replay unavailable**. Saved reports do not store recordings.
 
+## Finding and comparing drives
+
+Search the challenge library by title, street, place, authored conditions or the challenge ID
+from a drive link. **Best clean score** orders challenges by your recorded score from a clean
+manual arrival. Completed challenge cards show that score when measured, and road-test cards
+show how many of your recorded attempts passed.
+
+In the **Agent arena**, choose **Road tests only** to run the longer examiner drives. The
+results table can filter by track and search for an agent, map or challenge. **Export CSV**
+uses the displayed selection and order. A dash in **Flagged choices** means the count is
+unavailable. An Open Track result can report zero. To inspect a decision, select the driver in
+a result row and narrow the timeline by event type. **Close details** returns focus to the
+inspected row.
+
+On the **Results** page, **Coverage** isolates comparable conditions measured for every
+displayed driver, or shows which conditions are still missing a result. Copy the page URL
+to share the selected suite.
+
 ## AI eyes
 
 **AI eyes** draws the geometric sight region and obstacle footprints using the same building,

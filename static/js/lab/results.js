@@ -12,7 +12,14 @@ export const fraction = (rows) => ({ passed: sum(rows, "passed"), total: sum(row
 export const fractionText = (f) => (f ? `${f.passed}/${f.total}` : "not run");
 
 export function checkResults(data) {
-  if (!data || data.format !== RESULTS_FORMAT || !Array.isArray(data.rows) || !data.drivers) {
+  if (
+    !data ||
+    data.format !== RESULTS_FORMAT ||
+    !Array.isArray(data.rows) ||
+    !data.drivers ||
+    typeof data.drivers !== "object" ||
+    Array.isArray(data.drivers)
+  ) {
     throw new Error(`Not a results file (${RESULTS_FORMAT}).`);
   }
   return data;
@@ -25,8 +32,17 @@ export function resultVersions(data) {
 export const suiteLabel = (version) =>
   version === LEGACY_SUITE ? "Legacy results" : version === CUSTOM_SUITE ? "Custom runs" : `Suite ${version}`;
 
+export const selectedSuite = (versions, requested) =>
+  versions.includes(requested) ? requested : (versions[0] ?? LEGACY_SUITE);
+
+export function matchesCoverage(cells, coverage) {
+  if (!coverage) return true;
+  const complete = cells.every(Boolean);
+  return coverage === "complete" ? complete : !complete;
+}
+
 export function driverDisplayName(data, id) {
-  const driver = data.drivers[id];
+  const driver = Object.hasOwn(data.drivers, id) ? data.drivers[id] : null;
   const name = driver?.label || id;
   return driver?.submitter ? `${name} (submitted by @${driver.submitter})` : name;
 }
@@ -75,7 +91,7 @@ export function summary(data, version = LEGACY_SUITE) {
 }
 
 function withFailures(run, drive) {
-  return { ...drive, failures: run.failed.find((f) => f.id === drive.id)?.failures ?? [] };
+  return { ...drive, failures: run.failed?.find((f) => f.id === drive.id)?.failures ?? [] };
 }
 
 // The challenge set as a matrix: one row per challenge or road test, in the order the first driver
@@ -85,25 +101,26 @@ export function challengeMatrix(data, suite = "challenges", version = LEGACY_SUI
   for (const row of rankedRows(data, version))
     if (row.suite === suite && !latest.has(row.driver)) latest.set(row.driver, row);
   const runs = [...latest.values()];
-  const order = [];
-  for (const run of runs)
-    for (const d of run.drives) if (!order.some((o) => o.id === d.id)) order.push({ id: d.id, map: d.map });
+  const order = new Map();
+  const cellsByRun = runs.map((run) => {
+    const cells = new Map();
+    const failures = new Map((run.failed || []).map((entry) => [entry.id, entry.failures]));
+    for (const drive of run.drives) {
+      if (!order.has(drive.id)) order.set(drive.id, drive.map);
+      if (!cells.has(drive.id)) cells.set(drive.id, { ...drive, failures: failures.get(drive.id) ?? [] });
+    }
+    return cells;
+  });
   return {
     drivers: runs.map((r) => r.driver),
     runs,
-    rows: order.map((o) => ({
-      ...o,
-      cells: runs.map((run) => {
-        const drive = run.drives.find((d) => d.id === o.id);
-        return drive ? withFailures(run, drive) : null;
-      }),
-    })),
+    rows: Array.from(order, ([id, map]) => ({ id, map, cells: cellsByRun.map((cells) => cells.get(id) ?? null) })),
   };
 }
 
 // Result rows are newest first within each driver and suite.
 export function compatibleChallengeDrive(data, driver, config) {
-  if (!config.map_sha) return null;
+  if (!config?.map_sha) return null;
   for (const run of data.rows) {
     if (run.suite !== "challenges" || run.driver !== driver || suiteVersion(run) === CUSTOM_SUITE) continue;
     const drive = run.drives.find(
@@ -128,8 +145,16 @@ export function cityGrid(data, version = LEGACY_SUITE) {
   for (const run of runs)
     if (!places.some((p) => p.map === run.map && p.weather === run.weather))
       places.push({ map: run.map, weather: run.weather });
+  const rank = (values, key) => {
+    const index = values.indexOf(key);
+    return index < 0 ? values.length : index;
+  };
   places.sort(
-    (a, b) => maps.indexOf(a.map) - maps.indexOf(b.map) || WEATHERS.indexOf(a.weather) - WEATHERS.indexOf(b.weather),
+    (a, b) =>
+      rank(maps, a.map) - rank(maps, b.map) ||
+      a.map.localeCompare(b.map) ||
+      rank(WEATHERS, a.weather) - rank(WEATHERS, b.weather) ||
+      a.weather.localeCompare(b.weather),
   );
   return {
     drivers,
@@ -155,13 +180,15 @@ export function recordings(data) {
         sourceCommit: r.manifest?.source_commit ?? r.replay_source_commit,
         engine: r.manifest?.engine || r.engine,
         legacyReplay,
-        command: `node --experimental-default-type=module scripts/${runner}.mjs --port 8322 --replay ${r.recording}${legacyReplay ? "" : " --check replay"}`,
+        command: `node --experimental-default-type=module scripts/${runner}.mjs --port 8322 --replay ${shellPath(r.recording)}${legacyReplay ? "" : " --check replay"}`,
       };
     });
 }
 
+const shellPath = (path) => (/^[\w./-]+$/.test(path) ? path : `'${path.replaceAll("'", "'\\''")}'`);
+
 export function percentText(value) {
-  if (value === null || value === undefined) return "n/a";
+  if (!Number.isFinite(value)) return "n/a";
   return `${(value * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
 }
 export const moneyText = (value) =>

@@ -75,7 +75,22 @@ export function practiceStatus(challenge, records = {}) {
 export function filterChallenges(challenges, filters = {}, records = {}) {
   const terms = normalize(filters.query).trim().split(/\s+/).filter(Boolean);
   return challenges.filter((c) => {
-    const haystack = normalize([c.title, c.description, c.lesson, c.street, challengeCity(c), c.map].join(" "));
+    const haystack = normalize(
+      [
+        c.id,
+        c.title,
+        c.description,
+        c.lesson,
+        c.street,
+        challengeCity(c),
+        challengeNeighbourhood(c),
+        challengeProvince(c),
+        c.map,
+        c.difficulty,
+        c.weather,
+        c.time,
+      ].join(" "),
+    );
     return (
       terms.every((term) => haystack.includes(term)) &&
       (!filters.city || challengeCity(c) === filters.city) &&
@@ -180,14 +195,15 @@ export function savePractice(challenge, report, storage) {
     outcome = practiceOutcome(challenge, report);
   if (!outcome) return { ...state, outcome };
   const previous = practiceStatus(challenge, state.records) === "untried" ? null : state.records[challenge.id];
-  if (previous?.last_at === report.started_at) return { ...state, outcome };
+  if (previous && Date.parse(previous.last_at) === Date.parse(report.started_at)) return { ...state, outcome };
   const score = outcome === "completed" && finite(report.score) && report.score <= 100 ? report.score : null;
   state.records[challenge.id] = {
     version: version(challenge),
     attempts: (previous?.attempts || 0) + 1,
     completed: outcome === "completed" || !!previous?.completed,
     best_score: score === null ? (previous?.best_score ?? null) : Math.max(score, previous?.best_score ?? 0),
-    last_at: report.started_at,
+    last_at:
+      previous && Date.parse(previous.last_at) > Date.parse(report.started_at) ? previous.last_at : report.started_at,
   };
   try {
     (storage || globalThis.localStorage).setItem(PRACTICE_KEY, JSON.stringify(state.records));
@@ -266,21 +282,28 @@ export function roadTestStatus(test, records = {}) {
   return !record ? "untried" : record.passes ? "passed" : "attempted";
 }
 const better = (a, b) =>
-  a.pass !== b.pass ? a.pass : a.fails !== b.fails ? a.fails < b.fails : a.demerits < b.demerits;
+  a.pass !== b.pass
+    ? a.pass
+    : a.fails !== b.fails
+      ? a.fails < b.fails
+      : a.demerits !== b.demerits
+        ? a.demerits < b.demerits
+        : Date.parse(a.at) < Date.parse(b.at);
 // `sheet` is the examiner's sheet for the report (lab/examiner.js `examine`).
 export function saveRoadTest(test, report, sheet, storage) {
   const state = readRoadTests(storage);
   if (!practiceEligible(test, report) || !sheet?.available) return { ...state, outcome: null };
   const outcome = sheet.pass ? "passed" : "failed";
   const previous = roadTestRecord(test, state.records);
-  if (previous?.last_at === report.started_at) return { ...state, outcome };
+  if (previous && Date.parse(previous.last_at) === Date.parse(report.started_at)) return { ...state, outcome };
   const attempt = { pass: sheet.pass, demerits: sheet.demerits, fails: sheet.fails.length, at: report.started_at };
   state.records[test.id] = {
     version: version(test),
     attempts: (previous?.attempts || 0) + 1,
     passes: (previous?.passes || 0) + (sheet.pass ? 1 : 0),
     best: previous && !better(attempt, previous.best) ? previous.best : attempt,
-    last_at: report.started_at,
+    last_at:
+      previous && Date.parse(previous.last_at) > Date.parse(report.started_at) ? previous.last_at : report.started_at,
   };
   try {
     (storage || globalThis.localStorage).setItem(ROAD_TEST_KEY, JSON.stringify(state.records));
@@ -354,8 +377,14 @@ export function importPracticeBackup(data, storage, confirmReplace = () => false
 export function resetPractice(storage) {
   try {
     const store = storage || globalThis.localStorage;
+    const practice = store.getItem(PRACTICE_KEY);
     store.removeItem(PRACTICE_KEY);
-    store.removeItem(ROAD_TEST_KEY);
+    try {
+      store.removeItem(ROAD_TEST_KEY);
+    } catch {
+      if (practice !== null) store.setItem(PRACTICE_KEY, practice);
+      return { available: false };
+    }
     return { available: true };
   } catch {
     return { available: false };

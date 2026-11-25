@@ -20,6 +20,8 @@ import {
   HOME_MAP,
   resultVersions,
   suiteLabel,
+  selectedSuite,
+  matchesCoverage,
   driverDisplayName,
 } from "../lab/results.js";
 import { CUSTOM_SUITE, LEGACY_SUITE, suiteVersion } from "../bench/suite-version.js";
@@ -238,9 +240,25 @@ function summaryTable(data, { drivers, pilots }, version) {
   );
 }
 
+function coveragePicker(state, render) {
+  const coverageSelect = h(
+    "select",
+    {
+      onchange: () => {
+        state.coverage = coverageSelect.value;
+        render();
+      },
+    },
+    h("option", { value: "" }, "Any coverage"),
+    h("option", { value: "complete" }, "All drivers measured"),
+    h("option", { value: "missing" }, "Missing driver results"),
+  );
+  return h("label", {}, "Coverage ", coverageSelect);
+}
+
 function challengeTable(matrix, data, { open = false, version = LEGACY_SUITE } = {}) {
   if (!matrix.runs.length) return h("p", { class: "muted" }, "No run published yet.");
-  const state = { query: "", issuesOnly: false, sortCol: null, sortDir: "asc", sortMetric: "score" };
+  const state = { query: "", issuesOnly: false, coverage: "", sortCol: null, sortDir: "asc", sortMetric: "score" };
   const thead = h("thead");
   const tbody = h("tbody");
   const countEl = h("span", { class: "results-toolbar-count", role: "status", "aria-live": "polite" });
@@ -264,7 +282,7 @@ function challengeTable(matrix, data, { open = false, version = LEGACY_SUITE } =
   const visibleRows = () => {
     const terms = norm(state.query).trim().split(/\s+/).filter(Boolean);
     const filtered = matrix.rows.filter((row) => {
-      if (state.issuesOnly && !hasIssue(row)) return false;
+      if ((state.issuesOnly && !hasIssue(row)) || !matchesCoverage(row.cells, state.coverage)) return false;
       if (!terms.length) return true;
       const hay = norm(`${rowTitle(row)} ${row.id} ${rowMap(row)} ${row.map}`);
       return terms.every((term) => hay.includes(term));
@@ -463,6 +481,7 @@ function challengeTable(matrix, data, { open = false, version = LEGACY_SUITE } =
       searchInput,
       h("label", {}, issuesToggle, open ? "Failures / disagreements / flagged only" : "Failures / disagreements only"),
       metricSelect,
+      coveragePicker(state, render),
       countEl,
       h("span", { class: "results-toolbar-spacer" }),
       h(
@@ -477,7 +496,7 @@ function challengeTable(matrix, data, { open = false, version = LEGACY_SUITE } =
 }
 
 function cityTable(grid, data, version = LEGACY_SUITE) {
-  const state = { query: "", issuesOnly: false, sortCol: null, sortDir: "asc" };
+  const state = { query: "", issuesOnly: false, coverage: "", sortCol: null, sortDir: "asc" };
   const thead = h("thead");
   const tbody = h("tbody");
   const countEl = h("span", { class: "results-toolbar-count", role: "status", "aria-live": "polite" });
@@ -493,7 +512,7 @@ function cityTable(grid, data, version = LEGACY_SUITE) {
   const visibleRows = () => {
     const terms = norm(state.query).trim().split(/\s+/).filter(Boolean);
     const filtered = grid.rows.filter((row) => {
-      if (state.issuesOnly && !hasIssue(row)) return false;
+      if ((state.issuesOnly && !hasIssue(row)) || !matchesCoverage(row.cells, state.coverage)) return false;
       if (!terms.length) return true;
       const hay = norm(`${mapName(row)} ${row.map} ${row.weather}`);
       return terms.every((term) => hay.includes(term));
@@ -619,6 +638,7 @@ function cityTable(grid, data, version = LEGACY_SUITE) {
       { class: "results-toolbar" },
       searchInput,
       h("label", {}, issuesToggle, "Failures / disagreements only"),
+      coveragePicker(state, render),
       countEl,
       h("span", { class: "results-toolbar-spacer" }),
       h(
@@ -713,6 +733,8 @@ async function main() {
     const filter = $("#results-version");
     filter.replaceChildren(...versions.map((v) => h("option", { value: v }, suiteLabel(v))));
     $("#suite-filter").hidden = versions.length < 2;
+    const readSuite = () => selectedSuite(versions, new URL(location.href).searchParams.get("suite"));
+    filter.value = readSuite();
     const renderVersion = () => {
       const version = filter.value || LEGACY_SUITE;
       const rows = data.rows.filter((row) => suiteVersion(row) === version);
@@ -753,7 +775,12 @@ async function main() {
       const period = dates.length ? `, ${dates[0]} to ${dates.at(-1)}` : "";
       status.textContent = `${suiteLabel(version)} · ${rows.length} committed ${rows.length === 1 ? "run" : "runs"}${period}.`;
     };
-    filter.addEventListener("change", renderVersion);
+    filter.addEventListener("change", () => {
+      const url = new URL(location.href);
+      url.searchParams.set("suite", filter.value);
+      history.replaceState(history.state, "", url);
+      renderVersion();
+    });
     renderVersion();
     $("#results-replay").replaceChildren(replayList(recordings(data), data));
     $("#results-sources").replaceChildren(

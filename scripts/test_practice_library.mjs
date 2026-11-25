@@ -3,7 +3,11 @@ import {
   PRACTICE_KEY,
   ROAD_TEST_KEY,
   PRACTICE_BACKUP_FORMAT,
+  exportPracticeBackup,
   importPracticeBackup,
+  resetPractice,
+  saveRoadTest,
+  readRoadTests,
   challengeCity,
   filterChallenges,
   practiceStatus,
@@ -325,5 +329,95 @@ test("a failed road-test write preserves both original storage values", () => {
     assert.equal(s.getItem(ROAD_TEST_KEY), oldRoadTests);
   }
 });
+
+// Lab validation additions
+test("Search the library by published drive ID and authored conditions as well as descriptive text", () => {
+  const day = { ...pleasant, time: "afternoon" };
+  const snow = { ...vancouver, weather: "snow" };
+  const all = [challenge, day, snow];
+  for (const [query, id] of [
+    ["mount pleasant", day.id],
+    ["quebec", challenge.id],
+    ["curb-merge", snow.id],
+    ["patience night", challenge.id],
+    ["snow", snow.id],
+  ]) {
+    assert.deepEqual(
+      filterChallenges(all, { query }).map((c) => c.id),
+      [id],
+      query,
+    );
+  }
+});
+test("Treat two spellings of the latest practice timestamp as one attempt", () => {
+  const s = storage();
+  savePractice(challenge, report(), s);
+  savePractice(challenge, report(challenge, { started_at: "2026-11-07T05:00:00-05:00" }), s);
+  assert.equal(readPractice(s).records[challenge.id].attempts, 1);
+});
+test("Keep the latest practice timestamp when recording an older report", () => {
+  const s = storage();
+  savePractice(challenge, report(), s);
+  savePractice(challenge, report(challenge, { started_at: "2026-11-06T10:00:00Z" }), s);
+  assert.equal(readPractice(s).records[challenge.id].last_at, report().started_at);
+});
+test("Treat two spellings of the latest road-test timestamp as one attempt", () => {
+  const s = storage();
+  const sheet = { available: true, pass: true, demerits: 0, fails: [] };
+  saveRoadTest(challenge, report(), sheet, s);
+  saveRoadTest(challenge, report(challenge, { started_at: "2026-11-07T10:00:00.000Z" }), sheet, s);
+  assert.equal(readRoadTests(s).records[challenge.id].passes, 1);
+});
+test("Prefer the earlier road-test attempt when verdict and marks tie", () => {
+  const s = storage();
+  const sheet = { available: true, pass: true, demerits: 2, fails: [] };
+  const older = "2026-11-06T10:00:00Z";
+  saveRoadTest(challenge, report(), sheet, s);
+  saveRoadTest(challenge, report(challenge, { started_at: older }), sheet, s);
+  assert.equal(readRoadTests(s).records[challenge.id].best.at, older);
+});
+test("Keep the last road-test date independent of a newly saved best attempt", () => {
+  const s = storage();
+  const sheet = { available: true, pass: true, demerits: 2, fails: [] };
+  saveRoadTest(challenge, report(), sheet, s);
+  saveRoadTest(challenge, report(challenge, { started_at: "2026-11-06T10:00:00Z" }), { ...sheet, demerits: 0 }, s);
+  const saved = readRoadTests(s).records[challenge.id];
+  assert.equal(saved.last_at, report().started_at);
+  assert.equal(saved.best.demerits, 0);
+});
+test("Preserve practice progress when the road-test half of a reset fails", () => {
+  const raw = JSON.stringify({ [challenge.id]: record() });
+  const s = storage(raw);
+  const remove = s.removeItem;
+  s.removeItem = (key) => {
+    if (key === ROAD_TEST_KEY) throw new Error("Blocked");
+    remove(key);
+  };
+  s.setItem(ROAD_TEST_KEY, '{"old":{}}');
+  assert.equal(resetPractice(s).available, false);
+  assert.equal(s.getItem(PRACTICE_KEY), raw);
+  assert.equal(s.getItem(ROAD_TEST_KEY), '{"old":{}}');
+});
+test("Round-trip a mixed practice and road-test backup into a clean profile", () => {
+  const source = storage();
+  const target = storage();
+  savePractice(challenge, report(), source);
+  saveRoadTest(vancouver, report(vancouver), { available: true, pass: true, demerits: 1, fails: [] }, source);
+  const backup = JSON.parse(JSON.stringify(exportPracticeBackup(source)));
+  const restored = importPracticeBackup(backup, target);
+  assert.deepEqual([restored.practiceCount, restored.roadTestCount], [1, 1]);
+  assert.deepEqual(readPractice(target), readPractice(source));
+  assert.deepEqual(readRoadTests(target), readRoadTests(source));
+});
+test("Keep unrelated app settings when clearing both progress stores", () => {
+  const s = storage(JSON.stringify({ [challenge.id]: record() }));
+  s.setItem(ROAD_TEST_KEY, '{"old":{}}');
+  s.setItem("preferred-weather", "rain");
+  assert.equal(resetPractice(s).available, true);
+  assert.equal(s.getItem(PRACTICE_KEY), null);
+  assert.equal(s.getItem(ROAD_TEST_KEY), null);
+  assert.equal(s.getItem("preferred-weather"), "rain");
+});
+// End lab validation additions
 
 console.log(`${passed} practice library checks passed`);

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { replayPosition, reportIncidentTarget } from "../static/js/lab/playback.js";
-import { DriveRecorder } from "../static/js/lab/recorder.js";
+import { copyDriveLink, driveLink, exportFilename, exportDriveCard } from "../static/js/lab/share.js";
+import { cloneState, DriveRecorder } from "../static/js/lab/recorder.js";
 
 globalThis.document = { querySelector: () => null };
 const { DriveLab } = await import("../static/js/ui/lab.js");
@@ -204,3 +205,175 @@ assert(!lab.playing);
 console.log(
   "Replay timing and incident navigation passed: variable intervals, pause/resume, nonzero drive start, retained boundaries, history identity and paused event seeking.",
 );
+
+// Lab validation additions
+function test(label, fn) {
+  const result = fn();
+  if (result instanceof Promise) return result.then(() => console.log(`✓ ${label}`));
+  console.log(`✓ ${label}`);
+}
+test("Recover the replay cursor and interpolation from nonnumeric inputs", () => {
+  assert.deepEqual(replayPosition([{ t: 0 }, { t: 1 }], NaN, 0.25), {
+    index: 0,
+    elapsed: 0.25,
+    alpha: 0.25,
+    ended: false,
+  });
+  assert.deepEqual(replayPosition([{ t: 0 }, { t: 1 }, { t: 2 }], 1, NaN), {
+    index: 1,
+    elapsed: 0,
+    alpha: 0,
+    ended: false,
+  });
+});
+test("Decline incident playback when a retained checkpoint lacks drive state", () => {
+  const missingLast = [...retained.slice(0, -1), { t: retained.at(-1).t }];
+  const missingFirst = [{ t: retained[0].t }, ...retained.slice(1)];
+  for (const frames of [missingLast, missingFirst])
+    assert.equal(reportIncidentTarget({ frames, recordingId: report.recording_id }, report, { at_s: 51 }), null);
+});
+test("Keep the original checkpoint when a branch request is outside the recording bounds", () => {
+  const recorder = new DriveRecorder();
+  recorder.frames = [{ t: 1 }, { t: 2 }];
+  recorder.branch(-10);
+  assert.deepEqual(
+    recorder.frames.map((frame) => frame.t),
+    [1],
+  );
+  assert.equal(recorder.at, 1);
+});
+test("Prevent empty or nonnumeric branch requests from invalidating recording identity", () => {
+  const recorder = new DriveRecorder();
+  const id = recorder.recordingId;
+  recorder.branch(0);
+  recorder.frames = [{ t: 1 }];
+  recorder.branch(NaN);
+  assert.equal(recorder.recordingId, id);
+  assert.equal(recorder.branched, false);
+});
+test("Preserve sparse arrays and their trailing empty slots in a checkpoint", () => {
+  const sparse = new Array(4);
+  sparse[1] = "checkpoint";
+  const copy = cloneState(sparse);
+  assert.equal(copy.length, 4);
+  assert.deepEqual(Object.keys(copy), ["1"]);
+  assert.equal(copy[1], "checkpoint");
+});
+test("Check that a checkpoint preserves identity across map keys and set members", () => {
+  const actor = { id: "car", speed: 0 };
+  const original = { actor, map: new Map([[actor, actor]]), set: new Set([actor]) };
+  const copy = cloneState(original);
+  assert.equal(copy.map.get(copy.actor) === copy.actor, true);
+  assert.equal(copy.set.has(copy.actor), true);
+  copy.actor.speed = 1;
+  assert.equal(actor.speed, 0);
+});
+test("Check that shared renderer handles retain identity across simulation checkpoints", () => {
+  const instances = { meshes: ["headlight"] };
+  const copy = cloneState({ instances });
+  assert.equal(copy.instances === instances, true);
+});
+test("Check that branching trims only future incident markers", () => {
+  const recorder = new DriveRecorder();
+  recorder.frames = [{ t: 0 }, { t: 2 }, { t: 4 }];
+  for (const t of [0, 2, 4]) recorder.mark(t, "collision");
+  recorder.branch(1);
+  assert.deepEqual(
+    recorder.markers.map((m) => m.t),
+    [0, 2],
+  );
+});
+test("Check that restoring replay spend cannot decrease live model usage counters", () => {
+  const recorder = new DriveRecorder();
+  recorder.spend = { cost: 0.25, tokens: 1000, calls: 4 };
+  const pilot = { totals: { cost: 0.1, tokens: 1100, calls: 1 } };
+  recorder.restoreSpend(pilot);
+  assert.deepEqual(pilot.totals, { cost: 0.25, tokens: 1100, calls: 4 });
+});
+test("Check that restoring a replay cannot rewind to another attempt in the same buffer", () => {
+  const frames = [...retained.slice(0, -1), { ...retained.at(-1), state: { drive: { startedAt: "another drive" } } }];
+  assert.equal(reportIncidentTarget({ frames, recordingId: report.recording_id }, report, { at_s: 52 }), null);
+});
+test("Check that a shared drive link round-trips zero-valued settings", () => {
+  const link = new URL(
+    driveLink(
+      { challenge: "rain-check", seed: 0, traffic: 0, clock: 0, quality: "low" },
+      "https://example.test/drive/",
+    ),
+  );
+  assert.deepEqual(Object.fromEntries(link.searchParams), {
+    challenge: "rain-check",
+    seed: "0",
+    traffic: "0",
+    clock: "0",
+    quality: "low",
+  });
+});
+test("Use clean filename separators when a download slug ends at its length cap", () => {
+  const name = exportFilename({ title: `${"a".repeat(47)} and more`, started_at: "2026-11-19T17:00:00Z" });
+  assert.ok(name.startsWith(`jev-${"a".repeat(47)}-2026-`));
+});
+test("Check that a score-card filename uses the challenge ID and requested image extension", () => {
+  const name = exportFilename(
+    { config: { challenge: "À travers" }, title: "Different title", started_at: "2026-11-19T17:00:00Z" },
+    "png",
+    "jev-card",
+  );
+  assert.match(name, /^jev-card-a-travers-2026-11-19-\d{6}\.png$/);
+});
+await test("Check that copying a drive link offers the exact URL when clipboard access is denied", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const oldLocation = globalThis.location;
+  globalThis.location = new URL("https://example.test/repo/");
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      clipboard: {
+        writeText: async () => {
+          throw new Error("denied");
+        },
+      },
+    },
+  });
+  try {
+    await assert.rejects(copyDriveLink({ challenge: "rain-check" }), (error) => {
+      assert.match(error.message, /Clipboard unavailable/);
+      assert.equal(new URL(error.link).searchParams.get("challenge"), "rain-check");
+      return true;
+    });
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor);
+    else delete globalThis.navigator;
+    globalThis.location = oldLocation;
+  }
+});
+await test("Keep complete Unicode characters when truncating score-card titles", async () => {
+  const oldDocument = globalThis.document;
+  const painted = [];
+  const noop = () => {};
+  const ctx = {
+    createLinearGradient: () => ({ addColorStop: noop }),
+    fillRect: noop,
+    beginPath: noop,
+    moveTo: noop,
+    lineTo: noop,
+    stroke: noop,
+    fillText: (value, _x, y) => {
+      if (y === 157) painted.push(value);
+    },
+    measureText: (value) => ({ width: Array.from(value).length * 250 }),
+  };
+  globalThis.document = {
+    createElement: () => ({ getContext: () => ctx, toBlob: (cb) => cb(null) }),
+  };
+  try {
+    await assert.rejects(
+      exportDriveCard({ title: "A🚘🚗🛻Z", categories: {}, driver: "manual", distance_m: 0, elapsed_s: 0 }),
+      /Could not create the image/,
+    );
+    assert.deepEqual(painted, ["A🚘🚗…"]);
+  } finally {
+    globalThis.document = oldDocument;
+  }
+});
+// End lab validation additions

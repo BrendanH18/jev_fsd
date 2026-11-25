@@ -4,8 +4,8 @@ export const REPORT_INCIDENT_TIME_TOLERANCE_S = 0.05 + 1e-9;
 // Move along recorded simulation time, including short or duplicate final checkpoints.
 export function replayPosition(frames, index, elapsed) {
   if (!frames.length) return { index: 0, elapsed: 0, alpha: 0, ended: true };
-  index = Math.max(0, Math.min(frames.length - 1, Math.round(index)));
-  elapsed = Math.max(0, elapsed);
+  index = Number.isNaN(index) ? 0 : Math.max(0, Math.min(frames.length - 1, Math.round(index)));
+  elapsed = Number.isNaN(elapsed) ? 0 : Math.max(0, elapsed);
   while (index < frames.length - 1) {
     const duration = Math.max(0, frames[index + 1].t - frames[index].t);
     if (elapsed < duration) return { index, elapsed, alpha: elapsed / duration, ended: false };
@@ -21,14 +21,14 @@ export function reportIncidentTarget(recorder, report, incident) {
   const frames = recorder.frames;
   const first = frames[0],
     last = frames.at(-1),
-    drive = first?.state.drive;
+    drive = first?.state?.drive;
   if (
     !drive ||
     !report?.recording_id ||
     report.recording_id !== recorder.recordingId ||
     !report.started_at ||
     drive.startedAt !== report.started_at ||
-    last.state.drive?.startedAt !== report.started_at ||
+    last?.state?.drive?.startedAt !== report.started_at ||
     !Number.isFinite(drive.elapsed)
   )
     return null;

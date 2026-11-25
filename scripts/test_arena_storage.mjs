@@ -596,4 +596,52 @@ await test("a damaged record is left out, and runs saved in another tab are pick
   );
 });
 
+// Lab validation additions
+await test("Check that the IndexedDB history budget counts UTF-8 bytes for multilingual incident text", async () => {
+  const run = at(1, {
+    results: [
+      {
+        ...result,
+        events: [{ type: "warning", message: "路".repeat(100), at_s: 0, decision_id: null, decision_age_s: null }],
+      },
+    ],
+  });
+  const json = JSON.stringify(run);
+  const history = await openEvaluationHistory({
+    indexedDB: new FakeIndexedDB(),
+    storage: local(),
+    maxBytes: json.length + 25,
+  });
+  assert.ok(new Blob([json]).size > json.length + 25);
+  await assert.rejects(history.save(run), /too large/);
+  assert.deepEqual(await history.list(), []);
+});
+await test("Check that a serialized copy of a chosen baseline survives IndexedDB eviction", async () => {
+  const history = await openEvaluationHistory({ indexedDB: new FakeIndexedDB(), storage: local(), maxRuns: 2 });
+  await history.save(at(1));
+  await history.save(at(2));
+  const baseline = JSON.parse(JSON.stringify((await history.list()).at(-1)));
+  assert.deepEqual(times(await history.save(at(3), baseline)), minutes(3, 1));
+});
+await test("Check that invalid IndexedDB saves are rejected before history can be evicted", async () => {
+  const history = await openEvaluationHistory({ indexedDB: new FakeIndexedDB(), storage: local(), maxRuns: 1 });
+  await history.save(at(1));
+  await assert.rejects(history.save(at(2, { results: [] })), /invalid dates, versions or results/);
+  assert.deepEqual(times(await history.list()), minutes(1));
+});
+await test("Check that migration keeps valid entries alongside malformed legacy runs", async () => {
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2), { schema: "unsupported" }, at(1)])]]);
+  const history = await openEvaluationHistory({ indexedDB: new FakeIndexedDB(), storage });
+  assert.equal(history.kind, "indexedDB");
+  assert.deepEqual(times(await history.list()), minutes(2, 1));
+  assert.equal(storage.getItem(EVALUATION_HISTORY_KEY), null);
+});
+await test("Check that deleting one duplicate fallback entry leaves the other copy", async () => {
+  const storage = local([[EVALUATION_HISTORY_KEY, JSON.stringify([at(2), at(1), at(1)])]]);
+  const history = await openEvaluationHistory({ indexedDB: null, storage });
+  const repeated = (await history.list()).at(-1);
+  assert.deepEqual(times(await history.remove(repeated)), minutes(2, 1));
+});
+// End lab validation additions
+
 console.log(`${checks} arena storage checks passed`);
