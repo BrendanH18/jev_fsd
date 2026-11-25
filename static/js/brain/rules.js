@@ -142,14 +142,16 @@ export class RulesBrain {
             speed_error: speedError,
           }
         : null;
-      for (const [index, adjust] of BEFORE_SPEED_COST.entries()) {
+      for (let index = 0; index < BEFORE_SPEED_COST.length; index++) {
+        const adjust = BEFORE_SPEED_COST[index];
         const adjustment = adjust(c, snap);
         cost += adjustment;
         if (terms && adjustment) terms[`feature_before_speed_cost_${index}`] = adjustment;
       }
       // ending above the target is worse than below it: the target already accounts for what is ahead
       if (s.end_speed > vWant + 0.5) cost += explainCost(terms, "overspeed", 2.0 * (s.end_speed - vWant - 0.5));
-      for (const [index, adjust] of BEFORE_SIGNAL_STOP_COST.entries()) {
+      for (let index = 0; index < BEFORE_SIGNAL_STOP_COST.length; index++) {
+        const adjust = BEFORE_SIGNAL_STOP_COST[index];
         const adjustment = adjust(c, snap);
         cost += adjustment;
         if (terms && adjustment) terms[`feature_before_signal_stop_${index}`] = adjustment;
@@ -171,7 +173,8 @@ export class RulesBrain {
       if (c.id === "stop_at_destination" && snap.nav && snap.nav.remaining_m < 40)
         cost += explainCost(terms, "destination_stop", -6);
       if (c.id === "stop_for_pedestrian") cost += explainCost(terms, "pedestrian_stop", -6);
-      for (const [index, adjust] of BEFORE_STOPS_COST.entries()) {
+      for (let index = 0; index < BEFORE_STOPS_COST.length; index++) {
+        const adjust = BEFORE_STOPS_COST[index];
         const adjustment = adjust(c, snap);
         cost += adjustment;
         if (terms && adjustment) terms[`feature_before_stops_${index}`] = adjustment;
@@ -188,13 +191,15 @@ export class RulesBrain {
         c.id === "wait_short_of_junction"
       )
         cost += explainCost(terms, "required_wait", -6);
-      for (const [index, adjust] of STOPS_COST.entries()) {
+      for (let index = 0; index < STOPS_COST.length; index++) {
+        const adjust = STOPS_COST[index];
         const adjustment = adjust(c, snap);
         cost += adjustment;
         if (terms && adjustment) terms[`feature_stops_${index}`] = adjustment;
       }
       if (c.id === "creep_to_look" || c.id === "wait_to_give_way") cost += explainCost(terms, "creep_or_give_way", -6);
-      for (const [index, adjust] of FEATURE_COST.entries()) {
+      for (let index = 0; index < FEATURE_COST.length; index++) {
+        const adjust = FEATURE_COST[index];
         const adjustment = adjust(c, snap);
         cost += adjustment;
         if (terms && adjustment) terms[`feature_${index}`] = adjustment;
@@ -209,7 +214,8 @@ export class RulesBrain {
       // pulling up where the car reverses into the space comes before driving on past it.
       if (c.law.kind === "park") cost += explainCost(terms, "parking", -50);
       if (c.id === "wait_to_park") cost += explainCost(terms, "parking_approach", -12);
-      for (const [index, adjust] of AFTER_SPECIAL_COST.entries()) {
+      for (let index = 0; index < AFTER_SPECIAL_COST.length; index++) {
+        const adjust = AFTER_SPECIAL_COST[index];
         const adjustment = adjust(c, snap);
         cost += adjustment;
         if (terms && adjustment) terms[`feature_after_special_${index}`] = adjustment;
@@ -221,7 +227,8 @@ export class RulesBrain {
       // passes only for a clear gain and goes back once there is room. A change under way is
       // finished unless finishing it is no longer safe.
       if (c.change) cost += explainCost(terms, "lane_change", c.change.offer === "abort" ? 5.0 : 1.0);
-      for (const [index, adjust] of BEFORE_PASSING_COST.entries()) {
+      for (let index = 0; index < BEFORE_PASSING_COST.length; index++) {
+        const adjust = BEFORE_PASSING_COST[index];
         const adjustment = adjust(c, snap);
         cost += adjustment;
         if (terms && adjustment) terms[`feature_before_passing_${index}`] = adjustment;
