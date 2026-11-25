@@ -171,6 +171,14 @@ def _usable_recording(data) -> bool:
         and data.get("format") == RECORDING_FORMAT
         and isinstance(data.get("header"), dict)
         and isinstance(data.get("drives"), dict)
+        and _drive_answers_shaped(data["drives"])
+    )
+
+
+def _drive_answers_shaped(drives: dict) -> bool:
+    """Each drive maps request keys to lists of outcomes, as the browser's tape player expects."""
+    return all(
+        isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()
     )
 
 
@@ -634,9 +642,7 @@ def api_recording_save(body, _query):
     results, scenarios = body.get("results", {}), body.get("scenarios", {})
     if not all(isinstance(v, dict) for v in (header, drives, results, scenarios)):
         raise BadRequest("a recording needs header, drives, results and scenarios objects")
-    if not all(
-        isinstance(answers, dict) and all(isinstance(v, list) for v in answers.values()) for answers in drives.values()
-    ):
+    if not _drive_answers_shaped(drives):
         raise BadRequest("each drive maps request keys to lists of outcomes")
     declared, manifest = header.get("suite_version"), header.get("manifest")
     if (

@@ -397,10 +397,14 @@ class ArtifactTests(unittest.TestCase):
         """Serve the same valid compressed tape that the catalog lists when the plain tape is malformed."""
         self.write_recording("drive", driver="compressed", zipped=True)
         plain = self.write_recording("drive", driver="plain")
-        plain.write_text(json.dumps({"format": server.RECORDING_FORMAT, "header": {"driver": "plain"}, "drives": []}))
-        slots = server.api_recordings({}, {})["recordings"]
-        self.assertEqual([slot["header"]["driver"] for slot in slots], ["compressed"])
-        self.assertEqual(server.api_recordings({}, {"name": ["drive"]})["header"]["driver"], "compressed")
+        for drives in ([], {"trip": []}, {"trip": {"key": {}}}):
+            with self.subTest(drives=drives):
+                server._artifact_metadata.cache_clear()
+                body = {"format": server.RECORDING_FORMAT, "header": {"driver": "plain"}, "drives": drives}
+                plain.write_text(json.dumps(body))
+                slots = server.api_recordings({}, {})["recordings"]
+                self.assertEqual([slot["header"]["driver"] for slot in slots], ["compressed"])
+                self.assertEqual(server.api_recordings({}, {"name": ["drive"]})["header"]["driver"], "compressed")
 
     def test_snapshot_expect(self):
         """Require snapshot expected answers to be stored as an object."""
@@ -782,6 +786,10 @@ class JevClientTests(unittest.TestCase):
         trace = client.JevResult({}, response, 1).trace()
         self.assertEqual(trace["response"]["usage"], {"input_tokens": None, "detail": [None, 3]})
         json.dumps(trace, allow_nan=False)
+        answers = json.loads('{"answers": {"vector": {"answer": "a", "probability": 1e999}}}')
+        result = client.JevResult({}, answers, 1)
+        self.assertIsNone(result.answers["vector"]["probability"])
+        json.dumps({"answers": result.answers, "meta": result.meta(), "trace": result.trace()}, allow_nan=False)
 
     def test_jev_answer_container(self):
         """Return an empty answer object for an unusable Jev answers container."""
@@ -859,9 +867,10 @@ class MapCatalogTests(unittest.TestCase):
         damaged = (
             {**pack, "extent": [0, 0, float("nan"), 1]},
             {**pack, "edges": [{**pack["edges"][0], "pts": [[0, 0], [float("inf"), 1]]}]},
+            {**pack, "extent": [0, 0, 10**400, 1]},
         )
         for contents in damaged:
-            with self.subTest(contents=contents):
+            with self.subTest(contents=str(contents)[:80]):
                 self.path.write_text(json.dumps(contents))
                 catalog = maps.catalog(self.root)
                 self.assertFalse(catalog[0]["cached"])

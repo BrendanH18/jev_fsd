@@ -70,6 +70,8 @@ class JevResult:
 
     def __init__(self, request: dict, response: dict, latency_ms: float, backend: str = ""):
         self.request = request
+        # Overflowing provider numbers become null so answers, meta and traces always serialize.
+        response = _json_safe(response)
         self.response = response
         self.latency_ms = latency_ms
         self.backend = backend
@@ -103,7 +105,7 @@ class JevResult:
         }
 
     def trace(self) -> dict:
-        return {"request": self.request, "response": _json_safe(self.response), "meta": self.meta()}
+        return {"request": self.request, "response": self.response, "meta": self.meta()}
 
 
 def _json_safe(value):
