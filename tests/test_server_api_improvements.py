@@ -832,7 +832,14 @@ class MapCatalogTests(unittest.TestCase):
 
     def test_replaced_map_metadata(self):
         """Refresh a map preview after atomic replacement preserves its size and timestamp."""
-        pack = {"edges": [], "intersections": [], "stops": [], "buildings": [], "extent": [0, 0, 1, 1]}
+        pack = {
+            "pack_version": maps.PACK_VERSION,
+            "edges": [],
+            "intersections": [],
+            "stops": [],
+            "buildings": [],
+            "extent": [0, 0, 1, 1],
+        }
         self.path.write_text(json.dumps(pack))
         self.assertEqual(maps.catalog(self.root)[0]["extent"], [0, 0, 1, 1])
         original = self.path.stat()

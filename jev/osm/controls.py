@@ -142,9 +142,14 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
 
     stops = []
     stop_k = 0
-    for nid, (lat, lon, tags) in osm.nodes.items():
-        if tags.get("highway") != "stop":
-            continue
+    stop_nodes = {nid: node for nid, node in osm.nodes.items() if node[2].get("highway") == "stop"}
+    interior_stops = {nid: [] for nid in stop_nodes if "n%d" % nid not in graph.vertices}
+    if interior_stops:
+        for eid, edge in graph.edges.items():
+            for nid, s in edge["node_s"].items():
+                if nid in interior_stops:
+                    interior_stops[nid].append((eid, s))
+    for nid, (lat, lon, tags) in stop_nodes.items():
         direction = (tags.get("direction") or "").lower()
         all_way = tags.get("stop") == "all"
         x, y = proj.to_xy(lat, lon)
@@ -159,10 +164,8 @@ def attach_controls(osm: OsmData, graph: RoadGraph, proj: Projection, seed: int 
             if not direction and len(graph.in_edges.get(vid, [])) >= MIN_APPROACHES:
                 all_way = True
         else:
-            for eid, e in graph.edges.items():
-                s = e["node_s"].get(nid)
-                if s is None:
-                    continue
+            for eid, s in interior_stops[nid]:
+                e = graph.edges[eid]
                 if direction in ("forward", "backward"):
                     if e["forward"] != (direction == "forward"):
                         continue

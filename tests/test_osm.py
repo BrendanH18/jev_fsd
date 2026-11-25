@@ -1,6 +1,7 @@
 import json
 import math
 import unittest
+from unittest.mock import patch
 from urllib.parse import urlparse
 
 from helpers import grid_pack, synthetic_osm
@@ -8,7 +9,17 @@ from helpers import grid_pack, synthetic_osm
 from jev import geometry as g
 from jev.osm import fetch
 from jev.osm.buildings import extract_buildings
-from jev.osm.graph import build_graph, is_drivable, lanes_per_direction, parse_maxspeed, way_direction
+from jev.osm.graph import (
+    PARKING_LANE_M,
+    build_graph,
+    is_bike_route,
+    is_drivable,
+    lanes_per_direction,
+    parking_sides,
+    parse_maxspeed,
+    way_direction,
+)
+from jev.osm.pack import pack_from_osm
 from jev.osm.parse import OsmData, parse_xml
 from jev.osm.project import Projection
 
@@ -50,6 +61,55 @@ class TagTests(unittest.TestCase):
         self.assertTrue(is_drivable({"highway": "residential", "tunnel": "yes"}))
         self.assertFalse(is_drivable({"highway": "living_street", "covered": "yes"}))
         self.assertFalse(is_drivable({"highway": "tertiary", "tunnel": "building_passage"}))
+
+    def test_private_access_requires_explicit_motor_vehicle_permission(self):
+        tags = {"highway": "residential", "access": "private"}
+        self.assertFalse(is_drivable(tags))
+        self.assertTrue(is_drivable({**tags, "motor_vehicle": "permissive"}))
+        self.assertFalse(is_drivable({**tags, "bicycle": "yes"}))
+
+    def test_service_opt_in_still_excludes_driveways_and_parking_aisles(self):
+        tags = {"highway": "service"}
+        self.assertFalse(is_drivable(tags))
+        self.assertTrue(is_drivable(tags, include_service=True))
+        for kind in ("driveway", "parking_aisle"):
+            self.assertFalse(is_drivable({**tags, "service": kind}, include_service=True))
+
+    def test_highway_area_is_not_a_routable_linear_way(self):
+        self.assertFalse(is_drivable({"highway": "residential", "area": "yes"}))
+
+    def test_parking_side_tag_overrides_the_both_sides_tag(self):
+        tags = {"parking:left": "no", "parking:both": "lane"}
+        self.assertEqual(parking_sides(tags, "secondary", False), (0, PARKING_LANE_M))
+
+    def test_nonparallel_parking_is_not_a_curbside_lane(self):
+        tags = {"parking:both": "lane", "parking:right": "lane", "parking:right:orientation": "diagonal"}
+        self.assertEqual(parking_sides(tags, "residential", False), (PARKING_LANE_M, 0))
+
+    def test_legacy_parking_lane_tags_still_apply(self):
+        tags = {"parking:lane:right": "parallel"}
+        self.assertEqual(parking_sides(tags, "primary", True), (0, PARKING_LANE_M))
+
+    def test_one_way_and_roundabout_parking_defaults_are_empty(self):
+        self.assertEqual(parking_sides({}, "residential", True), (0, 0))
+        self.assertEqual(parking_sides({"junction": "roundabout"}, "residential", False), (0, 0))
+
+    def test_bike_routes_accept_network_tags_and_reject_bare_permission(self):
+        self.assertTrue(is_bike_route({"lcn": "yes"}))
+        self.assertTrue(is_bike_route({"bicycle": "designated"}))
+        self.assertFalse(is_bike_route({"bicycle": "yes"}))
+
+    def test_build_graph_reuses_projected_points_for_linear_referencing(self):
+        osm = OsmData()
+        for i in range(3):
+            osm.add_node(i + 1, 49.0, -123 + i * 0.001)
+        osm.add_way(4, [1, 2, 3], {"highway": "residential"})
+        proj = Projection(49.0, -123.0)
+        with patch.object(proj, "to_xy", wraps=proj.to_xy) as project:
+            graph = build_graph(osm, proj)
+        self.assertEqual(project.call_count, 5)  # three shape points and two graph vertices
+        edge = graph.edges["e0"]
+        self.assertAlmostEqual(edge["node_s"][2], edge["length"] / 2, places=5)
 
     def test_roundabout_split_over_ways_is_one_ring_on_its_carriageway(self):
         osm = OsmData()
@@ -237,8 +297,6 @@ class ControlsTests(unittest.TestCase):
         <way id="10"><nd ref="1"/><nd ref="5"/><nd ref="2"/><nd ref="3"/><tag k="highway" v="residential"/></way>
         <way id="11"><nd ref="4"/><nd ref="2"/><nd ref="6"/><tag k="highway" v="residential"/></way>
         </osm>"""
-        from jev.osm.pack import pack_from_osm
-
         pack = pack_from_osm(parse_xml(xml), (-123.002, 48.998, -122.998, 49.002))
         self.assertEqual(len(pack["stops"]), 1)
         stop = pack["stops"][0]
@@ -247,6 +305,32 @@ class ControlsTests(unittest.TestCase):
         self.assertEqual(edge["to"], "n2")
         self.assertGreater(edge["pts"][-1][0], edge["pts"][0][0])  # eastbound
         self.assertAlmostEqual(edge["length"] - stop["s_line"], 8.0, delta=0.5)
+
+    def test_multiple_interior_stops_preserve_the_first_sign_per_direction(self):
+        osm = OsmData()
+        bbox = (-0.01, -0.01, 0.01, 0.01)
+        proj = Projection.for_bbox(bbox)
+        for node, x, tags in (
+            (3, 45, {"highway": "stop", "direction": "forward"}),
+            (2, 25, {"highway": "stop", "direction": "forward"}),
+            (1, 0, {}),
+            (4, 75, {"highway": "stop", "direction": "backward"}),
+            (5, 100, {}),
+        ):
+            osm.add_node(node, *proj.to_latlon(x, 0), tags)
+        osm.add_way(10, [1, 2, 3, 4, 5], {"highway": "residential"})
+        pack = pack_from_osm(osm, bbox)
+        self.assertEqual([(s["edge"], s["s_line"]) for s in pack["stops"]], [("e0", 45), ("e1", 25)])
+
+    def test_untagged_interior_stop_targets_the_nearer_downstream_junction(self):
+        osm = OsmData()
+        bbox = (-0.01, -0.01, 0.01, 0.01)
+        proj = Projection.for_bbox(bbox)
+        for node, x, tags in ((1, 0, {}), (2, 80, {"highway": "stop"}), (3, 100, {})):
+            osm.add_node(node, *proj.to_latlon(x, 0), tags)
+        osm.add_way(10, [1, 2, 3], {"highway": "residential"})
+        stops = pack_from_osm(osm, bbox)["stops"]
+        self.assertEqual([(s["edge"], s["s_line"]) for s in stops], [("e0", 80)])
 
 
 class PackTests(unittest.TestCase):

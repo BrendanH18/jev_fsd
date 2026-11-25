@@ -230,11 +230,11 @@ def build_graph(osm: OsmData, proj: Projection, include_service: bool = False) -
         cut_points.append(len(node_ids) - 1)
         for a, b in zip(cut_points, cut_points[1:]):
             seg_nodes = node_ids[a : b + 1]
-            pts = [proj.to_xy(osm.nodes[n][0], osm.nodes[n][1]) for n in seg_nodes]
-            pts = g.dedupe_consecutive(pts, 0.05)
+            projected = [proj.to_xy(osm.nodes[n][0], osm.nodes[n][1]) for n in seg_nodes]
+            pts = g.dedupe_consecutive(projected, 0.05)
             if len(pts) < 2 or g.polyline_length(pts) < MIN_EDGE_M:
                 continue
-            node_s = _node_positions(seg_nodes, [proj.to_xy(osm.nodes[n][0], osm.nodes[n][1]) for n in seg_nodes])
+            node_s = _node_positions(seg_nodes, projected)
             base = {
                 "osm_way": w["id"],
                 "cls": cls,

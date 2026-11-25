@@ -26,9 +26,9 @@ class PxoTests(unittest.TestCase):
         bbox = PRESET_BBOXES["toronto"]
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            (root / (cache_key(bbox) + ".crossings.v1.json")).write_text('{"crossings_version":"1"}')
+            (root / (cache_key(bbox) + ".crossings.v1.json")).write_text('{"crossings_version":"1","crossings":[]}')
             self.assertEqual(load_crossings(bbox, root)["crossings_version"], "1")
-            crossings_path(root, bbox).write_text('{"crossings_version":"2"}')
+            crossings_path(root, bbox).write_text('{"crossings_version":"2","crossings":[]}')
             self.assertEqual(load_crossings(bbox, root)["crossings_version"], "2")
 
     def test_bundled_pxo_additions_preserve_every_legacy_crossing(self):
