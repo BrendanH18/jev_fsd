@@ -13,7 +13,10 @@ export const STREET = {
   secondary: [0.0, 2.6],
   primary: [0.0, 3.2],
 };
-export const streetOf = (e) => STREET[e.cls.replace("_link", "")] || [1.0, 1.8];
+export function streetOf(e) {
+  const cls = typeof e.cls === "string" ? e.cls.replace(/_link$/, "") : "";
+  return Object.hasOwn(STREET, cls) ? STREET[cls] : [1.0, 1.8];
+}
 
 // Center of the sidewalk on the right (side = 1) or left (side = -1) of the edge.
 export function sidewalkOffset(e, side) {

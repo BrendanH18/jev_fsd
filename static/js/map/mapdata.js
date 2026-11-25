@@ -19,7 +19,7 @@ const STOP_AHEAD_M = 30;
 // Road classes by importance, for junctions without a sign or signal: a road of a lower class gives
 // way to one of a higher class (primary and secondary roads, then tertiary, then everything else).
 const CLASS_RANK = { primary: 3, primary_link: 3, secondary: 3, secondary_link: 3, tertiary: 2, tertiary_link: 2 };
-export const roadRank = (e) => CLASS_RANK[e.cls] || 1;
+export const roadRank = (e) => (Object.hasOwn(CLASS_RANK, e.cls) ? CLASS_RANK[e.cls] : 1);
 // A right turn on a red light, after a full stop, is legal across Canada except on the island of
 // Montréal. A coarse outline of the island (lon, lat), good to a few hundred metres at the shore.
 const MONTREAL_ISLAND = [
@@ -138,12 +138,13 @@ export function projectPoint(pts, cum, p, hint = null) {
 // Near-straight joins whose ends do not meet: spread the shift over a few meters.
 export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
   if (!before.length) return after.slice();
-  if (after.length < 2 || before.length < 2 || cumulative(after).at(-1) < 3)
+  if (!after.length) return before.slice();
+  const ca = cumulative(after);
+  const La = ca[ca.length - 1];
+  if (after.length < 2 || before.length < 2 || La < 3)
     return before.concat(after.slice(dist(before[before.length - 1], after[0]) < 0.05 ? 1 : 0));
-  const cb = cumulative(before),
-    ca = cumulative(after);
-  const Lb = cb[cb.length - 1],
-    La = ca[ca.length - 1];
+  const cb = cumulative(before);
+  const Lb = cb[cb.length - 1];
   const e = before[before.length - 1],
     s0 = after[0];
   const unit = (a, b) => {

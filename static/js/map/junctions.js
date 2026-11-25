@@ -20,7 +20,8 @@ function legFrame(e, out, d) {
 }
 
 export function hull(points) {
-  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const pts = sorted.filter((p, i) => i === 0 || p[0] !== sorted[i - 1][0] || p[1] !== sorted[i - 1][1]);
   if (pts.length < 3) return pts;
   const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lower = [],

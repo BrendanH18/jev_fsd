@@ -90,6 +90,7 @@
     "test_left_turn.mjs": 26.6,
     "test_level_crossings.mjs": 20.1,
     "test_llm_agent.mjs": 0.4,
+    "test_map_helpers.mjs": 0.04,
     "test_merge_recordings.mjs": 0.3,
     "test_midblock_stop.mjs": 0.1,
     "test_model_recording.mjs": 17.6,
