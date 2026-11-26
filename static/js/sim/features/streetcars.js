@@ -240,6 +240,7 @@ export default {
     traffic: true,
     long: true,
     heavy: true,
+    ownLane: true,
     onTrack: true,
     noParking: () => true,
     pathPolicy: () => false,

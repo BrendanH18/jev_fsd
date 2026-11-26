@@ -26,6 +26,7 @@ const {
   streetcarRelation,
 } = await import("../static/js/sim/streetcar.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
+const { featureObstacle } = await import("../static/js/sim/features/index.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, buildQuestions, situationClauses } = await import("../static/js/brain/state.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
@@ -443,6 +444,13 @@ test("a checkpoint and restore brings back the streetcar's riders", () => {
     target.fleet.streetcars.list.some((v) => v.id === tram),
     "and the fleet's list of them",
   );
+});
+
+test("a streetcar keeps to its track: no easing round what stands at the kerb, no pulling over", () => {
+  const { tram } = doors();
+  const descriptor = featureObstacle(tram);
+  assert.equal(descriptor?.ownLane, true, "keeps its own lane past a bus standing at its stop");
+  assert.equal(descriptor?.onTrack, true, "never pulls over for an emergency vehicle");
 });
 
 console.log(`${checks} streetcar checks passed`);

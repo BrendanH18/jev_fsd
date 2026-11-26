@@ -11,7 +11,7 @@ import { obbOverlap } from "./collision.js";
 import { crosswalkConflict } from "./pedestrians.js";
 import { current as weather } from "./weather.js";
 import { pathLine } from "./traffic-geometry.js";
-import { controlAt, hooks } from "./features/index.js";
+import { controlAt, featureObstacle, hooks } from "./features/index.js";
 import {
   IDM,
   LEADER_MARGIN_M,
@@ -446,7 +446,8 @@ export class EmergencyTraffic {
 
   // How far right a driver giving way has moved over in its lane so far (a cyclist already keeps right).
   pullOver(n, edge, front, dt, giveWay) {
-    const pullTo = giveWay?.yielding && n.kind !== "bike" && !n.transit?.tram ? this.pullOverTo(n, edge, front) : 0;
+    const pullTo =
+      giveWay?.yielding && n.kind !== "bike" && !featureObstacle(n)?.onTrack ? this.pullOverTo(n, edge, front) : 0;
     n.evShift = (n.evShift || 0) + Math.max(-EV_SHIFT_MPS * dt, Math.min(EV_SHIFT_MPS * dt, pullTo - (n.evShift || 0)));
     return n.evShift;
   }
