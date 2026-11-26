@@ -336,11 +336,16 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   own before-and-after record, then their merge, matched `8c34c637` on the bare and city suites (Kitsilano
   dry, snow, 23:30 and with parking; Toronto, Edmonton, Calgary and Halifax), all 62 Rules and cautious
   drives, both prompts and the stub recording ([records](docs/validation/registry-final/merged.md)).
-- [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
+- [x] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
   under about 150 lines, with the same before-and-after record as 3.2.
   Fleet scheduling and snapshot assembly have been extracted. The per-vehicle traffic loop still
   needs to be split.
+  *Done 26 November:* `NpcFleet.step` (744 lines after the scheduling extraction) is 10 lines and calls
+  `stepVehicle`, which runs 13 named stages in the old order, the longest 101 lines. `buildSnapshot` (71
+  lines) and `needsMotionQuestion` (a 15-line `or`) needed nothing more. Every capture matched before and
+  after ([record](docs/validation/registry-final/split.md)). `desiredSpeed` in `brain/sensors.js` (212 lines)
+  is the longest left; 3.3 did not name it.
 - [x] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same
   thing: opt-in, own random stream, one shared conflict test, audit only once seen. State that
   pattern once, and move each feature's detail to the reference docs. Aim for under 12 KB.
@@ -394,7 +399,8 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   re-baselines routes, so the Python router and NPC paths join lanes the same way.
 
 Exit: adding a feature needs its own file, its challenge, its test and one registration line.
-*The proof on three features was met on 14 November; this exit needs 3.2 and 3.10.*
+*The proof on three features was met on 14 November, and 3.2 and 3.3 on 26 November; this exit still
+needs 3.10 (feature meshes and per-frame effects outside a record).*
 
 ## Phase 4: a benchmark that separates drivers
 
@@ -739,4 +745,4 @@ documented path, and adding it grows the repository by a stated, small amount.
 | 16 to 19 Nov | Ruff and Biome with blocking CI, pinned actions, each major lab's own API, faster browser CI |
 | 20 Nov | The open track, Jev and Claude Haiku results, 0.3.0, Boat sandboxes for agent work, 100 offline reports and run comparison, a keyless model replay in the demo, the registry at nine features |
 | 25 Nov | 5000 improvements in 25 areas ([inventory](docs/validation/five-thousand/README.md)); the registry at 34 of 41 features; actor meshes through the feature adapter |
-| 26 Nov | The registry at 41 of 41 features (3.2) |
+| 26 Nov | The registry at 41 of 41 features (3.2); the traffic loop split into stages (3.3) |

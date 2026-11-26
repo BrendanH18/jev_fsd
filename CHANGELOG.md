@@ -42,6 +42,7 @@
 - Register transit buses, school buses, streetcars, trains at level crossings, emergency vehicles,
   destination parking and hidden hazards through the feature interface, so all 41 opt-in features are
   records and the core files name none of them.
+- Split the per-vehicle traffic step into named stages, with identical results.
 - Watch four published model drives and replay a retained manual incident beside Jev.
 - Run CI on GitHub-hosted standard runners, free for this public repository, instead of Namespace.
 - Trace where the same tuned Rules drive first differs across JavaScript engines.
