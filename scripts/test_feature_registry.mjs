@@ -737,7 +737,17 @@ test("feature records reject malformed configuration with the field that needs f
     [{ coach: { deductions: [{ ...postDeduction, category: "speed" }] } }, /coach.deductions needs a score category/],
     [{ coach: { typo() {} } }, /unknown coach field/],
   ];
+  const at = (slot) => ({ at: slot, run() {} });
+  bad.push(
+    [{ state: [at("afterRearTraffic")] }, /fewer than two slots/],
+    [{ state: [at("afterRearTraffic"), at("afterRearTraffic")] }, /twice/],
+    [{ state: [{ run() {} }, at("afterRearTraffic")] }, /without its slot/],
+    [{ state: [at("afterRearTraffic"), at("nowhere")] }, /never runs/],
+    [{ prompt: [at("afterRightHook"), at("restrictions")] }, /must be an object/],
+  );
   for (const [fields, error] of bad) assert.match(R.recordProblem({ ...valid, ...fields }), error);
+  // (one hook at two slots of a pipeline)
+  assert.equal(R.recordProblem({ ...valid, state: [at("afterRearTraffic"), at("beforeTurnaround")] }), null);
   assert.match(R.recordProblem(null), /must be an object/);
   assert.equal(R.recordProblem({ ...valid, notice, coach: { reports: [coachReport], tips: [coachTip] } }), null);
   assert.equal(R.recordProblem({ ...valid, coach: { deductions: [{ ...postDeduction, category: "control" }] } }), null);

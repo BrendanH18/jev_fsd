@@ -67,7 +67,8 @@
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
 //   evKerb(world, road, front)          the emergency audit's furthest right the car can be asked to pull
-//                                       over, metres right of its lane's centre, or Infinity ("end")
+//                                       over, metres right of its lane's centre, or Infinity ("end";
+//                                       run by sim/emergency-audit.js)
 //   sense(world, snap, ctx)             the sensing pass: "afterRightHook" (with the lane, `visible` and what is
 //                                       executing), "parking", "driveways", "streetHazards", "late", "junctions",
 //                                       or "following" once the vehicles ahead and behind are known
@@ -83,7 +84,7 @@
 //   detour(snap)                        a move round an obstruction ("parking") or inside the lane
 //                                       in registration order ("end"), or null
 //   evStop(world, route, frontS, v, stop, decel)  where the car stops for an emergency vehicle, kept short
-//                                       of where the feature has it keep out ("end")
+//                                       of where the feature has it keep out ("end"; run by sim/emergency-yield.js)
 //   blocksView(world, from, to)         true: it blocks the car's view along a street from a junction ("end")
 //   turnPace(world, frontS, distance)   { mps, accel } the car crosses a junction at, over what the feature
 //                                       makes slippery, or null ("end")
@@ -93,7 +94,7 @@
 //   lineStop(snap)                      extra law fields for the candidate that stops at the line ("end")
 //   adjust(ctx, list)                   every lane candidate once the list is cut: "first", "streetHazards", "end"
 //   pullOverDetour(snap, detour, stopS) true: pulling over for an emergency vehicle to stop at `stopS`
-//                                       drops the lane's `detour` ("end")
+//                                       drops the lane's `detour` ("end"; run by the emergency record)
 //   brakeDetour(ctx)                    the move `hard_brake` keeps to, or null ("end")
 //   sim(world, snap, predictions)       the forward sims: null, or a checker { wheels, start(), afterLaw(car,
 //                                       wheelsBefore, t), along(s, front, car), near(car, box, obstacle,
@@ -134,7 +135,8 @@
 //   trafficControl(world, vehicle, edgeId) direction overriding traffic's signal, with per-car state ("end")
 //   trafficSignalProceed(world, fleet, n, edge, control, signal, distance, canStop) truthy to skip an ordinary signal stop ("end")
 //   trafficSignalHold(world, n, edge, control, distance, traffic) truthy to hold ordinary traffic at a green ("end")
-//   evQueueHold(world, front)         { distance, vehicle } of a stopped queue the ego approaches ("end")
+//   evQueueHold(world, front)         { distance, vehicle } of a stopped queue the ego approaches ("end"; run by
+//                                       sim/emergency-audit.js)
 //   vehicleLabel(vehicle)             what a vehicle is called that is not an ordinary car, or null ("end")
 //   trafficManage(world, fleet, dt)     update fleet-wide state before the transit ("beforeTransit"), before and after plow
 //                                       dispatch ("beforePlows", "afterPlows") or before the vehicle loop ("end")
