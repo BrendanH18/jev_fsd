@@ -54,8 +54,7 @@
 //   and the hooks below.
 //
 //   rulesStop(snap, eligible)          true when Rules should stop ("beforeSignal" or "end")
-//   rulesCost(candidate, snap)        a signed change to Rules' cost for the candidate ("end"; "special" beside
-//                                       turning round and parking)
+//   rulesCost(candidate, snap)        a signed change to Rules' cost for the candidate ("end")
 //   rulesWait(candidate)               true when Rules counts the candidate as a required wait ("end")
 //   rulesLaneGoal(candidate, snap)    metres off its lane's centre the candidate is meant to end, or null ("end")
 //   cautious(snap, eligible, target)   a candidate the cautious agent should choose, or null
@@ -246,7 +245,8 @@
 //   keepsDestination(snap)              true: arriving is not yet a reason for Rules to stop ("end")
 //   manoeuvreGoesOn(candidate)          true: Rules carries on with this clear manoeuvre whatever the reasons to
 //                                       stop ahead, as with a turnaround ("end")
-//   rulesTerms(candidate, snap)         { term: amount } added to Rules' cost under those names ("afterTurnaround")
+//   rulesTerms(candidate, snap)         { term: amount } added to Rules' cost under those names ("special", beside
+//                                       turning round, or "afterTurnaround")
 //   safetyLaw(world, law)               { reversing, gapStill, gapMoving, ttcMoving, passesOncoming } for a
 //                                       manoeuvre the safety brake allows closer, or null ("end")
 //   examinerScript(route, lines, { say }) push the examiner's own lines for the road test ("end")
@@ -365,16 +365,7 @@ export const SLOTS = {
   notice: ["beforeMerge", "beforePlow", "afterTraffic", "beforeLeftOnRed", "afterTurnNotice", "end", "beforeZone"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
-  rulesCost: [
-    "beforeSpeedCost",
-    "beforeSignalStop",
-    "beforeStops",
-    "stops",
-    "special",
-    "afterSpecial",
-    "beforePassing",
-    "end",
-  ],
+  rulesCost: ["beforeSpeedCost", "beforeSignalStop", "beforeStops", "stops", "afterSpecial", "beforePassing", "end"],
   rulesLaneGoal: ["end"],
   cautious: [
     "first",
@@ -777,7 +768,7 @@ export const SLOTS = {
   arrivalCriterion: ["end"],
   keepsDestination: ["end"],
   manoeuvreGoesOn: ["end"],
-  rulesTerms: ["afterTurnaround"],
+  rulesTerms: ["special", "afterTurnaround"],
   safetyLaw: ["end"],
   examinerScript: ["end"],
   examinerMarks: ["end"],

@@ -245,11 +245,11 @@ export default {
   // The built-in drivers. Rules: pull over and stop at once, rather than stop in the lane (outweighing the
   // cost of ending up out of the lane's centre), judged by how near it ends to where it pulls over to, across
   // lanes to the kerb if need be: from the lane's centre, two lanes out, it would cost as much as its bonus.
-  rulesCost: { at: "special", run: (c) => (c.id === "pull_over" ? -15 : 0) },
+  rulesTerms: { at: "special", run: (c) => (c.id === "pull_over" ? { pull_over: -15 } : null) },
   rulesLaneGoal: (c) => (c.id === "pull_over" ? c.law.offset - c.law.center : null),
   // The cautious agent pulls over and stops, whatever it costs in lane position, before anything else.
   cautious: { at: "first", run: (_snap, eligible) => eligible.find((c) => c.id === "pull_over") ?? null },
-  cautiousDrive: (candidate) => candidate.id === "pull_over",
+  cautiousDrive: { at: "plannedStop", run: (candidate) => candidate.id === "pull_over" },
   // (waiting pulled over, or behind one it let go by that has stopped, is no deadlock)
   legitimateStop: (snap) =>
     (snap?.emergency && snap.emergency.bumper_to_stop_m !== null && snap.emergency.bumper_to_stop_m < 8) ||

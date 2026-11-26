@@ -43,10 +43,11 @@ parkers' `evQueueHold`) are now dispatched by the emergency modules in registrat
   and `boxBusy` an `onRoad` flag, both supplied by the emergency step as the core did itself.
   `npc.js` now exports `IDM`, `LOOK_M`, `LEADER_MARGIN_M`, `featureTrafficSpeed`, `bodySweepLook`,
   `sweptBodyGap` and `curveSpeed` for it.
-- **Diagnostics only.** Rules' explanation now names the pull-over bonus `feature_special_0` instead of
-  `pull_over`, and the cautious agent's reports `feature_first` and `feature_planned_stop` instead of
-  `pull_over` and `planned_stop`. These appear only in `explain()` and the opt-in decision trace; the choice,
-  the motion and every result are unchanged (`scripts/test_5k_planning_policy.mjs` updated).
+- **Diagnostics only.** On the branch, Rules' explanation named the pull-over bonus `feature_special_0`, and
+  the cautious agent reported `feature_first` and `feature_planned_stop`. After the merge the bonus is a
+  named Rules term (`rulesTerms` at `"special"`), the cautious agent reports the first pick by its candidate
+  id and the pull-over's stop at `cautiousDrive`'s `"plannedStop"`, so `explain()` and the decision trace say
+  `pull_over` and `planned_stop` again, as before the move (`scripts/test_5k_planning_policy.mjs`).
 
 ## Left in the core
 

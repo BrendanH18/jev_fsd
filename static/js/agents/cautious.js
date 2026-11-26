@@ -71,8 +71,10 @@ export class CautiousAgent {
       if (candidate) selection = reason;
       return candidate;
     };
+    // (a feature's first pick is reported by its candidate id)
+    const first = firstHookResult(FIRST, snap, eligible, target);
     const candidate =
-      picked(firstHookResult(FIRST, snap, eligible, target), "feature_first") ||
+      picked(first, first?.id) ||
       picked(firstHookResult(BEFORE_BUS_LANES, snap, eligible, target), "feature_before_bus_lanes") ||
       picked(firstHookResult(RESERVED_LANE, snap, eligible, target), "feature_reserved_lane") ||
       picked(firstHookResult(AFTER_BUS_LANES, snap, eligible, target), "feature_after_bus_lanes") ||

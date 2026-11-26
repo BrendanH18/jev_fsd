@@ -23,7 +23,7 @@ const STOPS_COST = hooks("rulesCost", "stops");
 const BEFORE_PASSING_COST = hooks("rulesCost", "beforePassing");
 const AFTER_SPECIAL_COST = hooks("rulesCost", "afterSpecial");
 const FEATURE_COST = hooks("rulesCost");
-const SPECIAL_COST = hooks("rulesCost", "special");
+const SPECIAL_TERMS = hooks("rulesTerms", "special");
 const LANE_GOAL = hooks("rulesLaneGoal");
 const NAMED_COSTS = hooks("rulesTerms", "afterTurnaround");
 const KEEPS_DESTINATION = hooks("keepsDestination");
@@ -217,12 +217,8 @@ export class RulesBrain {
       }
       // (what a registered feature's own manoeuvre is worth beside turning round and parking: pulling over for
       // an emergency vehicle, say)
-      for (let index = 0; index < SPECIAL_COST.length; index++) {
-        const adjust = SPECIAL_COST[index];
-        const adjustment = adjust(c, snap);
-        cost += adjustment;
-        if (terms && adjustment) terms[`feature_special_${index}`] = adjustment;
-      }
+      for (const named of SPECIAL_TERMS)
+        for (const [name, amount] of Object.entries(named(c, snap) || {})) cost += explainCost(terms, name, amount);
       // Turning round where the route makes a U-turn is the only way on, and once begun it carries
       // on whenever its prediction is clear.
       if (c.law.kind === "turnaround") cost += explainCost(terms, "turnaround", -50);
