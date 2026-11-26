@@ -38,7 +38,8 @@ import { obbOverlap } from "./collision.js";
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { busZones } from "./bus.js";
 import { railIndex } from "./rail.js";
-import { hooks } from "./features/index.js";
+// (from the hook lists alone: the controller loads this module, and the registry loads the controller)
+import { hooks } from "./features/hook-lists.js";
 
 const PARKING_OBSTRUCTED = hooks("parkingObstructed");
 

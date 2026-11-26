@@ -259,6 +259,7 @@
 // (scripts/test_feature_registry.mjs checks each record loads after it).
 import { featureRecordProblem, featureRegistryProblem, hookEntries, slotOf } from "../feature-schema.js";
 import { setSignalPhaseResolver } from "../signals.js";
+import { fillHookLists, hooks } from "./hook-lists.js";
 import balls from "./balls.js";
 import contraflow from "./contraflow.js";
 import collection from "./collection-truck.js";
@@ -788,23 +789,10 @@ function freezeDeclarations(object) {
   for (const { value } of Object.values(Object.getOwnPropertyDescriptors(object))) freezeDeclarations(value);
 }
 
-// A core module can ask before the registry finishes loading through an import cycle.
-// Keep its list identity and fill the list in registration order once all records are ready.
-function hookLists() {
-  return (hookLists.state ??= { byName: new Map(), pending: [], ready: false });
-}
-
-export function hooks(name, slot = "end") {
-  const state = hookLists();
-  if (!state.byName.has(name)) state.byName.set(name, new Map());
-  const slots = state.byName.get(name);
-  if (slots.has(slot)) return slots.get(slot);
-  const out = [];
-  if (state.ready) fillHooks(out, name, slot);
-  else state.pending.push([out, name, slot]);
-  slots.set(slot, out);
-  return out;
-}
+// A core module can ask before the registry finishes loading through an import cycle: the lists live in
+// ./hook-lists.js, which keeps each list's identity and has this module fill it in registration order once
+// all records are ready.
+export { hooks };
 
 function fillHooks(out, name, slot) {
   if (name === "metric" || name === "prompt" || name === "notice")
@@ -1047,8 +1035,5 @@ export const FEATURE_EXAMINER_MINORS = Object.freeze(Object.assign({}, ...FEATUR
 export const FEATURE_SNAPSHOT_FIELDS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.snapshot)));
 
 // (the records have loaded: fill the lists handed out before)
-const hookState = hookLists();
-for (const [out, name, slot] of hookState.pending) fillHooks(out, name, slot);
-hookState.pending.length = 0;
-hookState.ready = true;
+fillHookLists(fillHooks);
 setSignalPhaseResolver(specialSignalPhase);

@@ -969,7 +969,9 @@ test("the registry comparison requires both complete captures and flags non-timi
 
 test("every record loads in a fresh process, through the registry as the core loads it", () => {
   const dir = new URL("../static/js/sim/features/", import.meta.url);
-  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "index.js")) {
+  for (const file of fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".js") && f !== "index.js" && f !== "hook-lists.js")) {
     // (fixed code; the two modules come in as arguments)
     const code =
       'globalThis.document = { querySelector: () => null }; await import(process.argv[1]); const r = await import(process.argv[2]); if (!r.default?.key) throw new Error("no record");';
@@ -996,6 +998,9 @@ test("standalone feature simulations can load before the registry", () => {
     ["outage", "Outages"],
     ["work-zone", "WorkZones"],
     ["signals", "setScrambles"],
+    ["bus", "isBus"],
+    ["transit-runs", "TransitRuns"],
+    ["parallel-park", "stepParking"],
   ]) {
     const entry = new URL(`../static/js/sim/${module}.js`, import.meta.url);
     const code = `globalThis.document = { querySelector: () => null };

@@ -3,6 +3,8 @@ import { performance } from "node:perf_hooks";
 
 const start = performance.now();
 globalThis.document = { querySelector: () => null };
+// (the registry fills parking's hook lists: the work zones, closures and vans that rule out a street)
+await import("../static/js/sim/features/index.js");
 const { CAR, Vehicle } = await import("../static/js/sim/vehicle.js");
 const { ParkedCars, releaseSlot, reserveAvailableSlots, reserveSlot } = await import("../static/js/sim/parking.js");
 const {

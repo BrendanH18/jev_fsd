@@ -76,7 +76,10 @@ The record keeps any conditions required before it requests a detour.
 A core module asks for its hooks once, when it loads (`hooks(name, slot)`). Through an import cycle that
 can be before the records have loaded (the snowbanks record's simulation reaches `sim/npc.js`, say), so the
 list `hooks()` hands out is filled as soon as the registry has loaded, before anything can run it; a slot
-the core never runs is still refused, then.
+the core never runs is still refused, then. The lists live in `features/hook-lists.js`, which imports nothing: a module the
+records load themselves (`sim/parallel-park.js`, which the controller loads) asks it for its list rather
+than loading the registry, so loading the bus lanes or a bus module first cannot reach a record before
+its own module has finished.
 
 An override of a signal has separate hooks for the physical direction, the direction the car can see, and
 the crossing audit. `controlDirection` serves the world light and oncoming-traffic checks.
