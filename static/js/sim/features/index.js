@@ -155,6 +155,8 @@
 //   trafficStart(world, n)              each vehicle step, first ("end") or before scanning signals ("beforeControl")
 //   trafficReplan(world, n)             before its path is extended; true when re-planned ("end")
 //   trafficSpawnBlocked(world, x, y)   true when a traffic spawn is too close to an obstruction ("end")
+//   parkingObstructed(world, edgeId)   true when it rules out parking anywhere on the street, for destination
+//                                       parking and traffic parking alike (sim/parallel-park.js) ("end")
 //   trafficBypass(world, n, front, all, defaultDriver) first bypass or wait for an obstruction: { shift,
 //                                       lineAt(s), ignore, waitGap, limit } at the pursuit point ("end")
 //   trafficActors(world)               road users outside the fleet, also considered by traffic
@@ -581,6 +583,7 @@ export const SLOTS = {
   examinerFail: ["beforeTracks"],
   passBlockReason: ["end"],
   trafficSpawnBlocked: ["end"],
+  parkingObstructed: ["end"],
   detour: ["beforeMerge", "laneControl", "parking", "optional", "end"],
   pullOverDetour: ["end"],
 };
