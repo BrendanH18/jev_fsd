@@ -74,7 +74,7 @@ for (const id of [
 cost(candidate("creep_to_look"), "creep_or_give_way", -6);
 cost(candidate("wait_to_give_way"), "creep_or_give_way", -6);
 cost(candidate("pull_over", { law: { offset: 2, center: 1 }, sim: { lane_err_end: 1 } }), "lateral_error", 0);
-cost(candidate("pull_over"), "pull_over", -15);
+cost(candidate("pull_over"), "feature_special_0", -15);
 cost(candidate("turn_around", { law: { kind: "turnaround" } }), "turnaround", -50);
 cost(candidate("pull_out", { law: { kind: "park" } }), "parking", -50);
 cost(candidate("wait_to_park"), "parking_approach", -12);
@@ -193,7 +193,7 @@ assert.equal(cautious.explain(clear, [keep]).motionReason, "moving_prediction");
 
 const stopping = (id, other) => candidate(id, { sim: { end_speed: 0 }, ...other });
 for (const [id, fields, props, selection, motionReason] of [
-  ["pull_over", {}, {}, "pull_over", "planned_stop"],
+  ["pull_over", {}, {}, "feature_first", "feature_planned_stop"],
   ["stop_for_closure", {}, {}, "feature_before_bus_lanes", "stationary_prediction"],
   [
     "return",

@@ -55,8 +55,7 @@ ${promptLines("amberDecision")}- Choose \`stop_at_line\` when \`situation\` says
 - Choose \`stop_for_pedestrian\` when a pedestrian is crossing ahead of the car.${promptLines("pedestrian")}
 - Choose \`stop_for_oncoming\` when \`situation\` says the car is turning left and oncoming traffic has the right of way.
 - Choose \`stop_for_cyclist\` when \`situation\` says the car is turning right and a cyclist on its right has the right of way.
-- Choose \`pull_over\` when \`situation\` says an emergency vehicle is coming and the car must give way to it, and keep choosing it until it has passed.
-- Choose \`yield_to_bus\` when \`situation\` says a bus ahead is pulling out from its stop and the car must let it out.
+${promptLines("afterRightHook")}- Choose \`yield_to_bus\` when \`situation\` says a bus ahead is pulling out from its stop and the car must let it out.
 - Choose \`stop_at_crosswalk\` when \`situation\` says a vehicle in the next lane is stopped at a crosswalk ahead: never pass it until the car has stopped and looked.
 - Choose \`stop_for_streetcar\` when \`situation\` says a streetcar ahead, going the car's way, is stopped with its doors open: riders cross between it and the curb. Keep the car stopped behind its rear doors until they close.
 - Choose \`stop_before_tracks\` when \`situation\` says a train is coming at a level crossing ahead, or that there is no room past the tracks: never stop on them. Keep the car stopped short of them until the train has passed and there is room for all of the car beyond them.

@@ -2821,7 +2821,7 @@ export class NpcFleet {
       const diff = Math.abs(wrap(o.psi - n.psi));
       if (diff > Math.PI / 6 && diff < (Math.PI * 5) / 6) {
         // The radius includes cars whose tail has already left the crossing street.
-        // A siren can stop one there, but it no longer occupies this junction.
+        // Giving way can stop one there, but it no longer occupies this junction.
         const edge = this.map.edges.get(e.id);
         if (onRoad && edge?.asphalt) {
           const box = o.obb(),
