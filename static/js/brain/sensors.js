@@ -1095,8 +1095,6 @@ function rightHook(world, p, frontS, lane) {
   return best;
 }
 
-}
-
 // A vehicle the car must not pass, stopped at a marked crosswalk ahead on its route, in another lane
 // going its way (sim/crosswalk.js, BC MVA s. 179(3)): the car stops with its front HOLD_M short of
 // the crosswalk's centre, and looks. Not when it could not have stopped there braking at OWED_DECEL

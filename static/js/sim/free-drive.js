@@ -23,8 +23,7 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     hazards,
     stepOuts: hazards ? STEP_OUT_COUNT : 0,
   };
-  const fleet = {
-  };
+  const fleet = {};
   // Each registered option is enabled unless its lowercase query flag is 0.
   for (const { key, flag = key.toLowerCase(), defaultCount, buildFleet, worldOption, freeDrive } of FEATURES) {
     const enabled = on(flag);
