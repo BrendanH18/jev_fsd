@@ -579,742 +579,881 @@ export class NpcFleet {
     const extraTraffic = TRAFFIC_ACTORS.flatMap((actors) => actors(world) ?? []);
     // (what stands at the kerb that drivers ease past: buses at their stops, say)
     const standing = TRAFFIC_STANDING.flatMap((list) => list(world, this) ?? []);
-    for (const n of [...this.vehicles]) {
-      // (with road closures on, say, every driver's way keeps out of a closed block)
-      for (const start of TRAFFIC_START) start(world, n);
-      if (n.frozen > 0) {
-        n.frozen -= dt;
+    const scene = { all, extraTraffic, standing };
+    for (const n of [...this.vehicles]) this.stepVehicle(n, dt, scene);
+  }
+
+  // One driver's step, in stages that share `t`, what this step has found so far: where it is on its path,
+  // the line it keeps to in its lane, what it follows, where it stops, and then the pedals and the wheel.
+  // `scene` is what every driver sees this step: `all` the moving vehicles, `extraTraffic` the actors
+  // outside the fleet, `standing` what stands at the kerb.
+  stepVehicle(n, dt, scene) {
+    // (with road closures on, say, every driver's way keeps out of a closed block)
+    for (const start of TRAFFIC_START) start(this.world, n);
+    if (this.heldInPlace(n, dt, scene)) return;
+    const t = this.placeOnPath(n);
+    this.chooseLane(n, dt, t, scene);
+    this.laneOffset(n, dt, t, scene);
+    this.leaderOnPath(n, t, scene);
+    this.leaderByBody(n, t, scene);
+    this.leaderHolds(n, dt, t);
+    this.controlAhead(n, dt, t, scene);
+    this.stopLines(n, t);
+    this.junctionWaits(n, t);
+    this.unstick(n, dt, t);
+    this.featureHolds(n, dt, t, scene);
+    this.drive(n, dt, t);
+  }
+
+  // A driver that is not driving its lane this step: frozen, waiting at the kerb to pull out, parking,
+  // in a registered feature's manoeuvre, backing off or holding still. True when it has been stepped.
+  heldInPlace(n, dt, { all, extraTraffic }) {
+    const world = this.world;
+    if (n.frozen > 0) {
+      n.frozen -= dt;
+      n.v = 0;
+      return true;
+    }
+    if (TRAFFIC_SPECIAL.some((step) => step(world, this, n, dt, all, extraTraffic))) return true;
+    if (n.pull && n.pull.wait > 0) {
+      n.signal = n.pull.lat > 0 ? "left" : "right";
+      if (this.pullClear(n)) n.pull.wait -= dt;
+      n.v = 0;
+      return true;
+    }
+    // Still at the curb (a parked car close in front, or the driver slow to move off): look again
+    // until the car is actually moving, and go back to waiting if someone is coming now.
+    if (n.pull && !n.pull.moving) {
+      if (n.v > 0.3) n.pull.moving = true;
+      else if (!this.pullClear(n)) {
+        n.pull.t = 0;
+        n.pull.wait = 0.5;
         n.v = 0;
-        continue;
+        return true;
       }
-      if (TRAFFIC_SPECIAL.some((step) => step(world, this, n, dt, all, extraTraffic))) continue;
-      if (n.pull && n.pull.wait > 0) {
-        n.signal = n.pull.lat > 0 ? "left" : "right";
-        if (this.pullClear(n)) n.pull.wait -= dt;
-        n.v = 0;
-        continue;
-      }
-      // Still at the curb (a parked car close in front, or the driver slow to move off): look again
-      // until the car is actually moving, and go back to waiting if someone is coming now.
-      if (n.pull && !n.pull.moving) {
-        if (n.v > 0.3) n.pull.moving = true;
-        else if (!this.pullClear(n)) {
-          n.pull.t = 0;
-          n.pull.wait = 0.5;
-          n.v = 0;
-          continue;
-        }
-      }
-      if (n.parking) {
-        this.parkStep(n, dt);
-        continue;
-      }
-      if (TRAFFIC_MANEUVER.some((step) => step(world, this, n, dt))) continue;
-      if (n.backoff) {
-        this.backOff(n, dt);
-        continue;
-      }
-      if (n.holdFor > 0) {
-        n.holdFor -= dt;
-        n.step(dt, { steer: n.delta, accel: -3 });
-        if (n.v < 0) n.v = 0;
-        continue;
-      }
-      const path = n.path;
-      // (a registered feature's vehicle can keep a path of its own: a streetcar keeps to its track)
-      const pathKind = featureObstacle(n)?.pathPolicy?.(n);
-      if (pathKind !== false) applyTrafficPathPolicy(world, path, pathKind ?? null);
-      if (n.lc && n.lc.t >= n.lc.T) {
-        const lane = this.map.lane(n.lc.edge, n.lc.to);
-        if (lane && path.currentEdge().id === n.lc.edge)
-          path.switchLane(n.lc.to, projectPoint(lane.pts, lane.cum, [n.x, n.y], null).s);
-        n.lc = null;
-        n.lcCooldown = 6;
-      }
-      let proj = projectPoint(path.pts, path.cum, [n.x, n.y], null);
+    }
+    if (n.parking) {
+      this.parkStep(n, dt);
+      return true;
+    }
+    if (TRAFFIC_MANEUVER.some((step) => step(world, this, n, dt))) return true;
+    if (n.backoff) {
+      this.backOff(n, dt);
+      return true;
+    }
+    if (n.holdFor > 0) {
+      n.holdFor -= dt;
+      n.step(dt, { steer: n.delta, accel: -3 });
+      if (n.v < 0) n.v = 0;
+      return true;
+    }
+    return false;
+  }
+
+  // Where the driver is on its path: a finished lane change moves the path onto the new lane, the path is
+  // recovered or re-planned where it needs to be, then extended and trimmed. Starts this step's `t`.
+  placeOnPath(n) {
+    const world = this.world;
+    const path = n.path;
+    // (a registered feature's vehicle can keep a path of its own: a streetcar keeps to its track)
+    const pathKind = featureObstacle(n)?.pathPolicy?.(n);
+    if (pathKind !== false) applyTrafficPathPolicy(world, path, pathKind ?? null);
+    if (n.lc && n.lc.t >= n.lc.T) {
+      const lane = this.map.lane(n.lc.edge, n.lc.to);
+      if (lane && path.currentEdge().id === n.lc.edge)
+        path.switchLane(n.lc.to, projectPoint(lane.pts, lane.cum, [n.x, n.y], null).s);
+      n.lc = null;
+      n.lcCooldown = 6;
+    }
+    let proj = projectPoint(path.pts, path.cum, [n.x, n.y], null);
+    path.s = proj.s;
+    if (proj.distance > 6) {
+      this.recoverPath(n);
+      proj = projectPoint(path.pts, path.cum, [n.x, n.y], null);
       path.s = proj.s;
-      if (proj.distance > 6) {
-        this.recoverPath(n);
-        proj = projectPoint(path.pts, path.cum, [n.x, n.y], null);
+    }
+    for (const replan of TRAFFIC_BEFORE_CORNER)
+      if (replan(world, n)) {
+        proj = projectPoint(path.pts, path.cum, [n.x, n.y]);
         path.s = proj.s;
       }
-      for (const replan of TRAFFIC_BEFORE_CORNER)
-        if (replan(world, n)) {
-          proj = projectPoint(path.pts, path.cum, [n.x, n.y]);
-          path.s = proj.s;
+    // (a long vehicle whose next turn would sweep its body over a car parked by the corner goes
+    // another way: a school bus, say)
+    for (const replan of TRAFFIC_CORNER)
+      if (replan(world, n, this)) {
+        proj = projectPoint(path.pts, path.cum, [n.x, n.y]);
+        path.s = proj.s;
+      }
+    // (a way through a block closed for an event, say, is re-planned while there is room)
+    for (const replan of TRAFFIC_REPLAN)
+      if (replan(world, n)) {
+        proj = projectPoint(path.pts, path.cum, [n.x, n.y]);
+        path.s = proj.s;
+      }
+    path.extend();
+    path.trim();
+    const edge = path.currentEdge();
+    const spec = n.spec;
+    const front = path.s + (spec.length - spec.rearOverhang);
+    let leaderHold = null;
+    for (const findHold of TRAFFIC_LEADER_HOLD) {
+      const hold = findHold(world, n, path, front);
+      if (hold && (!leaderHold || hold.gap < leaderHold.gap)) leaderHold = hold;
+    }
+    return { path, proj, edge, spec, front, leaderHold };
+  }
+
+  // Lane changes, a call to give way, the stops registered features plan, a cyclist's place toward the
+  // kerb, pulling over, and easing past what stands at the kerb.
+  chooseLane(n, dt, t, { standing }) {
+    const world = this.world;
+    const { path, proj, edge, front } = t;
+    // lane change in progress: the lateral offset eases over the maneuver, then the path moves
+    // onto the new lane
+    // a call on this driver to give way, an emergency vehicle's, say: null, or `yielding`, the call it
+    // pulls over and stops for
+    const giveWay = firstHookResult(TRAFFIC_GIVE_WAY, world, this, n, proj, dt);
+    const laneControl = firstHookResult(TRAFFIC_LANE_CONTROL, world, n, path, front);
+    if (n.lc) {
+      n.lc.t += dt;
+      if (n.lc.edge !== edge.id) n.lc = null; // ran out of edge: the next junction's join takes over
+    } else {
+      n.lcCooldown = Math.max(0, (n.lcCooldown || 0) - dt);
+      // (a registered feature's vehicle can change lanes its own way: a bus moves across to the curb lane
+      // for its next stop, and otherwise only for a turn; a streetcar, on its track, never does)
+      if (TRAFFIC_LANE_CHANGE.some((change) => change(world, this, n, edge, front))) {
+        /* its own way */
+      } else if (laneControl) {
+        /* keeping its lane through the temporary restriction */
+      } else if (!giveWay) this.maybeChangeLane(n, edge, front);
+      else if (giveWay.yielding && n.kind !== "bike") this.maybeChangeLane(n, edge, front, true);
+    }
+    let featureStop = Infinity;
+    for (const plan of TRAFFIC_STOP)
+      featureStop = Math.min(featureStop, plan(world, this, n, front, dt, proj) ?? Infinity);
+    // a cyclist rides the right-hand side of the lane, clear of the car doors, or the empty parking
+    // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
+    const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
+    // pulling over to give way
+    let pullShift = 0;
+    for (const shift of TRAFFIC_PULL_OVER) pullShift += shift(world, this, n, edge, front, dt, giveWay);
+    // Ease left to pass vehicles standing at the kerb (buses at their stops, say) and leave room beside
+    // the kerb when needed.
+    const parkedClearance = featureObstacle(n)?.parkedClearance?.(n);
+    if ((standing.length || parkedClearance) && n.kind !== "bike" && !featureObstacle(n)?.ownLane) {
+      const to = this.standingNudge(n, edge, standing, parkedClearance);
+      n.nudge = (n.nudge || 0) + Math.max(-NUDGE_MPS * dt, Math.min(NUDGE_MPS * dt, to - (n.nudge || 0)));
+    }
+    Object.assign(t, { giveWay, laneControl, featureStop, keepRight, pullShift });
+  }
+
+  // The line the driver keeps to across its lane (`offset`, right of the path positive): its place in the
+  // lane, a temporary corridor, going round an obstruction, a controlled lane, overtaking a cyclist, the
+  // moves registered features have it make inside its lane, a parking manoeuvre, pulling out from the kerb
+  // and rejoining its line.
+  laneOffset(n, dt, t, { all }) {
+    const world = this.world;
+    const { path, edge, front, giveWay, laneControl, keepRight, pullShift } = t;
+    const corridor = firstHookResult(TRAFFIC_CORRIDOR, world, n, path, front);
+    const corridorShift = corridor?.shift ?? 0;
+    const bypass = firstHookResult(TRAFFIC_BYPASS, world, n, front, all, IDM),
+      bypassShift = bypass?.shift ?? 0;
+    const controlledShift = laneControl?.shift ?? 0;
+    const overtaking = firstHookResult(
+      TRAFFIC_OVERTAKING,
+      world,
+      n,
+      edge,
+      all,
+      dt,
+      !!(giveWay?.yielding || bypass || laneControl || corridor),
+      IDM,
+    );
+    let offset =
+      (n.kind === "bike" ? n.side : keepRight) +
+      pullShift +
+      (featureObstacle(n)?.laneShift?.(n) ?? 0) +
+      (n.nudge || 0) +
+      (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) +
+      corridorShift +
+      bypassShift +
+      controlledShift;
+    if (overtaking) offset += overtaking.shift;
+    const earlyMoves = [];
+    for (const run of BEFORE_LANE_MOVES) {
+      const move = run(world, n, front, false, dt, { offset, moves: earlyMoves });
+      if (!move) continue;
+      if (move.shift !== undefined) offset += move.shift;
+      earlyMoves.push(move);
+    }
+    // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
+    // while changing lanes or going round something), and its speed ceiling for it; each is handed where
+    // it keeps in the lane so far and the earlier moves (where each is heading, `aim`, and has got to, `now`)
+    const laneBusy = !!(n.lc || corridorShift || bypassShift || controlledShift || overtaking || n.pull),
+      laneMoves = [];
+    let featureLimit = Infinity;
+    for (const run of TRAFFIC_LANE) {
+      const r = run(world, n, front, laneBusy, dt, { offset, moves: laneMoves });
+      if (r.shift !== undefined) offset += r.shift;
+      if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
+      laneMoves.push(r);
+    }
+    const driverOverride = firstHookResult(TRAFFIC_DRIVER, world, n);
+    if (driverOverride?.offset) offset += driverOverride.offset;
+    let parkingPlan = null;
+    for (const plan of TRAFFIC_PARKING_PLAN) {
+      parkingPlan = plan(n, (n.driver || IDM).s0);
+      if (parkingPlan) {
+        offset += parkingPlan.shift;
+        break;
+      }
+    }
+    // the line a registered feature has it keep to in its lane, over toward the middle between snowbanks
+    // that push the parked cars out from the kerb, say: where it stops (`hold`), the move along its way
+    // (`lineAt`) and the line it keeps to (`kept`) for what is in its way, and what it has moved so far
+    const keepMoves = [];
+    for (const run of TRAFFIC_KEEP) {
+      const r = run(world, n, front, laneBusy, dt, {
+        offset,
+        moves: keepMoves,
+        pursuit: () => path.s + lookahead(n.v),
+      });
+      if (r.shift !== undefined) offset += r.shift;
+      if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
+      keepMoves.push(r);
+    }
+    const keptBy = keepMoves.find((m) => m.kept);
+    // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
+    // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
+    // and checking for a gap.
+    if (n.pull) {
+      n.pull.t += dt;
+      offset += n.pull.lat * (1 - smooth(n.pull.t / n.pull.T));
+      if (n.pull.t >= n.pull.T && n.pull.moving) n.pull = null;
+    }
+
+    // A line it keeps to on its way back into its lane (an emergency vehicle stood down, say), and whether
+    // that line is still its own.
+    const rejoin = firstHookResult(TRAFFIC_REJOIN, world, this, n, offset, dt);
+    if (rejoin) offset = rejoin.offset;
+    const ownLine = !!rejoin?.own;
+    Object.assign(t, {
+      corridor,
+      bypass,
+      bypassShift,
+      overtaking,
+      offset,
+      earlyMoves,
+      featureLimit,
+      driverOverride,
+      parkingPlan,
+      keepMoves,
+      keptBy,
+      ownLine,
+    });
+  }
+
+  // Leader: nearest vehicle ahead on our path within LOOK_M (parked cars only when they
+  // stick into the lane). Starts `t.gap`, `t.leadV` and `t.leader`.
+  leaderOnPath(n, t, { all, extraTraffic }) {
+    const world = this.world;
+    const { path, spec, corridor, laneControl, bypass, overtaking, keepMoves, ownLine, offset, keptBy } = t;
+    const { keepRight, bypassShift } = t;
+    let gap = Infinity,
+      leadV = n.v0,
+      leader = null;
+    for (const o of all.concat(
+      world.parked.near(n.x, n.y, LOOK_M),
+      world.parked.doorsNear(n.x, n.y, LOOK_M),
+      extraTraffic,
+    )) {
+      if (o === n) continue;
+      if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
+      if (extraTraffic.length && featureObstacle(o)?.oncoming?.(o, n)) continue;
+      // Obstacles bypassed by the temporary corridor.
+      if (o === corridor?.ignore) continue;
+      // (nor, from the closed lane, the lane closure's)
+      if (o === laneControl?.ignore) continue;
+      if (o === bypass?.ignore) continue;
+      // (a cyclist it is passing, until it is the minimum passing distance clear of it, near enough)
+      const os = o.spec || CAR,
+        reach = (spec.width + os.width) / 2 + (o === overtaking?.vehicle ? overtaking.clearance : LEADER_MARGIN_M);
+      // in the way on the current lane, or on the target lane of a lane change: closer to the
+      // path than the two half-widths plus a margin
+      // The pursuit line moves with the corridor and kerb clearance.
+      const inWay = (lat, at) => {
+        if (corridor?.lineAt) lat -= corridor.lineAt(at);
+        if (laneControl?.lineAt) lat -= laneControl.lineAt(at);
+        // (between snowbanks, say, the line it will keep to where `o` is)
+        for (const m of keepMoves) if (m.lineAt) lat -= m.lineAt(at);
+        // (the line for going round an obstruction moves over; what is at the curb stays there)
+        const round = bypass?.lineAt ? lat - bypass.lineAt(at) : lat;
+        // (a registered feature's line, between snowbanks say, is its own: `kept`)
+        const kept = ownLine
+          ? Math.abs(lat - offset)
+          : keptBy
+            ? keptBy.kept(lat)
+            : Math.abs(
+                keepMoves.reduce(
+                  (x, m) => x - m.now,
+                  lat - keepRight - (n.nudge || 0) - bypassShift - (overtaking?.shift ?? 0),
+                ),
+              );
+        return (
+          Math.abs(round - offset) <= reach || (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) || kept <= reach
+        );
+      };
+      const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
+      if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral, p.s)) {
+        // rear axle to rear axle, less our axle-to-front-bumper and its rear overhang
+        const g = p.s - path.s - (spec.length - spec.rearOverhang) - os.rearOverhang;
+        if (g < gap) {
+          gap = g;
+          leadV = o.v;
+          leader = o;
         }
-      // (a long vehicle whose next turn would sweep its body over a car parked by the corner goes
-      // another way: a school bus, say)
-      for (const replan of TRAFFIC_CORNER)
-        if (replan(world, n, this)) {
-          proj = projectPoint(path.pts, path.cum, [n.x, n.y]);
-          path.s = proj.s;
+      }
+      // a long vehicle (a bus, say) is in the way wherever along its body it crosses the path: its middle
+      // and front are looked for too
+      if (isLong(o))
+        for (const d of [os.length / 2 - os.rearOverhang, os.length - os.rearOverhang - 1]) {
+          const q = projectPoint(path.pts, path.cum, [o.x + Math.cos(o.psi) * d, o.y + Math.sin(o.psi) * d], null);
+          if (!q || q.s <= path.s + 0.5 || q.s > path.s + LOOK_M || !inWay(q.lateral, q.s)) continue;
+          const g = q.s - path.s - (spec.length - spec.rearOverhang) - os.width / 2;
+          if (g < gap) {
+            gap = g;
+            leadV = o.v * Math.cos(o.psi - n.psi);
+            leader = o;
+          }
         }
-      // (a way through a block closed for an event, say, is re-planned while there is room)
-      for (const replan of TRAFFIC_REPLAN)
-        if (replan(world, n)) {
-          proj = projectPoint(path.pts, path.cum, [n.x, n.y]);
-          path.s = proj.s;
+    }
+    Object.assign(t, { gap, leadV, leader });
+  }
+
+  // Any part of a body in the driver's way, not only one whose middle is on its path: for a cyclist, a
+  // registered feature's heavy vehicle, and every motor vehicle for the driven car.
+  leaderByBody(n, t, { all, extraTraffic }) {
+    const world = this.world;
+    const { path, spec, front, proj, offset } = t;
+    let { gap, leadV, leader } = t;
+    // a cyclist also stops for any part of a body across its way just ahead (a car turning across
+    // it, say), not only for one whose middle is in its path, along the way it will actually ride:
+    // moving across, it lags the line it steers for
+    if (n.kind === "bike") {
+      for (const o of all.concat(
+        world.parked.near(n.x, n.y, BODY_LOOK_M + 6),
+        world.parked.doorsNear(n.x, n.y, BODY_LOOK_M + 6),
+        extraTraffic,
+      )) {
+        if (o === n || Math.abs(o.x - n.x) > BODY_LOOK_M + 6 || Math.abs(o.y - n.y) > BODY_LOOK_M + 6) continue;
+        const g = bodyOnPath(n, o, front, proj.lateral, offset);
+        if (g !== null && g < gap) {
+          gap = g;
+          leadV = Math.max(0, o.v * Math.cos(o.psi - n.psi));
+          leader = o;
         }
-      path.extend();
-      path.trim();
-      const edge = path.currentEdge();
-      const spec = n.spec;
-      const front = path.s + (spec.length - spec.rearOverhang);
-      let leaderHold = null;
-      for (const findHold of TRAFFIC_LEADER_HOLD) {
-        const hold = findHold(world, n, path, front);
-        if (hold && (!leaderHold || hold.gap < leaderHold.gap)) leaderHold = hold;
       }
-      // lane change in progress: the lateral offset eases over the maneuver, then the path moves
-      // onto the new lane
-      // a call on this driver to give way, an emergency vehicle's, say: null, or `yielding`, the call it
-      // pulls over and stops for
-      const giveWay = firstHookResult(TRAFFIC_GIVE_WAY, world, this, n, proj, dt);
-      const laneControl = firstHookResult(TRAFFIC_LANE_CONTROL, world, n, path, front);
-      if (n.lc) {
-        n.lc.t += dt;
-        if (n.lc.edge !== edge.id) n.lc = null; // ran out of edge: the next junction's join takes over
-      } else {
-        n.lcCooldown = Math.max(0, (n.lcCooldown || 0) - dt);
-        // (a registered feature's vehicle can change lanes its own way: a bus moves across to the curb lane
-        // for its next stop, and otherwise only for a turn; a streetcar, on its track, never does)
-        if (TRAFFIC_LANE_CHANGE.some((change) => change(world, this, n, edge, front))) {
-          /* its own way */
-        } else if (laneControl) {
-          /* keeping its lane through the temporary restriction */
-        } else if (!giveWay) this.maybeChangeLane(n, edge, front);
-        else if (giveWay.yielding && n.kind !== "bike") this.maybeChangeLane(n, edge, front, true);
-      }
-      let featureStop = Infinity;
-      for (const plan of TRAFFIC_STOP)
-        featureStop = Math.min(featureStop, plan(world, this, n, front, dt, proj) ?? Infinity);
-      // a cyclist rides the right-hand side of the lane, clear of the car doors, or the empty parking
-      // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
-      const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
-      // pulling over to give way
-      let pullShift = 0;
-      for (const shift of TRAFFIC_PULL_OVER) pullShift += shift(world, this, n, edge, front, dt, giveWay);
-      // Ease left to pass vehicles standing at the kerb (buses at their stops, say) and leave room beside
-      // the kerb when needed.
-      const parkedClearance = featureObstacle(n)?.parkedClearance?.(n);
-      if ((standing.length || parkedClearance) && n.kind !== "bike" && !featureObstacle(n)?.ownLane) {
-        const to = this.standingNudge(n, edge, standing, parkedClearance);
-        n.nudge = (n.nudge || 0) + Math.max(-NUDGE_MPS * dt, Math.min(NUDGE_MPS * dt, to - (n.nudge || 0)));
-      }
-      const corridor = firstHookResult(TRAFFIC_CORRIDOR, world, n, path, front);
-      const corridorShift = corridor?.shift ?? 0;
-      const bypass = firstHookResult(TRAFFIC_BYPASS, world, n, front, all, IDM),
-        bypassShift = bypass?.shift ?? 0;
-      const controlledShift = laneControl?.shift ?? 0;
-      const overtaking = firstHookResult(
-        TRAFFIC_OVERTAKING,
-        world,
-        n,
-        edge,
-        all,
-        dt,
-        !!(giveWay?.yielding || bypass || laneControl || corridor),
-        IDM,
-      );
-      let offset =
-        (n.kind === "bike" ? n.side : keepRight) +
-        pullShift +
-        (featureObstacle(n)?.laneShift?.(n) ?? 0) +
-        (n.nudge || 0) +
-        (n.lc ? n.lc.dir * n.lc.width * smooth(n.lc.t / n.lc.T) : 0) +
-        corridorShift +
-        bypassShift +
-        controlledShift;
-      if (overtaking) offset += overtaking.shift;
-      const earlyMoves = [];
-      for (const run of BEFORE_LANE_MOVES) {
-        const move = run(world, n, front, false, dt, { offset, moves: earlyMoves });
-        if (!move) continue;
-        if (move.shift !== undefined) offset += move.shift;
-        earlyMoves.push(move);
-      }
-      // what a registered feature moves it over for inside its lane, a pothole in its lane ahead, say (not
-      // while changing lanes or going round something), and its speed ceiling for it; each is handed where
-      // it keeps in the lane so far and the earlier moves (where each is heading, `aim`, and has got to, `now`)
-      const laneBusy = !!(n.lc || corridorShift || bypassShift || controlledShift || overtaking || n.pull),
-        laneMoves = [];
-      let featureLimit = Infinity;
-      for (const run of TRAFFIC_LANE) {
-        const r = run(world, n, front, laneBusy, dt, { offset, moves: laneMoves });
-        if (r.shift !== undefined) offset += r.shift;
-        if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
-        laneMoves.push(r);
-      }
-      const driverOverride = firstHookResult(TRAFFIC_DRIVER, world, n);
-      if (driverOverride?.offset) offset += driverOverride.offset;
-      let parkingPlan = null;
-      for (const plan of TRAFFIC_PARKING_PLAN) {
-        parkingPlan = plan(n, (n.driver || IDM).s0);
-        if (parkingPlan) {
-          offset += parkingPlan.shift;
+    }
+    // a registered feature's heavy vehicle (a bus, say), long and slow to stop, also stops for any part of
+    // a body in its way over the next few metres (a car turning or crossing in front of it), its own body
+    // laid along its path there (`noseFirst`: a school bus, say, not for anything already beside it, short
+    // of its front: a cyclist that stopped by its side as it turned would wait for it in turn)
+    if (featureObstacle(n)?.heavy) {
+      const body = n.obb(),
+        reach = spec.length + LONG_BODY_LOOK_M + 6,
+        nose = spec.length - spec.rearOverhang - 1;
+      const close = all
+        .concat(world.parked.near(n.x, n.y, reach), extraTraffic)
+        .filter(
+          (o) =>
+            o !== n &&
+            Math.abs(o.x - n.x) < reach &&
+            Math.abs(o.y - n.y) < reach &&
+            !obbOverlap(body, o.obb(), 0.05) &&
+            !(featureObstacle(n)?.noseFirst && n.toLocal(o.x, o.y).ahead < nose),
+        );
+      for (let d = 0.5; close.length && d <= LONG_BODY_LOOK_M && d < gap; d += 0.5) {
+        const mid = Math.min(path.length, path.s + spec.length / 2 - spec.rearOverhang + d),
+          [x, y] = path.offsetPointAt(mid, offset);
+        const hit = close.find((o) =>
+          obbOverlap({ ...body, center: [x, y], heading: path.headingAt(mid) }, o.obb(), 0.05),
+        );
+        if (hit) {
+          gap = d - 0.5;
+          leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi));
+          leader = hit;
           break;
         }
       }
-      // the line a registered feature has it keep to in its lane, over toward the middle between snowbanks
-      // that push the parked cars out from the kerb, say: where it stops (`hold`), the move along its way
-      // (`lineAt`) and the line it keeps to (`kept`) for what is in its way, and what it has moved so far
-      const keepMoves = [];
-      for (const run of TRAFFIC_KEEP) {
-        const r = run(world, n, front, laneBusy, dt, {
-          offset,
-          moves: keepMoves,
-          pursuit: () => path.s + lookahead(n.v),
-        });
-        if (r.shift !== undefined) offset += r.shift;
-        if (r.result?.limit != null) featureLimit = Math.min(featureLimit, r.result.limit);
-        keepMoves.push(r);
+    }
+    // Ordinary cars can swing across a stopped car too, especially through a wet-road turn:
+    // forecast every motor vehicle's real body through the stopping distance.
+    if (n.kind !== "bike") {
+      const ego = world.ego,
+        nose = spec.length - spec.rearOverhang - 1;
+      const g =
+        featureObstacle(n)?.noseFirst && n.toLocal(ego.x, ego.y).ahead < nose
+          ? null
+          : sweptBodyGap(n, ego, offset, LONG_BODY_LOOK_M);
+      if (g !== null && g < gap) {
+        gap = g;
+        leader = ego;
+        leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi));
       }
-      const keptBy = keepMoves.find((m) => m.kept);
-      // The merge eases the path out to the lane, which also frees a car boxed in by the one parked
-      // in front. It ends only once the car is moving, so a car still at the curb keeps signalling
-      // and checking for a gap.
-      if (n.pull) {
-        n.pull.t += dt;
-        offset += n.pull.lat * (1 - smooth(n.pull.t / n.pull.T));
-        if (n.pull.t >= n.pull.T && n.pull.moving) n.pull = null;
-      }
+    }
+    Object.assign(t, { gap, leadV, leader });
+  }
 
-      // A line it keeps to on its way back into its lane (an emergency vehicle stood down, say), and whether
-      // that line is still its own.
-      const rejoin = firstHookResult(TRAFFIC_REJOIN, world, this, n, offset, dt);
-      if (rejoin) offset = rejoin.offset;
-      const ownLine = !!rejoin?.own;
+  // What registered features have the driver keep back from or follow as a leader, its following policy,
+  // and the lead it then has (`n.lead`).
+  leaderHolds(n, dt, t) {
+    const world = this.world;
+    const { path, edge, front, offset, leaderHold, driverOverride } = t;
+    let { gap, leadV, leader } = t;
+    // (what a registered feature has traffic keep back from: the room the driven car reverses into
+    // while it parks at its destination, say, sim/features/destination-parking.js)
+    for (const keepBack of TRAFFIC_KEEP_BACK) {
+      const hold = keepBack(world, n, path, { dt, look: LOOK_M, isLong });
+      if (hold && hold.gap < gap) {
+        gap = Math.max(0.05, hold.gap);
+        leadV = 0;
+        leader = hold.vehicle;
+      }
+    }
+    if (leaderHold && leaderHold.gap < gap) {
+      gap = Math.max(0.05, leaderHold.gap);
+      leadV = 0;
+      leader = leaderHold.vehicle;
+    }
+    const specialLeader = firstHookResult(SPECIAL_LEADER, this, n, path, front, offset, edge.limit, LOOK_M);
+    if (specialLeader && specialLeader.gap < gap) {
+      gap = specialLeader.gap;
+      leadV = specialLeader.vehicle.v;
+      leader = specialLeader.vehicle;
+    }
+    const leadPolicy = firstHookResult(TRAFFIC_LEAD_POLICY, n, leader, edge.limit, (n.driver || IDM).s0);
+    if (leadPolicy?.extraGap !== undefined) gap = Math.max(0.05, gap - leadPolicy.extraGap);
+    if (driverOverride?.leadSpeed) leadV = driverOverride.leadSpeed(leader, leadV);
+    n.lead = gap < Infinity ? { gap, v: leadV, ...leadPolicy?.fields } : null;
+    Object.assign(t, { gap, leadV, leader });
+  }
 
-      // Leader: nearest vehicle ahead on our path within LOOK_M (parked cars only when they
-      // stick into the lane).
-      let gap = Infinity,
-        leadV = n.v0,
-        leader = null;
-      for (const o of all.concat(
-        world.parked.near(n.x, n.y, LOOK_M),
-        world.parked.doorsNear(n.x, n.y, LOOK_M),
-        extraTraffic,
-      )) {
-        if (o === n) continue;
-        if (Math.abs(o.x - n.x) > LOOK_M + 5 || Math.abs(o.y - n.y) > LOOK_M + 5) continue;
-        if (extraTraffic.length && featureObstacle(o)?.oncoming?.(o, n)) continue;
-        // Obstacles bypassed by the temporary corridor.
-        if (o === corridor?.ignore) continue;
-        // (nor, from the closed lane, the lane closure's)
-        if (o === laneControl?.ignore) continue;
-        if (o === bypass?.ignore) continue;
-        // (a cyclist it is passing, until it is the minimum passing distance clear of it, near enough)
-        const os = o.spec || CAR,
-          reach = (spec.width + os.width) / 2 + (o === overtaking?.vehicle ? overtaking.clearance : LEADER_MARGIN_M);
-        // in the way on the current lane, or on the target lane of a lane change: closer to the
-        // path than the two half-widths plus a margin
-        // The pursuit line moves with the corridor and kerb clearance.
-        const inWay = (lat, at) => {
-          if (corridor?.lineAt) lat -= corridor.lineAt(at);
-          if (laneControl?.lineAt) lat -= laneControl.lineAt(at);
-          // (between snowbanks, say, the line it will keep to where `o` is)
-          for (const m of keepMoves) if (m.lineAt) lat -= m.lineAt(at);
-          // (the line for going round an obstruction moves over; what is at the curb stays there)
-          const round = bypass?.lineAt ? lat - bypass.lineAt(at) : lat;
-          // (a registered feature's line, between snowbanks say, is its own: `kept`)
-          const kept = ownLine
-            ? Math.abs(lat - offset)
-            : keptBy
-              ? keptBy.kept(lat)
-              : Math.abs(
-                  keepMoves.reduce(
-                    (x, m) => x - m.now,
-                    lat - keepRight - (n.nudge || 0) - bypassShift - (overtaking?.shift ?? 0),
-                  ),
-                );
-          return (
-            Math.abs(round - offset) <= reach ||
-            (n.lc && Math.abs(lat - n.lc.dir * n.lc.width) <= reach) ||
-            kept <= reach
+  // The first traffic control ahead on the driver's path (a signal, a roundabout's yield line or a stop
+  // sign): where it stops for it (`stopAt`), the speed ceilings coming up to it and through it, and
+  // whether a registered feature holds it there.
+  controlAhead(n, dt, t, { all }) {
+    const world = this.world;
+    const { path, front } = t;
+    let stopAt = null,
+      controlCap = Infinity;
+    const approachSpeed = featureTrafficSpeed(world, n, front, APPROACH_TRAFFIC_SPEED);
+    let signalCap = featureTrafficSpeed(world, n, front, CLEARING_TRAFFIC_SPEED);
+    let heldAtControl = false;
+    for (const start of TRAFFIC_CONTROL_START) start(world, n);
+    for (const e of path.edges) {
+      if (!e.control || e.sEnd < path.s) continue;
+      const ctl = controlAt(world, e.control, e.id);
+      const lineS = pathLine(e, this.map.edges.get(e.id).length, ctl.s_line);
+      const bumperToLine = lineS - front;
+      if (bumperToLine < -1) continue;
+      if (bumperToLine > 70) break;
+      const direction = ctl.type === "signal" ? firstHookResult(TRAFFIC_CONTROL, world, n, e.id) : null;
+      if (direction) {
+        heldAtControl = direction === "stop";
+        if (heldAtControl) stopAt = bumperToLine;
+      } else if (ctl.type === "signal") {
+        // (the light for the way it goes: under a left arrow, only a left turn has a green)
+        const after = path.edges[path.edges.indexOf(e) + 1];
+        const st = movementSignal(
+          approachPhase(this.map.intersections.get(e.control.id), e.id, world.t),
+          after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight",
+        );
+        const policy = firstHookResult(SIGNAL_POLICY, this, n, e, st);
+        if (policy) {
+          controlCap = policy.speed;
+          if (policy.hold) stopAt = Math.max(0, bumperToLine);
+        }
+        const decision = firstHookResult(SIGNAL_DECISION, world, n, e, ctl, st, bumperToLine);
+        const canStop = decision
+          ? decision.stop
+          : bumperToLine > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) + 1;
+        if (decision && !decision.stop) signalCap = Math.min(signalCap, decision.speed_mps);
+        const proceed = firstHookResult(SIGNAL_PROCEED, world, this, n, e, ctl, st, bumperToLine, canStop);
+        if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
+        else if (!proceed && (st === "red" || (st === "yellow" && canStop))) stopAt = bumperToLine;
+        else if (!proceed && st === "green" && firstHookResult(SIGNAL_HOLD, world, n, e, ctl, bumperToLine, all))
+          stopAt = Math.max(0, bumperToLine);
+      } else if (ctl.type === "yield") {
+        // roundabout entry: wait at the line while someone in the ring would arrive first
+        if (bumperToLine < 12 && ringBusy(this.map.roundabouts.get(ctl.roundabout), this.map.nodes.get(e.to), all, n))
+          stopAt = bumperToLine;
+      } else {
+        const state = n.stopMem.update(ctl, bumperToLine, n.v, dt);
+        const next = path.edges[path.edges.indexOf(e) + 1];
+        if (TRAFFIC_RELEASE_CONTROL.some((release) => release(world, n, e, ctl, state, bumperToLine))) break;
+        if (ctl.all_way)
+          world.allWay.note(
+            n,
+            ctl,
+            e.id,
+            next ? this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) : "straight",
+            bumperToLine,
+            n.v,
+            world,
           );
-        };
-        const p = projectPoint(path.pts, path.cum, [o.x, o.y], null);
-        if (p && p.s > path.s + 0.5 && p.s <= path.s + LOOK_M && inWay(p.lateral, p.s)) {
-          // rear axle to rear axle, less our axle-to-front-bumper and its rear overhang
-          const g = p.s - path.s - (spec.length - spec.rearOverhang) - os.rearOverhang;
-          if (g < gap) {
-            gap = g;
-            leadV = o.v;
-            leader = o;
-          }
-        }
-        // a long vehicle (a bus, say) is in the way wherever along its body it crosses the path: its middle
-        // and front are looked for too
-        if (isLong(o))
-          for (const d of [os.length / 2 - os.rearOverhang, os.length - os.rearOverhang - 1]) {
-            const q = projectPoint(path.pts, path.cum, [o.x + Math.cos(o.psi) * d, o.y + Math.sin(o.psi) * d], null);
-            if (!q || q.s <= path.s + 0.5 || q.s > path.s + LOOK_M || !inWay(q.lateral, q.s)) continue;
-            const g = q.s - path.s - (spec.length - spec.rearOverhang) - os.width / 2;
-            if (g < gap) {
-              gap = g;
-              leadV = o.v * Math.cos(o.psi - n.psi);
-              leader = o;
-            }
-          }
+        if (state !== "completed") stopAt = bumperToLine;
+        // stopped: go when the junction is clear and, at a two-way stop, when nothing on the
+        // through road would get there first; at an all-way stop, when it is its turn, and nothing
+        // coming in on a street without a sign there (which does not stop) would get there first
+        else if (
+          this.boxBusy(n, e) ||
+          (ctl.all_way
+            ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id)
+            : // (a stop standing in for a grouped junction gives way there, as at an uncontrolled minor approach)
+              firstHookResult(PRIORITY_JUNCTION, world, ctl)
+              ? this.givesWay(n, e.id, e.sEnd - front)
+              : this.crossComing(n, e.to))
+        )
+          stopAt = Math.max(0, bumperToLine);
       }
-      // a cyclist also stops for any part of a body across its way just ahead (a car turning across
-      // it, say), not only for one whose middle is in its path, along the way it will actually ride:
-      // moving across, it lags the line it steers for
-      if (n.kind === "bike") {
-        for (const o of all.concat(
-          world.parked.near(n.x, n.y, BODY_LOOK_M + 6),
-          world.parked.doorsNear(n.x, n.y, BODY_LOOK_M + 6),
-          extraTraffic,
-        )) {
-          if (o === n || Math.abs(o.x - n.x) > BODY_LOOK_M + 6 || Math.abs(o.y - n.y) > BODY_LOOK_M + 6) continue;
-          const g = bodyOnPath(n, o, front, proj.lateral, offset);
-          if (g !== null && g < gap) {
-            gap = g;
-            leadV = Math.max(0, o.v * Math.cos(o.psi - n.psi));
-            leader = o;
-          }
-        }
+      break;
+    }
+    Object.assign(t, { stopAt, controlCap, signalCap, approachSpeed, heldAtControl });
+  }
+
+  // The other lines it stops at: short of people on a crosswalk, a cyclist where the parking lane ends,
+  // where it gives way and where it parks; then stopping there, and hanging back.
+  stopLines(n, t) {
+    const world = this.world;
+    const { path, spec, front, proj, offset, giveWay, parkingPlan } = t;
+    let { stopAt, gap, leadV } = t;
+    // crowd.pxo keeps a PXO occupied until the far curb, in every lane (sim/pxo.js).
+    const cw = crosswalkConflict(
+      path.pts,
+      path.cum,
+      front - 2,
+      front + 35,
+      world.crowd,
+      spec.width / 2 + 0.9 + (n.kind === "bike" ? Math.abs(n.side) : 0),
+    );
+    // A cyclist whose nose has already crossed the walk clears it; stopping with the
+    // bicycle across it traps a pedestrian beside its rear. People in front still have priority.
+    const clearingWalk =
+      n.kind === "bike" &&
+      cw &&
+      cw.s < front &&
+      n.toLocal(cw.ped.x, cw.ped.y).ahead < spec.length - spec.rearOverhang &&
+      bodyOnPath(n, cw.ped, front, proj.lateral, offset) === null;
+    if (cw && !clearingWalk) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
+    // a cyclist that cannot move back into the lane yet waits where the parking lane ends
+    if (n.kind === "bike" && n.stripHold != null)
+      stopAt = stopAt === null ? n.stripHold - front : Math.min(stopAt, n.stripHold - front);
+    // giving way: stop where it chose to when the call came
+    for (const stopFor of TRAFFIC_STOP_AT) {
+      const at = stopFor(world, this, n, front, giveWay);
+      if (at !== null) stopAt = stopAt === null ? at : Math.min(stopAt, at);
+    }
+    if (parkingPlan?.stop != null) stopAt = stopAt === null ? parkingPlan.stop : Math.min(stopAt, parkingPlan.stop);
+    if (stopAt !== null && stopAt < gap) {
+      gap = Math.max(0.05, stopAt);
+      leadV = 0;
+    }
+    // hanging back from what it must not follow closely (an emergency vehicle ahead going its way, say),
+    // as from a car nearer than it is
+    for (const hangBack of TRAFFIC_HANG_BACK) {
+      const back = hangBack(world, this, n, path, front);
+      if (back && back.gap < gap) {
+        gap = Math.max(0.05, back.gap);
+        leadV = back.v;
       }
-      // a registered feature's heavy vehicle (a bus, say), long and slow to stop, also stops for any part of
-      // a body in its way over the next few metres (a car turning or crossing in front of it), its own body
-      // laid along its path there (`noseFirst`: a school bus, say, not for anything already beside it, short
-      // of its front: a cyclist that stopped by its side as it turned would wait for it in turn)
-      if (featureObstacle(n)?.heavy) {
-        const body = n.obb(),
-          reach = spec.length + LONG_BODY_LOOK_M + 6,
-          nose = spec.length - spec.rearOverhang - 1;
-        const close = all
-          .concat(world.parked.near(n.x, n.y, reach), extraTraffic)
-          .filter(
-            (o) =>
-              o !== n &&
-              Math.abs(o.x - n.x) < reach &&
-              Math.abs(o.y - n.y) < reach &&
-              !obbOverlap(body, o.obb(), 0.05) &&
-              !(featureObstacle(n)?.noseFirst && n.toLocal(o.x, o.y).ahead < nose),
-          );
-        for (let d = 0.5; close.length && d <= LONG_BODY_LOOK_M && d < gap; d += 0.5) {
-          const mid = Math.min(path.length, path.s + spec.length / 2 - spec.rearOverhang + d),
-            [x, y] = path.offsetPointAt(mid, offset);
-          const hit = close.find((o) =>
-            obbOverlap({ ...body, center: [x, y], heading: path.headingAt(mid) }, o.obb(), 0.05),
-          );
-          if (hit) {
-            gap = d - 0.5;
-            leadV = Math.max(0, hit.v * Math.cos(hit.psi - n.psi));
-            leader = hit;
-            break;
-          }
-        }
-      }
-      // Ordinary cars can swing across a stopped car too, especially through a wet-road turn:
-      // forecast every motor vehicle's real body through the stopping distance.
-      if (n.kind !== "bike") {
-        const ego = world.ego,
-          nose = spec.length - spec.rearOverhang - 1;
-        const g =
-          featureObstacle(n)?.noseFirst && n.toLocal(ego.x, ego.y).ahead < nose
-            ? null
-            : sweptBodyGap(n, ego, offset, LONG_BODY_LOOK_M);
-        if (g !== null && g < gap) {
-          gap = g;
-          leader = ego;
-          leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi));
-        }
-      }
-      // (what a registered feature has traffic keep back from: the room the driven car reverses into
-      // while it parks at its destination, say, sim/features/destination-parking.js)
-      for (const keepBack of TRAFFIC_KEEP_BACK) {
-        const hold = keepBack(world, n, path, { dt, look: LOOK_M, isLong });
-        if (hold && hold.gap < gap) {
-          gap = Math.max(0.05, hold.gap);
-          leadV = 0;
-          leader = hold.vehicle;
-        }
-      }
-      if (leaderHold && leaderHold.gap < gap) {
-        gap = Math.max(0.05, leaderHold.gap);
-        leadV = 0;
-        leader = leaderHold.vehicle;
-      }
-      const specialLeader = firstHookResult(SPECIAL_LEADER, this, n, path, front, offset, edge.limit, LOOK_M);
-      if (specialLeader && specialLeader.gap < gap) {
-        gap = specialLeader.gap;
-        leadV = specialLeader.vehicle.v;
-        leader = specialLeader.vehicle;
-      }
-      const leadPolicy = firstHookResult(TRAFFIC_LEAD_POLICY, n, leader, edge.limit, (n.driver || IDM).s0);
-      if (leadPolicy?.extraGap !== undefined) gap = Math.max(0.05, gap - leadPolicy.extraGap);
-      if (driverOverride?.leadSpeed) leadV = driverOverride.leadSpeed(leader, leadV);
-      n.lead = gap < Infinity ? { gap, v: leadV, ...leadPolicy?.fields } : null;
-      let stopAt = null,
-        controlCap = Infinity;
-      const approachSpeed = featureTrafficSpeed(world, n, front, APPROACH_TRAFFIC_SPEED);
-      let signalCap = featureTrafficSpeed(world, n, front, CLEARING_TRAFFIC_SPEED);
-      let heldAtControl = false;
-      for (const start of TRAFFIC_CONTROL_START) start(world, n);
-      for (const e of path.edges) {
-        if (!e.control || e.sEnd < path.s) continue;
-        const ctl = controlAt(world, e.control, e.id);
-        const lineS = pathLine(e, this.map.edges.get(e.id).length, ctl.s_line);
-        const bumperToLine = lineS - front;
-        if (bumperToLine < -1) continue;
-        if (bumperToLine > 70) break;
-        const direction = ctl.type === "signal" ? firstHookResult(TRAFFIC_CONTROL, world, n, e.id) : null;
-        if (direction) {
-          heldAtControl = direction === "stop";
-          if (heldAtControl) stopAt = bumperToLine;
-        } else if (ctl.type === "signal") {
-          // (the light for the way it goes: under a left arrow, only a left turn has a green)
-          const after = path.edges[path.edges.indexOf(e) + 1];
-          const st = movementSignal(
-            approachPhase(this.map.intersections.get(e.control.id), e.id, world.t),
-            after ? this.map.classifyTurn(this.map.turnAngle(e.id, after.id)) : "straight",
-          );
-          const policy = firstHookResult(SIGNAL_POLICY, this, n, e, st);
-          if (policy) {
-            controlCap = policy.speed;
-            if (policy.hold) stopAt = Math.max(0, bumperToLine);
-          }
-          const decision = firstHookResult(SIGNAL_DECISION, world, n, e, ctl, st, bumperToLine);
-          const canStop = decision
-            ? decision.stop
-            : bumperToLine > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) + 1;
-          if (decision && !decision.stop) signalCap = Math.min(signalCap, decision.speed_mps);
-          const proceed = firstHookResult(SIGNAL_PROCEED, world, this, n, e, ctl, st, bumperToLine, canStop);
-          if (st === "red" && this.rightOnRed(n, e, bumperToLine, front, dt)) stopAt = null;
-          else if (!proceed && (st === "red" || (st === "yellow" && canStop))) stopAt = bumperToLine;
-          else if (!proceed && st === "green" && firstHookResult(SIGNAL_HOLD, world, n, e, ctl, bumperToLine, all))
-            stopAt = Math.max(0, bumperToLine);
-        } else if (ctl.type === "yield") {
-          // roundabout entry: wait at the line while someone in the ring would arrive first
-          if (bumperToLine < 12 && ringBusy(this.map.roundabouts.get(ctl.roundabout), this.map.nodes.get(e.to), all, n))
-            stopAt = bumperToLine;
-        } else {
-          const state = n.stopMem.update(ctl, bumperToLine, n.v, dt);
-          const next = path.edges[path.edges.indexOf(e) + 1];
-          if (TRAFFIC_RELEASE_CONTROL.some((release) => release(world, n, e, ctl, state, bumperToLine))) break;
-          if (ctl.all_way)
-            world.allWay.note(
-              n,
-              ctl,
-              e.id,
-              next ? this.map.classifyTurn(this.map.turnAngle(e.id, next.id)) : "straight",
-              bumperToLine,
-              n.v,
-              world,
-            );
-          if (state !== "completed") stopAt = bumperToLine;
-          // stopped: go when the junction is clear and, at a two-way stop, when nothing on the
-          // through road would get there first; at an all-way stop, when it is its turn, and nothing
-          // coming in on a street without a sign there (which does not stop) would get there first
-          else if (
-            this.boxBusy(n, e) ||
-            (ctl.all_way
-              ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id)
-              : // (a stop standing in for a grouped junction gives way there, as at an uncontrolled minor approach)
-                firstHookResult(PRIORITY_JUNCTION, world, ctl)
-                ? this.givesWay(n, e.id, e.sEnd - front)
-                : this.crossComing(n, e.to))
-          )
-            stopAt = Math.max(0, bumperToLine);
-        }
-        break;
-      }
-      // crowd.pxo keeps a PXO occupied until the far curb, in every lane (sim/pxo.js).
-      const cw = crosswalkConflict(
-        path.pts,
-        path.cum,
-        front - 2,
-        front + 35,
-        world.crowd,
-        spec.width / 2 + 0.9 + (n.kind === "bike" ? Math.abs(n.side) : 0),
-      );
-      // A cyclist whose nose has already crossed the walk clears it; stopping with the
-      // bicycle across it traps a pedestrian beside its rear. People in front still have priority.
-      const clearingWalk =
-        n.kind === "bike" &&
-        cw &&
-        cw.s < front &&
-        n.toLocal(cw.ped.x, cw.ped.y).ahead < spec.length - spec.rearOverhang &&
-        bodyOnPath(n, cw.ped, front, proj.lateral, offset) === null;
-      if (cw && !clearingWalk) stopAt = stopAt === null ? cw.s - front - 2 : Math.min(stopAt, cw.s - front - 2);
-      // a cyclist that cannot move back into the lane yet waits where the parking lane ends
-      if (n.kind === "bike" && n.stripHold != null)
-        stopAt = stopAt === null ? n.stripHold - front : Math.min(stopAt, n.stripHold - front);
-      // giving way: stop where it chose to when the call came
-      for (const stopFor of TRAFFIC_STOP_AT) {
-        const at = stopFor(world, this, n, front, giveWay);
-        if (at !== null) stopAt = stopAt === null ? at : Math.min(stopAt, at);
-      }
-      if (parkingPlan?.stop != null) stopAt = stopAt === null ? parkingPlan.stop : Math.min(stopAt, parkingPlan.stop);
-      if (stopAt !== null && stopAt < gap) {
-        gap = Math.max(0.05, stopAt);
-        leadV = 0;
-      }
-      // hanging back from what it must not follow closely (an emergency vehicle ahead going its way, say),
-      // as from a car nearer than it is
-      for (const hangBack of TRAFFIC_HANG_BACK) {
-        const back = hangBack(world, this, n, path, front);
-        if (back && back.gap < gap) {
-          gap = Math.max(0.05, back.gap);
-          leadV = back.v;
-        }
-      }
-      const ji = path.edges.findIndex((e) => e.sEnd > front);
-      const cur = path.edges[ji],
-        after = path.edges[ji + 1];
-      const toNode = cur ? cur.sEnd - front : Infinity;
-      // (past the end of its path, `cur` is gone: no turn)
-      const turn = cur && after ? this.map.classifyTurn(this.map.turnAngle(cur.id, after.id)) : "straight";
-      n.signal = n.pull
-        ? n.pull.lat > 0
+    }
+    Object.assign(t, { stopAt, gap, leadV });
+  }
+
+  // The turn coming up: its indicator, and waiting at the junction for oncoming traffic, a cyclist on the
+  // right, traffic with the right of way and a busy junction box. Sets `t.cur`, the edge it is on.
+  junctionWaits(n, t) {
+    const world = this.world;
+    const { path, edge, front, parkingPlan, stopAt } = t;
+    let { gap, leadV } = t;
+    const ji = path.edges.findIndex((e) => e.sEnd > front);
+    const cur = path.edges[ji],
+      after = path.edges[ji + 1];
+    const toNode = cur ? cur.sEnd - front : Infinity;
+    // (past the end of its path, `cur` is gone: no turn)
+    const turn = cur && after ? this.map.classifyTurn(this.map.turnAngle(cur.id, after.id)) : "straight";
+    n.signal = n.pull
+      ? n.pull.lat > 0
+        ? "left"
+        : "right"
+      : n.lc
+        ? n.lc.dir < 0
           ? "left"
           : "right"
-        : n.lc
-          ? n.lc.dir < 0
-            ? "left"
-            : "right"
-          : toNode < 35 && (turn === "left" || turn === "right")
-            ? turn
-            : null;
-      const indicated = firstHookResult(TRAFFIC_INDICATOR, n);
-      if (indicated) n.signal = indicated.signal;
-      if (parkingPlan) n.signal = parkingPlan.signal;
-      // turning left: yield to oncoming traffic before crossing its lane
-      if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
-        gap = Math.min(gap, Math.max(0.05, toNode - 5));
-        leadV = 0;
-      }
-      // turning right: wait short of the corner for a cyclist coming up on the right, unless the car
-      // can no longer stop before it
-      if (n.kind !== "bike" && turn === "right" && toNode < HOOK_LOOK_M) {
-        const half = this.map.crossingHalfWidth(cur.id),
-          hold = toNode - half - 1;
-        if (hold > (n.v * n.v) / (2 * comfort().decel) - 0.5 && this.cyclistOnRight(n, cur.to, toNode, half)) {
-          gap = Math.min(gap, Math.max(0.05, hold));
-          leadV = 0;
-        }
-      }
-      // junction with no sign or signal ahead: yield to anyone already crossing it, and give way
-      // at the line to traffic with the right of way (sim/priority.js) that would get there first
-      if (stopAt === null) {
-        const next = path.edges.find((e) => e.sEnd > front);
-        const toNode = next ? next.sEnd - front : Infinity;
-        // (and, coming in on a street without a sign to an all-way stop, to one pulling away from its line)
-        // A ring's entry vertices are not crossing junctions: circulating traffic has priority.
-        // Its leader checks above still hold it behind any vehicle obstructing its own lane.
-        if (
-          next &&
-          !next.control &&
-          !this.map.edges.get(next.id).ring &&
-          toNode > 5 &&
-          toNode < 25 &&
-          this.isJunction(next.to) &&
-          (this.boxBusy(n, next) || this.allWayLeaving(n, next.to))
-        ) {
-          gap = Math.min(gap, Math.max(0.05, toNode - 6));
-          leadV = 0;
-        }
-        const rule = next && !next.control ? this.map.priorityOf(next.id) : null;
-        if (rule && rule.rule !== "major" && toNode < GIVE_WAY_LOOK_M) {
-          const toLine = pathLine(next, this.map.edges.get(next.id).length, rule.s_line) - front;
-          if (toLine > -1 && this.givesWay(n, next.id, toNode)) {
-            gap = Math.min(gap, Math.max(0.05, toLine));
-            leadV = 0;
-          }
-        }
-      }
-      // intersection box rule for signals too: don't enter while a crossing car is inside
-      if (stopAt === null && edge.control && controlAt(world, edge.control, edge.id).type === "signal") {
-        const lineS = pathLine(edge, this.map.edges.get(edge.id).length, edge.control.s_line);
-        const b = lineS - front;
-        if (b > -1 && b < 6 && this.boxBusy(n, edge)) {
-          gap = Math.min(gap, Math.max(0.05, b));
-          leadV = 0;
-        }
-      }
-      // nose to nose with someone stopped in our path who is waiting for us in turn (a car turning
-      // across our lane, say): after a few seconds, back up and let them through
-      if (
-        leader &&
-        !leader.parked &&
-        n.v < 0.2 &&
-        gap < 5 &&
-        Math.abs(leader.v) < 0.3 &&
-        Math.abs(wrap(leader.psi - n.psi)) > 2.2
-      ) {
-        n.standoff = (n.standoff || 0) + dt;
-        if (n.standoff > 3) {
-          n.standoff = 0;
-          n.backoff = { left: 6, t: 0 };
-        }
-      } else n.standoff = 0;
-      // After ~15 s stopped at a clear control with no vehicle blocking, abandon the virtual leader.
-      if (n.v < 0.2 && gap < 3) n.waiting += dt;
-      else n.waiting = 0;
-      if (
-        n.waiting > 15 &&
-        stopAt !== null &&
-        stopAt < 1 &&
-        leadV === 0 &&
-        !heldAtControl &&
-        !this.blockedByVehicle(n) &&
-        !(cur && this.crossComing(n, cur.to))
-      ) {
-        gap = Infinity;
-        leadV = n.v0;
-        n.waiting = 0;
-      }
-      // where a registered feature has it stop, after the checks above, which still hold on the way there:
-      // behind a bus signalling to pull out from its stop, letting it out, or for a school bus with its
-      // reds flashing, say
-      for (const hold of TRAFFIC_HOLD_BUSES) {
-        const at = hold(world, this, n, front, all);
-        if (at != null && at < gap) {
-          gap = Math.max(0.05, at);
-          leadV = 0;
-        }
-      }
-      if (featureStop < gap) {
-        gap = Math.max(0.05, featureStop);
-        leadV = 0;
-      }
-      // where a registered feature has it stop: not passing a streetcar with its doors open on the side its
-      // riders use, or short of a level crossing's tracks for a train coming, say
-      for (const hold of TRAFFIC_HOLD) {
-        const at = hold(world, this, n, front, all);
-        if (at != null && at < gap) {
-          gap = Math.max(0.05, at);
-          leadV = 0;
-        }
-      }
-      // at a signal: at the line, while traffic past the junction leaves no room to clear it
-      // (sim/junction-box.js; not a cyclist)
-      const forBox = boxHold(this.map, n, front, all);
-      if (forBox !== null && forBox < gap) {
-        gap = Math.max(0.05, forBox);
-        leadV = 0;
-      }
-      const corridorStop = corridor?.stop?.();
-      if (corridorStop != null && corridorStop < gap) {
-        gap = Math.max(0.05, corridorStop);
-        leadV = 0;
-      }
-      if (bypass?.waitGap != null && bypass.waitGap < gap) {
-        gap = Math.max(0.05, bypass.waitGap);
-        leadV = 0;
-      }
-      const controlledStop = laneControl?.stop();
-      if (controlledStop && controlledStop.gap < gap) {
-        gap = Math.max(0.05, controlledStop.gap);
-        leadV = controlledStop.v;
-      }
-      for (const plan of AFTER_MERGE) {
-        const stop = plan(world, this, n, front, dt);
-        if (stop !== null && stop < gap) {
-          gap = Math.max(0.05, stop);
-          leadV = 0;
-        }
-      }
-      // where a registered feature's line has it stop: between snowbanks, say, short of the one-car stretch
-      // until it is its turn (once it could stop there: otherwise it has the way)
-      earlyMoves.push(...keepMoves);
-      for (const { hold } of earlyMoves) {
-        if (hold == null) continue;
-        const g = hold - front;
-        if (g > -1 && g < gap && g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1) {
-          gap = Math.max(0.05, g);
-          leadV = 0;
-        }
-      }
-      // where a registered feature has it stop, and its speed ceiling: for Canada geese, say, slowing while a
-      // gaggle comes up to the kerb ahead and stopping short of their way across until the last is off the
-      // roadway (once it could stop there, `canStop`: otherwise it carries on); or short of the barricade
-      // across a block closed for an event, on a way that could not be changed in time; and how it has the
-      // driver handle the car (`controls`)
-      let featureControls = null;
-      for (const yieldTo of TRAFFIC_YIELD) {
-        const y = yieldTo(world, n, front);
-        if (!y) continue;
-        if (y.limit != null) featureLimit = Math.min(featureLimit, y.limit);
-        if (y.controls) featureControls ||= y.controls;
-        if (y.hold == null) continue;
-        const g = y.hold - front;
-        if (g > -1 && g < gap && (!y.canStop || g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1)) {
-          gap = Math.max(0.05, g);
-          leadV = 0;
-        }
-      }
-
-      // curvature-limited desired speed: slow in time for every bend in the next 40 m
-      const vCurve = curveSpeed(path, path.s);
-      const limit = Math.min(
-        edge.limit,
-        this.zoneLimit(path, front),
-        featureTrafficSpeed(world, n, front, EDGE_TRAFFIC_SPEED, edge.limit),
-        corridor?.limit ?? Infinity,
-        bypass?.limit ?? Infinity,
-        laneControl?.limit ?? Infinity,
-      );
-      const vFollow = featureTrafficSpeed(world, n, front, FOLLOWING_TRAFFIC_SPEED, {
-        leader,
-        skipFollowing: driverOverride?.skipFollowing,
-      });
-      const v0 = Math.min(
-        featureObstacle(n)?.fixedCruise ? n.v0 : n.v0 * weather.speed,
-        limit * (featureObstacle(n)?.heavy ? 0.95 : (driverOverride?.speedFactor ?? 1.05)) * weather.speed,
-        vCurve,
-        controlCap,
-        signalCap,
-        approachSpeed,
-        n.pull ? 5 : Infinity,
-        vFollow,
-        featureTrafficSpeed(world, n, front, ORDINARY_TRAFFIC_SPEED),
-        featureLimit,
-        featureTrafficSpeed(world, n, front),
-      );
-      const D = n.driver || IDM;
-      let a;
-      if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
-      else if (gap === Infinity) a = D.aMax * (1 - (n.v / v0) ** 4);
-      else {
-        const dv = n.v - leadV;
-        // on a slippery road drivers leave more room and brake more gently
-        const grip = Math.min(1, comfort().decel / 2.5);
-        const b = D.b * grip,
-          T = D.T / Math.max(0.5, grip);
-        const sStar = D.s0 + Math.max(0, n.v * T + (n.v * dv) / (2 * Math.sqrt(D.aMax * b)));
-        a = D.aMax * (1 - (n.v / v0) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2);
-      }
-      if (driverOverride?.brake) a = driverOverride.brake(leader, gap, a);
-      a = Math.max(-Math.min(6, comfort().hardDecel * 1.1), Math.min(D.aMax, a));
-      // standing still, a driver takes a moment to notice the way is clear and move off
-      if (n.v < 0.3 && a > 0.2) {
-        n.ready = (n.ready || 0) + dt;
-        if (n.ready < (D.react || 0)) a = -1;
-      } else if (n.v > 1) n.ready = 0;
-      if (n.v < 0.05 && a < 0) a = -1; // stopped: hold the brakes rather than creep
-      // wedged at an angle to its lane (a turn taken wide, then blocked): rebase its path
-      if (n.waiting > 10 && Math.abs(wrap(n.psi - path.headingAt(path.s))) > 0.35) {
-        this.recoverPath(n);
-        continue;
-      }
-      // stopped close behind something it is moving out round, a cyclist puts a foot down and
-      // shuffles the bicycle across rather than rolling forward into it
-      if (n.kind === "bike" && n.v < 0.3 && gap < SHUFFLE_GAP_M) {
-        const turn = wrap(path.headingAt(path.s) - n.psi);
-        if (Math.abs(offset - proj.lateral) > 0.05 || Math.abs(turn) > 0.02)
-          this.shuffle(n, offset - proj.lateral, turn, dt);
-      }
-      const steer = purePursuit(n, path, path.s, offset);
-      // (where a registered feature has the driver ease the pedals and the wheel, on or coming up to black
-      // ice, say, short of braking harder than it ever does but in an emergency)
-      if (featureControls && a > -D.b) n.step(dt, featureControls(n, steer, a, dt));
-      else n.step(dt, { steer, accel: a });
-      if (n.v < 0) n.v = 0;
+        : toNode < 35 && (turn === "left" || turn === "right")
+          ? turn
+          : null;
+    const indicated = firstHookResult(TRAFFIC_INDICATOR, n);
+    if (indicated) n.signal = indicated.signal;
+    if (parkingPlan) n.signal = parkingPlan.signal;
+    // turning left: yield to oncoming traffic before crossing its lane
+    if (stopAt === null && turn === "left" && toNode > 3 && toNode < 25 && this.oncoming(n, cur.to)) {
+      gap = Math.min(gap, Math.max(0.05, toNode - 5));
+      leadV = 0;
     }
+    // turning right: wait short of the corner for a cyclist coming up on the right, unless the car
+    // can no longer stop before it
+    if (n.kind !== "bike" && turn === "right" && toNode < HOOK_LOOK_M) {
+      const half = this.map.crossingHalfWidth(cur.id),
+        hold = toNode - half - 1;
+      if (hold > (n.v * n.v) / (2 * comfort().decel) - 0.5 && this.cyclistOnRight(n, cur.to, toNode, half)) {
+        gap = Math.min(gap, Math.max(0.05, hold));
+        leadV = 0;
+      }
+    }
+    // junction with no sign or signal ahead: yield to anyone already crossing it, and give way
+    // at the line to traffic with the right of way (sim/priority.js) that would get there first
+    if (stopAt === null) {
+      const next = path.edges.find((e) => e.sEnd > front);
+      const toNode = next ? next.sEnd - front : Infinity;
+      // (and, coming in on a street without a sign to an all-way stop, to one pulling away from its line)
+      // A ring's entry vertices are not crossing junctions: circulating traffic has priority.
+      // Its leader checks above still hold it behind any vehicle obstructing its own lane.
+      if (
+        next &&
+        !next.control &&
+        !this.map.edges.get(next.id).ring &&
+        toNode > 5 &&
+        toNode < 25 &&
+        this.isJunction(next.to) &&
+        (this.boxBusy(n, next) || this.allWayLeaving(n, next.to))
+      ) {
+        gap = Math.min(gap, Math.max(0.05, toNode - 6));
+        leadV = 0;
+      }
+      const rule = next && !next.control ? this.map.priorityOf(next.id) : null;
+      if (rule && rule.rule !== "major" && toNode < GIVE_WAY_LOOK_M) {
+        const toLine = pathLine(next, this.map.edges.get(next.id).length, rule.s_line) - front;
+        if (toLine > -1 && this.givesWay(n, next.id, toNode)) {
+          gap = Math.min(gap, Math.max(0.05, toLine));
+          leadV = 0;
+        }
+      }
+    }
+    // intersection box rule for signals too: don't enter while a crossing car is inside
+    if (stopAt === null && edge.control && controlAt(world, edge.control, edge.id).type === "signal") {
+      const lineS = pathLine(edge, this.map.edges.get(edge.id).length, edge.control.s_line);
+      const b = lineS - front;
+      if (b > -1 && b < 6 && this.boxBusy(n, edge)) {
+        gap = Math.min(gap, Math.max(0.05, b));
+        leadV = 0;
+      }
+    }
+    Object.assign(t, { gap, leadV, cur });
+  }
+
+  // Getting out of a standoff: backing up for someone nose to nose with it, and giving up a stop it has
+  // waited at long enough with the way clear.
+  unstick(n, dt, t) {
+    const { leader, stopAt, heldAtControl, cur } = t;
+    let { gap, leadV } = t;
+    // nose to nose with someone stopped in our path who is waiting for us in turn (a car turning
+    // across our lane, say): after a few seconds, back up and let them through
+    if (
+      leader &&
+      !leader.parked &&
+      n.v < 0.2 &&
+      gap < 5 &&
+      Math.abs(leader.v) < 0.3 &&
+      Math.abs(wrap(leader.psi - n.psi)) > 2.2
+    ) {
+      n.standoff = (n.standoff || 0) + dt;
+      if (n.standoff > 3) {
+        n.standoff = 0;
+        n.backoff = { left: 6, t: 0 };
+      }
+    } else n.standoff = 0;
+    // After ~15 s stopped at a clear control with no vehicle blocking, abandon the virtual leader.
+    if (n.v < 0.2 && gap < 3) n.waiting += dt;
+    else n.waiting = 0;
+    if (
+      n.waiting > 15 &&
+      stopAt !== null &&
+      stopAt < 1 &&
+      leadV === 0 &&
+      !heldAtControl &&
+      !this.blockedByVehicle(n) &&
+      !(cur && this.crossComing(n, cur.to))
+    ) {
+      gap = Infinity;
+      leadV = n.v0;
+      n.waiting = 0;
+    }
+    Object.assign(t, { gap, leadV });
+  }
+
+  // Where registered features, the junction box, a corridor, going round an obstruction and a controlled
+  // lane have it stop, after the checks above, which still hold on the way there; and the speed ceiling
+  // and the handling registered features give it (`t.featureControls`).
+  featureHolds(n, dt, t, { all }) {
+    const world = this.world;
+    const { front, featureStop, corridor, bypass, laneControl, earlyMoves, keepMoves } = t;
+    let { gap, leadV, featureLimit } = t;
+    // where a registered feature has it stop, after the checks above, which still hold on the way there:
+    // behind a bus signalling to pull out from its stop, letting it out, or for a school bus with its
+    // reds flashing, say
+    for (const hold of TRAFFIC_HOLD_BUSES) {
+      const at = hold(world, this, n, front, all);
+      if (at != null && at < gap) {
+        gap = Math.max(0.05, at);
+        leadV = 0;
+      }
+    }
+    if (featureStop < gap) {
+      gap = Math.max(0.05, featureStop);
+      leadV = 0;
+    }
+    // where a registered feature has it stop: not passing a streetcar with its doors open on the side its
+    // riders use, or short of a level crossing's tracks for a train coming, say
+    for (const hold of TRAFFIC_HOLD) {
+      const at = hold(world, this, n, front, all);
+      if (at != null && at < gap) {
+        gap = Math.max(0.05, at);
+        leadV = 0;
+      }
+    }
+    // at a signal: at the line, while traffic past the junction leaves no room to clear it
+    // (sim/junction-box.js; not a cyclist)
+    const forBox = boxHold(this.map, n, front, all);
+    if (forBox !== null && forBox < gap) {
+      gap = Math.max(0.05, forBox);
+      leadV = 0;
+    }
+    const corridorStop = corridor?.stop?.();
+    if (corridorStop != null && corridorStop < gap) {
+      gap = Math.max(0.05, corridorStop);
+      leadV = 0;
+    }
+    if (bypass?.waitGap != null && bypass.waitGap < gap) {
+      gap = Math.max(0.05, bypass.waitGap);
+      leadV = 0;
+    }
+    const controlledStop = laneControl?.stop();
+    if (controlledStop && controlledStop.gap < gap) {
+      gap = Math.max(0.05, controlledStop.gap);
+      leadV = controlledStop.v;
+    }
+    for (const plan of AFTER_MERGE) {
+      const stop = plan(world, this, n, front, dt);
+      if (stop !== null && stop < gap) {
+        gap = Math.max(0.05, stop);
+        leadV = 0;
+      }
+    }
+    // where a registered feature's line has it stop: between snowbanks, say, short of the one-car stretch
+    // until it is its turn (once it could stop there: otherwise it has the way)
+    earlyMoves.push(...keepMoves);
+    for (const { hold } of earlyMoves) {
+      if (hold == null) continue;
+      const g = hold - front;
+      if (g > -1 && g < gap && g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1) {
+        gap = Math.max(0.05, g);
+        leadV = 0;
+      }
+    }
+    // where a registered feature has it stop, and its speed ceiling: for Canada geese, say, slowing while a
+    // gaggle comes up to the kerb ahead and stopping short of their way across until the last is off the
+    // roadway (once it could stop there, `canStop`: otherwise it carries on); or short of the barricade
+    // across a block closed for an event, on a way that could not be changed in time; and how it has the
+    // driver handle the car (`controls`)
+    let featureControls = null;
+    for (const yieldTo of TRAFFIC_YIELD) {
+      const y = yieldTo(world, n, front);
+      if (!y) continue;
+      if (y.limit != null) featureLimit = Math.min(featureLimit, y.limit);
+      if (y.controls) featureControls ||= y.controls;
+      if (y.hold == null) continue;
+      const g = y.hold - front;
+      if (g > -1 && g < gap && (!y.canStop || g > (n.v * n.v) / (2 * Math.min(4, comfort().hardDecel)) - 1)) {
+        gap = Math.max(0.05, g);
+        leadV = 0;
+      }
+    }
+    Object.assign(t, { gap, leadV, featureLimit, featureControls });
+  }
+
+  // The driver's speed (the Intelligent Driver Model toward the lowest ceiling, behind what it follows) and
+  // its wheel (pure pursuit of its line), then the step; or, wedged at an angle to its lane, a new path.
+  drive(n, dt, t) {
+    const world = this.world;
+    const { path, edge, front, proj, offset, corridor, bypass, laneControl, leader, driverOverride } = t;
+    const { controlCap, signalCap, approachSpeed, featureLimit, featureControls, gap, leadV } = t;
+    // curvature-limited desired speed: slow in time for every bend in the next 40 m
+    const vCurve = curveSpeed(path, path.s);
+    const limit = Math.min(
+      edge.limit,
+      this.zoneLimit(path, front),
+      featureTrafficSpeed(world, n, front, EDGE_TRAFFIC_SPEED, edge.limit),
+      corridor?.limit ?? Infinity,
+      bypass?.limit ?? Infinity,
+      laneControl?.limit ?? Infinity,
+    );
+    const vFollow = featureTrafficSpeed(world, n, front, FOLLOWING_TRAFFIC_SPEED, {
+      leader,
+      skipFollowing: driverOverride?.skipFollowing,
+    });
+    const v0 = Math.min(
+      featureObstacle(n)?.fixedCruise ? n.v0 : n.v0 * weather.speed,
+      limit * (featureObstacle(n)?.heavy ? 0.95 : (driverOverride?.speedFactor ?? 1.05)) * weather.speed,
+      vCurve,
+      controlCap,
+      signalCap,
+      approachSpeed,
+      n.pull ? 5 : Infinity,
+      vFollow,
+      featureTrafficSpeed(world, n, front, ORDINARY_TRAFFIC_SPEED),
+      featureLimit,
+      featureTrafficSpeed(world, n, front),
+    );
+    const D = n.driver || IDM;
+    let a;
+    if (v0 <= 0) a = -Math.min(6, comfort().hardDecel * 1.1);
+    else if (gap === Infinity) a = D.aMax * (1 - (n.v / v0) ** 4);
+    else {
+      const dv = n.v - leadV;
+      // on a slippery road drivers leave more room and brake more gently
+      const grip = Math.min(1, comfort().decel / 2.5);
+      const b = D.b * grip,
+        T = D.T / Math.max(0.5, grip);
+      const sStar = D.s0 + Math.max(0, n.v * T + (n.v * dv) / (2 * Math.sqrt(D.aMax * b)));
+      a = D.aMax * (1 - (n.v / v0) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2);
+    }
+    if (driverOverride?.brake) a = driverOverride.brake(leader, gap, a);
+    a = Math.max(-Math.min(6, comfort().hardDecel * 1.1), Math.min(D.aMax, a));
+    // standing still, a driver takes a moment to notice the way is clear and move off
+    if (n.v < 0.3 && a > 0.2) {
+      n.ready = (n.ready || 0) + dt;
+      if (n.ready < (D.react || 0)) a = -1;
+    } else if (n.v > 1) n.ready = 0;
+    if (n.v < 0.05 && a < 0) a = -1; // stopped: hold the brakes rather than creep
+    // wedged at an angle to its lane (a turn taken wide, then blocked): rebase its path
+    if (n.waiting > 10 && Math.abs(wrap(n.psi - path.headingAt(path.s))) > 0.35) {
+      this.recoverPath(n);
+      return;
+    }
+    // stopped close behind something it is moving out round, a cyclist puts a foot down and
+    // shuffles the bicycle across rather than rolling forward into it
+    if (n.kind === "bike" && n.v < 0.3 && gap < SHUFFLE_GAP_M) {
+      const turn = wrap(path.headingAt(path.s) - n.psi);
+      if (Math.abs(offset - proj.lateral) > 0.05 || Math.abs(turn) > 0.02)
+        this.shuffle(n, offset - proj.lateral, turn, dt);
+    }
+    const steer = purePursuit(n, path, path.s, offset);
+    // (where a registered feature has the driver ease the pedals and the wheel, on or coming up to black
+    // ice, say, short of braking harder than it ever does but in an emergency)
+    if (featureControls && a > -D.b) n.step(dt, featureControls(n, steer, a, dt));
+    else n.step(dt, { steer, accel: a });
+    if (n.v < 0) n.v = 0;
   }
 
   // How far left of its lane's path (negative) a driver eases to pass a vehicle standing at the kerb
