@@ -81,6 +81,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "leftOnRed",
       "amberLights",
       "busLanes",
+      "hazards",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -194,6 +195,9 @@ test("the core runs every slot, and names no registered feature", () => {
       'left-on-red.js"',
       'amber.js"',
       'bus-lanes.js"',
+      'hidden-hazards.js"',
+      'hidden-traffic.js"',
+      'blind-spot.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -329,6 +333,16 @@ test("the core runs every slot, and names no registered feature", () => {
       "this.redTurnSigns",
       "no_turn_on_red",
       "night_flash",
+      "world.hazards",
+      "this.hazards",
+      "world.stepOuts",
+      "this.stepOuts",
+      "snap.blind_spot",
+      "blindSpot(",
+      "blindApproach(",
+      "hiddenVehicle(",
+      "standingNear(",
+      "STEP_OUT_",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -432,7 +446,11 @@ test("the World builds each feature from its option, with its seen flag and its 
     leftOnRed: true,
     amberLights: true,
     busLanes: true,
+    hazards: true,
+    stepOuts: 1,
   });
+  assert.equal(on.stepOuts.count, 1, "hidden hazards read the step-outs option beside their own");
+  assert.equal(off.stepOuts.count, 0);
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;
     if (!f.buildFleet) {

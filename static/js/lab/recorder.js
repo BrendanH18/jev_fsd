@@ -187,7 +187,6 @@ export class DriveRecorder {
     }
     target.fleet.world = target.world;
     target.world.crowd.world = target.world;
-    target.world.stepOuts.world = target.world;
     for (const restore of CHECKPOINT) restore(target.world, target.fleet);
     target.world.npcs = target.fleet.vehicles;
     for (const n of target.fleet.vehicles) if (n.path?.constraintsWorld) n.path.constraintsWorld = target.world;

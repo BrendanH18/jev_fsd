@@ -8,7 +8,6 @@ import { current as weather } from "../sim/weather.js";
 import { CLEARING_M, waitsItsTurn } from "./sensors.js";
 import { FOLLOW_M } from "../sim/emergency.js";
 import { ZONE_HOURS, ZONE_NAMES } from "../sim/speed-zones.js";
-import { STEP_OUT_M } from "../sim/hidden-hazards.js";
 import { extraRedTurn, featureMotion, signalDecision, hooks, junctionPlan } from "../sim/features/index.js";
 import { flagText } from "./tracks.js";
 
@@ -37,6 +36,7 @@ const STATE = {
   junctions: hooks("state", "junctions"),
   rearTraffic: hooks("state", "rearTraffic"),
   parking: hooks("state", "parking"),
+  blindSpots: hooks("state", "blindSpots"),
 };
 const ACTIVE_OUTCOME = hooks("activeOutcome");
 const OUTCOME_BY_ID = hooks("outcome", "ids"),
@@ -61,6 +61,7 @@ const CLAUSE = {
   ice: hooks("clause", "ice"),
   rearTraffic: hooks("clause", "rearTraffic"),
   parking: hooks("clause", "parking"),
+  blindSpots: hooks("clause", "blindSpots"),
 };
 const HOLD_STILL = {
   beforeParking: hooks("holdStill", "beforeParking"),
@@ -435,19 +436,7 @@ export function toJevState(snap, candidates, meta = {}, style = DEFAULT_STYLE) {
   for (const add of STATE.beforePlow) add(snap, state);
   for (const add of STATE.nearbySpecial) add(snap, state);
   for (const add of STATE.afterPlow) add(snap, state);
-  if (snap.blind_spot) {
-    const b = snap.blind_spot;
-    state.blind_spot = {
-      side: b.side,
-      ...(b.from_m > 0 ? { parked_cars_from_m: r1(b.from_m) } : { beside_car: true }),
-      parked_cars_to_m: r1(Math.max(0, b.to_m)),
-      clearance_m: r1(b.gap_m),
-      street: b.why,
-      hides: "the sidewalk: someone may step out from between the parked cars",
-      stop_within_m: STEP_OUT_M,
-      pass_at: r1(b.limit_mps),
-    };
-  }
+  for (const add of STATE.blindSpots) add(snap, state);
   if (snap.emergency_ahead)
     state.emergency_vehicle_ahead = {
       id: snap.emergency_ahead.id,
@@ -750,7 +739,7 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
   pushClauses(out, CLAUSE.parking, snap);
   pushClauses(out, CLAUSE.afterParking, snap);
   pushClauses(out, CLAUSE.afterPassing, snap);
-  if (snap.blind_spot) out.push(blindClause(snap.blind_spot));
+  pushClauses(out, CLAUSE.blindSpots, snap);
   if (snap.emergency_ahead)
     out.push(
       `${/^[aeiou]/.test(snap.emergency_ahead.kind) ? "An" : "A"} ${snap.emergency_ahead.kind} with its siren on is ${Math.round(snap.emergency_ahead.gap_m)} m ahead, going the car's way: do not follow it within ${FOLLOW_M} m; \`car.target_speed\` already keeps the car back.`,
@@ -934,13 +923,6 @@ function turnOnRedClause(r, m, atLine, turn = "right") {
               ? ": the approach opposite has an advance green, and its protected left turns come into the street the car turns into"
               : `: \`${w.id}\` is coming from the ${side} and has the green`;
   return `The car has stopped fully at the red light and turns ${turn} here. A ${turn} turn on red is allowed, but it must yield first${why}. Hold still at the line until it is clear or the light turns green.`;
-}
-
-// Cars parked at the kerb that hide the sidewalk beside the car's way (sim/hidden-hazards.js).
-function blindClause(b) {
-  const kmh = Math.round(b.limit_mps * 3.6),
-    where = b.from_m > 0 ? `from ${Math.round(b.from_m)} m ahead` : "beside the car";
-  return `Cars parked along the ${b.side} ${where}, ${r1(b.gap_m)} m from the car's side, hide the sidewalk${b.why === "quiet street" ? " on this quiet street" : ` in this ${b.why}`}: someone could step out from between them, unseen until they do. Keep to ${kmh} km/h beside them, a speed from which the car can stop for someone who steps out ${STEP_OUT_M} m ahead (\`car.target_speed\` already does).`;
 }
 
 function crossingClause(snap) {

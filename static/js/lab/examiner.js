@@ -17,7 +17,7 @@
 // not recognised goes under "Other".
 
 import { projectPoint } from "../map/mapdata.js";
-import { FEATURE_METRICS, hooks } from "../sim/features/index.js";
+import { FEATURE_EXAMINER_MINORS, FEATURE_METRICS, hooks } from "../sim/features/index.js";
 
 import { CATEGORIES } from "./examiner-categories.js";
 import { challengeFailures } from "./practice.js";
@@ -388,7 +388,8 @@ const FAIL_INCIDENT = new Map([
     ({ failure, examinerIncident }) => [failure, examinerIncident],
   ),
 ]);
-// Minor errors from the incident stream: the observer's and the coaching report's own.
+// Minor errors from the incident stream: the observer's and the coaching report's own, and a registered
+// feature's (sim/features/index.js `examinerMinors`: its category, remark and, optionally, when it counts).
 const MINOR = {
   turn_no_signal: "right_of_way",
   lane_change_no_signal: "right_of_way",
@@ -400,15 +401,18 @@ const MINOR = {
   lane_position: "steering",
   lane_change_space: "observation",
   hesitation: "observation",
-  blind_spot_speeding: "observation",
   kerb: "parking",
+  ...Object.fromEntries(Object.entries(FEATURE_EXAMINER_MINORS).map(([type, { category }]) => [type, category])),
 };
 const MINOR_REMARK = {
   hard_brake: "Braked harshly",
   blocked_junction: "Stopped in the junction",
-  blind_spot_speeding: "Passed parked cars too fast to stop for someone stepping out",
   kerb: "Touched the kerb",
+  ...Object.fromEntries(Object.entries(FEATURE_EXAMINER_MINORS).map(([type, { remark }]) => [type, remark])),
 };
+// (a registered feature's minor error that counts only in some reports)
+const minorCounts = (type, report) =>
+  !Object.hasOwn(FEATURE_EXAMINER_MINORS, type) || FEATURE_EXAMINER_MINORS[type].when?.(report) !== false;
 
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 // A failure reason's category; one added to `failures()` later, and not listed here, is "other".
@@ -493,7 +497,13 @@ export function examine(test, report) {
   };
   for (const i of incidents) {
     const type = i?.type;
-    if (typeof type !== "string" || !Object.hasOwn(MINOR, type) || (type === "kerb" && !report.parking)) continue;
+    if (
+      typeof type !== "string" ||
+      !Object.hasOwn(MINOR, type) ||
+      (type === "kerb" && !report.parking) ||
+      !minorCounts(type, report)
+    )
+      continue;
     const remark = MINOR_REMARK[type] || i.message || capital(type.replaceAll("_", " "));
     mark(type, MINOR[type], remark, i);
   }

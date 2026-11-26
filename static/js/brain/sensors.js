@@ -58,8 +58,6 @@ import {
 } from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
-import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
-import { laneSight } from "../sim/hidden-traffic.js";
 // Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
 const PARK_STOP_DECEL = 1.2;
 import {
@@ -103,6 +101,7 @@ const SENSE = {
   streetHazards: hooks("sense", "streetHazards"),
   late: hooks("sense", "late"),
   junctions: hooks("sense", "junctions"),
+  blindSpots: hooks("sense", "blindSpots"),
 };
 const LIMIT = {
   beforeBlindSpots: hooks("limit", "beforeBlindSpots"),
@@ -129,6 +128,7 @@ const TARGET = {
   streetHazards: hooks("target", "streetHazards"),
   beforeEmergency: hooks("target", "beforeEmergency"),
   beforeRunner: hooks("target", "beforeRunner"),
+  blindSpots: hooks("target", "blindSpots"),
 };
 const LANE_GAP_BLOCKED = hooks("laneGapBlocked");
 const LANE_TARGET_FIELDS = hooks("laneTargetFields");
@@ -151,6 +151,7 @@ const HAZARD = {
   streetHazards: hooks("hazard", "streetHazards"),
   rearTraffic: hooks("hazard", "rearTraffic"),
   late: hooks("hazard", "late"),
+  blindSpots: hooks("hazard", "blindSpots"),
 };
 // (and how slowly and gently it crosses a junction over what a registered feature makes slippery)
 const TURN_PACE = hooks("turnPace");
@@ -177,6 +178,11 @@ const INTERSECTION_FIELDS_AFTER_ENTRY = hooks("signalEntryFields");
 const VISIBLE_SIGNAL_POLICY = hooks("visibleSignalPolicy");
 const PRIORITY_JUNCTION = hooks("priorityJunction");
 const PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside");
+// What a registered feature lets road vehicles hide along a lane the car must give way to, or null when
+// nothing but buildings, weather and light limit what it sees there (hidden traffic,
+// sim/features/hidden-hazards.js): { laneSight(world, observer, lane, from, far) }.
+const TRAFFIC_SIGHT = hooks("trafficSight");
+const trafficSight = (world) => firstHookResult(TRAFFIC_SIGHT, world);
 
 export const LOOK_AHEAD_CONTROL_M = 80;
 // Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
@@ -258,8 +264,8 @@ const IMMEDIATE_S = 2.0;
 const VIEW_CHECK_M = 40;
 const VIEW_STEP_M = 5;
 export const PEEK_MPS = 1.5;
-// With hidden traffic (World option hazards, sim/hidden-traffic.js), a vehicle's body may hide those
-// streets' lanes too. Then, stopped where it looks from, the car waits up to 8 s for the view to clear
+// With hidden traffic (a registered feature's trafficSight, sim/hidden-traffic.js), a vehicle's body
+// may hide those streets' lanes too. Then, stopped where it looks from, the car waits up to 8 s for the view to clear
 // before going once nothing it can see is coming, as it does past a building.
 const HIDDEN_HOLD_S = 8;
 // Turning right, the car yields to a cyclist on its right going its way (a right hook): one clear
@@ -762,7 +768,6 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
     speed_zone: null,
     ...FEATURE_SNAPSHOT_FIELDS,
     parking: null,
-    blind_spot: null,
     rear_follower: null,
     traffic: [],
     current_path_hazard: null,
@@ -789,11 +794,8 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
   for (const limit of LIMIT.driveways) limit(snap);
   for (const limit of LIMIT.streetHazards) limit(snap);
   for (const limit of LIMIT.beforeBlindSpots) limit(snap);
-  // (and coming up beside cars parked at the kerb that hide the sidewalk, with hidden hazards on:
-  // sim/hidden-hazards.js)
-  snap.blind_spot = blindSpot(world, ego, road);
-  if (snap.blind_spot)
-    snap.limit = Math.min(snap.limit, blindApproach(snap.blind_spot.limit_mps, snap.blind_spot.from_m));
+  // (and coming up beside cars parked at the kerb that hide the sidewalk: sim/features/hidden-hazards.js)
+  for (const sense of SENSE.blindSpots) sense(world, snap);
   snap.turnaround = turnaroundState(world, snap, executing);
   snap.parking = parkingState(world, snap, executing);
   // (and what a registered feature caps once the turnaround and the parking are known: black ice, say)
@@ -991,7 +993,7 @@ function pathHit(world, c, frontS, x, y, psi, spec, lane) {
 // the rest (`hidden_by`), and the first point it cannot see (`at`, heading along the lane: `heading`).
 // Oncoming lanes are those of the streets into the junction heading within 60 deg of straight at the
 // car's approach.
-function oncomingView(world, c, need) {
+function oncomingView(world, c, need, sight) {
   const { ego, route, map } = world;
   const node = map.edges.get(c.edge)?.to,
     facing = route.headingAt(c.sRoute) + Math.PI;
@@ -1003,7 +1005,7 @@ function oncomingView(world, c, need) {
     for (let idx = 0; idx < e.lanes; idx++) {
       const lane = map.lane(id, idx);
       if (!lane) continue;
-      const seen = laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
+      const seen = sight.laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
       if (!seen || (worst && worst.sight_m <= seen.sight_m)) continue;
       const L = lane.cum[lane.cum.length - 1];
       worst = { ...seen, lane, heading: headingAt(lane.pts, lane.cum, Math.max(0, L - seen.back)) };
@@ -1018,8 +1020,8 @@ function oncomingView(world, c, need) {
 // the front bumper stops, ONCOMING_STOP_M before the first point where the car's path comes within
 // half the two widths plus 0.5 m of the line of the innermost oncoming lane, measured from a
 // conflicting vehicle's line of travel (so a car in a far lane is waited for short of the near
-// lane too). Only vehicles the car can see count; with hidden traffic (World option hazards), what it
-// cannot see along an oncoming lane holds it too (`id` null, `view`).
+// lane too). Only vehicles the car can see count; with hidden traffic (a registered feature's
+// trafficSight), what it cannot see along an oncoming lane holds it too (`id` null, `view`).
 function oncomingYield(world, c, frontS, look = true) {
   const { ego, route } = world;
   const centre = route.pointAt(c.sJunction);
@@ -1044,7 +1046,7 @@ function oncomingYield(world, c, frontS, look = true) {
     // clears. Waiting for its first acceleration sample loses the gap on a slow turn.
     const ctl = lane?.edgeRef.control;
     const starting =
-      world.hazards &&
+      !!trafficSight(world) &&
       n.v < 1 &&
       n.a >= -0.5 &&
       ctl?.type === "signal" &&
@@ -1071,13 +1073,14 @@ function oncomingYield(world, c, frontS, look = true) {
     if (!best || at < best.yield_s_route)
       best = { id: n.id, eta_s: eta, need_s: need, yield_s_route: at, bumper_to_yield_m: at - frontS };
   }
-  // Hidden traffic (World option hazards, sim/hidden-traffic.js): along each oncoming lane, as far as
-  // traffic at its street's limit covers in that time, a vehicle's body (one waiting to turn left
+  // Hidden traffic (a registered feature's trafficSight, sim/hidden-traffic.js): along each oncoming
+  // lane, as far as traffic at its street's limit covers in that time, a vehicle's body (one waiting to turn left
   // opposite, say) may hide what is coming. Until the car can see that far, it waits short of that
   // lane's path, as it would for a vehicle there, but ONCOMING_STOP_M short of the near edge
   // of the street it crosses (so that a vehicle waiting to turn left opposite has room to turn in front of it), or, past
   // that, where it can stop braking gently.
-  const view = look && world.hazards ? oncomingView(world, c, need) : null;
+  const sight = look ? trafficSight(world) : null;
+  const view = sight ? oncomingView(world, c, need, sight) : null;
   if (view) {
     const hit = pathHit(world, c, frontS, view.at[0], view.at[1], view.heading, CAR, view.lane);
     if (hit !== null) {
@@ -1794,11 +1797,12 @@ function turnOnRed(world, c, inter, frontS, visible, held = false) {
         if (back < (far * k) / 4) break;
         last = back;
       }
-      // hidden traffic (World option hazards, sim/hidden-traffic.js): nor may a vehicle's body hide
-      // that street's lanes
-      for (let idx = 0; world.hazards && idx < e.lanes; idx++) {
+      // hidden traffic (a registered feature's trafficSight, sim/hidden-traffic.js): nor may a
+      // vehicle's body hide that street's lanes
+      const sight = trafficSight(world);
+      for (let idx = 0; sight && idx < e.lanes; idx++) {
         const lane = map.lane(e.id, idx),
-          seen = lane && laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
+          seen = lane && sight.laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
         if (seen) {
           out.wait_for = { kind: "view", sight_m: Math.round(seen.sight_m), hidden_by: seen.hidden_by };
           return out;
@@ -1919,11 +1923,12 @@ function giveWayAt(world, c, frontS) {
         out.view_clear = false;
         out.sight_m = out.sight_m === null ? last : Math.min(out.sight_m, last);
       }
-      // hidden traffic (World option hazards, sim/hidden-traffic.js): a vehicle's body may hide the
-      // street's lanes where buildings do not
-      for (let idx = 0; world.hazards && !blocked && idx < e.lanes; idx++) {
+      // hidden traffic (a registered feature's trafficSight, sim/hidden-traffic.js): a vehicle's body
+      // may hide the street's lanes where buildings do not
+      const sight = trafficSight(world);
+      for (let idx = 0; sight && !blocked && idx < e.lanes; idx++) {
         const lane = map.lane(id, idx),
-          seen = lane && laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
+          seen = lane && sight.laneSight(world, ego, lane, JUNCTION_BOX_M / 2, far);
         if (!seen) continue;
         out.view_clear = false;
         if (out.sight_m === null || seen.sight_m < out.sight_m) {
@@ -2113,16 +2118,8 @@ export function desiredSpeed(snap) {
   }
   for (const cap of TARGET.beforeRoadside) v = cap(snap, v, reasons);
   for (const cap of TARGET.beforeParked) v = cap(snap, v, reasons, targetCtx);
-  // cars parked at the kerb that hide the sidewalk (sim/hidden-hazards.js): down to the speed the car
-  // can stop from for someone stepping out from between them, gently, by the first of them
-  const bs = snap.blind_spot;
-  if (bs) {
-    const vb = blindApproach(bs.limit_mps, bs.from_m);
-    if (vb <= v + 0.05) {
-      v = Math.min(v, vb);
-      reasons.push(bs.from_m <= STEP_OUT_M ? "parked cars hide the sidewalk" : "parked cars ahead hide the sidewalk");
-    }
-  }
+  // (cars parked at the kerb that hide the sidewalk, say: sim/features/hidden-hazards.js)
+  for (const cap of TARGET.blindSpots) v = cap(snap, v, reasons, targetCtx);
   if (snap.following) {
     // close in on the leader gently, and never faster than lets the car stop comfortably behind it
     // even if it brakes hard (it is assumed able to stop at 4 m/s^2)
@@ -2441,7 +2438,10 @@ export function hazardFlags(snap) {
     else if (x) f.push(x);
   }
   if (snap.parking) f.push("parking");
-  if (snap.blind_spot && snap.blind_spot.from_m < STEP_OUT_M + 10) f.push("blind spot");
+  for (const flag of HAZARD.blindSpots) {
+    const label = flag(snap);
+    if (label) f.push(label);
+  }
   if (snap.traffic.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 8)) f.push("traffic");
   if (snap.routeProj && Math.abs(snap.lane ? snap.lane.lateral : snap.routeProj.lateral) > 0.8) f.push("lane");
   if (snap.lane && (snap.lane.shift || snap.lane.delta)) f.push("lane change");

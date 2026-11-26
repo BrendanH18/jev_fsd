@@ -65,7 +65,7 @@ const COACH_ENTRY_FIELDS = {
 };
 
 const WORLD_FIELDS = ["property", "seen", "calls"];
-const PREDICATES = ["motion", "parkingTraffic"];
+const PREDICATES = ["motion", "parkingTraffic", "freeDrive"];
 const CLOCK_FIELDS = ["day", "utcOffset", "weekday"];
 const DISPLAY_MAPS = ["flagText", "perceptionRejections", "eventBadges"];
 const FIELDS = new Set([
@@ -83,6 +83,7 @@ const FIELDS = new Set([
   "coach",
   ...PREDICATES,
   ...CLOCK_FIELDS,
+  "examinerMinors",
 ]);
 
 const text = (value) => typeof value === "string" && !!value.trim();
@@ -161,6 +162,22 @@ function metricProblem(metric) {
     return "metric must choose traceType or eventType";
   if (metric.trace === false && metric.traceType) return "metric.traceType requires trace to be enabled";
   if (metric.traceType && metric.threshold === undefined) return "metric.traceType needs a threshold";
+  return null;
+}
+
+function examinerMinorsProblem(minors) {
+  if (!object(minors)) return "examinerMinors must be an object";
+  const shape = declarationProblem("examinerMinors", minors);
+  if (shape) return shape;
+  for (const [type, minor] of Object.entries(minors)) {
+    if (!fieldName(type)) return `examinerMinors has an invalid incident type "${type}"`;
+    if (!object(minor)) return `examinerMinors.${type} must be an object`;
+    const entry = declarationProblem(`examinerMinors.${type}`, minor, ["category", "remark", "when"]);
+    if (entry) return entry;
+    if (!Object.hasOwn(CATEGORIES, minor.category)) return `examinerMinors.${type} has an unknown category`;
+    if (!text(minor.remark)) return `examinerMinors.${type} needs a remark`;
+    if (!optional(minor.when, callback)) return `examinerMinors.${type}.when must be a function`;
+  }
   return null;
 }
 
@@ -318,6 +335,10 @@ function recordFieldsProblem(record, slots) {
     const problem = coachProblem(record.coach, record.seen);
     if (problem) return problem;
   }
+  if (record.examinerMinors !== undefined) {
+    const problem = examinerMinorsProblem(record.examinerMinors);
+    if (problem) return problem;
+  }
   for (const [name, value] of Object.entries(record)) {
     if (FIELDS.has(name)) continue;
     const problem = hookProblem(name, value, slots);
@@ -351,6 +372,7 @@ export function featureRegistryProblem(records, slots) {
       if (Object.hasOwn(COACH_SLOTS, field))
         for (const { at, order } of entries) reserved.push([`coach.${field} order`, `${at}/${order}`]);
     }
+    for (const type of Object.keys(record.examinerMinors || {})) reserved.push(["examiner minor", type]);
     for (const field of ["snapshot", ...DISPLAY_MAPS])
       for (const name of Object.keys(record[field] || {})) reserved.push([field, name]);
     for (const [field, name] of reserved) {

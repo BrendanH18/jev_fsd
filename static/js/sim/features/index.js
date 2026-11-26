@@ -15,7 +15,8 @@
 //   seen      the World flag that gates the metric after the feature has met the driven car
 //             (required unless metric.reportWhenEnabled uses a boolean World option)
 //   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
-//   build(world, { enabled, seed, map })   the feature's World state
+//   build(world, { enabled, seed, map, options })   the feature's World state (`options`: every World option,
+//             for one the feature reads beside its own)
 //   buildFleet(fleet, { enabled, seed, makePath })   fleet state, stored under the option key
 //   metric    { at, name, failure, label, category?, decimals?, threshold?, traceType? }: the violation,
 //             failure text, trace label and examiner category. `eventType` supplies a world event's replay marker.
@@ -34,6 +35,9 @@
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
 //   parkingTraffic(n)  whether this traffic is entering a parking bay
+//   freeDrive(enabled)  more free-drive World or fleet options the feature sets with its own (sim/free-drive.js)
+//   examinerMinors  { [incident type]: { category, remark, when?(report) } }: minor errors the examiner marks
+//             from the incident stream (lab/examiner.js), counted only when `when` is not false
 //   day       true: while it is on, the World's clock keeps the `day` of the year (World.setClock)
 //   utcOffset true: while it is on, the World's clock keeps `utc_offset`
 //   and the hooks below.
@@ -56,11 +60,17 @@
 // metrics before the red-light runner's corresponding code. SLOTS lists every supported position.
 //   obstacles(world, x, y, r)          World.obstaclesNear, after the others ("end")
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
-//                                       traffic moves ("end"), with "afterOutages" between them
+//                                       traffic moves ("end"), with "afterOutages" and "stepOuts" between them
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, after traffic and before the people on foot move ("end")
 //   audit(world, frontOnPath?)           World.audit: "beforeCollisions" (with dt), "afterFlagger", "afterCalming", "driveways",
 //                                       "streetHazards", "rearTraffic", "late"
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
+//   standingHides(world, observer, ped) vehicles standing at the kerb that may hide pedestrian `ped`, beside
+//                                       moving traffic (World.sees), or null ("end")
+//   vehicleHides(world, observer, o, reach) true: another vehicle's body hides road user `o` (World.sees) ("end")
+//   hiddenByVehicle(world, observer, o) true: `o` is in sight but for another vehicle's body (World.hiddenByVehicle)
+//   trafficSight(world)                 { laneSight(world, observer, lane, from, far) } when road vehicles hide
+//                                       traffic along the lanes the car gives way to, or null ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
 //   evKerb(world, road, front)          the emergency audit's furthest right the car can be asked to pull
 //                                       over, metres right of its lane's centre, or Infinity ("end")
@@ -219,6 +229,7 @@ import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
+import hazards from "./hidden-hazards.js";
 
 export const FEATURES = [
   highBeams,
@@ -255,6 +266,9 @@ export const FEATURES = [
   leftOnRed,
   amber,
   busLanes,
+  // Hidden hazards run at slots of their own ("blindSpots", "stepOuts", "hiddenHazards") and hooks no other
+  // record has, so their place here changes no order.
+  hazards,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -283,7 +297,7 @@ export const SLOTS = {
   cautiousDrive: ["end"],
   legitimateStop: ["end"],
   obstacles: ["end"],
-  stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
+  stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "stepOuts", "end"],
   stepAfterTraffic: ["end"],
   audit: [
     "afterPassing",
@@ -315,6 +329,7 @@ export const SLOTS = {
     "following",
     "beforeTarget",
     "end",
+    "blindSpots",
   ],
   finishLanes: ["end"],
   laneOfferBlocked: ["end"],
@@ -352,6 +367,7 @@ export const SLOTS = {
     "beforeEmergency",
     "beforeParking",
     "parking",
+    "blindSpots",
   ],
   hazard: [
     "beforeWorkZone",
@@ -363,6 +379,7 @@ export const SLOTS = {
     "streetHazards",
     "rearTraffic",
     "late",
+    "blindSpots",
   ],
   laneOffer: ["afterPassing", "end"],
   laneChangeCandidate: ["end"],
@@ -443,6 +460,7 @@ export const SLOTS = {
     "rearTraffic",
     "beforeParking",
     "parking",
+    "blindSpots",
   ],
   greenSignalClause: ["end"],
   outcome: ["ids", "laneChange"],
@@ -465,6 +483,7 @@ export const SLOTS = {
     "rearTraffic",
     "beforeParking",
     "parking",
+    "blindSpots",
   ],
   holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "beforeParking", "parking"],
   prompt: [
@@ -482,6 +501,7 @@ export const SLOTS = {
     "beforeRightOnRed",
     "amberDecision",
     "afterGlare",
+    "hiddenHazards",
     "beforeRunner",
     "restrictions",
     "streetHazards",
@@ -563,6 +583,10 @@ export const SLOTS = {
   decisionFields: ["end"],
   trafficPullOut: ["end"],
   hides: ["end"],
+  standingHides: ["end"],
+  vehicleHides: ["end"],
+  hiddenByVehicle: ["end"],
+  trafficSight: ["end"],
   blocksView: ["end"],
   placeEgo: ["end"],
   evKerb: ["end"],
@@ -829,11 +853,14 @@ export function buildFeatures(world, options, seed, map, position) {
   for (const f of records) {
     const value = Object.hasOwn(options, f.key) ? options[f.key] : undefined;
     const enabled = value ?? (f.defaultCount === undefined ? false : 0);
-    world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
+    world[f.property ?? f.key] = f.build(world, { enabled, seed, map, options });
     if (f.seen) world[f.seen] = false;
     if (f.calls) world[f.calls] = new Map();
   }
 }
+
+// Minor errors a registered feature has the examiner mark (lab/examiner.js), by incident type.
+export const FEATURE_EXAMINER_MINORS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.examinerMinors)));
 
 // Default snapshot fields that older readers expect even when the feature is inactive.
 export const FEATURE_SNAPSHOT_FIELDS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.snapshot)));
