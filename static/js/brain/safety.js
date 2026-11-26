@@ -126,7 +126,6 @@ export class DeadlockDetector {
       (snap?.emergency_ahead && snap.emergency_ahead.speed < 1) ||
       (snap?.bus && snap.bus.bumper_to_stop_m < 8) ||
       (snap?.crosswalk_stop && snap.crosswalk_stop.bumper_to_stop_m < 8) ||
-      (snap && snap.school_bus?.lights === "red" && snap.school_bus.bumper_to_stop_m < 8) ||
       (snap?.junction_box && snap.junction_box.bumper_to_stop_m < 8) ||
       LEGITIMATE_STOP.some((hold) => hold(snap, CLEARING_M)) ||
       (snap?.nav && snap.nav.remaining_m < DESTINATION_ZONE_M) ||

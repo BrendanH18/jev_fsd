@@ -366,18 +366,6 @@ export function toJevState(snap, candidates, meta = {}, style = DEFAULT_STYLE) {
       do_not_pass: true,
     };
   }
-  if (snap.school_bus) {
-    const b = snap.school_bus;
-    state.school_bus = {
-      id: b.id,
-      coming_toward_car: b.relation === "oncoming",
-      lights: b.lights,
-      gap_m: r1(Math.max(0, b.gap_m)),
-      ...(b.lights === "red"
-        ? { stop: true, wait_in_m: r1(Math.max(0, b.bumper_to_stop_m)) }
-        : { about_to_stop: true }),
-    };
-  }
   for (const add of STATE.afterCrosswalk) add(snap, state);
   if (snap.junction_box) {
     const b = snap.junction_box;
@@ -486,8 +474,6 @@ function outcomeLabel(c, snap) {
     return `clear, stops ${Math.max(0, r1(snap.crosswalk_stop.bumper_to_stop_m - c.sim.progress_m))} m short of the crosswalk, beside the stopped ${snap.crosswalk_stop.kind}`;
   if (c.id === "wait_short_of_junction" && snap.junction_box)
     return `clear, waits ${Math.max(0, r1(snap.junction_box.bumper_to_stop_m - c.sim.progress_m))} m short of the junction, at the line`;
-  if (c.id === "stop_for_school_bus" && snap.school_bus)
-    return `clear, stops ${Math.max(0, r1(snap.school_bus.bumper_to_stop_m - c.sim.progress_m))} m short of the school bus`;
   if (c.id === "yield_to_bus" && snap.bus)
     return `clear, stops ${Math.max(0, r1(snap.bus.bumper_to_stop_m - c.sim.progress_m))} m behind the bus`;
   if (c.id === "pull_over" && snap.emergency)
@@ -671,19 +657,6 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
       w = Math.max(0, Math.round(c.bumper_to_stop_m));
     out.push(
       `A ${c.kind} (\`${c.id}\`) in the next lane is ${c.stopped ? "stopped" : "stopping"} at a marked crosswalk ${Math.round(Math.max(0, c.bumper_to_crosswalk_m))} m ahead, maybe for someone crossing whom it hides. A vehicle stopped at a crosswalk must not be passed: ${w < 2 ? "hold still short of the crosswalk and look; once the car has stood still there for 2 s it may go on if nobody is crossing in its path." : `slow down and stop ${w} m ahead, short of the crosswalk (\`stop_at_crosswalk\`), and look before going on.`}`,
-    );
-  }
-  if (snap.school_bus) {
-    const b = snap.school_bus,
-      w = Math.max(0, Math.round(b.bumper_to_stop_m)),
-      where =
-        b.relation === "behind"
-          ? `${Math.round(Math.max(0, b.gap_m))} m ahead, going the car's way`
-          : `${Math.round(Math.max(0, b.gap_m))} m ahead, coming toward the car`;
-    out.push(
-      b.lights === "red"
-        ? `School bus \`${b.id}\`, ${where}, is stopped with its red lights flashing, letting children off; they may cross in front of it, hidden by it. Traffic both ways must stop for it and stay stopped until it moves off or the lights go off: ${w < 2 ? "hold still where the car is." : `slow down and stop ${w} m ahead, short of it (\`stop_for_school_bus\`).`}`
-        : `School bus \`${b.id}\`, ${where}, has its amber lights flashing: it is about to stop and let children off, and traffic both ways will have to stop for it. Slow down, ready to stop short of it; \`car.target_speed\` already does.`,
     );
   }
   pushClauses(out, CLAUSE.afterCrosswalk, snap);
@@ -939,7 +912,6 @@ export function needsMotionQuestion(snap) {
     snap.emergency ||
     snap.bus ||
     snap.crosswalk_stop ||
-    snap.school_bus ||
     snap.junction_box ||
     snap.parking ||
     snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) ||
@@ -999,13 +971,8 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const cwWait = snap.crosswalk_stop
       ? ", when a vehicle in the next lane is stopped at a crosswalk and the car has stopped short of it (`stopped_at_crosswalk.wait_in_m` under 2)"
       : "";
-    // And waiting for a school bus with its reds flashing.
-    const schoolWait =
-      snap.school_bus?.lights === "red"
-        ? ", when a school bus with its red lights flashing is ahead and the car has stopped short of it (`school_bus.wait_in_m` under 2)"
-        : "";
-    // And waiting for the registered features after the crosswalk: behind a streetcar's open doors, or
-    // short of a level crossing, say.
+    // And waiting for the registered features after the crosswalk: for a school bus with its reds
+    // flashing, behind a streetcar's open doors, or short of a level crossing, say.
     const afterCrosswalkWait = HOLD_STILL.afterCrosswalk.map((h) => h(snap)).join("");
     // And waiting at a signal's line for room past the junction.
     const boxWait = snap.junction_box
@@ -1028,7 +995,7 @@ export function buildQuestions(snap, eligible, meta = {}) {
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
         drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${DRIVE_CRITERIA.map((criterion) => criterion(snap)).join("")}`,
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${beforeRunnerWait}${featureWait}${featureWaitLater}${evWait}${busWait}${cwWait}${schoolWait}${afterCrosswalkWait}${boxWait}${beforeMergeWait}${afterFlaggerWait}${approachWait}${featureParkingWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${beforeRunnerWait}${featureWait}${featureWaitLater}${evWait}${busWait}${cwWait}${afterCrosswalkWait}${boxWait}${beforeMergeWait}${afterFlaggerWait}${approachWait}${featureParkingWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
       },
     };
   } else {

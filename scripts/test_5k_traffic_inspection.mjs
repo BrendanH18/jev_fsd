@@ -43,11 +43,10 @@ function fixture() {
     nextPark: 2,
     nextEmergency: -1,
     nextBus: 14,
-    nextSchool: 16,
     nextPlow: 18,
     busTarget: 0,
     streetcars: { next: 15, target: 0 },
-    schoolTarget: 0,
+    schoolBuses: { next: 16, target: 0 },
     trains: { next: 17, target: 0 },
     plowTarget: 0,
   });
@@ -175,7 +174,7 @@ const fixtures = [
   [
     "fleet_school_timer",
     ({ fleet }) => {
-      fleet.nextSchool = -1;
+      fleet.schoolBuses.next = -1;
     },
   ],
   [
@@ -205,7 +204,7 @@ const fixtures = [
   [
     "fleet_school_target",
     ({ fleet }) => {
-      fleet.schoolTarget = NaN;
+      fleet.schoolBuses.target = NaN;
     },
   ],
   [

@@ -75,7 +75,6 @@ export const FLAG_TEXT = {
   fails_to_yield_to_emergency: "it does not give way to an emergency vehicle",
   fails_to_yield_to_bus: "it does not let a bus pull out from its stop",
   passes_car_stopped_at_crosswalk: "it passes a vehicle stopped at a crosswalk without stopping first",
-  passes_stopped_school_bus: "it passes a school bus with its red lights flashing",
   blocks_junction: "it enters a junction it has no room to clear",
   enters_unseen_junction: "it enters a junction before it can see that it is clear",
   passes_turn_round_point: "it drives past the point where the route turns round",

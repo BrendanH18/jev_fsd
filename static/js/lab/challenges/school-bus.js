@@ -73,7 +73,7 @@ function placeSchoolBus(world, fleet, { edge, s }, seed) {
     e = map.edges.get(edge),
     lane = map.lane(edge, 0),
     scale = lane.length / Math.max(1, e.cum[e.cum.length - 1]);
-  const bus = fleet.addSchoolBus(lane, s * scale - (SCHOOL_BUS.length - SCHOOL_BUS.rearOverhang), 0);
+  const bus = fleet.schoolBuses.add(lane, s * scale - (SCHOOL_BUS.length - SCHOOL_BUS.rearOverhang), 0);
   Object.assign(bus.school, {
     phase: "red",
     lights: "red",

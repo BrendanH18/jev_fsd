@@ -64,6 +64,7 @@ const OBSTACLE_FLAGS = [
   "noCyclistPass",
   "heavy",
   "onTrack",
+  "noseFirst",
 ];
 const OBSTACLE_CALLBACKS = ["predict", "visible", "oncoming", "parkedClearance", "noParking", "pathPolicy"];
 const COACH_ENTRY_FIELDS = {
@@ -74,7 +75,7 @@ const COACH_ENTRY_FIELDS = {
 };
 
 const WORLD_FIELDS = ["property", "seen", "calls"];
-const PREDICATES = ["motion", "parkingTraffic"];
+const PREDICATES = ["motion", "parkingTraffic", "freeDrive"];
 const CLOCK_FIELDS = ["day", "utcOffset", "weekday"];
 const DISPLAY_MAPS = ["flagText", "perceptionRejections", "eventBadges"];
 const FIELDS = new Set([

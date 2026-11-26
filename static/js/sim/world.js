@@ -25,14 +25,6 @@ import {
 } from "./emergency.js";
 import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
-import {
-  BEHIND_M,
-  ONCOMING_M,
-  SIDE_M,
-  canStopFor as canStopForSchool,
-  redsOn,
-  schoolBusRelation,
-} from "./school-bus.js";
 import { zoneLimit } from "./speed-zones.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
@@ -174,13 +166,6 @@ const AUDIT_BUS_MOVING_MPS = 1;
 // still stopped there, without having stood still at the crosswalk for 2 s first. Counted once a
 // vehicle and crosswalk.
 const AUDIT_CROSSWALK_MOVING_MPS = 1;
-// Stopping for a school bus with its reds flashing (sim/school-bus.js, BC MVA s. 149): once the car,
-// coming up behind it or toward it along its street (its near end, the rear or the front, within 9 m
-// of the line the car heads along), first sees the reds on, it owes the stop if it could then stop
-// short of it (5 m behind its rear, or 10 m short of its front coming toward it) braking at up to
-// 3.5 m/s^2. It fails to yield if, owing it, its front draws level with that end of the bus at more
-// than 1 m/s while the reds are still on. Counted once a stop.
-const AUDIT_SCHOOL_MOVING_MPS = 1;
 // Keeping the junction clear (sim/junction-box.js, Québec's Highway Safety Code): the car, following
 // its route, fails to yield if it entered a signal's junction (its front past the near side of the
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
@@ -240,7 +225,6 @@ export class World {
     this.busCalls = new Map(); // "<bus id>:<departure>" -> { owed, counted }: a bus pulling out ahead
     this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it
     this.crosswalkStop = null; // the marked crosswalk the car has stood still at (sim/crosswalk.js)
-    this.schoolCalls = new Map(); // "<school bus id>:<stop>" -> { owed, counted }: one with its reds on
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
     // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
     // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
@@ -408,7 +392,6 @@ export class World {
     this.evCalls.clear();
     this.evJunction = null;
     this.busCalls.clear();
-    this.schoolCalls.clear();
     this.inBox = null;
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
@@ -420,7 +403,6 @@ export class World {
     this.parkHold = 0;
     this.parkedIn = null;
     this.kerbContact = false;
-    this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
     this.crosswalkStop = null;
@@ -816,7 +798,6 @@ export class World {
     this.auditCyclists();
     this.auditEmergency(road);
     this.auditBuses();
-    this.auditSchoolBuses();
     for (const audit of AUDIT_BUSES) audit(this, dt);
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
@@ -917,35 +898,6 @@ export class World {
       this.violations.failed_to_yield++;
       this.events.push({ type: "failed_to_yield", to: "cross traffic", junction: box.id, blocking: true });
     }
-  }
-
-  auditSchoolBuses() {
-    const ego = this.ego;
-    for (const bus of this.npcs) {
-      if (!redsOn(bus)) continue;
-      const key = `${bus.id}:${bus.school.stops}`,
-        r = schoolBusRelation(ego, bus);
-      if (!r || Math.abs(r.right_m) > SIDE_M) continue;
-      let rec = this.schoolCalls.get(key);
-      // (decided when the car first sees the reds, still short of the bus)
-      if (!rec) {
-        if (r.ahead_m <= 0 || !this.visibility.sees(ego, bus)) continue;
-        this.schoolCalls.set(
-          key,
-          (rec = {
-            owed: canStopForSchool(ego.v, r.ahead_m - (r.relation === "behind" ? BEHIND_M : ONCOMING_M)),
-            counted: false,
-          }),
-        );
-      }
-      if (rec.owed && !rec.counted && r.ahead_m <= 0 && ego.v > AUDIT_SCHOOL_MOVING_MPS) {
-        rec.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({ type: "failed_to_yield", to: "school bus", with: bus.id });
-      }
-    }
-    if (this.schoolCalls.size > 20)
-      for (const key of [...this.schoolCalls.keys()].slice(0, 10)) this.schoolCalls.delete(key);
   }
 
   auditCrosswalkPass() {

@@ -10,6 +10,7 @@
 //   flag      optional URL parameter including when it differs from the lowercase option key
 //   property  the World property when it differs from `key`
 //   defaultCount  the free-drive default for a feature whose option is a count
+//   freeDrive(on, { hour })  the free-drive option, when it depends on more than its query flag
 //   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations;
 //             a fleet record at "early" also builds its fleet state first, right after the cyclists
 //   snapshot  default sensing fields kept in the snapshot even when the feature is inactive
@@ -33,7 +34,8 @@
 //             own free speed in all weathers. `noCyclistPass` keeps it behind cyclists. `heavy`
 //             (buses, school buses, streetcars) keeps under the limit and stops for any body in its way
 //             just ahead. `onTrack` never pulls over for an emergency vehicle. `pathPolicy(o)` is the
-//             transit kind the traffic path policy takes it as, or false for none.
+//             transit kind the traffic path policy takes it as, or false for none. `noseFirst`, with
+//             `heavy`, leaves what is beside it short of its front to give way to it.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
@@ -136,7 +138,7 @@
 //   trafficManeuver(world, fleet, n, dt, all) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
 //   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
 //   trafficHold(world, fleet, n, front, all)  where a driver stops for the feature, metres from its front, or
-//                                       null ("end", after the planned stops)
+//                                       null ("buses", before the planned stops, or "end", after them)
 //   emergencyHold(world, fleet, n, front, all)  the same for an emergency vehicle under its siren ("end")
 //   trafficCorridor(world, n, path, front) first corridor { shift, lineAt(s), ignore, limit, stop() }, or null
 //   trafficLaneControl(world, n, path, front) a separate lane restriction with the corridor fields above
@@ -161,7 +163,8 @@
 //   trafficLeaderHold(world, n, path, front) { gap, vehicle } of a virtual traffic leader ("end")
 //   trafficParkingPlan(n, standstillGap) { shift, stop, signal } for a car preparing to park ("end")
 //   trafficStart(world, n)              each vehicle step, first ("end") or before scanning signals ("beforeControl")
-//   trafficReplan(world, n)             before its path is extended; true when re-planned ("end")
+//   trafficReplan(world, n, fleet)      before its path is extended; true when re-planned ("beforeCorner", "corner"
+//                                       for a long vehicle's own corner check, or "end")
 //   trafficLaneChange(world, fleet, n, edge, front) true when the feature handles the vehicle's lane
 //                                       changes itself this step ("end")
 //   trafficRecover(world, fleet, n, near) true when the feature put the vehicle back on its path ("end")
@@ -228,6 +231,7 @@ import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
+import schoolBuses from "./school-buses.js";
 import streetcars from "./streetcars.js";
 import trains from "./trains.js";
 
@@ -254,6 +258,7 @@ export const FEATURES = [
   // Transit and rail traffic, built by the fleet in this order before the garbage trucks and plows, as it
   // always placed them; their sensing, candidates, wording and audits keep their places through the
   // "buses", "afterCrosswalk" and "streetcars" slots.
+  schoolBuses,
   streetcars,
   trains,
   collection, // A stopped truck also matches the double-parked obstacle.
@@ -365,6 +370,7 @@ export const SLOTS = {
     "beforeParked",
     "afterLeader",
     "beforeCrosswalk",
+    "afterCrosswalk",
     "afterSchoolBus",
     "streetcars",
     "driveways",
@@ -506,6 +512,7 @@ export const SLOTS = {
     "headlights",
     "pedestrian",
     "beforeSchoolBus",
+    "schoolBuses",
     "afterCrosswalk",
     "beforeMerge",
     "nearbySpecial",
@@ -561,13 +568,13 @@ export const SLOTS = {
   trafficDriver: ["end"],
   trafficManeuver: ["beforeSpecial", "end"],
   trafficStop: ["afterMerge", "end"],
-  trafficHold: ["end"],
+  trafficHold: ["buses", "end"],
   emergencyHold: ["end"],
   checkpoint: ["end"],
   trafficLeaderHold: ["end"],
   trafficParkingPlan: ["end"],
   trafficStart: ["end", "beforeControl"],
-  trafficReplan: ["beforeCorner", "end"],
+  trafficReplan: ["beforeCorner", "corner", "end"],
   trafficActors: ["end"],
   trafficLane: ["beforeLaneMoves", "laneMoves", "late"],
   trafficYield: ["end"],

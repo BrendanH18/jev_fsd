@@ -1547,7 +1547,7 @@ export async function boot() {
     }
     announcedCrosswalk = cwKey;
     // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
-    const school = fleet.schoolBuses?.find((b) => {
+    const school = fleet.schoolBuses?.list.find((b) => {
       const r = redsOn(b) && schoolBusRelation(world.ego, b);
       return (
         r &&

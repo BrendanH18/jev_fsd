@@ -32,7 +32,6 @@ import {
 } from "../sim/emergency.js";
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
-import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
@@ -99,6 +98,7 @@ const TARGET = {
   beforeParking: hooks("target", "beforeParking"),
   beforeMerge: hooks("target", "beforeMerge"),
   beforeParked: hooks("target", "beforeParked"),
+  afterCrosswalk: hooks("target", "afterCrosswalk"),
   afterSchoolBus: hooks("target", "afterSchoolBus"),
   streetcars: hooks("target", "streetcars"),
   parking: hooks("target", "parking"),
@@ -160,9 +160,6 @@ const PRIORITY_JUNCTION = hooks("priorityJunction");
 const PRIORITY_TRAFFIC_OUTSIDE = hooks("priorityTrafficOutside");
 
 export const LOOK_AHEAD_CONTROL_M = 80;
-// Coming up to a school bus showing its ambers (about to stop): no faster than it could stop where it
-// would stop for the reds, comfortably, but at least this.
-const AMBER_MIN_MPS = 4;
 export const TRAFFIC_RADIUS_M = 60;
 const YIELD_ENTRY_MPS = 4.0;
 const PED_LOOK_M = 45;
@@ -597,7 +594,6 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, seen, FRONT) {
   snap.bus = busPullingOut(world, frontS, visible);
   for (const sense of SENSE.afterPedestrians) sense(world, snap, { frontS });
   snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
-  snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
   for (const sense of SENSE.afterCrosswalk) sense(world, snap, { route, frontS, visible, visibleNpcs, vehicles });
   snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
   for (const sense of SENSE.beforeWorkZone) sense(world, snap, { p, frontS, lane, road });
@@ -735,7 +731,6 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
     emergency_ahead: null,
     bus: null,
     crosswalk_stop: null,
-    school_bus: null,
     junction_box: null,
     speed_zone: null,
     ...FEATURE_SNAPSHOT_FIELDS,
@@ -1401,43 +1396,6 @@ function crosswalkHold(world, frontS, visibleNpcs) {
     }
   }
   return null;
-}
-
-// A school bus the car must stop for (sim/school-bus.js, BC MVA s. 149): stopped with its reds
-// flashing on the car's route, ahead of it going its way or coming toward it (`relation`). The car
-// stops with its front 5 m behind the bus's rear, or 10 m short of its front coming toward it
-// (`stop_s_route`), and stays stopped while the reds flash. Owed when the car, first seeing the reds,
-// could stop there braking at no more than 3.5 m/s^2; decided once a stop and remembered in
-// `world.schoolYields`. With none, the nearest showing its ambers (about to stop: `lights` "amber"),
-// or null.
-function schoolBusStop(world, route, frontS, visibleNpcs) {
-  world.schoolYields ||= new Map();
-  let red = null,
-    amber = null;
-  for (const bus of visibleNpcs) {
-    if (!isSchoolBus(bus) || !bus.school?.lights) continue;
-    const h = schoolBusHold(route.pts, route.cum, frontS, bus);
-    if (!h) continue;
-    const out = {
-      id: bus.id,
-      relation: h.relation,
-      lights: bus.school.lights,
-      gap_m: h.gap_m,
-      stop_s_route: frontS + h.stop_m,
-      bumper_to_stop_m: h.stop_m,
-    };
-    if (bus.school.lights === "amber") {
-      if (!amber || h.gap_m < amber.gap_m) amber = out;
-      continue;
-    }
-    const key = `${bus.id}:${bus.school.stops}`;
-    if (!world.schoolYields.has(key)) {
-      if (world.schoolYields.size > 20) world.schoolYields.delete(world.schoolYields.keys().next().value);
-      world.schoolYields.set(key, canStopForSchool(world.ego.v, h.stop_m));
-    }
-    if (world.schoolYields.get(key) && (!red || h.stop_m < red.bumper_to_stop_m)) red = out;
-  }
-  return red || amber;
 }
 
 // The signal the car's route takes it through next, within 60 m, when traffic it can see past the
@@ -2144,21 +2102,7 @@ export function desiredSpeed(snap) {
       reasons.push("car stopped at a crosswalk");
     }
   }
-  // a school bus with its reds flashing: stop short of it; with its ambers, slow down, ready to
-  const sb = snap.school_bus;
-  if (sb && (sb.lights === "red" || sb.bumper_to_stop_m > 0)) {
-    const room = sb.bumper_to_stop_m;
-    const vs =
-      sb.lights === "red"
-        ? room < 1.0
-          ? 0
-          : stopSpeedFor(room - 0.5, decel)
-        : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
-    if (vs < v) {
-      v = vs;
-      reasons.push(sb.lights === "red" ? "school bus stopped, red lights flashing" : "school bus about to stop");
-    }
-  }
+  for (const cap of TARGET.afterCrosswalk) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.afterSchoolBus) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.streetcars) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.beforeMerge) v = cap(snap, v, reasons, targetCtx);
@@ -2249,7 +2193,6 @@ export function hazardFlags(snap) {
   if (snap.emergency) f.push("emergency vehicle");
   if (snap.bus) f.push("bus");
   if (snap.crosswalk_stop) f.push("crosswalk");
-  if (snap.school_bus) f.push("school bus");
   for (const flag of HAZARD.afterCrosswalk) {
     const label = flag(snap);
     if (label) f.push(label);

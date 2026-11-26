@@ -474,21 +474,6 @@ export function sampleCandidates(snap, world) {
         speed: `stop short of the crosswalk beside the stopped ${cwStop.kind}`,
       });
     }
-    // A school bus with its reds flashing, ahead or coming toward the car: stop short of it, and stay
-    // stopped while they flash.
-    const school = snap.school_bus;
-    if (school && school.lights === "red" && school.bumper_to_stop_m > 0.3) {
-      out.push({
-        id: "stop_for_school_bus",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(school.stop_s_route - FRONT) }),
-        steer: "hold lane",
-        speed:
-          school.relation === "behind"
-            ? "stop behind the school bus"
-            : "stop short of the school bus coming the other way",
-      });
-    }
     for (const add of CANDIDATES.afterCrosswalk) add(featureCtx, out);
     // A signal it could not clear, for traffic past the junction: wait at the line, even on a green,
     // until there is room for all of the car beyond it.
@@ -752,8 +737,6 @@ export function simulateAll(candidates, snap, world) {
   const busStop = snap.bus?.stop_s_route ?? null;
   // where the car stops short of a crosswalk a vehicle in the next lane is stopped at
   const cwStop = snap.crosswalk_stop?.stop_s_route ?? null;
-  // where the car stops for a school bus with its reds flashing
-  const schoolStop = snap.school_bus?.lights === "red" ? snap.school_bus.stop_s_route : null;
   // where the car waits at a signal it could not clear
   const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
@@ -799,7 +782,6 @@ export function simulateAll(candidates, snap, world) {
       minClearance = Infinity;
     let passesBus = false,
       passesCw = false,
-      passesSchool = false,
       passesBox = false,
       passesEv = false,
       pastTurnPoint = false,
@@ -883,8 +865,6 @@ export function simulateAll(candidates, snap, world) {
         if (busStop !== null && s + FRONT > busStop + 1.5) passesBus = true;
         // (likewise: 1.5 m past where it stops is still a metre short of the crosswalk)
         if (cwStop !== null && s + FRONT > cwStop + 1.5) passesCw = true;
-        // (and here: 1.5 m past where it stops is still well short of the bus)
-        if (schoolStop !== null && s + FRONT > schoolStop + 1.5) passesSchool = true;
         // (and here: 1.5 m past the line is still short of the street across)
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
@@ -1034,7 +1014,6 @@ export function simulateAll(candidates, snap, world) {
     else if (passesEv && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_emergency";
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";
-    else if (passesSchool && c.law.kind !== "hard_brake") reject = "passes_stopped_school_bus";
     else if ((reject = rejectBy(sims.afterCrosswalk, c)));
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if ((reject = rejectBy(sims.beforeMerge, c)));

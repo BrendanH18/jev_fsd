@@ -48,7 +48,7 @@ function drive(parkedAtCorner, parkedStraightOn = false) {
     world.parked.add(ahead);
   }
   // in the left lane, planning the left turn, as the bus was once its lane change was done
-  const bus = fleet.addSchoolBus(map.lane("e478", 0), 120, 6, [["e546", 0]]);
+  const bus = fleet.schoolBuses.add(map.lane("e478", 0), 120, 6, [["e546", 0]]);
   bus.school.every = Infinity;
   let touched = false,
     turned = false,

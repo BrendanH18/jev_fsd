@@ -15,7 +15,7 @@ Object.assign(world.ego, { x: -220, y: 120 });
 world.snowbanks.build({ narrowings: [{ edge: "e111", a: 15, b: 67 }] });
 const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
 fleet.nextPull = fleet.nextPark = Infinity;
-const bus = fleet.addSchoolBus(map.lane("e331", 0), 140, 3);
+const bus = fleet.schoolBuses.add(map.lane("e331", 0), 140, 3);
 bus.path.start("e331", 0, 140, [
   ["e111", 0],
   ["e322", 0],

@@ -75,14 +75,19 @@ for (const weather of ["dry", "rain", "snow"]) {
   // Losing the siren also loses emergency exemptions from buses, school buses and streetcars.
   const far = Object.assign(new Vehicle(900, 900, 0, 0), { transit: { phase: "drive" } });
   fleet.buses = [far];
-  fleet.schoolBuses = [far];
-  fleet.manageBuses = fleet.manageSchoolBuses = () => {};
+  fleet.manageBuses = () => {};
   const called = [];
-  for (const method of ["yieldToBus", "yieldToSchoolBus"])
+  for (const method of ["yieldToBus"])
     fleet[method] = () => {
       called.push(method);
       return 30;
     };
+  fleet.schoolBuses.list = [far];
+  fleet.schoolBuses.manage = () => {};
+  fleet.schoolBuses.yieldTo = () => {
+    called.push("yieldToSchoolBus");
+    return 30;
+  };
   fleet.streetcars.list = [far];
   fleet.streetcars.manage = () => {};
   fleet.streetcars.yieldTo = () => {
