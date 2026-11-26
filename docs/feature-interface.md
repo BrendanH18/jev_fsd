@@ -6,13 +6,14 @@ ROADMAP 3.1. Each opt-in feature used to be written into the same core files: `s
 record** in a file of its own under `static/js/sim/features/`, and **one line** in `FEATURES` in
 `static/js/sim/features/index.js`. The core loops over the records' hooks and never names the feature.
 
-Thirty-four of 41 features have moved to the registry. They include driveway reversers, ball chase, spring
-potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddles, traffic parking,
+All 41 features are on the registry (ROADMAP 3.2, finished 26 November): driveway reversers, ball chase,
+spring potholes, Canada geese, police officers, tailgaters, black ice, snowbanks, puddles, traffic parking,
 road closures, double-parked vans, contraflow cyclists, low sun glare, garbage trucks, traffic calming,
 red-light runners, crossing guards, Ontario pedestrian crossovers, roadside stops, following distance,
 turn restrictions, high beams, no-turn-on-red signs, scramble crossings, work zones with flaggers and
 power cuts, overnight flashing signals, left turns on red, amber-light decisions, bus-only lanes,
-snow plows, lane closures and passing cyclists. Each record holds its core pipeline hooks and model wording.
+snow plows, lane closures, passing cyclists, transit buses, school buses, streetcars, trains at level
+crossings, emergency vehicles, destination parking and hidden hazards. Each record holds its core pipeline hooks and model wording.
 
 ## A record
 
@@ -42,7 +43,14 @@ export default {
   state, outcome, slowOutcome, clause, holdStill, prompt, // the model's decision state and wording
   trafficStart, trafficReplan, trafficLane, trafficYield, trafficPullOut, // how traffic and cyclists take it
   hides, blocksView, placeEgo, detour, turnPace,        // what it hides, the car put down by hand, its move in the lane
-  evStop, evKerb, pullOverDetour,                       // the emergency pull-over and its audit
+  evStop, evKerb, pullOverDetour, evQueueHold,          // run by the emergency record's pull-over and audit
+  trafficGiveWay, trafficPullOver, trafficRejoin, trafficStopAt, trafficHangBack, // traffic giving way to it
+  trafficHold, emergencyHold, trafficLaneChange,        // where traffic stops for it; its own lane changes
+  standingHides, vehicleHides, hiddenByVehicle, trafficSight, // what standing and moving vehicles hide
+  trafficKeepBack, parkingObstructed,                   // room kept clear, streets kept free of parking
+  replacesDestinationStop, manoeuvreCandidates,         // a feature's own stop and manoeuvres at the goal
+  rulesTerms, cautiousDrive,                            // named Rules terms; the cautious agent's planned stops
+  worldOption, freeDrive, freeDriveExtra,               // a fleet option the World takes too; free-drive values
   day,                                                  // true: the clock keeps the `day` of the year while it is on
 };
 ```
@@ -503,5 +511,20 @@ order, map fingerprints and route fingerprints still have to match.
   still runs before the collision checks and keeps its reaction allowance in the checkpoint.
 * **Presentation hooks.** Records supply feature notices, perception lines and rejection labels.
   Renderer integration points are listed in the table above.
+* **The last seven (26 November).** Transit buses, school buses, streetcars and trains moved in that order
+  (each step's new slots landing where the code was, with no temporary slots); the fleet keeps them under
+  `fleet.buses`, `fleet.schoolBuses`, `fleet.streetcars` and `fleet.trains`, and buses and streetcars share
+  `sim/transit-runs.js`. Emergency vehicles moved in three steps (traffic, audit, then sensing, candidates
+  and wording) into `sim/emergency-traffic.js`, `sim/emergency-audit.js` and `sim/emergency-yield.js`; a
+  record can now give one hook at several slots as a list, since the model state names the vehicle behind
+  and the one ahead at two different places. Destination parking and hidden hazards followed, and the
+  last two named reads left the core: a flashing signal's stand-in stop goes through the night-flash
+  record's `priorityJunction`, and the streets parking avoids through `parkingObstructed`. Each branch, and
+  then the merge of the three, gave the same results as before on the bare and city suites (Kitsilano in
+  snow, at 23:30 and with parking; Toronto, Edmonton, Calgary and Halifax), all 62 Rules and cautious
+  drives, both prompts and the stub recording ([transit](validation/registry-final/transit.md),
+  [emergency](validation/registry-final/emergency.md),
+  [parking and hazards](validation/registry-final/parking-hazards.md),
+  [merged](validation/registry-final/merged.md)).
 * **Then 3.3.** With the features out of `NpcFleet.step` and the sensing pass, those long functions are
   mostly the core's own logic and loops over hooks, and can be broken up.
