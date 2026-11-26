@@ -51,7 +51,8 @@ registry's own list of core files are unchanged, and its source checks still fin
 Before is `e8d687f0`; after is the split commit. That commit only changes `sim/npc.js`, so the before
 tree on Boat was the after tree with `e8d687f0`'s `npc.js` swapped in. The run used an xlarge sandbox
 with Node 22.23.5 and ran the two trees side by side, each with its own loopback server
-(`PYTHONHASHSEED=0 PORT=8331|8332 uv run --locked server.py`). From each tree:
+(`PYTHONHASHSEED=0 PORT=8331|8332 uv run --locked server.py`). From each tree, with that tree's port
+exported as `PORT` (which `registry_parity.mjs` reads; `--port` does the same):
 
 ```sh
 node --experimental-default-type=module scripts/registry_parity.mjs bench "$out" bare
