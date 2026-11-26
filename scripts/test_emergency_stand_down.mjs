@@ -74,14 +74,13 @@ for (const weather of ["dry", "rain", "snow"]) {
   assert.equal(n.age > age + 17, true, `${weather}: still ages toward retirement`);
   // Losing the siren also loses emergency exemptions from buses, school buses and streetcars.
   const far = Object.assign(new Vehicle(900, 900, 0, 0), { transit: { phase: "drive" } });
-  fleet.buses = [far];
-  fleet.manageBuses = () => {};
   const called = [];
-  for (const method of ["yieldToBus"])
-    fleet[method] = () => {
-      called.push(method);
-      return 30;
-    };
+  fleet.buses.list = [far];
+  fleet.buses.manage = () => {};
+  fleet.buses.yieldTo = () => {
+    called.push("yieldToBus");
+    return 30;
+  };
   fleet.schoolBuses.list = [far];
   fleet.schoolBuses.manage = () => {};
   fleet.schoolBuses.yieldTo = () => {

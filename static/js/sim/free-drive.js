@@ -15,12 +15,9 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
   // cars parked at the kerb hide the people behind them, now and then someone steps out from between
   // them, and the autopilot keeps to a speed it can stop from beside them (`?hazards=0`)
   const hazards = on("hazards");
-  const buses = on("buses");
   const world = {
     // fewer people out on foot late in the evening and at night
     pedestrians: hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined,
-    // buses run their routes (`?buses=0`)
-    buses,
     // the autopilot parks at the destination, where there is a space (`?park=0` stops it in its lane)
     park: on("park"),
     hazards,
@@ -29,12 +26,12 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)
     emergency: on("emergency"),
-    buses,
   };
   // Each registered option is enabled unless its lowercase query flag is 0.
-  for (const { key, flag = key.toLowerCase(), defaultCount, buildFleet, freeDrive } of FEATURES) {
+  for (const { key, flag = key.toLowerCase(), defaultCount, buildFleet, worldOption, freeDrive } of FEATURES) {
     const enabled = on(flag);
     const options = buildFleet ? fleet : world;
+    if (worldOption) world[key] = enabled;
     options[key] = freeDrive
       ? freeDrive(enabled, { hour })
       : defaultCount === undefined

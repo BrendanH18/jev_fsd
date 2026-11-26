@@ -73,7 +73,6 @@ export const FLAG_TEXT = {
   enters_narrowing_out_of_turn: "it enters a stretch narrowed by snowbanks while it is the oncoming car's turn",
   blocks_parking_car: "it blocks or goes round a car parallel parking ahead",
   fails_to_yield_to_emergency: "it does not give way to an emergency vehicle",
-  fails_to_yield_to_bus: "it does not let a bus pull out from its stop",
   passes_car_stopped_at_crosswalk: "it passes a vehicle stopped at a crosswalk without stopping first",
   blocks_junction: "it enters a junction it has no room to clear",
   enters_unseen_junction: "it enters a junction before it can see that it is clear",

@@ -30,7 +30,6 @@ import {
   nearestCall,
   pullOverOffset,
 } from "../sim/emergency.js";
-import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
@@ -66,6 +65,7 @@ const SENSE_SIGNAL_CONTROL = hooks("senseSignalControl");
 const INTERSECTION_FIELDS_AFTER_RIGHT = hooks("intersectionFields", "afterRightTurn");
 const SENSE = {
   beforeLaneState: hooks("sense", "beforeLaneState"),
+  buses: hooks("sense", "buses"),
   afterPedestrians: hooks("sense", "afterPedestrians"),
   afterCrosswalk: hooks("sense", "afterCrosswalk"),
   beforeWorkZone: hooks("sense", "beforeWorkZone"),
@@ -98,6 +98,7 @@ const TARGET = {
   beforeParking: hooks("target", "beforeParking"),
   beforeMerge: hooks("target", "beforeMerge"),
   beforeParked: hooks("target", "beforeParked"),
+  buses: hooks("target", "buses"),
   afterCrosswalk: hooks("target", "afterCrosswalk"),
   afterSchoolBus: hooks("target", "afterSchoolBus"),
   streetcars: hooks("target", "streetcars"),
@@ -121,7 +122,9 @@ const ROUTE_RED_BANS = hooks("routeTurnOnRedBlocked");
 const SENSE_RED_TURN = hooks("senseRedTurn");
 const FOLLOWING_POLICY = hooks("followingPolicy");
 const STANDING_VEHICLE_LABELS = hooks("standingVehicleLabel");
+const CROSSWALK_VEHICLE = hooks("crosswalkVehicle");
 const HAZARD = {
+  buses: hooks("hazard", "buses"),
   afterCrosswalk: hooks("hazard", "afterCrosswalk"),
   beforeWorkZone: hooks("hazard", "beforeWorkZone"),
   parkingApproach: hooks("hazard", "parkingApproach"),
@@ -591,7 +594,7 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, seen, FRONT) {
   snap.right_hook = rightHook(world, p, frontS, lane);
   snap.emergency = emergencyYield(world, p, frontS, lane, visible, snap.intersection, executing);
   snap.emergency_ahead = emergencyAhead(world, p, frontS);
-  snap.bus = busPullingOut(world, frontS, visible);
+  for (const sense of SENSE.buses) sense(world, snap, { frontS, visible });
   for (const sense of SENSE.afterPedestrians) sense(world, snap, { frontS });
   snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
   for (const sense of SENSE.afterCrosswalk) sense(world, snap, { route, frontS, visible, visibleNpcs, vehicles });
@@ -729,7 +732,6 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
     right_hook: null,
     emergency: null,
     emergency_ahead: null,
-    bus: null,
     crosswalk_stop: null,
     junction_box: null,
     speed_zone: null,
@@ -1334,38 +1336,6 @@ function emergencyYield(world, p, frontS, lane, visible, intersection = null, ex
   };
 }
 
-// A bus ahead signalling to pull out from its stop that the car must let out (sim/bus.js, BC MVA
-// s. 169.1), or null: which bus (`id`, its route `ref`), how far ahead its rear is (`gap_m`) and
-// where the car stops for it (`stop_s_route`, front bumper, 2 m behind it), and whether it is already
-// moving out. The car owes it the right of way when it sees it signal from the lane it pulls out into,
-// behind it, if it could stop there braking at no more than 3 m/s^2 then; from then on until the bus
-// has pulled out. Decided once each time a bus pulls out, and remembered in `world.busYields`.
-function busPullingOut(world, frontS, visible) {
-  let best = null;
-  world.busYields ||= new Map();
-  for (const bus of world.npcs) {
-    if (!isBus(bus) || !visible.includes(bus)) continue;
-    const y = busYield(world.ego, bus);
-    if (!y) continue;
-    const key = `${bus.id}:${bus.transit.departures}`;
-    if (!world.busYields.has(key)) {
-      if (world.busYields.size > 20) world.busYields.delete(world.busYields.keys().next().value);
-      world.busYields.set(key, canStopFor(world.ego.v, y.stop_m));
-    }
-    if (!world.busYields.get(key)) continue;
-    if (!best || y.stop_m < best.bumper_to_stop_m)
-      best = {
-        id: bus.id,
-        ref: bus.ref || "",
-        gap_m: y.behind_m,
-        stop_s_route: frontS + y.stop_m,
-        bumper_to_stop_m: y.stop_m,
-        moving_out: bus.transit.phase === "out",
-      };
-  }
-  return best;
-}
-
 // A vehicle the car must not pass, stopped at a marked crosswalk ahead on its route, in another lane
 // going its way (sim/crosswalk.js, BC MVA s. 179(3)): the car stops with its front HOLD_M short of
 // the crosswalk's centre, and looks. Not when it could not have stopped there braking at OWED_DECEL
@@ -1386,7 +1356,7 @@ function crosswalkHold(world, frontS, visibleNpcs) {
       if (!world.crosswalkYields.get(key)) continue;
       return {
         id: n.id,
-        kind: isBus(n) ? "bus" : isEmergency(n) ? EMERGENCY_NAMES[n.kind] || n.kind : "car",
+        kind: firstHookResult(CROSSWALK_VEHICLE, n) || (isEmergency(n) ? EMERGENCY_NAMES[n.kind] || n.kind : "car"),
         crosswalk: cw.id,
         stop_s_route: s - HOLD_M,
         bumper_to_stop_m: s - HOLD_M - frontS,
@@ -2066,14 +2036,7 @@ export function desiredSpeed(snap) {
   for (const target of TARGET.driveways) v = target(snap, v, reasons, targetCtx);
   for (const target of TARGET.streetHazards) v = target(snap, v, reasons, targetCtx);
   for (const target of TARGET.beforeEmergency) v = target(snap, v, reasons, targetCtx);
-  if (snap.bus) {
-    const room = snap.bus.bumper_to_stop_m;
-    const vb = holdSpeed(room, decel);
-    if (vb < v) {
-      v = vb;
-      reasons.push("bus pulling out");
-    }
-  }
+  for (const target of TARGET.buses) v = target(snap, v, reasons, targetCtx);
   const ev = snap.emergency;
   if (ev && ev.bumper_to_stop_m !== null) {
     const room = ev.bumper_to_stop_m;
@@ -2191,7 +2154,10 @@ export function hazardFlags(snap) {
   if (snap.pedestrian) f.push("pedestrian");
   if (snap.right_hook) f.push("cyclist");
   if (snap.emergency) f.push("emergency vehicle");
-  if (snap.bus) f.push("bus");
+  for (const flag of HAZARD.buses) {
+    const label = flag(snap);
+    if (label) f.push(label);
+  }
   if (snap.crosswalk_stop) f.push("crosswalk");
   for (const flag of HAZARD.afterCrosswalk) {
     const label = flag(snap);

@@ -122,7 +122,7 @@ function setup({ front = -190, v = 0, busAt = 60, j = J, buses = true } = {}) {
   world.route = new Route(j.routeData, j.map);
   world.destination = world.route.endPoint();
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 3 });
-  const bus = busAt === null ? null : fleet.spawnBus(0, fleet.busRuns()[0], busAt);
+  const bus = busAt === null ? null : fleet.buses.spawn(0, fleet.buses.runs()[0], busAt);
   world._road = world.roadInfo();
   return { world, fleet, bus };
 }
@@ -318,7 +318,7 @@ test("a bus never takes a parking bay, and gives way to oncoming traffic turning
     const world = new World(J.map, { pedestrians: 0, buses: true });
     world.parked.list.slice().forEach((c) => world.parked.remove(c));
     const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 3 });
-    const bus = fleet.spawnBus(0, fleet.busRuns()[0], 20);
+    const bus = fleet.buses.spawn(0, fleet.buses.runs()[0], 20);
     let parks = 0;
     for (let k = 0; k < 60 * 8; k++) {
       if (k % 30 === 0 && fleet.maybePark()) parks++;

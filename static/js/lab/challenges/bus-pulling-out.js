@@ -84,7 +84,7 @@ function placeBus(world, fleet, { route: routeId, run: runIndex, stop: stopId, e
     run = route.runs[runIndex];
   const k = run.edges.indexOf(edge),
     before = run.edges.slice(0, k).reduce((a, id) => a + map.edges.get(id).length, 0);
-  const bus = fleet.spawnBus(0, { route, run }, before + front - (BUS.length - BUS.rearOverhang));
+  const bus = fleet.buses.spawn(0, { route, run }, before + front - (BUS.length - BUS.rearOverhang));
   if (!bus) return { busId: null };
   // standing at its stop, pulled in to the curb, doors open, until the car comes up behind it
   const e = map.edges.get(edge),

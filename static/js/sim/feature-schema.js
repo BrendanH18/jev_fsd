@@ -65,8 +65,18 @@ const OBSTACLE_FLAGS = [
   "heavy",
   "onTrack",
   "noseFirst",
+  "ownLane",
 ];
-const OBSTACLE_CALLBACKS = ["predict", "visible", "oncoming", "parkedClearance", "noParking", "pathPolicy"];
+const OBSTACLE_CALLBACKS = [
+  "predict",
+  "visible",
+  "oncoming",
+  "parkedClearance",
+  "noParking",
+  "pathPolicy",
+  "laneShift",
+  "standing",
+];
 const COACH_ENTRY_FIELDS = {
   reports: ["read"],
   guidance: ["read"],
@@ -87,6 +97,7 @@ const FIELDS = new Set([
   "snapshot",
   "build",
   "buildFleet",
+  "worldOption",
   "obstacle",
   "priority",
   ...DISPLAY_MAPS,
@@ -295,6 +306,8 @@ function recordFieldsProblem(record, slots) {
     return "defaultCount must be a positive integer";
   if (!callback(record.build)) return "has no build function";
   if (!optional(record.buildFleet, callback)) return "buildFleet must be a function";
+  if (!optional(record.worldOption, boolean)) return "worldOption must be a boolean";
+  if (record.worldOption && !record.buildFleet) return "worldOption needs a fleet option";
   for (const field of PREDICATES) if (!optional(record[field], callback)) return `${field} must be a function`;
   for (const field of CLOCK_FIELDS) if (!optional(record[field], boolean)) return `${field} must be a boolean`;
   if (record.priority !== undefined) {

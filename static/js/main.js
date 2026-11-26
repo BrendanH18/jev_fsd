@@ -1529,7 +1529,7 @@ export async function boot() {
       : Infinity;
     audio.siren(nearestEv, world.t, world.paused || document.hidden);
     // a bus ahead signalling to pull out from its stop, with the right of way: say so once
-    const bus = fleet.buses?.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
+    const bus = fleet.buses?.list.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
     const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
     if (bus && busKey !== announcedBus) {
       hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500);

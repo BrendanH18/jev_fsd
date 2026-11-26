@@ -23,7 +23,6 @@ import {
   parkedRoom,
   pullOverOffset,
 } from "./emergency.js";
-import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { zoneLimit } from "./speed-zones.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
@@ -61,6 +60,7 @@ const HIDES = hooks("hides"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_BUSES = hooks("audit", "buses");
+const PARKING_ZONES = hooks("parkingZones");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_PASSING = hooks("audit", "beforeReservedLane");
 const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
@@ -152,13 +152,6 @@ const AUDIT_EV_OVERSHOOT_M = 1.5; // a short stop at a line can end this far ove
 // Away from its line, a stop short of where the car looks from (`sPeek`) counts as a line stop only this close
 // to it: a stop sign set well back from its junction leaves the street between them open to pull over in.
 const AUDIT_EV_LOOK_M = 8;
-// Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
-// lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
-// or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
-// The car fails to yield if, owing it, it draws level with the bus (its front past the bus's rear) at
-// more than 1 m/s before the bus has pulled out. Counted once each time a bus pulls out.
-const AUDIT_BUS_DECEL = 3.5;
-const AUDIT_BUS_MOVING_MPS = 1;
 // Passing a vehicle stopped at a marked crosswalk (sim/crosswalk.js, BC MVA s. 179(3)): once the car,
 // behind it in another lane going its way, first sees it stopped there, it owes it if it could stop
 // with its front 3.5 m short of the crosswalk's centre braking at up to 3.5 m/s^2 then. It fails to
@@ -172,7 +165,6 @@ const AUDIT_CROSSWALK_MOVING_MPS = 1;
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
 export class World {
-  // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
   // `park`: the autopilot parks at the
   // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
   // driven car keeps to a speed it can stop from beside them; `stepOuts`: with that, how many people at
@@ -188,7 +180,6 @@ export class World {
       pedestrians = PEDESTRIANS,
       weather = "dry",
       vehicleSpec = CAR,
-      buses = false,
       park = false,
       hazards = false,
       stepOuts = 0,
@@ -202,7 +193,8 @@ export class World {
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
-    this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
+    // (nobody parks where a registered feature keeps the kerb clear: the bus zones while buses run, say)
+    this.parked = new ParkedCars(map, { seed, density: parked, zones: firstHookResult(PARKING_ZONES, this, map) });
     this.t = 0;
     this.tick = 0;
     this.ego = new Vehicle(0, 0, 0, 0, vehicleSpec);
@@ -222,7 +214,6 @@ export class World {
     this.evCalls = new Map(); // emergency vehicle id -> { since, v0, lead }: since it called on the car
     this.evCounted = new Set(); // emergency vehicles a failure to yield was counted for
     this.evJunction = null; // the junction the car's front is in, while one is about
-    this.busCalls = new Map(); // "<bus id>:<departure>" -> { owed, counted }: a bus pulling out ahead
     this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it
     this.crosswalkStop = null; // the marked crosswalk the car has stood still at (sim/crosswalk.js)
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
@@ -391,7 +382,6 @@ export class World {
     this.hookCounted.clear();
     this.evCalls.clear();
     this.evJunction = null;
-    this.busCalls.clear();
     this.inBox = null;
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
@@ -797,7 +787,6 @@ export class World {
     this.auditGiveWay();
     this.auditCyclists();
     this.auditEmergency(road);
-    this.auditBuses();
     for (const audit of AUDIT_BUSES) audit(this, dt);
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
@@ -934,36 +923,6 @@ export class World {
     }
     if (this.crosswalkCalls.size > 40)
       for (const key of [...this.crosswalkCalls.keys()].slice(0, 20)) this.crosswalkCalls.delete(key);
-  }
-
-  auditBuses() {
-    const ego = this.ego;
-    for (const bus of this.npcs) {
-      if (!isBus(bus) || !busHasRightOfWay(bus)) continue;
-      const key = `${bus.id}:${bus.transit.departures}`,
-        r = busRelation(ego, bus);
-      let rec = this.busCalls.get(key);
-      if (!r?.inLane) continue;
-      // (it owes the bus the right of way if it was behind it when it first saw it signal, and could
-      // stop then; until it sees it, nothing is decided)
-      if (!rec) {
-        if (!this.visibility.sees(ego, bus)) continue;
-        this.busCalls.set(
-          key,
-          (rec = {
-            owed: r.behind_m > 0 && r.behind_m - BUS_YIELD_GAP_M >= Math.max(0, ego.v) ** 2 / (2 * AUDIT_BUS_DECEL),
-            counted: false,
-          }),
-        );
-      }
-      if (rec.owed && !rec.counted && r.behind_m < 0 && ego.v > AUDIT_BUS_MOVING_MPS) {
-        rec.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({ type: "failed_to_yield", to: "bus", with: bus.id });
-      }
-    }
-    // (forget buses that have pulled out)
-    if (this.busCalls.size > 20) for (const key of [...this.busCalls.keys()].slice(0, 10)) this.busCalls.delete(key);
   }
 
   auditEmergency(road) {

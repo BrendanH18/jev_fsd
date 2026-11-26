@@ -67,7 +67,7 @@ const FLEET_CHECKS = [
     "A countdown that can suppress emergency dispatch indefinitely.",
     ({ fleet }) => !Number.isFinite(fleet.nextEmergency),
   ],
-  ["fleet_bus_timer", "An invalid bus replenishment deadline.", ({ fleet }) => !nonnegative(fleet.nextBus)],
+  ["fleet_bus_timer", "An invalid bus replenishment deadline.", ({ fleet }) => !nonnegative(fleet.buses?.next)],
   [
     "fleet_tram_timer",
     "An invalid streetcar replenishment deadline.",
@@ -80,7 +80,7 @@ const FLEET_CHECKS = [
   ],
   ["fleet_train_timer", "An invalid train recovery deadline.", ({ fleet }) => !nonnegative(fleet.trains?.next)],
   ["fleet_plow_timer", "An invalid plow replenishment deadline.", ({ fleet }) => !nonnegative(fleet.nextPlow)],
-  ["fleet_bus_target", "An invalid bus population target.", ({ fleet }) => !count(fleet.busTarget)],
+  ["fleet_bus_target", "An invalid bus population target.", ({ fleet }) => !count(fleet.buses?.target)],
   ["fleet_tram_target", "An invalid streetcar population target.", ({ fleet }) => !count(fleet.streetcars?.target)],
   ["fleet_school_target", "An invalid school-bus population target.", ({ fleet }) => !count(fleet.schoolBuses?.target)],
   ["fleet_train_target", "An invalid train population target.", ({ fleet }) => !count(fleet.trains?.target)],

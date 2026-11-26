@@ -42,10 +42,15 @@ for (const { key, flag = key.toLowerCase() } of FEATURES.filter((f) => !f.buildF
   assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).world, { ...free.world, [key]: off });
   assert.deepEqual(presetOptions("city", { without: [key] }).world, { ...free.world, park: false, [key]: off });
 }
-for (const { key, flag = key.toLowerCase() } of FLEET_FEATURES) {
+for (const { key, flag = key.toLowerCase(), worldOption } of FLEET_FEATURES) {
   const off = typeof free.fleet[key] === "number" ? 0 : false;
   assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).fleet, { ...free.fleet, [key]: off });
   assert.deepEqual(presetOptions("city", { without: [key] }).fleet, { ...free.fleet, [key]: off });
+  // (a fleet feature the World takes too is off in both)
+  if (worldOption) {
+    assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).world, { ...free.world, [key]: false });
+    assert.deepEqual(presetOptions("city", { without: [key] }).world, { ...free.world, park: false, [key]: false });
+  }
 }
 assert.equal(freeDriveOptions(new URLSearchParams("plows=0")).fleet.plows, 0);
 assert.equal(freeDriveOptions(new URLSearchParams("hazards=0")).world.stepOuts, 0);

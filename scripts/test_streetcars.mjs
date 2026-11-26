@@ -184,7 +184,7 @@ test("in a free drive streetcars keep to their track, stop with their doors open
   assert.ok(log.spawned.size >= 4, `${log.spawned.size} streetcars came and went`);
   assert.ok(fleet.streetcars.list.length <= 2 && fleet.streetcars.list.every((c) => c.transit.tram), "two at a time");
   assert.ok(
-    fleet.buses.every((b) => !b.transit.tram),
+    fleet.buses.list.every((b) => !b.transit.tram),
     "buses run bus routes only",
   );
   assert.deepEqual([...log.hits], [], "they hit nothing");

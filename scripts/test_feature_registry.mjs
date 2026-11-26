@@ -66,6 +66,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "puddles",
       "parkers",
       "roadClosures",
+      "buses",
       "schoolBuses",
       "streetcars",
       "trains",
@@ -93,11 +94,11 @@ test("every record is whole, its option and flags its own, and every hook at a s
   }
   assert.deepEqual(
     R.FEATURE_OPTIONS,
-    R.FEATURES.filter((f) => !f.buildFleet).map((f) => f.key),
+    R.FEATURES.filter((f) => !f.buildFleet || f.worldOption).map((f) => f.key),
   );
   assert.deepEqual(
     R.FLEET_FEATURES.map((f) => f.key),
-    ["schoolBuses", "streetcars", "trains", "collection", "plows"],
+    ["buses", "schoolBuses", "streetcars", "trains", "collection", "plows"],
   );
 });
 
@@ -133,6 +134,7 @@ test("the core runs every slot, and names no registered feature", () => {
     checkpointRestore: source("lab/recorder.js"),
     decisionFields: source("sim/features/index.js"),
     passBlockReason: source("sim/features/cyclist-pass.js"),
+    busSpawnLane: source("sim/features/buses.js"),
     routeOptions: source("sim/features/index.js"),
     requestReroute: source("brain/brain.js"),
   };
@@ -199,6 +201,8 @@ test("the core runs every slot, and names no registered feature", () => {
       'rail.js"',
       'streetcar.js"',
       'school-bus.js"',
+      '/bus.js"',
+      'transit-runs.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -363,6 +367,16 @@ test("the core runs every slot, and names no registered feature", () => {
       "schoolOwed",
       "n.school",
       "redsOn",
+      "snap.bus",
+      '"yield_to_bus"',
+      "fails_to_yield_to_bus",
+      "busCalls",
+      "busYields",
+      "isBus",
+      "this.buses",
+      "busYield",
+      "n.transit",
+      "busZones",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -497,6 +511,8 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.equal(offFleet.trains.target, 0);
   assert.equal(offFleet.streetcars.target, 0);
   assert.equal(offFleet.schoolBuses.target, 0);
+  assert.equal(offFleet.buses.target, 0);
+  assert.equal(off.buses, false);
   assert.equal(off.onTracks, null);
   assert.ok(off.crewPassed instanceof Set);
   // (off, nothing is placed and no random stream is made)

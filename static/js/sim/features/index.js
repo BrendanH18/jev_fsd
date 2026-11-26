@@ -19,6 +19,7 @@
 //   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
 //   build(world, { enabled, seed, map })   the feature's World state
 //   buildFleet(fleet, { enabled, seed, makePath })   fleet state, stored under the option key
+//   worldOption  true: a fleet feature whose option the World takes too (free drives set both)
 //   metric    { at, name, failure, label, category?, decimals?, threshold?, traceType? }: the violation,
 //             failure text, trace label and examiner category. `eventType` supplies a world event's replay marker.
 //             `initial` supplies an existing counter at World creation. A duration can round to `decimals` and
@@ -35,7 +36,9 @@
 //             (buses, school buses, streetcars) keeps under the limit and stops for any body in its way
 //             just ahead. `onTrack` never pulls over for an emergency vehicle. `pathPolicy(o)` is the
 //             transit kind the traffic path policy takes it as, or false for none. `noseFirst`, with
-//             `heavy`, leaves what is beside it short of its front to give way to it.
+//             `heavy`, leaves what is beside it short of its front to give way to it. `ownLane` keeps
+//             it from easing past what stands at the kerb. `laneShift(o)` is how far right of its lane it
+//             has moved over (toward the kerb, say), and `standing(o)` whether drivers ease past it.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
@@ -136,7 +139,8 @@
 //   trafficDriver(world, n)             first override of a traffic driver's offset, speedFactor,
 //                                       skipFollowing, leadSpeed(leader, speed) or brake(leader, gap, accel) ("end")
 //   trafficManeuver(world, fleet, n, dt, all) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
-//   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
+//   trafficStop(world, fleet, n, front, dt, proj)  plan a stop and return the following controller's gap, or
+//                                       null ("end", handed the vehicle's projection on its path)
 //   trafficHold(world, fleet, n, front, all)  where a driver stops for the feature, metres from its front, or
 //                                       null ("buses", before the planned stops, or "end", after them)
 //   emergencyHold(world, fleet, n, front, all)  the same for an emergency vehicle under its siren ("end")
@@ -165,6 +169,10 @@
 //   trafficStart(world, n)              each vehicle step, first ("end") or before scanning signals ("beforeControl")
 //   trafficReplan(world, n, fleet)      before its path is extended; true when re-planned ("beforeCorner", "corner"
 //                                       for a long vehicle's own corner check, or "end")
+//   trafficStanding(world, fleet)      vehicles a driver may ease left past while they stand at the kerb ("end")
+//   trafficIndicator(n)                { signal } a feature has the vehicle give this step, or null ("end")
+//   parkingZones(world, map)           where nobody parks, for the World's parked cars, or null ("end")
+//   crosswalkVehicle(n)                what to call a vehicle stopped at a crosswalk, or null for the core's ("end")
 //   trafficLaneChange(world, fleet, n, edge, front) true when the feature handles the vehicle's lane
 //                                       changes itself this step ("end")
 //   trafficRecover(world, fleet, n, near) true when the feature put the vehicle back on its path ("end")
@@ -231,6 +239,7 @@ import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
+import buses from "./buses.js";
 import schoolBuses from "./school-buses.js";
 import streetcars from "./streetcars.js";
 import trains from "./trains.js";
@@ -258,6 +267,7 @@ export const FEATURES = [
   // Transit and rail traffic, built by the fleet in this order before the garbage trucks and plows, as it
   // always placed them; their sensing, candidates, wording and audits keep their places through the
   // "buses", "afterCrosswalk" and "streetcars" slots.
+  buses,
   schoolBuses,
   streetcars,
   trains,
@@ -324,6 +334,7 @@ export const SLOTS = {
   ],
   sense: [
     "beforeLaneState",
+    "buses",
     "afterPedestrians",
     "afterCrosswalk",
     "beforeWorkZone",
@@ -370,6 +381,7 @@ export const SLOTS = {
     "beforeParked",
     "afterLeader",
     "beforeCrosswalk",
+    "buses",
     "afterCrosswalk",
     "afterSchoolBus",
     "streetcars",
@@ -380,6 +392,7 @@ export const SLOTS = {
     "parking",
   ],
   hazard: [
+    "buses",
     "afterCrosswalk",
     "beforeWorkZone",
     "beforeRunner",
@@ -424,6 +437,7 @@ export const SLOTS = {
   trafficSignalHold: ["end"],
   turnPace: ["end"],
   candidates: [
+    "buses",
     "afterCrosswalk",
     "beforeMerge",
     "afterFlagger",
@@ -448,6 +462,7 @@ export const SLOTS = {
     "driveways",
     "streetHazards",
     "beforeEmergency",
+    "buses",
     "afterCrosswalk",
     "parking",
     "merge",
@@ -456,6 +471,7 @@ export const SLOTS = {
   ],
   state: [
     "beforeRoadConstraints",
+    "buses",
     "afterCrosswalk",
     "beforeMerge",
     "signal",
@@ -479,6 +495,7 @@ export const SLOTS = {
   slowOutcome: ["lane", "end"],
   clause: [
     "beforeCalming",
+    "buses",
     "afterCrosswalk",
     "stopStart",
     "signal",
@@ -498,6 +515,7 @@ export const SLOTS = {
     "parking",
   ],
   holdStill: [
+    "buses",
     "afterCrosswalk",
     "beforeMerge",
     "afterFlagger",
@@ -513,6 +531,7 @@ export const SLOTS = {
     "pedestrian",
     "beforeSchoolBus",
     "schoolBuses",
+    "buses",
     "afterCrosswalk",
     "beforeMerge",
     "nearbySpecial",
@@ -557,6 +576,10 @@ export const SLOTS = {
   evQueueHold: ["end"],
   trafficManage: ["buses", "schoolBuses", "beforePlows", "dispatch", "afterPlows", "end"],
   trafficLaneChange: ["end"],
+  trafficStanding: ["end"],
+  trafficIndicator: ["end"],
+  parkingZones: ["end"],
+  crosswalkVehicle: ["end"],
   trafficRecover: ["end"],
   trafficFollowingLeader: ["end"],
   trafficLeadPolicy: ["end"],
@@ -862,7 +885,7 @@ export function featureDecisionFields(snap) {
 }
 
 // Every World option a registered feature takes.
-export const FEATURE_OPTIONS = Object.freeze(FEATURES.filter((f) => !f.buildFleet).map((f) => f.key));
+export const FEATURE_OPTIONS = Object.freeze(FEATURES.filter((f) => !f.buildFleet || f.worldOption).map((f) => f.key));
 export const FLEET_FEATURES = Object.freeze(FEATURES.filter((f) => f.buildFleet));
 
 // Build the fleet state of the fleet records at `position` ("early", or undefined for the rest), each
