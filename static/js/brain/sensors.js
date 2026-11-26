@@ -46,16 +46,6 @@ import {
   streetcarRelation,
 } from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
-import {
-  HEAR_M,
-  HOLD_M as RAIL_HOLD_M,
-  canStopFor as canStopForTrain,
-  crossingsAhead,
-  railIndex,
-  roomBlocker,
-  trainAt,
-  waitsAt,
-} from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
 import { STEP_OUT_M, blindApproach, blindSpot } from "../sim/hidden-hazards.js";
@@ -90,6 +80,7 @@ const INTERSECTION_FIELDS_AFTER_RIGHT = hooks("intersectionFields", "afterRightT
 const SENSE = {
   beforeLaneState: hooks("sense", "beforeLaneState"),
   afterPedestrians: hooks("sense", "afterPedestrians"),
+  afterCrosswalk: hooks("sense", "afterCrosswalk"),
   beforeWorkZone: hooks("sense", "beforeWorkZone"),
   beforeTarget: hooks("sense", "beforeTarget"),
   end: hooks("sense"),
@@ -121,6 +112,7 @@ const TARGET = {
   beforeMerge: hooks("target", "beforeMerge"),
   beforeParked: hooks("target", "beforeParked"),
   afterSchoolBus: hooks("target", "afterSchoolBus"),
+  streetcars: hooks("target", "streetcars"),
   parking: hooks("target", "parking"),
   beforeCurve: hooks("target", "beforeCurve"),
   beforeRoadside: hooks("target", "beforeRoadside"),
@@ -142,6 +134,7 @@ const SENSE_RED_TURN = hooks("senseRedTurn");
 const FOLLOWING_POLICY = hooks("followingPolicy");
 const STANDING_VEHICLE_LABELS = hooks("standingVehicleLabel");
 const HAZARD = {
+  afterCrosswalk: hooks("hazard", "afterCrosswalk"),
   beforeWorkZone: hooks("hazard", "beforeWorkZone"),
   parkingApproach: hooks("hazard", "parkingApproach"),
   afterParking: hooks("hazard", "afterParking"),
@@ -618,7 +611,7 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, seen, FRONT) {
   snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
   snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
   snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);
-  snap.level_crossing = levelCrossing(world, route, frontS, vehicles);
+  for (const sense of SENSE.afterCrosswalk) sense(world, snap, { route, frontS, visible, visibleNpcs, vehicles });
   snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
   for (const sense of SENSE.beforeWorkZone) sense(world, snap, { p, frontS, lane, road });
   for (const sense of SENSE.beforeParking) sense(world, snap, { p, frontS, road, lane });
@@ -757,7 +750,6 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
     crosswalk_stop: null,
     school_bus: null,
     streetcar: null,
-    level_crossing: null,
     junction_box: null,
     speed_zone: null,
     ...FEATURE_SNAPSHOT_FIELDS,
@@ -1507,63 +1499,6 @@ function streetcarStop(world, route, frontS, visibleNpcs) {
   return open || stopping;
 }
 
-// A level crossing on the car's route ahead (sim/rail.js, Alberta AR 304/2002 s. 42): the nearest
-// within 80 m, or the one it is on the tracks of (`on_tracks`). The car stops with its front 7 m back
-// from the nearest rail (`stop_s_route`), short of the law's 5 m, and waits there while a train it
-// hears (ringing its gong, within 250 m) or sees is approaching the crossing (`wait` "train"): owed
-// when the car, first hearing or seeing it, could stop there braking at no more than 3.5 m/s^2,
-// decided once a train and remembered in `world.trainYields`. And it waits there too while a vehicle
-// it can see past the tracks, stopped or slower than 3 m/s, leaves no room for all of the car beyond
-// them (`wait` "room", `blocker`). Once its front is past where it would stop it goes on, unless it is
-// barely moving and still short of the train's envelope; on the tracks it always goes on. Or null.
-function levelCrossing(world, route, frontS, vehicles) {
-  if (!railIndex(world.map).crossings.length) return null;
-  const ego = world.ego,
-    x = crossingsAhead(world.map, route.pts, route.cum, frontS, ego.spec)[0];
-  if (!x) return null;
-  world.trainYields ||= new Map();
-  const track = railIndex(world.map).tracks.get(x.c.track),
-    at = trainAt(world.npcs, x.c);
-  let train = null,
-    wait = null,
-    blocker = null;
-  if (at) {
-    const n = at.train,
-      d = Math.hypot(n.x - ego.x, n.y - ego.y),
-      seen = world.sees(ego, n),
-      heard = !!n.rail.gong && d < HEAR_M;
-    if (seen || heard) {
-      train = { id: n.id, seen, heard, on: at.on, gap_m: at.gap_m, eta_s: at.eta_s };
-      const key = `${x.c.id}:${n.id}:${n.rail.departures}`;
-      if (!world.trainYields.has(key)) {
-        if (world.trainYields.size > 20) world.trainYields.delete(world.trainYields.keys().next().value);
-        world.trainYields.set(key, canStopForTrain(ego.v, x.stop_m) || ego.v < 0.5);
-      }
-      if (world.trainYields.get(key) && waitsAt(x, ego.v)) wait = "train";
-    }
-  }
-  if (waitsAt(x, ego.v)) {
-    const b = roomBlocker(route.pts, route.cum, frontS, ego.spec, x, vehicles, ego);
-    if (b) {
-      blocker = { id: b.vehicle.id, past_tracks_m: b.rear_m };
-      wait ||= "room";
-    }
-  }
-  return {
-    id: x.c.id,
-    kind: track?.kind || "rail",
-    line: track?.name || "",
-    to_rail_m: x.hold_m + RAIL_HOLD_M,
-    stop_s_route: frontS + x.stop_m,
-    bumper_to_stop_m: x.stop_m,
-    on_tracks: x.fouling,
-    clear_in_m: x.exit_m,
-    train,
-    wait,
-    blocker,
-  };
-}
-
 // The signal the car's route takes it through next, within 60 m, when traffic it can see past the
 // junction, going its way, stopped or slower than 3 m/s, leaves no room for all of the car beyond it
 // (sim/junction-box.js, Québec's Highway Safety Code): it waits at the line (`stop_s_route`, aimed
@@ -2074,7 +2009,7 @@ export function desiredSpeed(snap) {
     v = snap.limit * weather.speed;
     reasons.push(weather.label);
   }
-  const targetCtx = { decel, FRONT, stopSpeedFor };
+  const targetCtx = { decel, FRONT, stopSpeedFor, holdSpeed };
   for (const target of TARGET.restrictions) v = target(snap, v, reasons, targetCtx);
   if (snap.visibility) {
     const visibleSpeed = snap.visibility.safe_speed_mps ?? visibilitySpeed(snap.visibility.range_m, FRONT);
@@ -2298,16 +2233,7 @@ export function desiredSpeed(snap) {
       reasons.push(sc.doors ? "streetcar stopped, doors open" : "streetcar stopping");
     }
   }
-  // a level crossing to wait at, for a train coming or for room past the tracks: stop short of it
-  const lx = snap.level_crossing;
-  if (lx?.wait) {
-    const room = lx.bumper_to_stop_m;
-    const vl = holdSpeed(room, decel);
-    if (vl < v) {
-      v = vl;
-      reasons.push(lx.wait === "train" ? "train coming at the level crossing" : "no room past the tracks");
-    }
-  }
+  for (const cap of TARGET.streetcars) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.beforeMerge) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.beforeParking) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.parking) v = cap(snap, v, reasons, { decel, stopSpeedFor });
@@ -2398,7 +2324,10 @@ export function hazardFlags(snap) {
   if (snap.crosswalk_stop) f.push("crosswalk");
   if (snap.school_bus) f.push("school bus");
   if (snap.streetcar) f.push("streetcar");
-  if (snap.level_crossing) f.push("level crossing");
+  for (const flag of HAZARD.afterCrosswalk) {
+    const label = flag(snap);
+    if (label) f.push(label);
+  }
   if (snap.junction_box) f.push("junction box");
   for (const flag of HAZARD.beforeWorkZone) {
     const label = flag(snap);

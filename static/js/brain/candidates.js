@@ -53,6 +53,7 @@ const LINE_STOP_BEFORE_FOLLOWER = hooks("lineStop", "beforeFollower");
 const PREDICTION_IGNORE = hooks("predictionIgnore");
 const SETTLE = hooks("candidateSettle");
 const CANDIDATES = {
+  afterCrosswalk: hooks("candidates", "afterCrosswalk"),
   beforeMerge: hooks("candidates", "beforeMerge"),
   afterFlagger: hooks("candidates", "afterFlagger"),
   restrictions: hooks("candidates", "restrictions"),
@@ -75,6 +76,7 @@ const SIMS = {
   beforeOffRoad: hooks("sim", "beforeOffRoad"),
   afterCollision: hooks("sim", "afterCollision"),
   beforeMerge: hooks("sim", "beforeMerge"),
+  afterCrosswalk: hooks("sim", "afterCrosswalk"),
   first: hooks("sim", "first"),
   beforeRunner: hooks("sim", "beforeRunner"),
   driveways: hooks("sim", "driveways"),
@@ -499,21 +501,7 @@ export function sampleCandidates(snap, world) {
         speed: tram.beside ? "stop behind the streetcar's rear doors" : "stop behind the streetcar",
       });
     }
-    // A level crossing to wait at (a train coming, or no room past the tracks): stop 7 m back from the
-    // nearest rail, and stay stopped there until the train has passed and there is room.
-    const lx = snap.level_crossing;
-    if (lx?.wait && lx.bumper_to_stop_m > 0.3) {
-      out.push({
-        id: "stop_before_tracks",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(lx.stop_s_route - FRONT) }),
-        steer: "hold lane",
-        speed:
-          lx.wait === "train"
-            ? "stop short of the level crossing for the train"
-            : "wait short of the tracks for room past them",
-      });
-    }
+    for (const add of CANDIDATES.afterCrosswalk) add(featureCtx, out);
     // A signal it could not clear, for traffic past the junction: wait at the line, even on a green,
     // until there is room for all of the car beyond it.
     const jb = snap.junction_box;
@@ -780,8 +768,6 @@ export function simulateAll(candidates, snap, world) {
   const schoolStop = snap.school_bus?.lights === "red" ? snap.school_bus.stop_s_route : null;
   // where the car stops for a streetcar with its doors open
   const tramStop = snap.streetcar?.doors ? snap.streetcar.stop_s_route : null;
-  // where the car waits short of a level crossing
-  const railStop = snap.level_crossing?.wait ? snap.level_crossing.stop_s_route : null;
   // where the car waits at a signal it could not clear
   const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
@@ -805,6 +791,7 @@ export function simulateAll(candidates, snap, world) {
     ...sims.driveways,
     ...sims.streetHazards,
     ...sims.beforeEmergency,
+    ...sims.afterCrosswalk,
     ...sims.beforeMerge,
     ...sims.parking,
     ...sims.merge,
@@ -828,7 +815,6 @@ export function simulateAll(candidates, snap, world) {
       passesCw = false,
       passesSchool = false,
       passesTram = false,
-      passesRail = false,
       passesBox = false,
       passesEv = false,
       pastTurnPoint = false,
@@ -916,8 +902,6 @@ export function simulateAll(candidates, snap, world) {
         if (schoolStop !== null && s + FRONT > schoolStop + 1.5) passesSchool = true;
         // (and here: 1.5 m past where it stops is still short of the doors)
         if (tramStop !== null && s + FRONT > tramStop + 1.5) passesTram = true;
-        // (and here: 1.5 m past where it waits is still 5.5 m back from the nearest rail)
-        if (railStop !== null && s + FRONT > railStop + 1.5) passesRail = true;
         // (and here: 1.5 m past the line is still short of the street across)
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
@@ -1069,8 +1053,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";
     else if (passesSchool && c.law.kind !== "hard_brake") reject = "passes_stopped_school_bus";
     else if (passesTram && c.law.kind !== "hard_brake") reject = "passes_streetcar_doors";
-    else if (passesRail && c.law.kind !== "hard_brake")
-      reject = snap.level_crossing.wait === "train" ? "crosses_in_front_of_train" : "no_room_past_tracks";
+    else if ((reject = rejectBy(sims.afterCrosswalk, c)));
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if ((reject = rejectBy(sims.beforeMerge, c)));
     else if ((reject = rejectBy(sims.parking, c)));

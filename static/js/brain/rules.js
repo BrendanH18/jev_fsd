@@ -17,6 +17,7 @@ const BEFORE_SIGNAL_STOP_COST = hooks("rulesCost", "beforeSignalStop");
 
 const STOP_BEFORE_SIGNAL = hooks("rulesStop", "beforeSignal");
 const FEATURE_STOP = hooks("rulesStop");
+const RULES_WAIT = hooks("rulesWait");
 const BEFORE_STOPS_COST = hooks("rulesCost", "beforeStops");
 const STOPS_COST = hooks("rulesCost", "stops");
 const BEFORE_PASSING_COST = hooks("rulesCost", "beforePassing");
@@ -187,8 +188,8 @@ export class RulesBrain {
         c.id === "stop_at_crosswalk" ||
         c.id === "stop_for_school_bus" ||
         c.id === "stop_for_streetcar" ||
-        c.id === "stop_before_tracks" ||
-        c.id === "wait_short_of_junction"
+        c.id === "wait_short_of_junction" ||
+        RULES_WAIT.some((wait) => wait(c))
       )
         cost += explainCost(terms, "required_wait", -6);
       for (let index = 0; index < STOPS_COST.length; index++) {

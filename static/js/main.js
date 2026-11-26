@@ -1632,7 +1632,7 @@ export async function boot() {
     announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
     if (audio.enabled) {
       let ringing = Infinity;
-      for (const train of fleet.trains || [])
+      for (const train of fleet.trains?.list || [])
         if (train.rail.gong) ringing = Math.min(ringing, Math.hypot(train.x - world.ego.x, train.y - world.ego.y));
       audio.gong(ringing, world.t, world.paused || document.hidden);
     }

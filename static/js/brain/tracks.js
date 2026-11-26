@@ -77,8 +77,6 @@ export const FLAG_TEXT = {
   passes_car_stopped_at_crosswalk: "it passes a vehicle stopped at a crosswalk without stopping first",
   passes_stopped_school_bus: "it passes a school bus with its red lights flashing",
   passes_streetcar_doors: "it passes a streetcar's open doors",
-  crosses_in_front_of_train: "it crosses the level crossing with a train coming",
-  no_room_past_tracks: "it stops on the level crossing, with no room past the tracks",
   blocks_junction: "it enters a junction it has no room to clear",
   enters_unseen_junction: "it enters a junction before it can see that it is clear",
   passes_turn_round_point: "it drives past the point where the route turns round",

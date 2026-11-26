@@ -45,12 +45,11 @@ function fixture() {
     nextBus: 14,
     nextStreetcar: 15,
     nextSchool: 16,
-    nextTrain: 17,
     nextPlow: 18,
     busTarget: 0,
     streetcarTarget: 0,
     schoolTarget: 0,
-    trainTarget: 0,
+    trains: { next: 17, target: 0 },
     plowTarget: 0,
   });
   fleet.world = {
@@ -183,7 +182,7 @@ const fixtures = [
   [
     "fleet_train_timer",
     ({ fleet }) => {
-      fleet.nextTrain = Infinity;
+      fleet.trains.next = Infinity;
     },
   ],
   [
@@ -213,7 +212,7 @@ const fixtures = [
   [
     "fleet_train_target",
     ({ fleet }) => {
-      fleet.trainTarget = Infinity;
+      fleet.trains.target = Infinity;
     },
   ],
   [

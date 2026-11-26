@@ -40,6 +40,7 @@
 //
 //   rulesStop(snap, eligible)          true when Rules should stop ("beforeSignal" or "end")
 //   rulesCost(candidate, snap)        a signed change to Rules' cost for the candidate ("end")
+//   rulesWait(candidate)               true when Rules counts the candidate as a required wait ("end")
 //   cautious(snap, eligible, target)   a candidate the cautious agent should choose, or null
 //                                       ("beforeBusLanes", "end", "beforeAmber", "afterAmber")
 //   cautiousStop(snap)                true when the cautious agent sets a target of zero ("end")
@@ -128,8 +129,11 @@
 //   trafficManage(world, fleet, dt)     update fleet-wide state before and after plow dispatch ("beforePlows", "afterPlows") or before the vehicle loop ("end")
 //   trafficDriver(world, n)             first override of a traffic driver's offset, speedFactor,
 //                                       skipFollowing, leadSpeed(leader, speed) or brake(leader, gap, accel) ("end")
-//   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
+//   trafficManeuver(world, fleet, n, dt, all) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
 //   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
+//   trafficHold(world, fleet, n, front, all)  where a driver stops for the feature, metres from its front, or
+//                                       null ("end", after the planned stops)
+//   emergencyHold(world, fleet, n, front, all)  the same for an emergency vehicle under its siren ("end")
 //   trafficCorridor(world, n, path, front) first corridor { shift, lineAt(s), ignore, limit, stop() }, or null
 //   trafficLaneControl(world, n, path, front) a separate lane restriction with the corridor fields above
 //                                       and a deferred stop returning { gap, v } or null
@@ -217,6 +221,7 @@ import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
+import trains from "./trains.js";
 
 export const FEATURES = [
   highBeams,
@@ -238,6 +243,10 @@ export const FEATURES = [
   puddles,
   parkers,
   roadClosures,
+  // Transit and rail traffic, built by the fleet in this order before the garbage trucks and plows, as it
+  // always placed them; their sensing, candidates, wording and audits keep their places through the
+  // "buses", "afterCrosswalk" and "streetcars" slots.
+  trains,
   collection, // A stopped truck also matches the double-parked obstacle.
   doubleParked,
   roadside,
@@ -278,12 +287,14 @@ export const SLOTS = {
     "afterAmber",
   ],
   cautiousStop: ["end"],
+  rulesWait: ["end"],
   cautiousDrive: ["end"],
   legitimateStop: ["end"],
   obstacles: ["end"],
   stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
   audit: [
+    "buses",
     "afterPassing",
     "beforeCollisions",
     "beforeMerge",
@@ -300,6 +311,7 @@ export const SLOTS = {
   sense: [
     "beforeLaneState",
     "afterPedestrians",
+    "afterCrosswalk",
     "beforeWorkZone",
     "afterCalming",
     "beforeRunner",
@@ -345,6 +357,7 @@ export const SLOTS = {
     "afterLeader",
     "beforeCrosswalk",
     "afterSchoolBus",
+    "streetcars",
     "driveways",
     "streetHazards",
     "beforeEmergency",
@@ -352,6 +365,7 @@ export const SLOTS = {
     "parking",
   ],
   hazard: [
+    "afterCrosswalk",
     "beforeWorkZone",
     "beforeRunner",
     "afterParking",
@@ -395,6 +409,7 @@ export const SLOTS = {
   trafficSignalHold: ["end"],
   turnPace: ["end"],
   candidates: [
+    "afterCrosswalk",
     "beforeMerge",
     "afterFlagger",
     "beforeRunner",
@@ -418,6 +433,7 @@ export const SLOTS = {
     "driveways",
     "streetHazards",
     "beforeEmergency",
+    "afterCrosswalk",
     "parking",
     "merge",
     "afterMerge",
@@ -425,6 +441,7 @@ export const SLOTS = {
   ],
   state: [
     "beforeRoadConstraints",
+    "afterCrosswalk",
     "beforeMerge",
     "signal",
     "afterFollowing",
@@ -447,6 +464,7 @@ export const SLOTS = {
   slowOutcome: ["lane", "end"],
   clause: [
     "beforeCalming",
+    "afterCrosswalk",
     "stopStart",
     "signal",
     "afterJunctionBox",
@@ -464,12 +482,22 @@ export const SLOTS = {
     "beforeParking",
     "parking",
   ],
-  holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "beforeParking", "parking"],
+  holdStill: [
+    "afterCrosswalk",
+    "beforeMerge",
+    "afterFlagger",
+    "beforeRunner",
+    "driveways",
+    "late",
+    "beforeParking",
+    "parking",
+  ],
   prompt: [
     "introduction",
     "headlights",
     "pedestrian",
     "beforeSchoolBus",
+    "afterCrosswalk",
     "beforeMerge",
     "nearbySpecial",
     "afterPlow",
@@ -511,7 +539,7 @@ export const SLOTS = {
     "junctions",
   ],
   evQueueHold: ["end"],
-  trafficManage: ["beforePlows", "dispatch", "afterPlows", "end"],
+  trafficManage: ["schoolBuses", "beforePlows", "dispatch", "afterPlows", "end"],
   trafficFollowingLeader: ["end"],
   trafficLeadPolicy: ["end"],
   trafficPassingLaneBlocked: ["end"],
@@ -522,6 +550,8 @@ export const SLOTS = {
   trafficDriver: ["end"],
   trafficManeuver: ["beforeSpecial", "end"],
   trafficStop: ["afterMerge", "end"],
+  trafficHold: ["end"],
+  emergencyHold: ["end"],
   checkpoint: ["end"],
   trafficLeaderHold: ["end"],
   trafficParkingPlan: ["end"],

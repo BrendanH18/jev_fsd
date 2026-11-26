@@ -66,6 +66,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "puddles",
       "parkers",
       "roadClosures",
+      "trains",
       "collection",
       "vans",
       "roadside",
@@ -94,7 +95,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
   );
   assert.deepEqual(
     R.FLEET_FEATURES.map((f) => f.key),
-    ["collection", "plows"],
+    ["trains", "collection", "plows"],
   );
 });
 
@@ -193,6 +194,7 @@ test("the core runs every slot, and names no registered feature", () => {
       'left-on-red.js"',
       'amber.js"',
       'bus-lanes.js"',
+      'rail.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -327,6 +329,16 @@ test("the core runs every slot, and names no registered feature", () => {
       "world.redTurnSigns",
       "this.redTurnSigns",
       "no_turn_on_red",
+      "snap.level_crossing",
+      '"stop_before_tracks"',
+      "crosses_in_front_of_train",
+      "no_room_past_tracks",
+      "trainCalls",
+      "trainYields",
+      "onTracks",
+      "isTrain",
+      "this.trains",
+      "railOwed",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -458,6 +470,8 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.equal(offFleet.collection.target, 0);
   assert.equal(onFleet.collection.target, 1);
   assert.equal(offFleet.collection.trucks.length, 0);
+  assert.equal(offFleet.trains.target, 0);
+  assert.equal(off.onTracks, null);
   assert.ok(off.crewPassed instanceof Set);
   // (off, nothing is placed and no random stream is made)
   assert.equal(off.contraflow.random, null);

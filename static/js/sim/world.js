@@ -43,7 +43,6 @@ import {
   doorsOpen,
   streetcarRelation,
 } from "./streetcar.js";
-import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
 import { leftSpace, reversing, tyres } from "./parallel-park.js";
 import { StepOuts, standingNear } from "./hidden-hazards.js";
@@ -78,6 +77,7 @@ const HIDES = hooks("hides"),
   EV_KERB = hooks("evKerb"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
+const AUDIT_BUSES = hooks("audit", "buses");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_PASSING = hooks("audit", "beforeReservedLane");
 const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
@@ -197,14 +197,6 @@ const AUDIT_SCHOOL_MOVING_MPS = 1;
 // comes within 2 m of the rear doors (of the streetcar, in its lane) at more than 1 m/s while they are
 // still open. Counted once a stop.
 const AUDIT_STREETCAR_MOVING_MPS = 1;
-// Stopping for a train at a level crossing (sim/rail.js, Alberta AR 304/2002 s. 42): once the car,
-// heading across the crossing, first hears the train coming (its gong, within 250 m) or sees it, it
-// owes the stop if it could then stop where drivers do (7 m back from the nearest rail) braking at up
-// to 3.5 m/s^2. It fails to yield if, owing it, its front comes within 5 m of the nearest rail at more
-// than 1 m/s while the train is still approaching (coming, or on the crossing), or if any of it stands
-// on the tracks (in the train's envelope) slower than 1 m/s while the train is. Counted once per
-// train at each crossing.
-const AUDIT_TRAIN_MOVING_MPS = 1;
 // Keeping the junction clear (sim/junction-box.js, Québec's Highway Safety Code): the car, following
 // its route, fails to yield if it entered a signal's junction (its front past the near side of the
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
@@ -266,8 +258,6 @@ export class World {
     this.crosswalkStop = null; // the marked crosswalk the car has stood still at (sim/crosswalk.js)
     this.schoolCalls = new Map(); // "<school bus id>:<stop>" -> { owed, counted }: one with its reds on
     this.streetcarCalls = new Map(); // "<streetcar id>:<departure>" -> { owed, counted }: one with its doors open
-    this.trainCalls = new Map(); // "<crossing id>:<train id>:<departure>" -> { owed, counted }: one approaching it
-    this.onTracks = null; // the level crossing the car is standing on the tracks of, and since when
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
     // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
     // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
@@ -438,9 +428,6 @@ export class World {
     this.schoolCalls.clear();
     this.streetcarCalls.clear();
     this.streetcarYields?.clear();
-    this.trainCalls.clear();
-    this.trainYields?.clear();
-    this.onTracks = null;
     this.inBox = null;
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
@@ -850,7 +837,7 @@ export class World {
     this.auditBuses();
     this.auditSchoolBuses();
     this.auditStreetcars();
-    this.auditCrossings(dt);
+    for (const audit of AUDIT_BUSES) audit(this, dt);
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
     for (const audit of AUDIT_BEFORE_MERGE) audit(this);
@@ -950,51 +937,6 @@ export class World {
       this.violations.failed_to_yield++;
       this.events.push({ type: "failed_to_yield", to: "cross traffic", junction: box.id, blocking: true });
     }
-  }
-
-  auditCrossings(dt) {
-    const crossings = railIndex(this.map).crossings;
-    if (!crossings.length) return;
-    const ego = this.ego;
-    // (where the car stands on the tracks, for the coaching score: sim/drive-score.js)
-    const on = crossings.find((c) => fouling(ego, c, this.map)) || null;
-    if (!on) this.onTracks = null;
-    else if (this.onTracks?.id !== on.id) this.onTracks = { id: on.id, since: this.t, still: 0 };
-    if (this.onTracks) this.onTracks.still = Math.abs(ego.v) < 0.3 ? this.onTracks.still + dt : 0;
-    const ahead = crossingAheadOf(ego, this.map);
-    for (const c of crossings) {
-      const at = trainAt(this.npcs, c);
-      if (!at) continue;
-      const x = ahead?.c === c ? ahead.x : null,
-        foul = on === c;
-      if (!x && !foul) continue;
-      const train = at.train,
-        key = `${c.id}:${train.id}:${train.rail.departures}`;
-      let rec = this.trainCalls.get(key);
-      // (decided when the car first hears or sees it coming, still short of the law's line)
-      if (!rec && x && x.hold_m > 0) {
-        const heard = train.rail.gong && Math.hypot(train.x - ego.x, train.y - ego.y) < HEAR_M;
-        if (heard || this.visibility.sees(ego, train))
-          this.trainCalls.set(key, (rec = { owed: canStopForTrain(ego.v, x.stop_m), counted: false }));
-      }
-      if (rec?.counted) continue;
-      const crossed = rec?.owed && x && x.hold_m <= 0 && !x.fouling && x.exit_m > 0 && ego.v > AUDIT_TRAIN_MOVING_MPS;
-      const stood = foul && Math.abs(ego.v) < AUDIT_TRAIN_MOVING_MPS;
-      if (crossed || stood) {
-        if (!rec) this.trainCalls.set(key, (rec = { owed: true, counted: false }));
-        rec.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({
-          type: "failed_to_yield",
-          to: "train",
-          with: train.id,
-          crossing: c.id,
-          ...(stood ? { on_tracks: true } : {}),
-        });
-      }
-    }
-    if (this.trainCalls.size > 20)
-      for (const key of [...this.trainCalls.keys()].slice(0, 10)) this.trainCalls.delete(key);
   }
 
   auditStreetcars() {
