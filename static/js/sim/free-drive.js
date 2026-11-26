@@ -27,8 +27,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     stepOuts: hazards ? STEP_OUT_COUNT : 0,
   };
   const fleet = {
-    // emergency vehicles answer calls now and then (`?emergency=0`)
-    emergency: on("emergency"),
     buses,
     // streetcars and trains run their routes where the map has tracks (`?streetcars=0`, `?trains=0`)
     streetcars: on("streetcars"),

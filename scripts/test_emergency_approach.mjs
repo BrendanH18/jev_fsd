@@ -12,9 +12,9 @@ const world = fixtureWorld({ weather: "rain" });
 Object.assign(world.ego, { x: 100, v: 3.6633 });
 const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
 fleet.nextPull = fleet.nextPark = Infinity;
-const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 80 });
+const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 80 });
 assert.equal(!!ev, true);
-fleet.emergencyStep = () => {};
+fleet.emergency.step = () => {};
 // The approach is already latched to a stop beyond a junction, leaving room to steer over.
 world.evYield = { id: ev.id, route: world.route, stop: 160, speed: world.ego.v, since: 0, clearing: true, lead: false };
 // The full pull-over is unavailable beside this parked car; a lane manoeuvre wins.

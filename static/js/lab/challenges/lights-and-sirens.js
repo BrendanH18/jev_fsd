@@ -79,6 +79,6 @@ export const step = (world, fleet) =>
   stepAuthored(world, fleet, {
     trigger: reach(ONCOMING_TRIGGER_M),
     release: (_world, fleet, state) => {
-      state.emergencyId = fleet.dispatchEmergency(state.emergency)?.id || null;
+      state.emergencyId = fleet.emergency.dispatch(state.emergency)?.id || null;
     },
   });

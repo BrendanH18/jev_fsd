@@ -259,7 +259,6 @@ export class World {
     this.besideRight = new Map(); // cyclist id -> when it last rode on the car's right, going its way
     this.hookCounted = new Map(); // cyclist id -> when cutting across it was last counted
     this.evCalls = new Map(); // emergency vehicle id -> { since, v0, lead }: since it called on the car
-    this.evCounted = new Set(); // emergency vehicles a failure to yield was counted for
     this.evJunction = null; // the junction the car's front is in, while one is about
     this.busCalls = new Map(); // "<bus id>:<departure>" -> { owed, counted }: a bus pulling out ahead
     this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it

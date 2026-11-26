@@ -65,6 +65,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "snowbanks",
       "puddles",
       "parkers",
+      "emergency",
       "roadClosures",
       "collection",
       "vans",
@@ -94,7 +95,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
   );
   assert.deepEqual(
     R.FLEET_FEATURES.map((f) => f.key),
-    ["collection", "plows"],
+    ["emergency", "collection", "plows"],
   );
 });
 
@@ -851,6 +852,7 @@ test("standalone feature simulations can load before the registry", () => {
   for (const [module, className] of [
     ["double-parked", "DoubleParked"],
     ["collection-truck", "CollectionTrucks"],
+    ["emergency-traffic", "EmergencyTraffic"],
     ["outage", "Outages"],
     ["work-zone", "WorkZones"],
     ["signals", "setScrambles"],

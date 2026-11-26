@@ -76,8 +76,8 @@ for (const followingDistance of [false, true])
       Object.assign(w.ego, { x: 120, v: 0 });
       const f = new NpcFleet(w, { count: 0, bikes: 0 });
       f.nextPull = f.nextPark = Infinity;
-      assert.equal(!!f.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 }), true);
-      f.emergencyStep = () => {};
+      assert.equal(!!f.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 }), true);
+      f.emergency.step = () => {};
       Object.assign(w.ego, { x: -1000, y: -1000 });
       const n = Object.assign(new Vehicle(100, 0, 0, 2, clearing ? SCHOOL_BUS : CAR), {
         id: "yielding",

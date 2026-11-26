@@ -79,7 +79,7 @@ function pass({ parker, phase = "reverse", hold = 0.2, parkedAt = Infinity, cree
     world.parkers.active.push(P);
     world.npcs.push(P);
   }
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 60 });
   assert.equal(ev?.kind, "ambulance");
   // It comes up behind, then goes round through the other lane, never held up by the car.
   for (let k = 0; k <= 40; k++) {

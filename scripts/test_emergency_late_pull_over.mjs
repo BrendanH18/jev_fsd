@@ -39,9 +39,9 @@ function setup({ weather = "dry", room = 3.4, v = 1.33, age = 2.3 } = {}) {
   }
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
   fleet.nextPull = fleet.nextPark = Infinity;
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 80 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 80 });
   assert.equal(!!ev, true);
-  fleet.emergencyStep = () => {};
+  fleet.emergency.step = () => {};
   world.evYield = {
     id: ev.id,
     route: world.route,

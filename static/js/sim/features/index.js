@@ -125,10 +125,20 @@
 //   trafficSignalProceed(world, fleet, n, edge, control, signal, distance, canStop) truthy to skip an ordinary signal stop ("end")
 //   trafficSignalHold(world, n, edge, control, distance, traffic) truthy to hold ordinary traffic at a green ("end")
 //   evQueueHold(world, front)         { distance, vehicle } of a stopped queue the ego approaches ("end")
-//   trafficManage(world, fleet, dt)     update fleet-wide state before and after plow dispatch ("beforePlows", "afterPlows") or before the vehicle loop ("end")
+//   trafficManage(world, fleet, dt)     update fleet-wide state before the transit ("beforeTransit"), before and after plow
+//                                       dispatch ("beforePlows", "afterPlows") or before the vehicle loop ("end")
 //   trafficDriver(world, n)             first override of a traffic driver's offset, speedFactor,
 //                                       skipFollowing, leadSpeed(leader, speed) or brake(leader, gap, accel) ("end")
-//   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
+//   trafficManeuver(world, fleet, n, dt, all, extra) true when a feature drives the whole vehicle step ("beforeSpecial"
+//                                       or "end"); `all` is the car and the fleet, `extra` the road users outside it
+//   trafficGiveWay(world, fleet, n, proj, dt) the first call on a driver to give way: null, or { yielding }, the
+//                                       call it pulls over and stops for (null while it drives on) ("end")
+//   trafficPullOver(world, fleet, n, edge, front, dt, giveWay) metres right of its line a driver has moved over
+//                                       to give way, added to its offset ("end")
+//   trafficRejoin(world, fleet, n, offset, dt) the first { offset, own } line a driver keeps to on its way back
+//                                       into its lane, `own` while still its own line, or null ("end")
+//   trafficStopAt(world, fleet, n, front, giveWay) where a driver giving way stops, metres from its front, or null ("end")
+//   trafficHangBack(world, fleet, n, path, front) { gap, v } of a virtual leader a driver hangs back from ("end")
 //   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
 //   trafficCorridor(world, n, path, front) first corridor { shift, lineAt(s), ignore, limit, stop() }, or null
 //   trafficLaneControl(world, n, path, front) a separate lane restriction with the corridor fields above
@@ -217,6 +227,7 @@ import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
+import emergency from "./emergency.js";
 
 export const FEATURES = [
   highBeams,
@@ -237,6 +248,9 @@ export const FEATURES = [
   snowbanks,
   puddles,
   parkers,
+  // (anywhere would do: each of its hooks has a slot of its own, and its traffic, its pull-over and its
+  // audit read only what the records registered before it do: snowbanks and parkers dispatch through it)
+  emergency,
   roadClosures,
   collection, // A stopped truck also matches the double-parked obstacle.
   doubleParked,
@@ -511,7 +525,7 @@ export const SLOTS = {
     "junctions",
   ],
   evQueueHold: ["end"],
-  trafficManage: ["beforePlows", "dispatch", "afterPlows", "end"],
+  trafficManage: ["beforeTransit", "beforePlows", "dispatch", "afterPlows", "end"],
   trafficFollowingLeader: ["end"],
   trafficLeadPolicy: ["end"],
   trafficPassingLaneBlocked: ["end"],
@@ -560,6 +574,11 @@ export const SLOTS = {
   questions: ["end"],
   decisionFields: ["end"],
   trafficPullOut: ["end"],
+  trafficGiveWay: ["end"],
+  trafficPullOver: ["end"],
+  trafficRejoin: ["end"],
+  trafficStopAt: ["end"],
+  trafficHangBack: ["end"],
   hides: ["end"],
   blocksView: ["end"],
   placeEgo: ["end"],

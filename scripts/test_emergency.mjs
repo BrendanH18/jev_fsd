@@ -142,7 +142,7 @@ const rules = new RulesBrain();
   // who it calls on: a car ahead of it in either direction, one on a side street heading for its
   // path, not one it has passed, one following it, or one well away
   const { world, fleet } = setup({ front: -60, v: 10 });
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 60 });
   assert.ok(ev?.siren && ev.kind === "ambulance", "dispatched");
   assert.ok(Math.abs(world.ego.x - ev.x - 60) < 0.5, `${ev.x}`);
   assert.equal(emergencyCall(world.ego, ev)?.relation, "behind");
@@ -155,7 +155,7 @@ const rules = new RulesBrain();
   const far = new Vehicle(-HALF, -150, Math.PI / 2, 8);
   assert.equal(emergencyCall(far, ev), null, "too far");
   const other = setup({ front: -20, v: 10 });
-  const ev2 = other.fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 });
+  const ev2 = other.fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 60 });
   const side = new Vehicle(-HALF, -25, Math.PI / 2, 8);
   assert.equal(
     emergencyCall(side, ev2)?.relation,
@@ -172,7 +172,7 @@ const rules = new RulesBrain();
 {
   // the car hears it coming up behind, plans to pull over and stop, and Rules does
   const { world, fleet } = setup({ front: -120, v: 10 });
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   ev.v = 15;
   const { snap, eligible } = decide(world);
   const e = snap.emergency;
@@ -208,7 +208,7 @@ const rules = new RulesBrain();
 {
   // near a junction: stop short of it, or clear it when too close to stop
   const near = setup({ front: -40, v: 10 });
-  near.fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  near.fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   const a = buildSnapshot(near.world).emergency;
   assert.ok(
     !a.clearing &&
@@ -216,16 +216,16 @@ const rules = new RulesBrain();
     `${a.bumper_to_stop_m}`,
   );
   const close = setup({ front: -10, v: 10 });
-  close.fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  close.fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   const b = buildSnapshot(close.world).emergency;
   assert.ok(b.clearing && b.bumper_to_stop_m > 10 + 5.3, `${b.bumper_to_stop_m}`);
   const inside = setup({ front: 2, v: 6 });
-  inside.fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  inside.fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   const c = buildSnapshot(inside.world).emergency;
   assert.ok(c.clearing && c.bumper_to_stop_m > 5.3 + 4.5 - 2, `${c.bumper_to_stop_m}`);
   // (its rear past the junction's centre, still in it)
   const past = setup({ front: 4, v: 1 });
-  past.fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  past.fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   const d = buildSnapshot(past.world).emergency;
   assert.ok(
     d.clearing && d.bumper_to_stop_m >= 5.3 + 1 - 4 + FRONT - 0.01,
@@ -237,7 +237,7 @@ const rules = new RulesBrain();
 {
   // what decision models and LLMs are told
   const { world, fleet } = setup({ front: -120, v: 10 });
-  fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck" });
+  fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck" });
   const { snap, candidates, eligible, rejected } = decide(world);
   const state = toJevState(snap, candidates, { rejected });
   assert.equal(state.emergency_vehicle.kind, "fire truck");
@@ -279,7 +279,7 @@ function drive(world, fleet, seconds, each = () => {}) {
   // closed loop: the ambulance comes up behind; the car pulls over and stops, it goes by, and the
   // car carries on, keeping back from it, and arrives
   const { world, fleet } = setup({ front: -110, v: 10 });
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   let passedAt = null,
     stoppedAt = null,
     pulled = 0,
@@ -317,7 +317,7 @@ function drive(world, fleet, seconds, each = () => {}) {
     world.parked.add(
       Object.assign(new Vehicle(x, -HALF - 2.65, 0, 0), { id: `kerb_${x}`, edge: "w_in", curb: "right" }),
     );
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   assert.equal(ev?.kind, "ambulance");
   let stoppedRight = null,
     fastest = 0;
@@ -366,7 +366,7 @@ for (const followingDistance of [false, true]) {
   world.ego.y = 40;
   const ahead = trafficCar(world, fleet, "ahead", -120, { v: 9 });
   const oncoming = trafficCar(world, fleet, "oncoming", -20, { v: 9, west: true });
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 1 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 1 });
   assert.equal(ev === null, true, "nothing to dispatch past with the car off the streets");
   const lane = world.map.lane("w_in", 0),
     p = pointAt(lane.pts, lane.cum, 10);
@@ -432,7 +432,7 @@ for (const followingDistance of [false, true]) {
   // the audit: a car that keeps going fails to yield, once; a car stopped in the lane holding the
   // ambulance up does too; Rules pulling over does not (above)
   const keeps = setup({ front: -120, v: 10 });
-  keeps.fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  keeps.fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   let failed = 0,
     to = null;
   for (let k = 0; k < 15 * 60; k++) {
@@ -461,7 +461,7 @@ for (const followingDistance of [false, true]) {
       curb: "right",
     }),
   );
-  const amb = blocks.fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 60 });
+  const amb = blocks.fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck", distance: 60 });
   let blockFails = 0;
   for (let k = 0; k < 20 * 60; k++) {
     stepWorld(
@@ -490,7 +490,7 @@ for (const followingDistance of [false, true]) {
           curb: "right",
         }),
       );
-  const truck = fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 60 });
+  const truck = fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck", distance: 60 });
   let led = false,
     stopped = null,
     touched = false,
@@ -528,7 +528,7 @@ for (const followingDistance of [false, true]) {
   // on a street with two lanes each way, the car in the inner lane moves across into the curb lane
   // and pulls over there; an ambulance it let go by along the middle of the road is kept 150 m ahead
   const { world, fleet } = setup({ front: -120, v: 10, j: J2 });
-  const amb = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  const amb = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   const e = buildSnapshot(world).emergency;
   assert.ok(Math.abs(e.offset_m - (3.2 + 1.5)) < 1e-9, `across and over: ${e.offset_m}`);
   let right = 0,
@@ -586,7 +586,7 @@ for (const followingDistance of [false, true]) {
   amb.path = new NpcPath(world.map, fleet.random);
   amb.path.start("w_in", 0, 20, [["e_out", 0]]);
   fleet.vehicles.push(amb);
-  fleet.retireEmergency = () => {}; // (the driven car is off the streets)
+  fleet.emergency.retire = () => {}; // (the driven car is off the streets)
   let right = 0,
     clear = false,
     closest = Infinity;
@@ -620,7 +620,7 @@ for (const followingDistance of [false, true]) {
   // a car that stands in its lane without pulling over fails to yield when the ambulance gets past
   // it anyway
   const { world, fleet } = setup({ front: -120, v: 0 });
-  fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 70 });
+  fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 70 });
   let failed = 0;
   for (let k = 0; k < 25 * 60; k++) {
     stepWorld({ world, fleet, autopilot: { enabled: false, step() {} }, input: {} }, 1 / 60, world.t * 1000);

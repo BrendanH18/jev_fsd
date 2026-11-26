@@ -65,7 +65,7 @@ const FLEET_CHECKS = [
   [
     "fleet_emergency_timer",
     "A countdown that can suppress emergency dispatch indefinitely.",
-    ({ fleet }) => !Number.isFinite(fleet.nextEmergency),
+    ({ fleet }) => !Number.isFinite(fleet.emergency?.next),
   ],
   ["fleet_bus_timer", "An invalid bus replenishment deadline.", ({ fleet }) => !nonnegative(fleet.nextBus)],
   [

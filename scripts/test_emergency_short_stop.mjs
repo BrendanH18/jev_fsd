@@ -21,7 +21,7 @@ const { sampleCandidates } = await import("../static/js/brain/candidates.js");
   world.placeOnLane(lane, 77.4);
   world.ego.v = 0.964;
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
-  assert.equal(!!fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 70 }), true);
+  assert.equal(!!fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck", distance: 70 }), true);
   let snap = buildSnapshot(world);
   assert.equal(snap.emergency.steer_at_stop, true, "the signal leaves less than normal steering room");
   assert.equal(sampleCandidates(snap, world).find((c) => c.id === "pull_over").law.steerAtStop, true);
@@ -53,9 +53,9 @@ for (const weather of ["dry", "fog", "rain", "snow"]) {
   world.parked.add(parked);
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
   fleet.nextPull = fleet.nextPark = Infinity;
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 80 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 80 });
   assert.equal(!!ev, true);
-  fleet.emergencyStep = () => {};
+  fleet.emergency.step = () => {};
   world.evYield = {
     id: ev.id,
     route: world.route,
@@ -118,9 +118,9 @@ for (const weather of ["dry", "rain"]) {
     fleetStep(dt);
     fleet.vehicles.push(lead);
   };
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 80 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck", distance: 80 });
   assert.equal(!!ev, true);
-  fleet.emergencyStep = () => {};
+  fleet.emergency.step = () => {};
   const snap = buildSnapshot(world);
   assert.equal(snap.emergency.steer_at_stop, false, `${weather}: the plan alone leaves ordinary steering room`);
   assert.equal(

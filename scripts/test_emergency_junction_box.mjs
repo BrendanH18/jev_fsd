@@ -109,7 +109,7 @@ function plan(crossHalf, v) {
     world.map,
   );
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 60 });
   assert.equal(ev?.kind, "ambulance");
   ev.psi = 0;
   return buildSnapshot(world).emergency;

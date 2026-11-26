@@ -85,7 +85,7 @@ function setup(right, atLine = false, speed = 0) {
     world.map,
   );
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 60 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck", distance: 60 });
   assert.equal(ev?.kind, "fire_truck");
   ev.psi = world.ego.psi;
   ev.blockedBy = [world.ego];
