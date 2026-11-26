@@ -58,7 +58,8 @@
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
 //                                       traffic moves ("end"), with "afterOutages" between them
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, after traffic and before the people on foot move ("end")
-//   audit(world, frontOnPath?)           World.audit: "beforeCollisions" (with dt), "afterFlagger", "afterCalming", "driveways",
+//   audit(world, frontOnPath?)           World.audit: "afterCyclists" (with the road), "beforeCollisions" (with dt),
+//                                       "afterFlagger", "afterCalming", "driveways",
 //                                       "streetHazards", "rearTraffic", "late"
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
@@ -298,6 +299,7 @@ export const SLOTS = {
   stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
   stepAfterTraffic: ["end"],
   audit: [
+    "afterCyclists",
     "afterPassing",
     "beforeCollisions",
     "beforeMerge",

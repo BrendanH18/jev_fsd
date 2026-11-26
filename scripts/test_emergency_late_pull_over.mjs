@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { fixtureWorld } = await import("../static/tests/jev-fixtures.js");
 const { NpcFleet } = await import("../static/js/sim/npc.js");
+const { auditEmergency } = await import("../static/js/sim/emergency-audit.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
@@ -112,7 +113,7 @@ for (const weather of ["dry", "rain"]) {
     ev.psi = 0;
     ev.path.s = ev.x;
     world.t = t;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
   assert.equal(world.violations.failed_to_yield, 0, `${weather}: yields as the ambulance draws level`);
 }

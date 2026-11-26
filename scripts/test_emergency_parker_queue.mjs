@@ -1,7 +1,7 @@
 // A car stopped at the hold line behind a traffic car reversing into a space (sim/parkers.js) has
 // nowhere to pull over to: the room between them is the parker's. When an emergency vehicle comes up
 // behind and goes round, holding that stop is yielding, as in a queue behind a stopped car
-// (World.heldInQueue in auditEmergency). Winnipeg's city smoke s1-1 counted it as a failure to yield.
+// (heldInQueue in sim/emergency-audit.js). Winnipeg's city smoke s1-1 counted it as a failure to yield.
 // Released from that queue just before the vehicle passes, the car has as long to pull over as it had
 // from the call. Without the parker, staying in the lane as the vehicle passes still fails. Creeping
 // the last metre or two up to that hold line when the call comes (Kitsilano's city suite at 06:30,
@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { MapData } = await import("../static/js/map/mapdata.js");
+const { auditEmergency, heldInQueue } = await import("../static/js/sim/emergency-audit.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Route } = await import("../static/js/map/route.js");
 const { NpcFleet } = await import("../static/js/sim/npc.js");
@@ -92,9 +93,9 @@ function pass({ parker, phase = "reverse", hold = 0.2, parkedAt = Infinity, cree
       world.npcs.push(ev);
     }
     Object.assign(ev, { x: 40 + k * 3, y: k > 12 ? 1.75 : -1.75, psi: 0, v: 12, blockedBy: null, blockedFor: 0 });
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
-  return { failed: world.violations.failed_to_yield, queued: parker ? (world.heldInQueue(FRONT)?.id ?? null) : null };
+  return { failed: world.violations.failed_to_yield, queued: parker ? (heldInQueue(world, FRONT)?.id ?? null) : null };
 }
 
 const held = pass({ parker: true });

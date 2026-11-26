@@ -1,7 +1,7 @@
 // Giving way at a junction without a sign (or at a stop sign), the car stops anywhere from its line to
 // the point it looks from (Route `sPeek`), short of the junction. Already stopped there when an
 // emergency vehicle calls, or crawling up to it and stopping there, it has no more room to pull over
-// than at a control line, and holding that stop as the vehicle passes is yielding (World.auditEmergency).
+// than at a control line, and holding that stop as the vehicle passes is yielding (sim/emergency-audit.js auditEmergency).
 // In Winnipeg's city smoke s1-1 the car had crept 3 m past its give-way line on Martha Street towards
 // where it looks from when an ambulance called from behind; it stopped there, in the curb lane, 9 m
 // from the centre of a wide junction, and the audit counted the ambulance drawing level as a failure
@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { MapData, joinLanes, cumulative, pointAt } = await import("../static/js/map/mapdata.js");
+const { auditEmergency } = await import("../static/js/sim/emergency-audit.js");
 const { Route } = await import("../static/js/map/route.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle, AMBULANCE } = await import("../static/js/sim/vehicle.js");
@@ -100,14 +101,14 @@ function setup(front, v = 0) {
   });
   ev.path.s = ev.x + ARM;
   world.npcs.push(ev);
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   return { world, ev, FRONT };
 }
 // (the car's front `front` metres along its route, stopped)
 function moveTo(world, FRONT, front, t) {
   Object.assign(world.ego, { x: front - ARM - FRONT, v: 0 });
   world.t = t;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
 }
 // The ambulance's middle passes the car's middle 10 s after the call.
 function pass(world, ev) {
@@ -119,7 +120,7 @@ function pass(world, ev) {
     ev.x = world.ego.x + middle + ahead - (ev.spec.length / 2 - ev.spec.rearOverhang);
     ev.path.s = ev.x + ARM;
     world.t = t;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
 }
 

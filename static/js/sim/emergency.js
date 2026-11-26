@@ -136,7 +136,7 @@ export function kerbCars(world, x, y, r) {
 // parked at the kerb there and keep the forward simulations' 0.3 m from them (brain/candidates.js), or
 // Infinity with none beside it. A narrow lane with cars parked close to its line leaves less than the
 // usual pull-over: the plan aims no further (brain/sensors.js emergencyYield), and the audit takes a
-// car that far over as pulled over (World.auditEmergency).
+// car that far over as pulled over (sim/emergency-audit.js auditEmergency).
 export const PARKED_CLEAR_M = 0.3;
 // (`ahead` metres more of kerb ahead of it count too: the stretch it is pulling over into)
 export function parkedRoom(world, x, y, h, spec = CAR, ahead = 0) {
@@ -228,7 +228,7 @@ export function nearestCall(o, vehicles, points = null) {
 
 // A car giving way to an emergency vehicle stops with its front at least this far from the node of the
 // junction ahead (brain/sensors.js emergencyYield), and the audit counts its front coming this close to a
-// junction's node as entering it (World.auditEmergency).
+// junction's node as entering it (sim/emergency-audit.js auditEmergency).
 export const EV_BOX_M = 8;
 
 const junctionCache = new WeakMap();

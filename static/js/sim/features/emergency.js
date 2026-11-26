@@ -2,13 +2,22 @@
 // and siren on, sent past the car now and then in free drives (the fleet option `emergency`), and every
 // driver giving way to one. Traffic's side is sim/emergency-traffic.js.
 import { EmergencyTraffic } from "../emergency-traffic.js";
+import { auditEmergency } from "../emergency-audit.js";
 import { isEmergencyVehicle } from "../emergency.js";
 
 export default {
   key: "emergency",
   // (the World keeps the vehicles a failure to yield was counted for)
   property: "evCounted",
+  // (emergency vehicle id -> { since, v0, lead, ... }: since it called on the car, and the drive-on latch)
+  calls: "evCalls",
   build: () => new Set(),
+  // The car giving way, after the cyclists' audit: a failure to yield counts in the shared `failed_to_yield`.
+  audit: { at: "afterCyclists", run: auditEmergency },
+  // (the junction the car's front is in, while one is about)
+  resetContact(world) {
+    world.evJunction = null;
+  },
   buildFleet: (fleet, { enabled, seed }) => new EmergencyTraffic(fleet, enabled, seed),
   // Dispatched, and taken off, before the transit is managed.
   trafficManage: { at: "beforeTransit", run: (_world, fleet, dt) => fleet.emergency.manage(dt) },
