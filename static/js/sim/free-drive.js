@@ -30,8 +30,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     // emergency vehicles answer calls now and then (`?emergency=0`)
     emergency: on("emergency"),
     buses,
-    // streetcars run their routes where the map has tracks (`?streetcars=0`)
-    streetcars: on("streetcars"),
     // on the school run (7:00 to 17:00), two school buses (`?schoolbuses=0`)
     schoolBuses: on("schoolbuses") && hour >= 7 && hour < 17 ? 2 : 0,
   };

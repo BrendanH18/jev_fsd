@@ -4,15 +4,14 @@ import { reserveSlot } from "./parking.js";
 // Traffic: NPC cars that follow lanes, pick turns at junctions, keep gaps with the Intelligent
 // Driver Model, and obey lights and stop signs. They also react to the ego car. Now and then a car
 // parked up ahead of the ego signals, waits for a gap, and pulls out into the lane. Buses drive
-// their routes and stop at their stops (sim/bus.js), and streetcars theirs, on their tracks; nobody
-// passes one with its doors open on the side its riders use (sim/streetcar.js). School buses stop to
+// their routes and stop at their stops (sim/bus.js). School buses stop to
 // let children off, and everyone stops for them (sim/school-bus.js). Nobody enters a signalled junction
 // without room past it (sim/junction-box.js). At a
 // construction site, follow its temporary controls. Where a road crew
 // closes one of two lanes, drivers zipper merge: both lanes up to the merge point, then one from each
 // in turn.
 
-import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, STREETCAR, comfort } from "./vehicle.js";
+import { Vehicle, CAR, BIKE, BUS, SCHOOL_BUS, comfort } from "./vehicle.js";
 import { lookahead, purePursuit, speedControl } from "./controller.js";
 import { cumulative, pointAt, headingAt, projectPoint, joinLanes } from "../map/mapdata.js";
 import { advanceHolds, approachPhase, movementSignal, StopMemory } from "./signals.js";
@@ -59,23 +58,10 @@ import {
   isBus,
 } from "./bus.js";
 import { ZONE_LIMIT_MPS, zoneAt } from "./speed-zones.js";
-import {
-  DEPART_S,
-  DOORS_DELAY_S,
-  DWELL_MAX_S,
-  DWELL_S,
-  RIDER_EVERY_S,
-  RIDERS_OFF,
-  RIDERS_ON,
-  canStopFor as canStopForStreetcar,
-  doorsOpen,
-  isStreetcar,
-  streetcarHold,
-} from "./streetcar.js";
 import { boxHold } from "./junction-box.js";
 import {
   controlAt,
-  FLEET_FEATURES,
+  buildFleetFeatures,
   featureObstacle,
   applyTrafficPathPolicy,
   firstHookResult,
@@ -89,7 +75,10 @@ import {
 // code used to be. (With `geese` on, say, drivers and cyclists slow for a gaggle of Canada geese coming up
 // to the kerb ahead and stop short of their way across until the last goose is off the roadway.)
 const TRAFFIC_MANAGE = hooks("trafficManage"),
+  TRAFFIC_MANAGE_BUSES = hooks("trafficManage", "buses"),
   TRAFFIC_MANAGE_SCHOOL_BUSES = hooks("trafficManage", "schoolBuses"),
+  TRAFFIC_LANE_CHANGE = hooks("trafficLaneChange"),
+  TRAFFIC_RECOVER = hooks("trafficRecover"),
   TRAFFIC_MANAGE_BEFORE_PLOWS = hooks("trafficManage", "beforePlows"),
   TRAFFIC_MANAGE_AFTER_PLOWS = hooks("trafficManage", "afterPlows"),
   TRAFFIC_SPAWN_BLOCKED = hooks("trafficSpawnBlocked"),
@@ -302,13 +291,8 @@ const SCHOOL_GONE_M = 400;
 const SCHOOL_EVERY_S = [30, 60];
 const SCHOOL_DECEL = 1.2;
 const SCHOOL_COLOR = 0xf7b500;
-// Streetcars in free drives (sim/streetcar.js): up to 2 at a time on their routes' runs, placed and
-// replaced as buses are. One slows to its stops at up to 1.1 m/s^2.
-const MAX_STREETCARS = 2;
-const STREETCAR_COLOR = 0xc8102e;
-const STREETCAR_DECEL = 1.1;
-// (a bus, school bus or streetcar: long, so looked for all along its body)
-const isLong = (o) => isBus(o) || isSchoolBus(o) || isStreetcar(o) || !!featureObstacle(o)?.long;
+// (a bus or school bus: long, so looked for all along its body)
+const isLong = (o) => isBus(o) || isSchoolBus(o) || !!featureObstacle(o)?.long;
 
 // How far ahead of a cyclist's front wheel any part of another vehicle's body is in its way, or
 // null: within its own body (and 0.05 m) moving straight on as it is heading for the next 2 m, or
@@ -584,16 +568,7 @@ function curveSpeed(path, s) {
 export class NpcFleet {
   constructor(
     world,
-    {
-      count = 40,
-      bikes = BIKES,
-      seed = 7,
-      emergency = false,
-      buses = false,
-      streetcars = false,
-      schoolBuses = 0,
-      ...features
-    } = {},
+    { count = 40, bikes = BIKES, seed = 7, emergency = false, buses = false, schoolBuses = 0, ...features } = {},
   ) {
     this.world = world;
     this.map = world.map;
@@ -622,13 +597,8 @@ export class NpcFleet {
     for (let i = 0; i < this.busTarget; i++) this.spawnBus(BUS_START_M);
     this.nextBus = world.t + BUS_EVERY_S[0];
     this.buses = this.vehicles.filter(isBus);
-    // (streetcars too)
-    this.trams = rng(seed * 49979687 + 13);
-    this.streetcarCount = 0;
-    this.streetcarTarget = streetcars ? Math.min(MAX_STREETCARS, this.busRuns(true).length) : 0;
-    for (let i = 0; i < this.streetcarTarget; i++) this.spawnBus(BUS_START_M, null, null, true);
-    this.nextStreetcar = world.t + BUS_EVERY_S[0];
-    this.streetcars = this.vehicles.filter(isStreetcar);
+    const makePath = (map, random, options) => new NpcPath(map, random, { ...options, world: this.world });
+    buildFleetFeatures(this, features, seed, makePath, "early");
     // (and school buses theirs)
     this.school = rng(seed * 32452843 + 5);
     this.schoolCount = 0;
@@ -637,13 +607,7 @@ export class NpcFleet {
     for (let i = 0; i < schoolBuses; i++) this.spawnSchoolBus(SCHOOL_START_M);
     this.nextSchool = world.t + SCHOOL_EVERY_S[0];
     this.schoolBuses = this.vehicles.filter(isSchoolBus);
-    for (const feature of FLEET_FEATURES) {
-      this[feature.key] = feature.buildFleet(this, {
-        enabled: features[feature.key] ?? (feature.defaultCount === undefined ? false : 0),
-        seed,
-        makePath: (map, random, options) => new NpcPath(map, random, { ...options, world: this.world }),
-      });
-    }
+    buildFleetFeatures(this, features, seed, makePath);
     world.npcs = this.vehicles;
   }
 
@@ -728,12 +692,12 @@ export class NpcFleet {
     return STOP_EVERY_M[0] + this.school() * (STOP_EVERY_M[1] - STOP_EVERY_M[0]);
   }
 
-  // Every run of every bus route on the map (`tram`: of every streetcar route): [{ route, run }].
-  busRuns(tram = false) {
-    const key = tram ? "_tramRuns" : "_busRuns";
+  // Every run of every bus route on the map: [{ route, run }].
+  busRuns() {
+    const key = "_busRuns";
     if (!this[key])
       this[key] = (this.map.transit?.routes || [])
-        .filter((route) => (route.mode === "tram") === tram)
+        .filter((route) => route.mode !== "tram")
         .flatMap((route) =>
           route.runs.filter((run) => run.edges.every((id) => this.map.edges.has(id))).map((run) => ({ route, run })),
         );
@@ -742,14 +706,13 @@ export class NpcFleet {
 
   // Place a bus on a run of its route (`pick`, by default one at random, longer runs more often) at
   // `sRun` metres along it (by default somewhere in its first 80%), at least `away` metres from the
-  // car and clear of other traffic. Returns the bus, or null. (`tram`: a streetcar, on a run of a
-  // streetcar route, in the lane its track is laid in.)
-  spawnBus(away = BUS_LATER_M, pick = null, sRun = null, tram = false) {
-    const runs = this.busRuns(tram),
+  // car and clear of other traffic. Returns the bus, or null.
+  spawnBus(away = BUS_LATER_M, pick = null, sRun = null) {
+    const runs = this.busRuns(),
       map = this.map,
       ego = this.world.ego,
-      spec = tram ? STREETCAR : BUS,
-      random = tram ? this.trams : this.transit;
+      spec = BUS,
+      random = this.transit;
     if (!runs.length) return null;
     const total = runs.reduce((a, r) => a + r.run.length, 0);
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -764,12 +727,7 @@ export class NpcFleet {
       while (k < run.edges.length - 1 && along > map.edges.get(run.edges[k]).length)
         along -= map.edges.get(run.edges[k++]).length;
       const e = map.edges.get(run.edges[k]),
-        lane = map.lane(
-          e.id,
-          tram
-            ? Math.min(run.lane ?? 0, e.lanes - 1)
-            : (firstHookResult(BUS_SPAWN_LANE, this.world, e)?.index ?? e.lanes - 1),
-        );
+        lane = map.lane(e.id, firstHookResult(BUS_SPAWN_LANE, this.world, e)?.index ?? e.lanes - 1);
       if (!lane) continue;
       const s = Math.max(1, Math.min(lane.length - 1, (along * lane.length) / Math.max(1, e.length)));
       const p = pointAt(lane.pts, lane.cum, s);
@@ -783,20 +741,20 @@ export class NpcFleet {
       }
       const v = new Vehicle(p[0], p[1], headingAt(lane.pts, lane.cum, s), Math.min(8, e.limit * 0.6), spec);
       Object.assign(v, {
-        id: tram ? `streetcar_${++this.streetcarCount}` : `bus_${++this.busCount}`,
+        id: `bus_${++this.busCount}`,
         kind: spec.kind,
-        color: tram ? STREETCAR_COLOR : BUS_COLORS[0],
+        color: BUS_COLORS[0],
         ref: route.ref,
         headsign: route.name,
         v0: 15,
-        driver: { aMax: tram ? 1.1 : 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.9, lcRate: 0 },
+        driver: { aMax: 1.0, b: 1.8, T: 1.6, s0: 3.0, react: 0.9, lcRate: 0 },
         stopMem: new StopMemory(),
         frozen: 0,
         waiting: 0,
       });
       v.path = new NpcPath(map, random, { world: this.world });
-      if (!tram) applyTrafficPathPolicy(this.world, v.path, "bus");
-      this.startRun(v, run.edges, k, lane.idx, s, tram);
+      applyTrafficPathPolicy(this.world, v.path, "bus");
+      this.startRun(v, run.edges, k, lane.idx, s);
       // the route's stops still ahead, as where its front stops along each street (see busStopFront)
       const firstAt =
         run.edges.slice(0, k).reduce((a, id) => a + map.edges.get(id).length, 0) +
@@ -828,25 +786,19 @@ export class NpcFleet {
         done: false,
         limit: e.limit,
         laneWidth: e.lane_width,
-        ...(tram ? { tram: true, lane: lane.idx, off: 0, on: 0, riderAt: 0 } : {}),
       };
       this.vehicles.push(v);
       this.buses = this.vehicles.filter(isBus);
-      this.streetcars = this.vehicles.filter(isStreetcar);
       return v;
     }
     return null;
   }
 
   // Start a bus's path on edge `edges[k]` (lane `lane`, `s` along it) with the rest of its run planned.
-  // (`fixed`: a streetcar's, in that lane all the way, along its track.)
-  startRun(n, edges, k, lane, s, fixed = false) {
+  startRun(n, edges, k, lane, s) {
     let prev = { id: edges[k], lane };
     const planned = edges.slice(k + 1).map((id) => {
-      prev = {
-        id,
-        lane: fixed ? Math.min(lane, this.map.edges.get(id).lanes - 1) : n.path.laneInto(prev.id, prev.lane, id),
-      };
+      prev = { id, lane: n.path.laneInto(prev.id, prev.lane, id) };
       return [id, prev.lane];
     });
     n.path.start(edges[k], lane, s, planned);
@@ -939,7 +891,7 @@ export class NpcFleet {
     this.retireEmergency();
     this.evs = this.vehicles.filter(isEmergency);
     if (this.buses.length || this.busTarget) this.manageBuses();
-    if (this.streetcars.length || this.streetcarTarget) this.manageBuses(true);
+    for (const manage of TRAFFIC_MANAGE_BUSES) manage(world, this, dt);
     if (this.schoolBuses.length || this.schoolTarget) this.manageSchoolBuses();
     for (const manage of TRAFFIC_MANAGE_SCHOOL_BUSES) manage(world, this, dt);
     for (const manage of TRAFFIC_MANAGE_BEFORE_PLOWS) manage(world, this, dt);
@@ -1008,7 +960,9 @@ export class NpcFleet {
         continue;
       }
       const path = n.path;
-      if (!n.transit?.tram && !n.school) applyTrafficPathPolicy(world, path, n.transit ? "bus" : null);
+      // (a registered feature's vehicle can keep a path of its own: a streetcar keeps to its track)
+      if (featureObstacle(n)?.pathPolicy?.(n) !== false && !n.school)
+        applyTrafficPathPolicy(world, path, n.transit ? "bus" : null);
       if (n.lc && n.lc.t >= n.lc.T) {
         const lane = this.map.lane(n.lc.edge, n.lc.to);
         if (lane && path.currentEdge().id === n.lc.edge)
@@ -1089,9 +1043,9 @@ export class NpcFleet {
         n.lcCooldown = Math.max(0, (n.lcCooldown || 0) - dt);
         // (a bus moves across to the curb lane for its next stop, and otherwise changes lanes only
         // for a turn)
-        // (a streetcar, on its track, never changes lanes)
-        if (n.transit?.tram) {
-          /* on its track */
+        // (a registered feature's vehicle can change lanes its own way: a streetcar, on its track, never does)
+        if (TRAFFIC_LANE_CHANGE.some((change) => change(world, this, n, edge, front))) {
+          /* its own way */
         } else if (n.transit && !n.yieldEv) {
           if (n.transit.phase === "drive") this.maybeChangeLane(n, edge, front, this.busStopSoon(n, front));
         } else if (laneControl) {
@@ -1100,12 +1054,7 @@ export class NpcFleet {
         else if (yielding && n.kind !== "bike") this.maybeChangeLane(n, edge, front, true);
       }
       // a bus pulling in to its stop, waiting there and pulling out again (sim/bus.js)
-      // (a streetcar stopping at its stops in its lane, its doors open while its riders get on and off)
-      const stand = n.transit
-        ? n.transit.tram
-          ? this.streetcarPlan(n, front, dt)
-          : this.busPlan(n, edge, front, dt, proj.lateral)
-        : null;
+      const stand = isBus(n) && n.transit ? this.busPlan(n, edge, front, dt, proj.lateral) : null;
       // a school bus slowing to a stop, standing there with its reds flashing, and moving off
       const schoolStop = n.school ? this.schoolPlan(n, front, dt) : null;
       let featureStop = Infinity;
@@ -1114,7 +1063,8 @@ export class NpcFleet {
       // lane beside it: `keepRight` is where it is heading, `n.side` where it is now
       const keepRight = n.kind === "bike" ? this.curbside(n, edge, front, dt) : 0;
       // pulling over for an emergency vehicle (a cyclist already keeps right)
-      const pullTo = yielding && n.kind !== "bike" && !n.transit?.tram ? this.pullOverTo(n, edge, front) : 0;
+      const pullTo =
+        yielding && n.kind !== "bike" && !featureObstacle(n)?.onTrack ? this.pullOverTo(n, edge, front) : 0;
       n.evShift =
         (n.evShift || 0) + Math.max(-EV_SHIFT_MPS * dt, Math.min(EV_SHIFT_MPS * dt, pullTo - (n.evShift || 0)));
       // Ease left to pass buses standing at their stops and leave room beside the kerb when needed.
@@ -1632,15 +1582,8 @@ export class NpcFleet {
         gap = Math.max(0.05, featureStop);
         leadV = 0;
       }
-      // not passing a streetcar with its doors open on the side its riders use (sim/streetcar.js)
-      const forStreetcar =
-        this.streetcars.length && !isEmergency(n) && !n.transit?.tram ? this.yieldToStreetcar(n, front) : null;
-      if (forStreetcar !== null && forStreetcar < gap) {
-        gap = Math.max(0.05, forStreetcar);
-        leadV = 0;
-      }
-      // where a registered feature has it stop: short of a level crossing's tracks for a train coming, or
-      // for a queue backed up past them, say
+      // where a registered feature has it stop: not passing a streetcar with its doors open on the side its
+      // riders use, or short of a level crossing's tracks for a train coming, say
       for (const hold of TRAFFIC_HOLD) {
         const at = hold(world, this, n, front, all);
         if (at != null && at < gap) {
@@ -2058,14 +2001,13 @@ export class NpcFleet {
     return best;
   }
 
-  // Buses (sim/bus.js), or streetcars (`tram`, sim/streetcar.js): note where each is along its run,
-  // take off those that have finished it well away from the car, and send another when there are too
-  // few.
-  manageBuses(tram = false) {
+  // Buses (sim/bus.js): note where each is along its run, take off those that have finished it well
+  // away from the car, and send another when there are too few.
+  manageBuses() {
     const ego = this.world.ego,
-      is = tram ? isStreetcar : isBus,
-      next = tram ? "nextStreetcar" : "nextBus",
-      random = tram ? this.trams : this.transit;
+      is = isBus,
+      next = "nextBus",
+      random = this.transit;
     for (const n of this.vehicles.filter(is)) {
       const t = n.transit;
       if (!t) continue;
@@ -2075,26 +2017,16 @@ export class NpcFleet {
       if (k >= 0) t.k = k;
       else if (!t.done && t.edges.indexOf(id) < 0) t.done = true;
       if (t.k === t.edges.length - 1 && n.path.currentEdge().sEnd - n.path.s < 15) t.done = true;
-      // (a streetcar waits at the end of its run, where its track leaves the map's streets, until the
-      // car is well away or cannot see it: it has nowhere to drive on to as traffic)
-      if (
-        t.done &&
-        t.phase === "drive" &&
-        (Math.hypot(n.x - ego.x, n.y - ego.y) > BUS_GONE_M || (tram && !this.world.visibility.sees(ego, n)))
-      ) {
+      if (t.done && t.phase === "drive" && Math.hypot(n.x - ego.x, n.y - ego.y) > BUS_GONE_M) {
         this.vehicles.splice(this.vehicles.indexOf(n), 1);
         this[next] = Math.max(this[next], this.world.t + BUS_EVERY_S[0] + random() * (BUS_EVERY_S[1] - BUS_EVERY_S[0]));
       }
     }
-    if (
-      this.vehicles.filter(is).length < (tram ? this.streetcarTarget : this.busTarget) &&
-      this.world.t >= this[next]
-    ) {
-      if (!this.spawnBus(BUS_LATER_M, null, null, tram)) this[next] = this.world.t + 5;
+    if (this.vehicles.filter(is).length < this.busTarget && this.world.t >= this[next]) {
+      if (!this.spawnBus(BUS_LATER_M)) this[next] = this.world.t + 5;
       else this[next] = this.world.t + BUS_EVERY_S[0];
     }
     this.buses = this.vehicles.filter(isBus);
-    this.streetcars = this.vehicles.filter(isStreetcar);
   }
 
   // School buses (sim/school-bus.js): one far from the car, driving on, leaves, and another is placed
@@ -2308,106 +2240,6 @@ export class NpcFleet {
     t.shift += Math.max(-rate, Math.min(rate, target - t.shift));
     n.doors = t.doors;
     return { stopAt, signal };
-  }
-
-  // One step of a streetcar's stops (see the top of sim/streetcar.js): it slows to the next and stops
-  // there in its lane, opens its doors, lets its riders off and on, closes its doors once they are
-  // clear of the street and moves off; and it stops at the end of its run, where its track leaves the
-  // map (manageBuses then takes it off). Returns where it stops (`stopAt`, metres from its front, or
-  // null), and no signal: it has none to give.
-  streetcarPlan(n, front, dt) {
-    const t = n.transit,
-      crowd = this.world.crowd;
-    let stopAt = null;
-    const last = n.path.edges.find((e) => e.id === t.edges[t.edges.length - 1]);
-    if (last) {
-      stopAt = last.sEnd - front - 1;
-      // (stopped there, short of it by the driver's standstill gap)
-      if (stopAt < (n.driver.s0 || 0) + 1.5 && n.v < 0.3) t.done = true;
-    }
-    const hold = (at) => {
-      stopAt = stopAt === null ? at : Math.min(stopAt, at);
-    };
-    if (t.phase === "drive") {
-      let stop = t.stops[t.next],
-        at = stop ? this.stopOnPath(n, stop, front) : null;
-      while (stop && (at === null || at - front < -2)) {
-        stop = t.stops[++t.next];
-        at = stop ? this.stopOnPath(n, stop, front) : null;
-      }
-      if (stop && at - front < Math.max(BUS_SIGNAL_M, (n.v * n.v) / (2 * STREETCAR_DECEL) + 10))
-        Object.assign(t, { phase: "in", stop });
-    }
-    if (t.phase === "in") {
-      const at = this.stopOnPath(n, t.stop, front),
-        to = at === null ? -Infinity : at - front;
-      if (to < -3) Object.assign(t, { phase: "drive", next: t.next + 1 });
-      else {
-        // (the driver's standstill gap would leave it short of the stop: aim beyond by as much)
-        hold(to + (n.driver.s0 || 0) - 1);
-        if (n.v < 0.2 && to < 2.5) {
-          const pick = (r) => r[0] + Math.floor(this.trams() * (r[1] - r[0] + 1));
-          Object.assign(t, {
-            phase: "dwell",
-            t: 0,
-            dwell: DWELL_S[0] + this.trams() * (DWELL_S[1] - DWELL_S[0]),
-            next: t.next + 1,
-            off: pick(RIDERS_OFF),
-            on: pick(RIDERS_ON),
-            riderAt: DOORS_DELAY_S + 0.5,
-          });
-        }
-      }
-    }
-    if (t.phase === "dwell") {
-      hold(0);
-      t.t += dt;
-      const e = this.map.edges.get(n.path.currentEdge().id);
-      if (!t.doors && t.t >= DOORS_DELAY_S && !t.closing) t.doors = true;
-      // (one rider at a time: those getting off first)
-      if (t.doors && !t.held && t.t >= t.riderAt && (t.off > 0 || t.on > 0)) {
-        if (t.off > 0) {
-          t.off--;
-          crowd.rideOff(n, e, this.trams);
-        } else {
-          t.on--;
-          crowd.rideOn(n, e, this.trams);
-        }
-        t.riderAt = t.t + RIDER_EVERY_S;
-      }
-      const mine = crowd.list.filter((p) => p.streetcar === n.id && !p.gone);
-      // (a rider still in the street, crossing between the curb and the doors, or about to)
-      const inStreet = mine.some((p) => p.path.some((w) => w.cross) && (p.crossing || !p.boarding));
-      if (t.doors && !t.held && t.t >= t.dwell && !inStreet && (!(t.off > 0 || t.on > 0) || t.t >= DWELL_MAX_S)) {
-        // (anyone still waiting at the curb to get on has missed it)
-        for (const p of mine) if (p.boarding && !p.crossing) crowd.missed(p, e);
-        Object.assign(t, { doors: false, off: 0, on: 0, closing: true, t: 0 });
-      }
-      if (t.closing && t.t >= DEPART_S)
-        Object.assign(t, { phase: "drive", closing: false, departures: t.departures + 1 });
-    }
-    n.doors = t.doors;
-    return { stopAt };
-  }
-
-  // A driver not passing a streetcar with its doors open (sim/streetcar.js): where it stops, as metres
-  // from its front, or null. Owed when, seeing the doors open, it can stop there braking at no more
-  // than OWED_DECEL; decided once a stop, and kept until they close.
-  yieldToStreetcar(n, front) {
-    let best = null;
-    for (const car of this.streetcars) {
-      if (car === n || !doorsOpen(car) || Math.abs(car.x - n.x) > 130 || Math.abs(car.y - n.y) > 130) continue;
-      const h = streetcarHold(n.path.pts, n.path.cum, front, car);
-      if (!h) continue;
-      const key = `${car.id}:${car.transit.departures}`;
-      n.streetcarOwed ||= {};
-      if (!(key in n.streetcarOwed)) {
-        for (const k of Object.keys(n.streetcarOwed)) if (k.startsWith(`${car.id}:`)) delete n.streetcarOwed[k];
-        n.streetcarOwed[key] = canStopForStreetcar(n.v, h.stop_m);
-      }
-      if (n.streetcarOwed[key] && (best === null || h.stop_m < best)) best = h.stop_m;
-    }
-    return best;
   }
 
   // How far left of its lane's path (negative) a driver eases to pass a bus standing at its stop just
@@ -3152,9 +2984,11 @@ export class NpcFleet {
     const near = this.map.nearestLane(n.x, n.y, n.psi, 40);
     if (!near) return;
     // Rebase the plan without teleporting the body or instantaneously stopping a moving car. (A bus
-    // back on its run keeps to it.)
-    const k = n.transit && !n.transit.done ? n.transit.edges.indexOf(near.lane.edge, n.transit.k) : -1;
-    if (k >= 0) this.startRun(n, n.transit.edges, k, near.lane.idx, near.s);
+    // back on its run keeps to it, and so does a registered feature's vehicle back on its way.)
+    const k = isBus(n) && n.transit && !n.transit.done ? n.transit.edges.indexOf(near.lane.edge, n.transit.k) : -1;
+    if (TRAFFIC_RECOVER.some((recover) => recover(this.world, this, n, near))) {
+      /* back on its way */
+    } else if (k >= 0) this.startRun(n, n.transit.edges, k, near.lane.idx, near.s);
     else n.path.start(near.lane.edge, near.lane.idx, near.s);
     n.stopMem.reset();
     n.lc = null;

@@ -43,11 +43,10 @@ function fixture() {
     nextPark: 2,
     nextEmergency: -1,
     nextBus: 14,
-    nextStreetcar: 15,
     nextSchool: 16,
     nextPlow: 18,
     busTarget: 0,
-    streetcarTarget: 0,
+    streetcars: { next: 15, target: 0 },
     schoolTarget: 0,
     trains: { next: 17, target: 0 },
     plowTarget: 0,
@@ -170,7 +169,7 @@ const fixtures = [
   [
     "fleet_tram_timer",
     ({ fleet }) => {
-      fleet.nextStreetcar = Infinity;
+      fleet.streetcars.next = Infinity;
     },
   ],
   [
@@ -200,7 +199,7 @@ const fixtures = [
   [
     "fleet_tram_target",
     ({ fleet }) => {
-      fleet.streetcarTarget = 0.5;
+      fleet.streetcars.target = 0.5;
     },
   ],
   [

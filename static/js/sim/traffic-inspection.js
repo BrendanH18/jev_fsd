@@ -71,7 +71,7 @@ const FLEET_CHECKS = [
   [
     "fleet_tram_timer",
     "An invalid streetcar replenishment deadline.",
-    ({ fleet }) => !nonnegative(fleet.nextStreetcar),
+    ({ fleet }) => !nonnegative(fleet.streetcars?.next),
   ],
   [
     "fleet_school_timer",
@@ -81,7 +81,7 @@ const FLEET_CHECKS = [
   ["fleet_train_timer", "An invalid train recovery deadline.", ({ fleet }) => !nonnegative(fleet.trains?.next)],
   ["fleet_plow_timer", "An invalid plow replenishment deadline.", ({ fleet }) => !nonnegative(fleet.nextPlow)],
   ["fleet_bus_target", "An invalid bus population target.", ({ fleet }) => !count(fleet.busTarget)],
-  ["fleet_tram_target", "An invalid streetcar population target.", ({ fleet }) => !count(fleet.streetcarTarget)],
+  ["fleet_tram_target", "An invalid streetcar population target.", ({ fleet }) => !count(fleet.streetcars?.target)],
   ["fleet_school_target", "An invalid school-bus population target.", ({ fleet }) => !count(fleet.schoolTarget)],
   ["fleet_train_target", "An invalid train population target.", ({ fleet }) => !count(fleet.trains?.target)],
   ["fleet_plow_target", "An invalid plow population target.", ({ fleet }) => !count(fleet.plowTarget)],

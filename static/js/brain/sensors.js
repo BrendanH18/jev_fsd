@@ -33,18 +33,6 @@ import {
 import { busYield, canStopFor, isBus } from "../sim/bus.js";
 import { HOLD_M, canStopShort, crosswalksAlong, looked, stoppedAt } from "../sim/crosswalk.js";
 import { canStopFor as canStopForSchool, isSchoolBus, schoolBusHold } from "../sim/school-bus.js";
-import {
-  STOP_M as STREETCAR_STOP_M,
-  IN_LANE_M as STREETCAR_IN_LANE_M,
-  SIDE_M as STREETCAR_SIDE_M,
-  canStopFor as canStopForStreetcar,
-  doorsOpen,
-  holdFromRear,
-  isStreetcar,
-  stoppingAt,
-  streetcarHold,
-  streetcarRelation,
-} from "../sim/streetcar.js";
 import { ZONE_LIMIT_MPS, ZONE_NAMES, inEffect } from "../sim/speed-zones.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
 import { TRY_START_M } from "../sim/parallel-park.js";
@@ -610,7 +598,6 @@ function senseRoute(world, snap, executing, visible, visibleNpcs, seen, FRONT) {
   for (const sense of SENSE.afterPedestrians) sense(world, snap, { frontS });
   snap.crosswalk_stop = crosswalkHold(world, frontS, visibleNpcs);
   snap.school_bus = schoolBusStop(world, route, frontS, visibleNpcs);
-  snap.streetcar = streetcarStop(world, route, frontS, visibleNpcs);
   for (const sense of SENSE.afterCrosswalk) sense(world, snap, { route, frontS, visible, visibleNpcs, vehicles });
   snap.junction_box = junctionBox(world, route, frontS, vehicles, snap.intersection);
   for (const sense of SENSE.beforeWorkZone) sense(world, snap, { p, frontS, lane, road });
@@ -749,7 +736,6 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
     bus: null,
     crosswalk_stop: null,
     school_bus: null,
-    streetcar: null,
     junction_box: null,
     speed_zone: null,
     ...FEATURE_SNAPSHOT_FIELDS,
@@ -1452,51 +1438,6 @@ function schoolBusStop(world, route, frontS, visibleNpcs) {
     if (world.schoolYields.get(key) && (!red || h.stop_m < red.bumper_to_stop_m)) red = out;
   }
   return red || amber;
-}
-
-// A streetcar the car must not pass (sim/streetcar.js, Ontario HTA s. 166): stopped with its doors
-// open, ahead on the car's route going its way, with the car in its lane behind it or in the lane
-// beside it on the side its riders use (`beside`). The car stops with its front 4 m behind its rear
-// doors, short of the law's 2 m, or 4 m behind it in its lane (`stop_s_route`), and stays stopped
-// while they are open. Owed
-// when the car, first seeing them open, could stop there braking at no more than 3.5 m/s^2; decided
-// once a stop and remembered in `world.streetcarYields`. With none, the nearest slowing for its stop
-// (`doors` false, `stopping` true), or null.
-function streetcarStop(world, route, frontS, visibleNpcs) {
-  world.streetcarYields ||= new Map();
-  let open = null,
-    stopping = null;
-  for (const car of visibleNpcs) {
-    if (!isStreetcar(car) || !(doorsOpen(car) || stoppingAt(car))) continue;
-    const h = streetcarHold(route.pts, route.cum, frontS, car),
-      r = streetcarRelation(world.ego, car);
-    if (!h || !r || r.right_m < -STREETCAR_IN_LANE_M || r.right_m > STREETCAR_SIDE_M) continue;
-    // (in its lane or beside it, by where the car is now)
-    const stop = h.gap_m + holdFromRear(r.right_m);
-    // (until its front reaches the doors, or the streetcar in its lane: just past where it stops, it
-    // stays stopped)
-    if (stop + STREETCAR_STOP_M <= 0) continue;
-    const out = {
-      id: car.id,
-      ref: car.ref || null,
-      beside: r.beside,
-      doors: doorsOpen(car),
-      gap_m: h.gap_m,
-      stop_s_route: frontS + stop,
-      bumper_to_stop_m: stop,
-    };
-    if (!out.doors) {
-      if (!stopping || h.gap_m < stopping.gap_m) stopping = { ...out, stopping: true };
-      continue;
-    }
-    const key = `${car.id}:${car.transit.departures}`;
-    if (!world.streetcarYields.has(key)) {
-      if (world.streetcarYields.size > 20) world.streetcarYields.delete(world.streetcarYields.keys().next().value);
-      world.streetcarYields.set(key, canStopForStreetcar(world.ego.v, stop));
-    }
-    if (world.streetcarYields.get(key) && (!open || stop < open.bumper_to_stop_m)) open = out;
-  }
-  return open || stopping;
 }
 
 // The signal the car's route takes it through next, within 60 m, when traffic it can see past the
@@ -2219,20 +2160,6 @@ export function desiredSpeed(snap) {
     }
   }
   for (const cap of TARGET.afterSchoolBus) v = cap(snap, v, reasons, targetCtx);
-  // a streetcar with its doors open: stop behind them; slowing for its stop, slow down, ready to
-  const sc = snap.streetcar;
-  if (sc) {
-    const room = sc.bumper_to_stop_m;
-    const vs = sc.doors
-      ? room < 1.0
-        ? 0
-        : stopSpeedFor(room - 0.5, decel)
-      : Math.max(AMBER_MIN_MPS, stopSpeedFor(room, decel));
-    if (vs < v) {
-      v = vs;
-      reasons.push(sc.doors ? "streetcar stopped, doors open" : "streetcar stopping");
-    }
-  }
   for (const cap of TARGET.streetcars) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.beforeMerge) v = cap(snap, v, reasons, targetCtx);
   for (const cap of TARGET.beforeParking) v = cap(snap, v, reasons, targetCtx);
@@ -2323,7 +2250,6 @@ export function hazardFlags(snap) {
   if (snap.bus) f.push("bus");
   if (snap.crosswalk_stop) f.push("crosswalk");
   if (snap.school_bus) f.push("school bus");
-  if (snap.streetcar) f.push("streetcar");
   for (const flag of HAZARD.afterCrosswalk) {
     const label = flag(snap);
     if (label) f.push(label);

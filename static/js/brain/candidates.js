@@ -489,18 +489,6 @@ export function sampleCandidates(snap, world) {
             : "stop short of the school bus coming the other way",
       });
     }
-    // A streetcar ahead with its doors open: stop behind its rear doors (behind it, in its lane), and
-    // stay stopped while they are open.
-    const tram = snap.streetcar;
-    if (tram?.doors && tram.bumper_to_stop_m > 0.3) {
-      out.push({
-        id: "stop_for_streetcar",
-        laneUntil,
-        law: inLane({ kind: "lane", vTarget: approach, stopAtRoute: stopAt(tram.stop_s_route - FRONT) }),
-        steer: "hold lane",
-        speed: tram.beside ? "stop behind the streetcar's rear doors" : "stop behind the streetcar",
-      });
-    }
     for (const add of CANDIDATES.afterCrosswalk) add(featureCtx, out);
     // A signal it could not clear, for traffic past the junction: wait at the line, even on a green,
     // until there is room for all of the car beyond it.
@@ -766,8 +754,6 @@ export function simulateAll(candidates, snap, world) {
   const cwStop = snap.crosswalk_stop?.stop_s_route ?? null;
   // where the car stops for a school bus with its reds flashing
   const schoolStop = snap.school_bus?.lights === "red" ? snap.school_bus.stop_s_route : null;
-  // where the car stops for a streetcar with its doors open
-  const tramStop = snap.streetcar?.doors ? snap.streetcar.stop_s_route : null;
   // where the car waits at a signal it could not clear
   const boxStop = snap.junction_box?.stop_s_route ?? null;
   // where the front bumper must stop to give way, or to look before going on (see giveWayAt)
@@ -814,7 +800,6 @@ export function simulateAll(candidates, snap, world) {
     let passesBus = false,
       passesCw = false,
       passesSchool = false,
-      passesTram = false,
       passesBox = false,
       passesEv = false,
       pastTurnPoint = false,
@@ -900,8 +885,6 @@ export function simulateAll(candidates, snap, world) {
         if (cwStop !== null && s + FRONT > cwStop + 1.5) passesCw = true;
         // (and here: 1.5 m past where it stops is still well short of the bus)
         if (schoolStop !== null && s + FRONT > schoolStop + 1.5) passesSchool = true;
-        // (and here: 1.5 m past where it stops is still short of the doors)
-        if (tramStop !== null && s + FRONT > tramStop + 1.5) passesTram = true;
         // (and here: 1.5 m past the line is still short of the street across)
         if (boxStop !== null && s + FRONT > boxStop + 1.5) passesBox = true;
         if (give && s + FRONT > give.hold_s_route + 0.2) pastHold = true;
@@ -1052,7 +1035,6 @@ export function simulateAll(candidates, snap, world) {
     else if (passesBus && c.law.kind !== "hard_brake") reject = "fails_to_yield_to_bus";
     else if (passesCw && c.law.kind !== "hard_brake") reject = "passes_car_stopped_at_crosswalk";
     else if (passesSchool && c.law.kind !== "hard_brake") reject = "passes_stopped_school_bus";
-    else if (passesTram && c.law.kind !== "hard_brake") reject = "passes_streetcar_doors";
     else if ((reject = rejectBy(sims.afterCrosswalk, c)));
     else if (passesBox && c.law.kind !== "hard_brake") reject = "blocks_junction";
     else if ((reject = rejectBy(sims.beforeMerge, c)));

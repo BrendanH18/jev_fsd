@@ -10,7 +10,8 @@
 //   flag      optional URL parameter including when it differs from the lowercase option key
 //   property  the World property when it differs from `key`
 //   defaultCount  the free-drive default for a feature whose option is a count
-//   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations
+//   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations;
+//             a fleet record at "early" also builds its fleet state first, right after the cyclists
 //   snapshot  default sensing fields kept in the snapshot even when the feature is inactive
 //   seen      the World flag that gates the metric after the feature has met the driven car
 //             (required unless metric.reportWhenEnabled uses a boolean World option)
@@ -29,7 +30,10 @@
 //             `oncoming(o, vehicle)` identifies an opposing rider instead of a leader or cyclist to pass.
 //             `long` uses the long-vehicle leader check. `parkedClearance(o)` eases by cars at the kerb.
 //             `noParking(o)` skips the fleet's parking scheduler. `fixedCruise` keeps the actor's
-//             own free speed in all weathers. `noCyclistPass` keeps it behind cyclists.
+//             own free speed in all weathers. `noCyclistPass` keeps it behind cyclists. `heavy`
+//             (buses, school buses, streetcars) keeps under the limit and stops for any body in its way
+//             just ahead. `onTrack` never pulls over for an emergency vehicle. `pathPolicy(o)` is the
+//             transit kind the traffic path policy takes it as, or false for none.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
@@ -158,6 +162,9 @@
 //   trafficParkingPlan(n, standstillGap) { shift, stop, signal } for a car preparing to park ("end")
 //   trafficStart(world, n)              each vehicle step, first ("end") or before scanning signals ("beforeControl")
 //   trafficReplan(world, n)             before its path is extended; true when re-planned ("end")
+//   trafficLaneChange(world, fleet, n, edge, front) true when the feature handles the vehicle's lane
+//                                       changes itself this step ("end")
+//   trafficRecover(world, fleet, n, near) true when the feature put the vehicle back on its path ("end")
 //   trafficSpawnBlocked(world, x, y)   true when a traffic spawn is too close to an obstruction ("end")
 //   trafficBypass(world, n, front, all, defaultDriver) first bypass or wait for an obstruction: { shift,
 //                                       lineAt(s), ignore, waitGap, limit } at the pursuit point ("end")
@@ -221,6 +228,7 @@ import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
+import streetcars from "./streetcars.js";
 import trains from "./trains.js";
 
 export const FEATURES = [
@@ -246,6 +254,7 @@ export const FEATURES = [
   // Transit and rail traffic, built by the fleet in this order before the garbage trucks and plows, as it
   // always placed them; their sensing, candidates, wording and audits keep their places through the
   // "buses", "afterCrosswalk" and "streetcars" slots.
+  streetcars,
   trains,
   collection, // A stopped truck also matches the double-parked obstacle.
   doubleParked,
@@ -539,7 +548,9 @@ export const SLOTS = {
     "junctions",
   ],
   evQueueHold: ["end"],
-  trafficManage: ["schoolBuses", "beforePlows", "dispatch", "afterPlows", "end"],
+  trafficManage: ["buses", "schoolBuses", "beforePlows", "dispatch", "afterPlows", "end"],
+  trafficLaneChange: ["end"],
+  trafficRecover: ["end"],
   trafficFollowingLeader: ["end"],
   trafficLeadPolicy: ["end"],
   trafficPassingLaneBlocked: ["end"],
@@ -846,6 +857,19 @@ export function featureDecisionFields(snap) {
 // Every World option a registered feature takes.
 export const FEATURE_OPTIONS = Object.freeze(FEATURES.filter((f) => !f.buildFleet).map((f) => f.key));
 export const FLEET_FEATURES = Object.freeze(FEATURES.filter((f) => f.buildFleet));
+
+// Build the fleet state of the fleet records at `position` ("early", or undefined for the rest), each
+// stored under its option key.
+export function buildFleetFeatures(fleet, options, seed, makePath, position) {
+  for (const f of FLEET_FEATURES) {
+    if ((f.buildAt === "early") !== (position === "early")) continue;
+    fleet[f.key] = f.buildFleet(fleet, {
+      enabled: options[f.key] ?? (f.defaultCount === undefined ? false : 0),
+      seed,
+      makePath,
+    });
+  }
+}
 const FEATURES_BY_POSITION = new Map(
   [undefined, "early", "afterSpawn"].map((position) => [position, FEATURES.filter((f) => f.buildAt === position)]),
 );

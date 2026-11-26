@@ -1563,7 +1563,7 @@ export async function boot() {
     }
     announcedSchool = schoolKey;
     // a streetcar ahead with its doors open, that the car must stop behind: say so once
-    const tram = fleet.streetcars?.find((c) => {
+    const tram = fleet.streetcars?.list.find((c) => {
       const r = doorsOpen(c) && streetcarRelation(world.ego, c);
       return (
         r &&

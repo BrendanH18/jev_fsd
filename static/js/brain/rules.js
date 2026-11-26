@@ -187,7 +187,6 @@ export class RulesBrain {
         c.id === "yield_to_bus" ||
         c.id === "stop_at_crosswalk" ||
         c.id === "stop_for_school_bus" ||
-        c.id === "stop_for_streetcar" ||
         c.id === "wait_short_of_junction" ||
         RULES_WAIT.some((wait) => wait(c))
       )

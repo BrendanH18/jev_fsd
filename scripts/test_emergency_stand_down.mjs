@@ -76,14 +76,19 @@ for (const weather of ["dry", "rain", "snow"]) {
   const far = Object.assign(new Vehicle(900, 900, 0, 0), { transit: { phase: "drive" } });
   fleet.buses = [far];
   fleet.schoolBuses = [far];
-  fleet.streetcars = [far];
   fleet.manageBuses = fleet.manageSchoolBuses = () => {};
   const called = [];
-  for (const method of ["yieldToBus", "yieldToSchoolBus", "yieldToStreetcar"])
+  for (const method of ["yieldToBus", "yieldToSchoolBus"])
     fleet[method] = () => {
       called.push(method);
       return 30;
     };
+  fleet.streetcars.list = [far];
+  fleet.streetcars.manage = () => {};
+  fleet.streetcars.yieldTo = () => {
+    called.push("yieldToStreetcar");
+    return 30;
+  };
   fleet.step(1 / 60);
   assert.equal(called.includes("yieldToBus"), true);
   assert.equal(called.includes("yieldToSchoolBus"), true);

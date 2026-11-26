@@ -55,8 +55,17 @@ const METRIC_FIELDS = [
   "reportWhenEnabled",
 ];
 const NOTICE_FIELDS = ["at", "read", "order", "duration", "style", "hold"];
-const OBSTACLE_FLAGS = ["traffic", "fixed", "likePedestrian", "long", "fixedCruise", "noCyclistPass"];
-const OBSTACLE_CALLBACKS = ["predict", "visible", "oncoming", "parkedClearance", "noParking"];
+const OBSTACLE_FLAGS = [
+  "traffic",
+  "fixed",
+  "likePedestrian",
+  "long",
+  "fixedCruise",
+  "noCyclistPass",
+  "heavy",
+  "onTrack",
+];
+const OBSTACLE_CALLBACKS = ["predict", "visible", "oncoming", "parkedClearance", "noParking", "pathPolicy"];
 const COACH_ENTRY_FIELDS = {
   reports: ["read"],
   guidance: ["read"],

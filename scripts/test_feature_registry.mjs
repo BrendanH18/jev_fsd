@@ -66,6 +66,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "puddles",
       "parkers",
       "roadClosures",
+      "streetcars",
       "trains",
       "collection",
       "vans",
@@ -95,7 +96,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
   );
   assert.deepEqual(
     R.FLEET_FEATURES.map((f) => f.key),
-    ["trains", "collection", "plows"],
+    ["streetcars", "trains", "collection", "plows"],
   );
 });
 
@@ -195,6 +196,7 @@ test("the core runs every slot, and names no registered feature", () => {
       'amber.js"',
       'bus-lanes.js"',
       'rail.js"',
+      'streetcar.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -339,6 +341,16 @@ test("the core runs every slot, and names no registered feature", () => {
       "isTrain",
       "this.trains",
       "railOwed",
+      "snap.streetcar",
+      '"stop_for_streetcar"',
+      "passes_streetcar_doors",
+      "streetcarCalls",
+      "streetcarYields",
+      "isStreetcar",
+      "this.streetcars",
+      "streetcarOwed",
+      "transit?.tram",
+      "transit.tram",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -471,6 +483,7 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.equal(onFleet.collection.target, 1);
   assert.equal(offFleet.collection.trucks.length, 0);
   assert.equal(offFleet.trains.target, 0);
+  assert.equal(offFleet.streetcars.target, 0);
   assert.equal(off.onTracks, null);
   assert.ok(off.crewPassed instanceof Set);
   // (off, nothing is placed and no random stream is made)
