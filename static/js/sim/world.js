@@ -96,6 +96,7 @@ const ARROW_EXIT_AUDIT = hooks("arrowExitAudit");
 const RED_TURN_MEMORY = hooks("redTurnMemory");
 const RED_TURN_EXIT = hooks("redTurnExit");
 const RESET_CONTACT = hooks("resetContact");
+const PRIORITY_JUNCTION = hooks("priorityJunction");
 
 const AUDIT_ROUTE_CORRIDOR_M = 4;
 const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -781,9 +782,8 @@ export class World {
           };
         }
         // giving way: at a two-way stop, or where its street has no sign and is not the major road
-        const junction = control.night_flash
-          ? this.map.intersections.get(control.junction)
-          : this.map.nodes.get(edge.to);
+        // (a stop standing in for a grouped junction gives way at that junction)
+        const junction = firstHookResult(PRIORITY_JUNCTION, this, control) || this.map.nodes.get(edge.to);
         this.giveWay =
           junction &&
           ((control.type === "stop" && !control.all_way) ||

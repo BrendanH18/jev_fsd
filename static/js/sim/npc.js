@@ -1552,7 +1552,8 @@ export class NpcFleet {
             this.boxBusy(n, e) ||
             (ctl.all_way
               ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id)
-              : ctl.night_flash
+              : // (a stop standing in for a grouped junction gives way there, as at an uncontrolled minor approach)
+                firstHookResult(PRIORITY_JUNCTION, world, ctl)
                 ? this.givesWay(n, e.id, e.sEnd - front)
                 : this.crossComing(n, e.to))
           )
@@ -3134,7 +3135,8 @@ export class NpcFleet {
     const edge = this.map.edges.get(edgeId);
     if (!edge) return false;
     const ctl = controlAt(this.world, edge.control, edgeId);
-    const node = ctl?.night_flash ? this.map.intersections.get(ctl.junction) : this.map.nodes.get(edge.to);
+    // (a stop standing in for a grouped junction gives way at that junction)
+    const node = (ctl && firstHookResult(PRIORITY_JUNCTION, this.world, ctl)) || this.map.nodes.get(edge.to);
     if (!node) return false;
     const mine = toNode / Math.max(1, n.v);
     for (const o of [this.world.ego, ...this.vehicles]) {

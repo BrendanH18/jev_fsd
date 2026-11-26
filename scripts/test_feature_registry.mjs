@@ -327,6 +327,7 @@ test("the core runs every slot, and names no registered feature", () => {
       "world.redTurnSigns",
       "this.redTurnSigns",
       "no_turn_on_red",
+      "night_flash",
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
