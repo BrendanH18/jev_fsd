@@ -65,7 +65,12 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "snowbanks",
       "puddles",
       "parkers",
+      "emergency",
       "roadClosures",
+      "buses",
+      "schoolBuses",
+      "streetcars",
+      "trains",
       "collection",
       "vans",
       "roadside",
@@ -81,6 +86,8 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "leftOnRed",
       "amberLights",
       "busLanes",
+      "park",
+      "hazards",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -90,11 +97,11 @@ test("every record is whole, its option and flags its own, and every hook at a s
   }
   assert.deepEqual(
     R.FEATURE_OPTIONS,
-    R.FEATURES.filter((f) => !f.buildFleet).map((f) => f.key),
+    R.FEATURES.filter((f) => !f.buildFleet || f.worldOption).map((f) => f.key),
   );
   assert.deepEqual(
     R.FLEET_FEATURES.map((f) => f.key),
-    ["collection", "plows"],
+    ["emergency", "buses", "schoolBuses", "streetcars", "trains", "collection", "plows"],
   );
 });
 
@@ -130,8 +137,15 @@ test("the core runs every slot, and names no registered feature", () => {
     checkpointRestore: source("lab/recorder.js"),
     decisionFields: source("sim/features/index.js"),
     passBlockReason: source("sim/features/cyclist-pass.js"),
+    busSpawnLane: source("sim/features/buses.js"),
     routeOptions: source("sim/features/index.js"),
     requestReroute: source("brain/brain.js"),
+    evKerb: source("sim/emergency-audit.js"),
+    evQueueHold: source("sim/emergency-audit.js"),
+    evStop: source("sim/emergency-yield.js"),
+    pullOverDetour: source("sim/features/emergency.js"),
+    emergencyHold: source("sim/emergency-traffic.js"),
+    parkingObstructed: source("sim/parallel-park.js"),
   };
   for (const [name, slots] of Object.entries(R.SLOTS)) {
     if (["metric", "prompt", "notice"].includes(name)) continue;
@@ -193,6 +207,15 @@ test("the core runs every slot, and names no registered feature", () => {
       'left-on-red.js"',
       'amber.js"',
       'bus-lanes.js"',
+      'rail.js"',
+      'streetcar.js"',
+      'school-bus.js"',
+      '/bus.js"',
+      'transit-runs.js"',
+      'hidden-hazards.js"',
+      'hidden-traffic.js"',
+      'blind-spot.js"',
+      'parallel-park.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -327,6 +350,103 @@ test("the core runs every slot, and names no registered feature", () => {
       "world.redTurnSigns",
       "this.redTurnSigns",
       "no_turn_on_red",
+      'emergency.js"',
+      'emergency-traffic.js"',
+      'emergency-audit.js"',
+      'emergency-yield.js"',
+      "isEmergency",
+      "snap.emergency",
+      "snap?.emergency",
+      "emergency_vehicle",
+      '"pull_over"',
+      "fails_to_yield_to_emergency",
+      "evCalls",
+      "evCounted",
+      "evJunction",
+      "evYield",
+      "yieldEv",
+      "evShift",
+      "evRejoin",
+      ".evs",
+      "siren",
+      "EV_BOX_M",
+      "AUDIT_EV_",
+      "FOLLOW_M",
+      "heldInQueue",
+      "queueHold",
+      "evQueueHold",
+      "evKerb",
+      "evStop",
+      "pullOverDetour",
+      "dispatchEmergency",
+      "emergencyStep",
+      "auditEmergency",
+      "snap.level_crossing",
+      '"stop_before_tracks"',
+      "crosses_in_front_of_train",
+      "no_room_past_tracks",
+      "trainCalls",
+      "trainYields",
+      "onTracks",
+      "isTrain",
+      "this.trains",
+      "railOwed",
+      "snap.streetcar",
+      '"stop_for_streetcar"',
+      "passes_streetcar_doors",
+      "streetcarCalls",
+      "streetcarYields",
+      "isStreetcar",
+      "this.streetcars",
+      "streetcarOwed",
+      "transit?.tram",
+      "transit.tram",
+      "snap.school_bus",
+      '"stop_for_school_bus"',
+      "passes_stopped_school_bus",
+      "schoolCalls",
+      "schoolYields",
+      "isSchoolBus",
+      "this.schoolBuses",
+      "schoolOwed",
+      "n.school",
+      "redsOn",
+      "snap.bus",
+      '"yield_to_bus"',
+      "fails_to_yield_to_bus",
+      "busCalls",
+      "busYields",
+      "isBus",
+      "this.buses",
+      "busYield",
+      "n.transit",
+      "busZones",
+      "night_flash",
+      "world.hazards",
+      "this.hazards",
+      "world.stepOuts",
+      "this.stepOuts",
+      "snap.blind_spot",
+      "blindSpot(",
+      "blindApproach(",
+      "hiddenVehicle(",
+      "standingNear(",
+      "STEP_OUT_",
+      "world.park.",
+      "world.park?",
+      "world.parking",
+      "parkHold",
+      "parkedIn",
+      "parkAtGoal",
+      "parkTried",
+      "parkWait",
+      "kerbContact",
+      "snap.parking",
+      '"park"',
+      '"wait_to_park"',
+      '"pull_out"',
+      '"passes_parking_space"',
+      '"not parked"',
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -430,7 +550,12 @@ test("the World builds each feature from its option, with its seen flag and its 
     leftOnRed: true,
     amberLights: true,
     busLanes: true,
+    hazards: true,
+    stepOuts: 1,
+    park: true,
   });
+  assert.equal(on.stepOuts.count, 1, "hidden hazards read the step-outs option beside their own");
+  assert.equal(off.stepOuts.count, 0);
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;
     if (!f.buildFleet) {
@@ -458,6 +583,12 @@ test("the World builds each feature from its option, with its seen flag and its 
   assert.equal(offFleet.collection.target, 0);
   assert.equal(onFleet.collection.target, 1);
   assert.equal(offFleet.collection.trucks.length, 0);
+  assert.equal(offFleet.trains.target, 0);
+  assert.equal(offFleet.streetcars.target, 0);
+  assert.equal(offFleet.schoolBuses.target, 0);
+  assert.equal(offFleet.buses.target, 0);
+  assert.equal(off.buses, false);
+  assert.equal(off.onTracks, null);
   assert.ok(off.crewPassed instanceof Set);
   // (off, nothing is placed and no random stream is made)
   assert.equal(off.contraflow.random, null);
@@ -701,7 +832,17 @@ test("feature records reject malformed configuration with the field that needs f
     [{ coach: { deductions: [{ ...postDeduction, category: "speed" }] } }, /coach.deductions needs a score category/],
     [{ coach: { typo() {} } }, /unknown coach field/],
   ];
+  const at = (slot) => ({ at: slot, run() {} });
+  bad.push(
+    [{ state: [at("afterRearTraffic")] }, /fewer than two slots/],
+    [{ state: [at("afterRearTraffic"), at("afterRearTraffic")] }, /twice/],
+    [{ state: [{ run() {} }, at("afterRearTraffic")] }, /without its slot/],
+    [{ state: [at("afterRearTraffic"), at("nowhere")] }, /never runs/],
+    [{ prompt: [at("afterRightHook"), at("restrictions")] }, /must be an object/],
+  );
   for (const [fields, error] of bad) assert.match(R.recordProblem({ ...valid, ...fields }), error);
+  // (one hook at two slots of a pipeline)
+  assert.equal(R.recordProblem({ ...valid, state: [at("afterRearTraffic"), at("beforeTurnaround")] }), null);
   assert.match(R.recordProblem(null), /must be an object/);
   assert.equal(R.recordProblem({ ...valid, notice, coach: { reports: [coachReport], tips: [coachTip] } }), null);
   assert.equal(R.recordProblem({ ...valid, coach: { deductions: [{ ...postDeduction, category: "control" }] } }), null);
@@ -828,7 +969,9 @@ test("the registry comparison requires both complete captures and flags non-timi
 
 test("every record loads in a fresh process, through the registry as the core loads it", () => {
   const dir = new URL("../static/js/sim/features/", import.meta.url);
-  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "index.js")) {
+  for (const file of fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".js") && f !== "index.js" && f !== "hook-lists.js")) {
     // (fixed code; the two modules come in as arguments)
     const code =
       'globalThis.document = { querySelector: () => null }; await import(process.argv[1]); const r = await import(process.argv[2]); if (!r.default?.key) throw new Error("no record");';
@@ -851,9 +994,13 @@ test("standalone feature simulations can load before the registry", () => {
   for (const [module, className] of [
     ["double-parked", "DoubleParked"],
     ["collection-truck", "CollectionTrucks"],
+    ["emergency-traffic", "EmergencyTraffic"],
     ["outage", "Outages"],
     ["work-zone", "WorkZones"],
     ["signals", "setScrambles"],
+    ["bus", "isBus"],
+    ["transit-runs", "TransitRuns"],
+    ["parallel-park", "stepParking"],
   ]) {
     const entry = new URL(`../static/js/sim/${module}.js`, import.meta.url);
     const code = `globalThis.document = { querySelector: () => null };

@@ -10,13 +10,17 @@
 //   flag      optional URL parameter including when it differs from the lowercase option key
 //   property  the World property when it differs from `key`
 //   defaultCount  the free-drive default for a feature whose option is a count
-//   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations
+//   freeDrive(on, { hour })  the free-drive option, when it depends on more than its query flag
+//   buildAt   optional earlier construction: "early" before the crowd, or "afterSpawn" before other bay reservations;
+//             a fleet record at "early" also builds its fleet state first, right after the cyclists
 //   snapshot  default sensing fields kept in the snapshot even when the feature is inactive
 //   seen      the World flag that gates the metric after the feature has met the driven car
 //             (required unless metric.reportWhenEnabled uses a boolean World option)
 //   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
-//   build(world, { enabled, seed, map })   the feature's World state
+//   build(world, { enabled, seed, map, options })   the feature's World state (`options`: every World option,
+//             for one the feature reads beside its own)
 //   buildFleet(fleet, { enabled, seed, makePath })   fleet state, stored under the option key
+//   worldOption  true: a fleet feature whose option the World takes too (free drives set both)
 //   metric    { at, name, failure, label, category?, decimals?, threshold?, traceType? }: the violation,
 //             failure text, trace label and examiner category. `eventType` supplies a world event's replay marker.
 //             `initial` supplies an existing counter at World creation. A duration can round to `decimals` and
@@ -29,24 +33,39 @@
 //             `oncoming(o, vehicle)` identifies an opposing rider instead of a leader or cyclist to pass.
 //             `long` uses the long-vehicle leader check. `parkedClearance(o)` eases by cars at the kerb.
 //             `noParking(o)` skips the fleet's parking scheduler. `fixedCruise` keeps the actor's
-//             own free speed in all weathers. `noCyclistPass` keeps it behind cyclists.
+//             own free speed in all weathers. `noCyclistPass` keeps it behind cyclists. `heavy`
+//             (buses, school buses, streetcars) keeps under the limit and stops for any body in its way
+//             just ahead. `onTrack` never pulls over for an emergency vehicle. `pathPolicy(o)` is the
+//             transit kind the traffic path policy takes it as, or false for none. `noseFirst`, with
+//             `heavy`, leaves what is beside it short of its front to give way to it. `ownLane` keeps
+//             it from easing past what stands at the kerb. `laneShift(o)` is how far right of its lane it
+//             has moved over (toward the kerb, say), and `standing(o)` whether drivers ease past it.
 //   priority  candidate ids kept ahead of lateral alternatives when the list is cut
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
 //   parkingTraffic(n)  whether this traffic is entering a parking bay
+//   freeDriveExtra(enabled)  more free-drive World or fleet options the feature sets with its own (sim/free-drive.js)
+//   verdict   { failure, category, examinerRemark, fails(m) }: a failure reason for a drive as a whole when
+//             `fails` holds for its metrics, after the metrics' own (bench/metrics.js, lab/examiner.js)
+//   examinerMinors  { [incident type]: { category, remark, when?(report) } }: minor errors the examiner marks
+//             from the incident stream (lab/examiner.js), counted only when `when` is not false
 //   day       true: while it is on, the World's clock keeps the `day` of the year (World.setClock)
 //   utcOffset true: while it is on, the World's clock keeps `utc_offset`
 //   and the hooks below.
 //
 //   rulesStop(snap, eligible)          true when Rules should stop ("beforeSignal" or "end")
 //   rulesCost(candidate, snap)        a signed change to Rules' cost for the candidate ("end")
+//   rulesWait(candidate)               true when Rules counts the candidate as a required wait ("end")
+//   rulesLaneGoal(candidate, snap)    metres off its lane's centre the candidate is meant to end, or null ("end")
 //   cautious(snap, eligible, target)   a candidate the cautious agent should choose, or null
-//                                       ("beforeBusLanes", "end", "beforeAmber", "afterAmber")
+//                                       ("first", "beforeBusLanes", "end", "beforeAmber", "afterAmber")
 //   cautiousStop(snap)                true when the cautious agent sets a target of zero ("end")
-//   cautiousDrive(candidate, snap)    true when the candidate's own law brings it to a stop ("end")
+//   cautiousDrive(candidate, snap)    true when the candidate's own law brings it to a stop ("end"), or
+//                                       counts as a planned stop like a pull-over ("plannedStop")
 //   legitimateStop(snap, clearing)    true when waiting here is legitimate and should not count as deadlock ("end")
 //
-// A hook is a function, or { at, run } to run it at a slot. The core runs each hook where the feature's
+// A hook is a function, or { at, run } to run it at a slot, or a list of those for a feature that acts at
+// two places in one pipeline (emergency vehicles' state and wording). The core runs each hook where the feature's
 // own code used to be, so every result stays exactly as it was. While other features are still written
 // into the core, a slot names the one (or the core step) the hook runs right after in that pipeline;
 // hooks without `at` run at the slot "end". Once every feature is a record (ROADMAP 3.2), registration
@@ -56,54 +75,69 @@
 // metrics before the red-light runner's corresponding code. SLOTS lists every supported position.
 //   obstacles(world, x, y, r)          World.obstaclesNear, after the others ("end")
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
-//                                       traffic moves ("end"), with "afterOutages" between them
+//                                       traffic moves ("end"), with "afterOutages" and "stepOuts" between them
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, after traffic and before the people on foot move ("end")
-//   audit(world, frontOnPath?)           World.audit: "beforeCollisions" (with dt), "afterFlagger", "afterCalming", "driveways",
-//                                       "streetHazards", "rearTraffic", "late"
+//   audit(world, frontOnPath?)           World.audit: "afterCyclists" (with the road), "beforeCollisions" (with dt),
+//                                       "afterFlagger", "afterCalming", "driveways",
+//                                       "streetHazards", "rearTraffic", "late", "destination" (last of all)
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
+//   standingHides(world, observer, ped) vehicles standing at the kerb that may hide pedestrian `ped`, beside
+//                                       moving traffic (World.sees), or null ("end")
+//   vehicleHides(world, observer, o, reach) true: another vehicle's body hides road user `o` (World.sees) ("end")
+//   hiddenByVehicle(world, observer, o) true: `o` is in sight but for another vehicle's body (World.hiddenByVehicle)
+//   trafficSight(world)                 { laneSight(world, observer, lane, from, far) } when road vehicles hide
+//                                       traffic along the lanes the car gives way to, or null ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
 //   evKerb(world, road, front)          the emergency audit's furthest right the car can be asked to pull
-//                                       over, metres right of its lane's centre, or Infinity ("end")
-//   sense(world, snap, ctx)             the sensing pass: "parking", "driveways", "streetHazards", "late", "junctions",
+//                                       over, metres right of its lane's centre, or Infinity ("end";
+//                                       run by sim/emergency-audit.js)
+//   sense(world, snap, ctx)             the sensing pass: "afterRightHook" (with the lane, `visible` and what is
+//                                       executing), "parking", "driveways", "streetHazards", "late", "junctions",
 //                                       or "following" once the vehicles ahead and behind are known
 //   laneOffer(snap, side, ctx)          a lane-change offer for a side without one, before bus-lane checks ("end")
 //   finishLanes(snap)                   read the final lane-change offers and update sensing ("end")
 //   limit(snap)                         the speed ceiling `snap.limit`: "passing", "driveways", "streetHazards", "parking" (once
 //                                       the turnaround and the parking are known)
 //   target(snap, v, reasons, ctx)       `desiredSpeed`, returns the new speed at that point in the planner
-//   hazard(snap)                        a hazard flag, a list of them, or null: "parking", "driveways", "streetHazards",
+//                                       ("afterBus": after the bus pulling out, among others)
+//   hazard(snap)                        a hazard flag, a list of them, or null: "afterRightHook", "parking", "driveways", "streetHazards",
 //                                       "rearTraffic", "late"
 //   followingExclusion(snap)           id of a vehicle treated as a stop instead of a follow target ("end")
 //   detour(snap)                        a move round an obstruction ("parking") or inside the lane
 //                                       in registration order ("end"), or null
 //   evStop(world, route, frontS, v, stop, decel)  where the car stops for an emergency vehicle, kept short
-//                                       of where the feature has it keep out ("end")
+//                                       of where the feature has it keep out ("end"; run by sim/emergency-yield.js)
 //   blocksView(world, from, to)         true: it blocks the car's view along a street from a junction ("end")
 //   turnPace(world, frontS, distance)   { mps, accel } the car crosses a junction at, over what the feature
 //                                       makes slippery, or null ("end")
-//   candidates(ctx, out)                lane candidates: "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"
+//   candidates(ctx, out)                lane candidates: "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic",
+//                                       "afterRightHook", "parking"
 //   laneChangeCandidate(ctx, out)       handle a lane-change offer and return true to consume it ("end")
 //   lineStop(snap)                      extra law fields for the candidate that stops at the line ("end")
-//   adjust(ctx, list)                   every lane candidate once the list is cut: "streetHazards", "end"
+//   adjust(ctx, list)                   every lane candidate once the list is cut: "first", "streetHazards", "end"
 //   pullOverDetour(snap, detour, stopS) true: pulling over for an emergency vehicle to stop at `stopS`
-//                                       drops the lane's `detour` ("end")
+//                                       drops the lane's `detour` ("end"; run by the emergency record)
 //   brakeDetour(ctx)                    the move `hard_brake` keeps to, or null ("end")
 //   sim(world, snap, predictions)       the forward sims: null, or a checker { wheels, start(), afterLaw(car,
 //                                       wheelsBefore, t), along(s, front, car), near(car, box, obstacle,
 //                                       predictedBox, ahead, side, meeting), reject(c), settle(candidates) }
 //                                       whose rejection comes at its slot: "first", "beforeRunner", "driveways",
-//                                       "streetHazards", "beforeEmergency", "parking" or "end";
+//                                       "streetHazards", "beforeEmergency", "afterParkers", "parking" or "end";
 //                                       `settle` runs after `candidateSettle` and may let a rejection stand down
-//   predictionIgnore(snap, obstacle)   true to skip an obstacle in the forward simulations ("end")
+//   predictionIgnore(snap, obstacle, world) true to skip an obstacle in the forward simulations ("end")
+//   predictionStill(world, obstacle)   true: the forward simulations have the obstacle stay where it is ("end")
 //   candidateSettle(snap, candidates)  apply checks that compare candidates after all are judged ("end")
-//   state(snap, state)                  the decision state: "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic", "parking"
+//   state(snap, state)                  the decision state: "restrictions", "driveways", "streetHazards", "junctions", "rearTraffic",
+//                                       "afterRearTraffic", "beforeTurnaround", "parking"
 //   greenSignalClause(snap, metres)     wording replacing the normal green-light instruction, or null ("end")
 //   outcome(c, snap)                    a candidate's outcome label by its id, or null: "ids"
 //   slowOutcome(c, snap)                the outcome of a lane candidate slowed for it, or null: "lane", "end"
 //   clause(snap)                        the situation's wording (a sentence or a list), or null: "restrictions",
-//                                       "driveways", "streetHazards", "ice" (after black ice's), "rearTraffic", "parking"
-//   holdStill(snap)                     when holding still is right, or "": "driveways", "late", "parking"
-//   prompt                              { at, text }: a section of the LLM system prompt: "restrictions",
+//                                       "driveways", "streetHazards", "ice" (after black ice's), "rearTraffic",
+//                                       "afterRearTraffic", "beforeFollowing", "parking"
+//   holdStill(snap)                     when holding still is right, or "": "driveways", "late", "afterLate", "parking",
+//                                       "destination"
+//   prompt                              { at, text }: a section of the LLM system prompt: "afterRightHook", "restrictions",
 //                                       "streetHazards", "driveways", "snowbanks", "junctions", "rearTraffic", "parking", "afterParking"
 //   phaseBansRedTurns(intersection)    true when the current signal plan forbids all turns on red
 //   redLightEvent(event, intersection) attach phase-specific fields to a red-light event
@@ -124,12 +158,28 @@
 //   trafficControl(world, vehicle, edgeId) direction overriding traffic's signal, with per-car state ("end")
 //   trafficSignalProceed(world, fleet, n, edge, control, signal, distance, canStop) truthy to skip an ordinary signal stop ("end")
 //   trafficSignalHold(world, n, edge, control, distance, traffic) truthy to hold ordinary traffic at a green ("end")
-//   evQueueHold(world, front)         { distance, vehicle } of a stopped queue the ego approaches ("end")
-//   trafficManage(world, fleet, dt)     update fleet-wide state before and after plow dispatch ("beforePlows", "afterPlows") or before the vehicle loop ("end")
+//   evQueueHold(world, front)         { distance, vehicle } of a stopped queue the ego approaches ("end"; run by
+//                                       sim/emergency-audit.js)
+//   vehicleLabel(vehicle)             what a vehicle is called that is not an ordinary car, or null ("end")
+//   trafficManage(world, fleet, dt)     update fleet-wide state before the transit ("beforeTransit"), before and after plow
+//                                       dispatch ("beforePlows", "afterPlows") or before the vehicle loop ("end")
 //   trafficDriver(world, n)             first override of a traffic driver's offset, speedFactor,
 //                                       skipFollowing, leadSpeed(leader, speed) or brake(leader, gap, accel) ("end")
-//   trafficManeuver(world, fleet, n, dt) true when a feature drives the whole vehicle step ("beforeSpecial" or "end")
-//   trafficStop(world, fleet, n, front, dt)  plan a stop and return the following controller's gap, or null ("end")
+//   trafficManeuver(world, fleet, n, dt, all, extra) true when a feature drives the whole vehicle step ("beforeSpecial"
+//                                       or "end"); `all` is the car and the fleet, `extra` the road users outside it
+//   trafficGiveWay(world, fleet, n, proj, dt) the first call on a driver to give way: null, or { yielding }, the
+//                                       call it pulls over and stops for (null while it drives on) ("end")
+//   trafficPullOver(world, fleet, n, edge, front, dt, giveWay) metres right of its line a driver has moved over
+//                                       to give way, added to its offset ("end")
+//   trafficRejoin(world, fleet, n, offset, dt) the first { offset, own } line a driver keeps to on its way back
+//                                       into its lane, `own` while still its own line, or null ("end")
+//   trafficStopAt(world, fleet, n, front, giveWay) where a driver giving way stops, metres from its front, or null ("end")
+//   trafficHangBack(world, fleet, n, path, front) { gap, v } of a virtual leader a driver hangs back from ("end")
+//   trafficStop(world, fleet, n, front, dt, proj)  plan a stop and return the following controller's gap, or
+//                                       null ("end", handed the vehicle's projection on its path)
+//   trafficHold(world, fleet, n, front, all)  where a driver stops for the feature, metres from its front, or
+//                                       null ("buses", before the planned stops, or "end", after them)
+//   emergencyHold(world, fleet, n, front, all)  the same for an emergency vehicle under its siren ("end")
 //   trafficCorridor(world, n, path, front) first corridor { shift, lineAt(s), ignore, limit, stop() }, or null
 //   trafficLaneControl(world, n, path, front) a separate lane restriction with the corridor fields above
 //                                       and a deferred stop returning { gap, v } or null
@@ -137,7 +187,8 @@
 //   activeManeuver(snap, passing)       { keep(candidate), brake } or null, for a passing law under way
 //   activeOutcome(candidate, snap)    how a passing candidate finishes, checked after the road edge
 //   passClearance(world, snap)          { metres, rejection } for bicycle clearance, or null for the default
-//   driveCriterion(snap)               wording appended to the motion question's drive criterion
+//   driveCriterion(snap)               wording appended to the motion question's drive criterion ("end"),
+//                                       or after the turnaround's ("destination")
 //   followingOmitted(snap, vehicle)     true if this vehicle is left out of ordinary leader sensing
 //   laneGapBlocked(snap, side)          true if the destination lane's rear gap is too short
 //   laneTargetFields(sideSnap, offset) adjust constraints for the destination lane's speed calculation
@@ -153,7 +204,15 @@
 //   trafficLeaderHold(world, n, path, front) { gap, vehicle } of a virtual traffic leader ("end")
 //   trafficParkingPlan(n, standstillGap) { shift, stop, signal } for a car preparing to park ("end")
 //   trafficStart(world, n)              each vehicle step, first ("end") or before scanning signals ("beforeControl")
-//   trafficReplan(world, n)             before its path is extended; true when re-planned ("end")
+//   trafficReplan(world, n, fleet)      before its path is extended; true when re-planned ("beforeCorner", "corner"
+//                                       for a long vehicle's own corner check, or "end")
+//   trafficStanding(world, fleet)      vehicles a driver may ease left past while they stand at the kerb ("end")
+//   trafficIndicator(n)                { signal } a feature has the vehicle give this step, or null ("end")
+//   parkingZones(world, map)           where nobody parks, for the World's parked cars, or null ("end")
+//   crosswalkVehicle(n)                what to call a vehicle stopped at a crosswalk, or null for the core's ("end")
+//   trafficLaneChange(world, fleet, n, edge, front) true when the feature handles the vehicle's lane
+//                                       changes itself this step ("end")
+//   trafficRecover(world, fleet, n, near) true when the feature put the vehicle back on its path ("end")
 //   trafficSpawnBlocked(world, x, y)   true when a traffic spawn is too close to an obstruction ("end")
 //   trafficBypass(world, n, front, all, defaultDriver) first bypass or wait for an obstruction: { shift,
 //                                       lineAt(s), ignore, waitGap, limit } at the pursuit point ("end")
@@ -177,12 +236,30 @@
 //                                       ("beforeControl") or later ("ordinary"), or both ordinary
 //                                       and emergency traffic ("end")
 //   trafficPullOut(world, n)            false: a car parked at the kerb must not pull out yet ("end")
+//   trafficKeepBack(world, n, path, { dt, look, isLong }) { gap, vehicle } traffic keeps back from, as from a
+//                                       stopped leader, or null; it may update the driver's own wait ("end")
+//   replacesDestinationStop(ctx)        true: the feature's own stop takes the place of stop_at_destination ("end")
+//   manoeuvreCandidates(ctx, out)       a manoeuvre on offer and carried on until done, after the turnaround's
+//                                       ("afterTurnaround"); `ctx` is { snap, world }
+//   arrivalCriterion(snap)              wording added to the motion question's "reached the destination" ("end")
+//   keepsDestination(snap)              true: arriving is not yet a reason for Rules to stop ("end")
+//   manoeuvreGoesOn(candidate)          true: Rules carries on with this clear manoeuvre whatever the reasons to
+//                                       stop ahead, as with a turnaround ("end")
+//   rulesTerms(candidate, snap)         { term: amount } added to Rules' cost under those names ("special", beside
+//                                       turning round, or "afterTurnaround")
+//   safetyLaw(world, law)               { reversing, gapStill, gapMoving, ttcMoving, passesOncoming } for a
+//                                       manoeuvre the safety brake allows closer, or null ("end")
+//   examinerScript(route, lines, { say }) push the examiner's own lines for the road test ("end")
+//   examinerMarks(report, mark)         mark minor errors from a finished report ("end")
+//   parkingObstructed(world, edgeId)    true when it rules out parking anywhere on the street, for destination
+//                                       parking and traffic parking alike (sim/parallel-park.js) ("end")
 
 // Import a record through this registry (or a core module), never on its own: the snowbanks record's simulation
 // reaches sim/npc.js, which loads this registry while that record is still loading
 // (scripts/test_feature_registry.mjs checks each record loads after it).
-import { featureRecordProblem, featureRegistryProblem, slotOf } from "../feature-schema.js";
+import { featureRecordProblem, featureRegistryProblem, hookEntries, slotOf } from "../feature-schema.js";
 import { setSignalPhaseResolver } from "../signals.js";
+import { fillHookLists, hooks } from "./hook-lists.js";
 import balls from "./balls.js";
 import contraflow from "./contraflow.js";
 import collection from "./collection-truck.js";
@@ -217,6 +294,13 @@ import cyclistPassing from "./cyclist-pass.js";
 import closures from "./lane-closure.js";
 import plows from "./snow-plow.js";
 import runners from "./red-light-runner.js";
+import buses from "./buses.js";
+import schoolBuses from "./school-buses.js";
+import streetcars from "./streetcars.js";
+import trains from "./trains.js";
+import emergency from "./emergency.js";
+import destinationParking from "./destination-parking.js";
+import hazards from "./hidden-hazards.js";
 
 export const FEATURES = [
   highBeams,
@@ -237,7 +321,17 @@ export const FEATURES = [
   snowbanks,
   puddles,
   parkers,
+  // (anywhere would do: each of its hooks has a slot of its own, and its traffic, its pull-over and its
+  // audit read only what the records registered before it do: snowbanks and parkers dispatch through it)
+  emergency,
   roadClosures,
+  // Transit and rail traffic, built by the fleet in this order before the garbage trucks and plows, as it
+  // always placed them; their sensing, candidates, wording and audits keep their places through the
+  // "buses", "afterCrosswalk" and "streetcars" slots.
+  buses,
+  schoolBuses,
+  streetcars,
+  trains,
   collection, // A stopped truck also matches the double-parked obstacle.
   doubleParked,
   roadside,
@@ -253,6 +347,13 @@ export const FEATURES = [
   leftOnRed,
   amber,
   busLanes,
+  // Destination parking runs at slots of its own ("destination", "afterTurnaround", "parking" for the
+  // cautious agent, "plannedStop") and hooks no other record has; where it shares one (outcome labels by
+  // candidate id, the motion test, legitimate stops, resetting contact) the order does not matter.
+  destinationParking,
+  // Hidden hazards run at slots of their own ("blindSpots", "stepOuts", "hiddenHazards") and hooks no other
+  // record has, so their place here changes no order.
+  hazards,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -266,10 +367,13 @@ export const SLOTS = {
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
   rulesCost: ["beforeSpeedCost", "beforeSignalStop", "beforeStops", "stops", "afterSpecial", "beforePassing", "end"],
+  rulesLaneGoal: ["end"],
   cautious: [
+    "first",
     "beforeBusLanes",
     "reservedLane",
     "afterBusLanes",
+    "parking",
     "passing",
     "afterPassing",
     "end",
@@ -278,12 +382,15 @@ export const SLOTS = {
     "afterAmber",
   ],
   cautiousStop: ["end"],
-  cautiousDrive: ["end"],
+  rulesWait: ["end"],
+  cautiousDrive: ["plannedStop", "end"],
   legitimateStop: ["end"],
   obstacles: ["end"],
-  stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
+  stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "stepOuts", "end"],
   stepAfterTraffic: ["end"],
   audit: [
+    "afterCyclists",
+    "buses",
     "afterPassing",
     "beforeCollisions",
     "beforeMerge",
@@ -296,10 +403,14 @@ export const SLOTS = {
     "streetHazards",
     "rearTraffic",
     "late",
+    "destination",
   ],
   sense: [
     "beforeLaneState",
+    "afterRightHook",
+    "buses",
     "afterPedestrians",
+    "afterCrosswalk",
     "beforeWorkZone",
     "afterCalming",
     "beforeRunner",
@@ -313,6 +424,8 @@ export const SLOTS = {
     "following",
     "beforeTarget",
     "end",
+    "blindSpots",
+    "destination",
   ],
   finishLanes: ["end"],
   laneOfferBlocked: ["end"],
@@ -337,6 +450,7 @@ export const SLOTS = {
   ],
   target: [
     "beforeMerge",
+    "afterBus",
     "beforeRunner",
     "restrictions",
     "beforeCurve",
@@ -344,14 +458,22 @@ export const SLOTS = {
     "beforeParked",
     "afterLeader",
     "beforeCrosswalk",
+    "buses",
+    "afterCrosswalk",
     "afterSchoolBus",
+    "streetcars",
     "driveways",
     "streetHazards",
     "beforeEmergency",
     "beforeParking",
     "parking",
+    "blindSpots",
+    "destination",
   ],
   hazard: [
+    "afterRightHook",
+    "buses",
+    "afterCrosswalk",
     "beforeWorkZone",
     "beforeRunner",
     "afterParking",
@@ -361,12 +483,15 @@ export const SLOTS = {
     "streetHazards",
     "rearTraffic",
     "late",
+    "blindSpots",
+    "destination",
   ],
   laneOffer: ["afterPassing", "end"],
   laneChangeCandidate: ["end"],
   laneChangeStyle: ["end"],
   lineStop: ["beforeFollower", "end"],
   predictionIgnore: ["end"],
+  predictionStill: ["end"],
   candidateSettle: ["end"],
   controlDirection: ["end"],
   controlAudit: ["end"],
@@ -395,6 +520,9 @@ export const SLOTS = {
   trafficSignalHold: ["end"],
   turnPace: ["end"],
   candidates: [
+    "afterRightHook",
+    "buses",
+    "afterCrosswalk",
     "beforeMerge",
     "afterFlagger",
     "beforeRunner",
@@ -406,8 +534,9 @@ export const SLOTS = {
     "beforeParking",
     "afterParking",
     "parking",
+    "destination",
   ],
-  adjust: ["streetHazards", "end", "finish"],
+  adjust: ["first", "streetHazards", "end", "finish"],
   brakeDetour: ["end"],
   sim: [
     "beforeRunner",
@@ -418,13 +547,19 @@ export const SLOTS = {
     "driveways",
     "streetHazards",
     "beforeEmergency",
+    "afterParkers",
+    "buses",
+    "afterCrosswalk",
     "parking",
     "merge",
     "afterMerge",
+    "destination",
     "end",
   ],
   state: [
     "beforeRoadConstraints",
+    "buses",
+    "afterCrosswalk",
     "beforeMerge",
     "signal",
     "afterFollowing",
@@ -439,14 +574,20 @@ export const SLOTS = {
     "streetHazards",
     "junctions",
     "rearTraffic",
+    "afterRearTraffic",
+    "beforeTurnaround",
     "beforeParking",
     "parking",
+    "blindSpots",
+    "destination",
   ],
   greenSignalClause: ["end"],
   outcome: ["ids", "laneChange"],
   slowOutcome: ["lane", "end"],
   clause: [
     "beforeCalming",
+    "buses",
+    "afterCrosswalk",
     "stopStart",
     "signal",
     "afterJunctionBox",
@@ -461,15 +602,35 @@ export const SLOTS = {
     "streetHazards",
     "ice",
     "rearTraffic",
+    "afterRearTraffic",
+    "beforeFollowing",
     "beforeParking",
     "parking",
+    "blindSpots",
+    "destination",
   ],
-  holdStill: ["beforeMerge", "afterFlagger", "beforeRunner", "driveways", "late", "beforeParking", "parking"],
+  holdStill: [
+    "buses",
+    "afterCrosswalk",
+    "beforeMerge",
+    "afterFlagger",
+    "beforeRunner",
+    "driveways",
+    "late",
+    "afterLate",
+    "beforeParking",
+    "parking",
+    "destination",
+  ],
   prompt: [
     "introduction",
+    "afterRightHook",
     "headlights",
     "pedestrian",
     "beforeSchoolBus",
+    "schoolBuses",
+    "buses",
+    "afterCrosswalk",
     "beforeMerge",
     "nearbySpecial",
     "afterPlow",
@@ -480,6 +641,7 @@ export const SLOTS = {
     "beforeRightOnRed",
     "amberDecision",
     "afterGlare",
+    "hiddenHazards",
     "beforeRunner",
     "restrictions",
     "streetHazards",
@@ -491,6 +653,7 @@ export const SLOTS = {
     "afterParkingAdvice",
     "parking",
     "afterParking",
+    "afterTurnaround",
   ],
   metric: [
     "afterRedLights",
@@ -511,7 +674,13 @@ export const SLOTS = {
     "junctions",
   ],
   evQueueHold: ["end"],
-  trafficManage: ["beforePlows", "dispatch", "afterPlows", "end"],
+  trafficManage: ["beforeTransit", "buses", "schoolBuses", "beforePlows", "dispatch", "afterPlows", "end"],
+  trafficLaneChange: ["end"],
+  trafficStanding: ["end"],
+  trafficIndicator: ["end"],
+  parkingZones: ["end"],
+  crosswalkVehicle: ["end"],
+  trafficRecover: ["end"],
   trafficFollowingLeader: ["end"],
   trafficLeadPolicy: ["end"],
   trafficPassingLaneBlocked: ["end"],
@@ -522,11 +691,13 @@ export const SLOTS = {
   trafficDriver: ["end"],
   trafficManeuver: ["beforeSpecial", "end"],
   trafficStop: ["afterMerge", "end"],
+  trafficHold: ["buses", "end"],
+  emergencyHold: ["end"],
   checkpoint: ["end"],
   trafficLeaderHold: ["end"],
   trafficParkingPlan: ["end"],
   trafficStart: ["end", "beforeControl"],
-  trafficReplan: ["beforeCorner", "end"],
+  trafficReplan: ["beforeCorner", "corner", "end"],
   trafficActors: ["end"],
   trafficLane: ["beforeLaneMoves", "laneMoves", "late"],
   trafficYield: ["end"],
@@ -557,10 +728,20 @@ export const SLOTS = {
   handlesPedestrian: ["end"],
   returnClause: ["end"],
   standingVehicleLabel: ["end"],
+  vehicleLabel: ["end"],
   questions: ["end"],
   decisionFields: ["end"],
   trafficPullOut: ["end"],
+  trafficGiveWay: ["end"],
+  trafficPullOver: ["end"],
+  trafficRejoin: ["end"],
+  trafficStopAt: ["end"],
+  trafficHangBack: ["end"],
   hides: ["end"],
+  standingHides: ["end"],
+  vehicleHides: ["end"],
+  hiddenByVehicle: ["end"],
+  trafficSight: ["end"],
   blocksView: ["end"],
   placeEgo: ["end"],
   evKerb: ["end"],
@@ -572,7 +753,7 @@ export const SLOTS = {
   activeOutcome: ["end"],
   passClearance: ["end"],
   suppressFollowingClause: ["end"],
-  driveCriterion: ["end"],
+  driveCriterion: ["destination", "end"],
   followingOmitted: ["end"],
   trafficLaneControl: ["end"],
   trafficCorridor: ["end"],
@@ -581,6 +762,17 @@ export const SLOTS = {
   examinerFail: ["beforeTracks"],
   passBlockReason: ["end"],
   trafficSpawnBlocked: ["end"],
+  parkingObstructed: ["end"],
+  trafficKeepBack: ["end"],
+  replacesDestinationStop: ["end"],
+  manoeuvreCandidates: ["afterTurnaround"],
+  arrivalCriterion: ["end"],
+  keepsDestination: ["end"],
+  manoeuvreGoesOn: ["end"],
+  rulesTerms: ["special", "afterTurnaround"],
+  safetyLaw: ["end"],
+  examinerScript: ["end"],
+  examinerMarks: ["end"],
   detour: ["beforeMerge", "laneControl", "parking", "optional", "end"],
   pullOverDetour: ["end"],
 };
@@ -597,33 +789,19 @@ function freezeDeclarations(object) {
   for (const { value } of Object.values(Object.getOwnPropertyDescriptors(object))) freezeDeclarations(value);
 }
 
-// A core module can ask before the registry finishes loading through an import cycle.
-// Keep its list identity and fill the list in registration order once all records are ready.
-function hookLists() {
-  return (hookLists.state ??= { byName: new Map(), pending: [], ready: false });
-}
-
-export function hooks(name, slot = "end") {
-  const state = hookLists();
-  if (!state.byName.has(name)) state.byName.set(name, new Map());
-  const slots = state.byName.get(name);
-  if (slots.has(slot)) return slots.get(slot);
-  const out = [];
-  if (state.ready) fillHooks(out, name, slot);
-  else state.pending.push([out, name, slot]);
-  slots.set(slot, out);
-  return out;
-}
+// A core module can ask before the registry finishes loading through an import cycle: the lists live in
+// ./hook-lists.js, which keeps each list's identity and has this module fill it in registration order once
+// all records are ready.
+export { hooks };
 
 function fillHooks(out, name, slot) {
   if (name === "metric" || name === "prompt" || name === "notice")
     throw new Error(`Feature registry: ${name} is data. use recordsAt().`);
   if (!Object.hasOwn(SLOTS, name) || !SLOTS[name].includes(slot))
     throw new Error(`Feature registry: no slot "${slot}" for ${name}.`);
-  for (const record of FEATURES) {
-    const hook = record[name];
-    if (hook && slotOf(hook) === slot) out.push((typeof hook === "function" ? hook : hook.run).bind(record));
-  }
+  for (const record of FEATURES)
+    for (const hook of hookEntries(record[name]))
+      if (slotOf(hook) === slot) out.push((typeof hook === "function" ? hook : hook.run).bind(record));
   Object.freeze(out);
 }
 
@@ -814,8 +992,21 @@ export function featureDecisionFields(snap) {
 }
 
 // Every World option a registered feature takes.
-export const FEATURE_OPTIONS = Object.freeze(FEATURES.filter((f) => !f.buildFleet).map((f) => f.key));
+export const FEATURE_OPTIONS = Object.freeze(FEATURES.filter((f) => !f.buildFleet || f.worldOption).map((f) => f.key));
 export const FLEET_FEATURES = Object.freeze(FEATURES.filter((f) => f.buildFleet));
+
+// Build the fleet state of the fleet records at `position` ("early", or undefined for the rest), each
+// stored under its option key.
+export function buildFleetFeatures(fleet, options, seed, makePath, position) {
+  for (const f of FLEET_FEATURES) {
+    if ((f.buildAt === "early") !== (position === "early")) continue;
+    fleet[f.key] = f.buildFleet(fleet, {
+      enabled: options[f.key] ?? (f.defaultCount === undefined ? false : 0),
+      seed,
+      makePath,
+    });
+  }
+}
 const FEATURES_BY_POSITION = new Map(
   [undefined, "early", "afterSpawn"].map((position) => [position, FEATURES.filter((f) => f.buildAt === position)]),
 );
@@ -826,18 +1017,23 @@ export function buildFeatures(world, options, seed, map, position) {
   for (const f of records) {
     const value = Object.hasOwn(options, f.key) ? options[f.key] : undefined;
     const enabled = value ?? (f.defaultCount === undefined ? false : 0);
-    world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
+    world[f.property ?? f.key] = f.build(world, { enabled, seed, map, options });
     if (f.seen) world[f.seen] = false;
     if (f.calls) world[f.calls] = new Map();
   }
 }
 
+// The registered features' verdicts on a drive as a whole (bench/metrics.js failures, lab/examiner.js), in
+// registration order: each a failure reason when `fails(m)` holds for the drive's metrics `m`.
+export const FEATURE_VERDICTS = Object.freeze(FEATURES.filter((f) => f.verdict).map((f) => f.verdict));
+export const featureVerdicts = (m) => FEATURE_VERDICTS.filter(({ fails }) => fails(m)).map(({ failure }) => failure);
+
+// Minor errors a registered feature has the examiner mark (lab/examiner.js), by incident type.
+export const FEATURE_EXAMINER_MINORS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.examinerMinors)));
+
 // Default snapshot fields that older readers expect even when the feature is inactive.
 export const FEATURE_SNAPSHOT_FIELDS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.snapshot)));
 
 // (the records have loaded: fill the lists handed out before)
-const hookState = hookLists();
-for (const [out, name, slot] of hookState.pending) fillHooks(out, name, slot);
-hookState.pending.length = 0;
-hookState.ready = true;
+fillHookLists(fillHooks);
 setSignalPhaseResolver(specialSignalPhase);

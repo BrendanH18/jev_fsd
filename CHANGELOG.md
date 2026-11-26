@@ -39,6 +39,10 @@
   amber, bus lanes, snow plows, lane closures and passing cyclists through the feature interface
   (34 of 41), and draw vehicles and pedestrians through the feature adapter
   ([inventory](docs/validation/five-thousand/README.md)).
+- Register transit buses, school buses, streetcars, trains at level crossings, emergency vehicles,
+  destination parking and hidden hazards through the feature interface, so all 41 opt-in features are
+  records and the core files name none of them.
+- Split the per-vehicle traffic step into named stages, with identical results.
 - Watch four published model drives and replay a retained manual incident beside Jev.
 - Run CI on GitHub-hosted standard runners, free for this public repository, instead of Namespace.
 - Trace where the same tuned Rules drive first differs across JavaScript engines.

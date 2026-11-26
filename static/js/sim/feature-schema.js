@@ -55,8 +55,28 @@ const METRIC_FIELDS = [
   "reportWhenEnabled",
 ];
 const NOTICE_FIELDS = ["at", "read", "order", "duration", "style", "hold"];
-const OBSTACLE_FLAGS = ["traffic", "fixed", "likePedestrian", "long", "fixedCruise", "noCyclistPass"];
-const OBSTACLE_CALLBACKS = ["predict", "visible", "oncoming", "parkedClearance", "noParking"];
+const OBSTACLE_FLAGS = [
+  "traffic",
+  "fixed",
+  "likePedestrian",
+  "long",
+  "fixedCruise",
+  "noCyclistPass",
+  "heavy",
+  "onTrack",
+  "noseFirst",
+  "ownLane",
+];
+const OBSTACLE_CALLBACKS = [
+  "predict",
+  "visible",
+  "oncoming",
+  "parkedClearance",
+  "noParking",
+  "pathPolicy",
+  "laneShift",
+  "standing",
+];
 const COACH_ENTRY_FIELDS = {
   reports: ["read"],
   guidance: ["read"],
@@ -65,7 +85,7 @@ const COACH_ENTRY_FIELDS = {
 };
 
 const WORLD_FIELDS = ["property", "seen", "calls"];
-const PREDICATES = ["motion", "parkingTraffic"];
+const PREDICATES = ["motion", "parkingTraffic", "freeDrive", "freeDriveExtra"];
 const CLOCK_FIELDS = ["day", "utcOffset", "weekday"];
 const DISPLAY_MAPS = ["flagText", "perceptionRejections", "eventBadges"];
 const FIELDS = new Set([
@@ -77,12 +97,15 @@ const FIELDS = new Set([
   "snapshot",
   "build",
   "buildFleet",
+  "worldOption",
   "obstacle",
   "priority",
   ...DISPLAY_MAPS,
   "coach",
   ...PREDICATES,
   ...CLOCK_FIELDS,
+  "examinerMinors",
+  "verdict",
 ]);
 
 const text = (value) => typeof value === "string" && !!value.trim();
@@ -164,6 +187,33 @@ function metricProblem(metric) {
   return null;
 }
 
+function verdictProblem(verdict) {
+  if (!object(verdict)) return "verdict must be an object";
+  const shape = declarationProblem("verdict", verdict, ["failure", "category", "examinerRemark", "fails"]);
+  if (shape) return shape;
+  if (!text(verdict.failure)) return "verdict has no failure";
+  if (!Object.hasOwn(CATEGORIES, verdict.category)) return "verdict has an unknown category";
+  if (!text(verdict.examinerRemark)) return "verdict needs an examinerRemark";
+  if (!callback(verdict.fails)) return "verdict needs a fails function";
+  return null;
+}
+
+function examinerMinorsProblem(minors) {
+  if (!object(minors)) return "examinerMinors must be an object";
+  const shape = declarationProblem("examinerMinors", minors);
+  if (shape) return shape;
+  for (const [type, minor] of Object.entries(minors)) {
+    if (!fieldName(type)) return `examinerMinors has an invalid incident type "${type}"`;
+    if (!object(minor)) return `examinerMinors.${type} must be an object`;
+    const entry = declarationProblem(`examinerMinors.${type}`, minor, ["category", "remark", "when"]);
+    if (entry) return entry;
+    if (!Object.hasOwn(CATEGORIES, minor.category)) return `examinerMinors.${type} has an unknown category`;
+    if (!text(minor.remark)) return `examinerMinors.${type} needs a remark`;
+    if (!optional(minor.when, callback)) return `examinerMinors.${type}.when must be a function`;
+  }
+  return null;
+}
+
 function noticeProblem(notice) {
   if (!callback(notice.read)) return "notice needs a read function";
   if (!Number.isSafeInteger(notice.order)) return "notice.order must be an integer";
@@ -238,9 +288,26 @@ const dataChecks = {
   },
 };
 
+// A hook at several slots of one pipeline is a list of { at, run }, one a slot.
+export const hookEntries = (hook) => (hook === undefined ? [] : Array.isArray(hook) ? hook : [hook]);
+
 function hookProblem(name, hook, slots) {
   if (!Object.hasOwn(slots, name)) return `has an unknown hook or field ${name}`;
   const data = Object.hasOwn(dataFields, name);
+  if (Array.isArray(hook)) {
+    if (data) return `${name} must be an object`;
+    if (hook.length < 2) return `${name} lists fewer than two slots: use one hook`;
+    if (Object.keys(hook).length !== hook.length) return `${name} must be a plain list`;
+    const at = new Set();
+    for (const entry of hook) {
+      if (!object(entry) || entry.at === undefined) return `${name} lists a hook without its slot`;
+      if (at.has(entry.at)) return `${name} lists the slot "${String(entry.at)}" twice`;
+      at.add(entry.at);
+      const problem = hookProblem(name, entry, slots);
+      if (problem) return problem;
+    }
+    return null;
+  }
   if (data && !object(hook)) return `${name} must be an object`;
   if (object(hook)) {
     const shape = declarationProblem(name, hook, data ? dataFields[name] : HOOK_FIELDS);
@@ -285,6 +352,8 @@ function recordFieldsProblem(record, slots) {
     return "defaultCount must be a positive integer";
   if (!callback(record.build)) return "has no build function";
   if (!optional(record.buildFleet, callback)) return "buildFleet must be a function";
+  if (!optional(record.worldOption, boolean)) return "worldOption must be a boolean";
+  if (record.worldOption && !record.buildFleet) return "worldOption needs a fleet option";
   for (const field of PREDICATES) if (!optional(record[field], callback)) return `${field} must be a function`;
   for (const field of CLOCK_FIELDS) if (!optional(record[field], boolean)) return `${field} must be a boolean`;
   if (record.priority !== undefined) {
@@ -316,6 +385,14 @@ function recordFieldsProblem(record, slots) {
   }
   if (record.coach !== undefined) {
     const problem = coachProblem(record.coach, record.seen);
+    if (problem) return problem;
+  }
+  if (record.examinerMinors !== undefined) {
+    const problem = examinerMinorsProblem(record.examinerMinors);
+    if (problem) return problem;
+  }
+  if (record.verdict !== undefined) {
+    const problem = verdictProblem(record.verdict);
     if (problem) return problem;
   }
   for (const [name, value] of Object.entries(record)) {
@@ -351,6 +428,8 @@ export function featureRegistryProblem(records, slots) {
       if (Object.hasOwn(COACH_SLOTS, field))
         for (const { at, order } of entries) reserved.push([`coach.${field} order`, `${at}/${order}`]);
     }
+    for (const type of Object.keys(record.examinerMinors || {})) reserved.push(["examiner minor", type]);
+    if (record.verdict) reserved.push(["failure reason", record.verdict.failure]);
     for (const field of ["snapshot", ...DISPLAY_MAPS])
       for (const name of Object.keys(record[field] || {})) reserved.push([field, name]);
     for (const [field, name] of reserved) {

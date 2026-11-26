@@ -270,6 +270,8 @@ export default {
   obstacle: { test: isWorkZone, traffic: true },
   standingVehicleLabel: (o) => (isWorkZone(o) ? "work zone" : null),
   trafficSpawnBlocked: (world, x, y) => world.workZones?.covers(x, y),
+  // (nobody parks on the block of a work zone: sim/parallel-park.js)
+  parkingObstructed: (world, edge) => !!world.workZones?.zones.some((z) => z.closed === edge || z.open === edge),
   trafficCorridor(world, vehicle, path, front) {
     const wz = workZoneAhead(world, path, front);
     if (!wz) return null;

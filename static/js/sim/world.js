@@ -1,7 +1,7 @@
 // The simulation world: map, ego car, traffic, signals, time, and honest counters.
 
-import { Vehicle, CAR, comfort } from "./vehicle.js";
-import { headingAt, pointAt } from "../map/mapdata.js";
+import { Vehicle, CAR } from "./vehicle.js";
+import { headingAt } from "../map/mapdata.js";
 import { surfaceDistance } from "../map/junctions.js";
 import { approachPhase, movementSignal, phaseOf, StopMemory } from "./signals.js";
 import { obbOverlap } from "./collision.js";
@@ -13,41 +13,9 @@ import { setWeather } from "./weather.js";
 import { StaticObstacles, poseOf } from "./static-obstacles.js";
 import { AllWayStops } from "./all-way.js";
 import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
-import {
-  EV_BOX_M,
-  emergencyCall,
-  emergencyLead,
-  holdsUp,
-  isEmergency,
-  isJunction,
-  parkedRoom,
-  pullOverOffset,
-} from "./emergency.js";
-import { BUS_YIELD_GAP_M, busHasRightOfWay, busRelation, busZones, isBus } from "./bus.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
-import {
-  BEHIND_M,
-  ONCOMING_M,
-  SIDE_M,
-  canStopFor as canStopForSchool,
-  redsOn,
-  schoolBusRelation,
-} from "./school-bus.js";
 import { zoneLimit } from "./speed-zones.js";
-import {
-  HOLD_M as STREETCAR_HOLD_M,
-  STOP_M as STREETCAR_STOP_M,
-  IN_LANE_M,
-  SIDE_M as STREETCAR_SIDE_M,
-  canStopFor as canStopForStreetcar,
-  doorsOpen,
-  streetcarRelation,
-} from "./streetcar.js";
-import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
-import { leftSpace, reversing, tyres } from "./parallel-park.js";
-import { StepOuts, standingNear } from "./hidden-hazards.js";
-import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 
 import {
   FEATURES,
@@ -64,7 +32,6 @@ import {
   hooks,
   buildFeatures,
 } from "./features/index.js";
-import { FOLLOWING_STANDSTILL_M } from "./following.js";
 
 // The registered features' hooks (sim/features/index.js), each run where that feature's code used to be.
 const OBSTACLES_NEAR = hooks("obstacles");
@@ -74,16 +41,18 @@ const AUDIT_AFTER_DRIVEWAYS = hooks("audit", "driveways");
 const AUDIT_STREET_HAZARDS = hooks("audit", "streetHazards");
 const AUDIT_REAR_TRAFFIC = hooks("audit", "rearTraffic");
 const HIDES = hooks("hides"),
-  PLACE_EGO = hooks("placeEgo"),
-  EV_KERB = hooks("evKerb"),
-  EV_QUEUE_HOLD = hooks("evQueueHold");
+  PLACE_EGO = hooks("placeEgo");
 const AUDIT_LATE = hooks("audit", "late");
+const AUDIT_BUSES = hooks("audit", "buses");
+const PARKING_ZONES = hooks("parkingZones");
+const AUDIT_DESTINATION = hooks("audit", "destination");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_PASSING = hooks("audit", "beforeReservedLane");
 const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
 const AUDIT_AFTER_FLAGGER = hooks("audit", "afterFlagger");
 const AUDIT_AFTER_PASSING = hooks("audit", "afterPassing");
 const AUDIT_AFTER_CALMING = hooks("audit", "afterCalming");
+const AUDIT_AFTER_CYCLISTS = hooks("audit", "afterCyclists");
 const VISION_RANGE = hooks("visionRange");
 const SIGNED_EXITS = hooks("redEntryBans");
 const CONTROL_AUDIT = hooks("controlAudit");
@@ -96,9 +65,15 @@ const ARROW_EXIT_AUDIT = hooks("arrowExitAudit");
 const RED_TURN_MEMORY = hooks("redTurnMemory");
 const RED_TURN_EXIT = hooks("redTurnExit");
 const RESET_CONTACT = hooks("resetContact");
+const PRIORITY_JUNCTION = hooks("priorityJunction");
+// (what a registered feature hides: a vehicle standing at the kerb hiding a pedestrian, a road vehicle's
+// body hiding another, sim/features/hidden-hazards.js)
+const STANDING_HIDES = hooks("standingHides"),
+  VEHICLE_HIDES = hooks("vehicleHides"),
+  HIDDEN_BY_VEHICLE = hooks("hiddenByVehicle");
 
-const AUDIT_ROUTE_CORRIDOR_M = 4;
-const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
+export const AUDIT_ROUTE_CORRIDOR_M = 4;
+export const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
 // Past a signal's line, the car fails to yield when its front bumper enters the path of an
 // oncoming vehicle (seen or not) due at the junction's centre within this many seconds. The path
 // is the one the vehicle is actually following, so only a left turn or a U-turn takes the car into
@@ -141,41 +116,6 @@ const PASSED_M = 1;
 const AUDIT_HOOK_MEMORY_S = 3;
 const AUDIT_HOOK_TURN = Math.PI / 9;
 const AUDIT_HOOK_AGAIN_S = 10;
-// Giving way to an emergency vehicle (sim/emergency.js), seen or not, once it calls on the car: the
-// car fails to yield if, from 2 s after the call came, it is faster than 3 m/s and has not slowed by
-// at least 1 m/s^2 since then (unless, pulled over, it was told to drive on ahead of a vehicle stuck
-// behind it);
-// if its front enters a junction (8 m of its centre) that a vehicle coming from the side is due
-// across, 3 s or more after the call came; if, 4 s or more after the call came, the vehicle draws
-// level with it along its street (within 8 m to the side) while it is not pulled over and not in a
-// junction (unless the call found it constrained by an existing line stop, including one between a
-// give-way or stop line and where it looks from, or a close queue);
-// or if the vehicle has been stuck behind it for 6 s while
-// it is not pulled over (at least 0.2 m right of its lane's centre) and has not been told to drive on
-// ahead of it. A second blocker directly ahead can prevent that too. In a snowbank
-// narrowing the usable right edge replaces the old lane centre. Counted once a vehicle.
-const AUDIT_EV_MOVING_MPS = 3;
-const AUDIT_EV_DECEL = 1;
-const AUDIT_EV_REACT_S = 2;
-const AUDIT_EV_JUNCTION_S = 3;
-const AUDIT_EV_BOX_M = EV_BOX_M;
-const AUDIT_EV_BLOCK_S = 6;
-const AUDIT_EV_PULLED_M = 0.2;
-const AUDIT_EV_PULL_AHEAD_M = 5; // beside parked cars, the kerb this far ahead counts as where the car pulls over (stopped short of its stop in a queue, say)
-const AUDIT_EV_PULL_S = 4;
-const AUDIT_EV_SIDE_M = 8;
-const AUDIT_EV_LINE_M = 2;
-const AUDIT_EV_OVERSHOOT_M = 1.5; // a short stop at a line can end this far over it, and still be a stop at it
-// Away from its line, a stop short of where the car looks from (`sPeek`) counts as a line stop only this close
-// to it: a stop sign set well back from its junction leaves the street between them open to pull over in.
-const AUDIT_EV_LOOK_M = 8;
-// Yielding to a bus pulling out from its stop (sim/bus.js, BC MVA s. 169.1): once the car, in the
-// lane the bus pulls out into and behind it, first sees it signalling to (where the limit is 60 km/h
-// or less), it owes it the right of way if it could stop 2 m behind it braking at up to 3.5 m/s^2 then.
-// The car fails to yield if, owing it, it draws level with the bus (its front past the bus's rear) at
-// more than 1 m/s before the bus has pulled out. Counted once each time a bus pulls out.
-const AUDIT_BUS_DECEL = 3.5;
-const AUDIT_BUS_MOVING_MPS = 1;
 // Passing a vehicle stopped at a marked crosswalk (sim/crosswalk.js, BC MVA s. 179(3)): once the car,
 // behind it in another lane going its way, first sees it stopped there, it owes it if it could stop
 // with its front 3.5 m short of the crosswalk's centre braking at up to 3.5 m/s^2 then. It fails to
@@ -183,42 +123,14 @@ const AUDIT_BUS_MOVING_MPS = 1;
 // still stopped there, without having stood still at the crosswalk for 2 s first. Counted once a
 // vehicle and crosswalk.
 const AUDIT_CROSSWALK_MOVING_MPS = 1;
-// Stopping for a school bus with its reds flashing (sim/school-bus.js, BC MVA s. 149): once the car,
-// coming up behind it or toward it along its street (its near end, the rear or the front, within 9 m
-// of the line the car heads along), first sees the reds on, it owes the stop if it could then stop
-// short of it (5 m behind its rear, or 10 m short of its front coming toward it) braking at up to
-// 3.5 m/s^2. It fails to yield if, owing it, its front draws level with that end of the bus at more
-// than 1 m/s while the reds are still on. Counted once a stop.
-const AUDIT_SCHOOL_MOVING_MPS = 1;
-// Not passing a streetcar with its doors open (sim/streetcar.js, Ontario HTA s. 166): once the car,
-// going its way behind it in its lane or in the lane beside it on the side its riders use, first sees
-// its doors open, it owes the stop if it could then stop where drivers do (4 m behind its rear doors,
-// or 4 m behind it in its lane) braking at up to 3.5 m/s^2. It fails to yield if, owing it, its front
-// comes within 2 m of the rear doors (of the streetcar, in its lane) at more than 1 m/s while they are
-// still open. Counted once a stop.
-const AUDIT_STREETCAR_MOVING_MPS = 1;
-// Stopping for a train at a level crossing (sim/rail.js, Alberta AR 304/2002 s. 42): once the car,
-// heading across the crossing, first hears the train coming (its gong, within 250 m) or sees it, it
-// owes the stop if it could then stop where drivers do (7 m back from the nearest rail) braking at up
-// to 3.5 m/s^2. It fails to yield if, owing it, its front comes within 5 m of the nearest rail at more
-// than 1 m/s while the train is still approaching (coming, or on the crossing), or if any of it stands
-// on the tracks (in the train's envelope) slower than 1 m/s while the train is. Counted once per
-// train at each crossing.
-const AUDIT_TRAIN_MOVING_MPS = 1;
 // Keeping the junction clear (sim/junction-box.js, Québec's Highway Safety Code): the car, following
 // its route, fails to yield if it entered a signal's junction (its front past the near side of the
 // street across) while traffic past it left no room for it beyond, and is then standing in it (slower than 1 m/s) while its light is
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
 export class World {
-  // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
-  // `park`: the autopilot parks at the
-  // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
-  // driven car keeps to a speed it can stop from beside them; `stepOuts`: with that, how many people at
-  // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
-  // `hazards`, road vehicles also hide other vehicles and cyclists, and the car turns left, gives way
-  // and turns right on red only once it can see the lanes it must give way to (sim/hidden-traffic.js).
-  // And the option of each registered feature (sim/features/index.js).
+  // And the option of each registered feature (sim/features/index.js), with any option it reads beside
+  // its own (hidden hazards' `stepOuts`, say).
   constructor(
     map,
     {
@@ -227,10 +139,6 @@ export class World {
       pedestrians = PEDESTRIANS,
       weather = "dry",
       vehicleSpec = CAR,
-      buses = false,
-      park = false,
-      hazards = false,
-      stepOuts = 0,
       ...features
     } = {},
   ) {
@@ -241,7 +149,8 @@ export class World {
     this.staticObstacles = new StaticObstacles(map);
     this.staticContacts = new Map();
     this.weather = setWeather(weather).name;
-    this.parked = new ParkedCars(map, { seed, density: parked, zones: buses ? busZones(map) : null });
+    // (nobody parks where a registered feature keeps the kerb clear: the bus zones while buses run, say)
+    this.parked = new ParkedCars(map, { seed, density: parked, zones: firstHookResult(PARKING_ZONES, this, map) });
     this.t = 0;
     this.tick = 0;
     this.ego = new Vehicle(0, 0, 0, 0, vehicleSpec);
@@ -258,28 +167,9 @@ export class World {
     this.turnaround = null; // the three-point turn the car is making (sim/turnaround.js)
     this.besideRight = new Map(); // cyclist id -> when it last rode on the car's right, going its way
     this.hookCounted = new Map(); // cyclist id -> when cutting across it was last counted
-    this.evCalls = new Map(); // emergency vehicle id -> { since, v0, lead }: since it called on the car
-    this.evCounted = new Set(); // emergency vehicles a failure to yield was counted for
-    this.evJunction = null; // the junction the car's front is in, while one is about
-    this.busCalls = new Map(); // "<bus id>:<departure>" -> { owed, counted }: a bus pulling out ahead
     this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it
     this.crosswalkStop = null; // the marked crosswalk the car has stood still at (sim/crosswalk.js)
-    this.schoolCalls = new Map(); // "<school bus id>:<stop>" -> { owed, counted }: one with its reds on
-    this.streetcarCalls = new Map(); // "<streetcar id>:<departure>" -> { owed, counted }: one with its doors open
-    this.trainCalls = new Map(); // "<crossing id>:<train id>:<departure>" -> { owed, counted }: one approaching it
-    this.onTracks = null; // the level crossing the car is standing on the tracks of, and since when
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
-    // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
-    // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
-    // spaces it gave up, the space it is parked in, and the kerb strikes the audit counted
-    this.parkAtGoal = !!park;
-    this.park = null;
-    this.parking = null;
-    this.parkHold = 0;
-    this.parkTried = [];
-    this.parkedIn = null;
-    this.kerbContact = false;
-    this.hazards = !!hazards;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -302,7 +192,6 @@ export class World {
     this.spawnEgo();
     buildFeatures(this, features, seed, map, "afterSpawn");
     this.crowd = new Crowd(this, { seed, count: pedestrians });
-    this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     buildFeatures(this, features, seed, map);
   }
 
@@ -327,11 +216,12 @@ export class World {
   }
 
   // Line of sight: buildings, weather and darkness hide anything, and a vehicle in traffic hides a
-  // pedestrian behind it (sim/crosswalk.js); with hidden hazards on, so does one standing at the kerb
-  // (sim/hidden-hazards.js), and road vehicles hide other vehicles and cyclists (sim/hidden-traffic.js).
-  // (with hidden traffic: a vehicle or cyclist the car would see but for another vehicle's body)
+  // pedestrian behind it (sim/crosswalk.js); a registered feature can add what else hides one (hidden
+  // hazards: a vehicle standing at the kerb hides a pedestrian, and road vehicles hide other vehicles and
+  // cyclists, sim/features/hidden-hazards.js).
+  // (a vehicle or cyclist the car would see but for another vehicle's body)
   hiddenByVehicle(o, observer = this.ego) {
-    return this.hazards && hideable(o) && this.visibility.sees(observer, o) && hiddenVehicle(this, observer, o);
+    return HIDDEN_BY_VEHICLE.some((hidden) => hidden(this, observer, o));
   }
 
   // (`reach`: looking further along a street by clear daylight, see sim/visibility.js PASS_SIGHT_M)
@@ -344,9 +234,15 @@ export class World {
     for (const hides of HIDES) if (hides(this, observer, o)) return false;
     const visible = featureObstacle(o)?.visible;
     if (visible) return visible(this, observer, o);
-    if (o.kind === "pedestrian")
-      return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
-    return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
+    if (o.kind === "pedestrian") {
+      let standing = [];
+      for (const near of STANDING_HIDES) {
+        const more = near(this, observer, o);
+        if (more) standing = standing.length ? standing.concat(more) : more;
+      }
+      return !hiddenByTraffic(observer, o, this.npcs, standing);
+    }
+    return !VEHICLE_HIDES.some((hides) => hides(this, observer, o, reach));
   }
 
   // Middle of a long residential edge near the map center, facing along it.
@@ -432,27 +328,9 @@ export class World {
     this.allWayCounted = null;
     this.besideRight.clear();
     this.hookCounted.clear();
-    this.evCalls.clear();
-    this.evJunction = null;
-    this.busCalls.clear();
-    this.schoolCalls.clear();
-    this.streetcarCalls.clear();
-    this.streetcarYields?.clear();
-    this.trainCalls.clear();
-    this.trainYields?.clear();
-    this.onTracks = null;
     this.inBox = null;
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
-    // (moved by hand: whatever space it was going for, or parked in, is let go)
-    for (const p of [this.park, this.parkedIn])
-      for (const slot of p?.slots || []) if (slot.reserved?.owner === this.ego) slot.reserved = null;
-    this.park = null;
-    this.parking = null;
-    this.parkHold = 0;
-    this.parkedIn = null;
-    this.kerbContact = false;
-    this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
     this.crosswalkStop = null;
@@ -781,9 +659,8 @@ export class World {
           };
         }
         // giving way: at a two-way stop, or where its street has no sign and is not the major road
-        const junction = control.night_flash
-          ? this.map.intersections.get(control.junction)
-          : this.map.nodes.get(edge.to);
+        // (a stop standing in for a grouped junction gives way at that junction)
+        const junction = firstHookResult(PRIORITY_JUNCTION, this, control) || this.map.nodes.get(edge.to);
         this.giveWay =
           junction &&
           ((control.type === "stop" && !control.all_way) ||
@@ -846,11 +723,8 @@ export class World {
     this.auditOncoming();
     this.auditGiveWay();
     this.auditCyclists();
-    this.auditEmergency(road);
-    this.auditBuses();
-    this.auditSchoolBuses();
-    this.auditStreetcars();
-    this.auditCrossings(dt);
+    for (const audit of AUDIT_AFTER_CYCLISTS) audit(this, road);
+    for (const audit of AUDIT_BUSES) audit(this, dt);
     this.auditBox(dt, followsRoute ? frontS : null);
     this.auditArrow();
     for (const audit of AUDIT_BEFORE_MERGE) audit(this);
@@ -864,21 +738,8 @@ export class World {
     for (const audit of AUDIT_STREET_HAZARDS) audit(this);
     for (const audit of AUDIT_REAR_TRAFFIC) audit(this);
     for (const audit of AUDIT_LATE) audit(this);
-    this.auditKerb();
-    leftSpace(this);
-  }
-
-  // Parking or pulling out (sim/parallel-park.js), a tyre on the kerb is a kerb strike: counted once a
-  // contact (a bumper reaching over it is not).
-  auditKerb() {
-    const law = this.parking;
-    if (!law || law.phase === "done") {
-      this.kerbContact = false;
-      return;
-    }
-    const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
-    if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
-    this.kerbContact = on;
+    // (and last, destination parking's: sim/features/destination-parking.js)
+    for (const audit of AUDIT_DESTINATION) audit(this);
   }
 
   // Through a junction on a left arrow: anything but a left turn (heading more than 45 deg left of
@@ -952,108 +813,6 @@ export class World {
     }
   }
 
-  auditCrossings(dt) {
-    const crossings = railIndex(this.map).crossings;
-    if (!crossings.length) return;
-    const ego = this.ego;
-    // (where the car stands on the tracks, for the coaching score: sim/drive-score.js)
-    const on = crossings.find((c) => fouling(ego, c, this.map)) || null;
-    if (!on) this.onTracks = null;
-    else if (this.onTracks?.id !== on.id) this.onTracks = { id: on.id, since: this.t, still: 0 };
-    if (this.onTracks) this.onTracks.still = Math.abs(ego.v) < 0.3 ? this.onTracks.still + dt : 0;
-    const ahead = crossingAheadOf(ego, this.map);
-    for (const c of crossings) {
-      const at = trainAt(this.npcs, c);
-      if (!at) continue;
-      const x = ahead?.c === c ? ahead.x : null,
-        foul = on === c;
-      if (!x && !foul) continue;
-      const train = at.train,
-        key = `${c.id}:${train.id}:${train.rail.departures}`;
-      let rec = this.trainCalls.get(key);
-      // (decided when the car first hears or sees it coming, still short of the law's line)
-      if (!rec && x && x.hold_m > 0) {
-        const heard = train.rail.gong && Math.hypot(train.x - ego.x, train.y - ego.y) < HEAR_M;
-        if (heard || this.visibility.sees(ego, train))
-          this.trainCalls.set(key, (rec = { owed: canStopForTrain(ego.v, x.stop_m), counted: false }));
-      }
-      if (rec?.counted) continue;
-      const crossed = rec?.owed && x && x.hold_m <= 0 && !x.fouling && x.exit_m > 0 && ego.v > AUDIT_TRAIN_MOVING_MPS;
-      const stood = foul && Math.abs(ego.v) < AUDIT_TRAIN_MOVING_MPS;
-      if (crossed || stood) {
-        if (!rec) this.trainCalls.set(key, (rec = { owed: true, counted: false }));
-        rec.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({
-          type: "failed_to_yield",
-          to: "train",
-          with: train.id,
-          crossing: c.id,
-          ...(stood ? { on_tracks: true } : {}),
-        });
-      }
-    }
-    if (this.trainCalls.size > 20)
-      for (const key of [...this.trainCalls.keys()].slice(0, 10)) this.trainCalls.delete(key);
-  }
-
-  auditStreetcars() {
-    const ego = this.ego;
-    for (const car of this.npcs) {
-      if (!doorsOpen(car)) continue;
-      const key = `${car.id}:${car.transit.departures}`,
-        r = streetcarRelation(ego, car);
-      if (!r || r.right_m < -IN_LANE_M || r.right_m > STREETCAR_SIDE_M) continue;
-      let rec = this.streetcarCalls.get(key);
-      // (decided when the car first sees the doors open, still short of where it must stop)
-      if (!rec) {
-        if (r.ahead_m <= 0 || !this.visibility.sees(ego, car)) continue;
-        this.streetcarCalls.set(key, (rec = { owed: canStopForStreetcar(ego.v, r.ahead_m), counted: false }));
-      }
-      if (
-        rec.owed &&
-        !rec.counted &&
-        r.ahead_m <= STREETCAR_HOLD_M - STREETCAR_STOP_M &&
-        ego.v > AUDIT_STREETCAR_MOVING_MPS
-      ) {
-        rec.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({ type: "failed_to_yield", to: "streetcar", with: car.id });
-      }
-    }
-    if (this.streetcarCalls.size > 20)
-      for (const key of [...this.streetcarCalls.keys()].slice(0, 10)) this.streetcarCalls.delete(key);
-  }
-
-  auditSchoolBuses() {
-    const ego = this.ego;
-    for (const bus of this.npcs) {
-      if (!redsOn(bus)) continue;
-      const key = `${bus.id}:${bus.school.stops}`,
-        r = schoolBusRelation(ego, bus);
-      if (!r || Math.abs(r.right_m) > SIDE_M) continue;
-      let rec = this.schoolCalls.get(key);
-      // (decided when the car first sees the reds, still short of the bus)
-      if (!rec) {
-        if (r.ahead_m <= 0 || !this.visibility.sees(ego, bus)) continue;
-        this.schoolCalls.set(
-          key,
-          (rec = {
-            owed: canStopForSchool(ego.v, r.ahead_m - (r.relation === "behind" ? BEHIND_M : ONCOMING_M)),
-            counted: false,
-          }),
-        );
-      }
-      if (rec.owed && !rec.counted && r.ahead_m <= 0 && ego.v > AUDIT_SCHOOL_MOVING_MPS) {
-        rec.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({ type: "failed_to_yield", to: "school bus", with: bus.id });
-      }
-    }
-    if (this.schoolCalls.size > 20)
-      for (const key of [...this.schoolCalls.keys()].slice(0, 10)) this.schoolCalls.delete(key);
-  }
-
   auditCrosswalkPass() {
     const ego = this.ego,
       f = ego.front,
@@ -1088,357 +847,6 @@ export class World {
     }
     if (this.crosswalkCalls.size > 40)
       for (const key of [...this.crosswalkCalls.keys()].slice(0, 20)) this.crosswalkCalls.delete(key);
-  }
-
-  auditBuses() {
-    const ego = this.ego;
-    for (const bus of this.npcs) {
-      if (!isBus(bus) || !busHasRightOfWay(bus)) continue;
-      const key = `${bus.id}:${bus.transit.departures}`,
-        r = busRelation(ego, bus);
-      let rec = this.busCalls.get(key);
-      if (!r?.inLane) continue;
-      // (it owes the bus the right of way if it was behind it when it first saw it signal, and could
-      // stop then; until it sees it, nothing is decided)
-      if (!rec) {
-        if (!this.visibility.sees(ego, bus)) continue;
-        this.busCalls.set(
-          key,
-          (rec = {
-            owed: r.behind_m > 0 && r.behind_m - BUS_YIELD_GAP_M >= Math.max(0, ego.v) ** 2 / (2 * AUDIT_BUS_DECEL),
-            counted: false,
-          }),
-        );
-      }
-      if (rec.owed && !rec.counted && r.behind_m < 0 && ego.v > AUDIT_BUS_MOVING_MPS) {
-        rec.counted = true;
-        this.violations.failed_to_yield++;
-        this.events.push({ type: "failed_to_yield", to: "bus", with: bus.id });
-      }
-    }
-    // (forget buses that have pulled out)
-    if (this.busCalls.size > 20) for (const key of [...this.busCalls.keys()].slice(0, 10)) this.busCalls.delete(key);
-  }
-
-  auditEmergency(road) {
-    const ego = this.ego,
-      evs = this.npcs.filter(isEmergency);
-    if (!evs.length) {
-      this.evCalls.clear();
-      this.evJunction = null;
-      return;
-    }
-    const FRONT = ego.spec.length - ego.spec.rearOverhang;
-    const fx = ego.x + Math.cos(ego.psi) * FRONT,
-      fy = ego.y + Math.sin(ego.psi) * FRONT;
-    let junction = null;
-    for (const n of this.map.nodes.values()) {
-      if (
-        Math.abs(n.x - fx) < AUDIT_EV_BOX_M &&
-        Math.abs(n.y - fy) < AUDIT_EV_BOX_M &&
-        Math.hypot(n.x - fx, n.y - fy) < AUDIT_EV_BOX_M &&
-        isJunction(this.map, n.id)
-      ) {
-        junction = n.id;
-        break;
-      }
-    }
-    const entered = junction !== null && junction !== this.evJunction && ego.v > 1;
-    this.evJunction = junction;
-    // A registered feature may move the usable right edge into the lane (snowbanks pushing the parked cars
-    // out, say). A stopped car must not drive into the cars parked there to satisfy a measurement from the
-    // old lane centre.
-    let rightmost = Infinity;
-    for (const kerb of EV_KERB) rightmost = Math.min(rightmost, kerb(this, road, FRONT));
-    // The normal target leaves a settling allowance before this audit's minimum
-    // (0.3 m versus 0.2 m for the standard car). Preserve that allowance when banks
-    // move the target left; requiring exact equality with keepAt has no feasible
-    // range between the audit and the parked-car clearance policy.
-    const settling = road.lane
-      ? Math.max(0, pullOverOffset(road.edge, road.lane.idx, ego.spec.width, false) - AUDIT_EV_PULLED_M)
-      : 0;
-    // (beside cars parked close to the lane's line, as far over as they leave room counts: sim/emergency.js)
-    const besideParked = road.lane
-      ? (() => {
-          const mid = ego.spec.length / 2 - ego.spec.rearOverhang,
-            s = Math.min(road.lane.length, road.s + mid);
-          const [x, y] = pointAt(road.lane.pts, road.lane.cum, s);
-          // (with the usual pull-over's settling allowance: its 0.3 m target is met at 0.2 m)
-          return (
-            parkedRoom(this, x, y, headingAt(road.lane.pts, road.lane.cum, s), ego.spec, AUDIT_EV_PULL_AHEAD_M) -
-            (pullOverOffset(road.edge, road.lane.idx, ego.spec.width, false) - AUDIT_EV_PULLED_M)
-          );
-        })()
-      : Infinity;
-    // (stopped outside the curb lane with a vehicle alongside on the right, closer than a lane's width: the
-    // lane it would pull over into is taken, and it stops where it is)
-    const boxedRight =
-      road.lane &&
-      road.edge &&
-      road.lane.idx < road.edge.lanes - 1 &&
-      Math.abs(ego.v) < 0.3 &&
-      this.npcs.some((n) => {
-        if (isEmergency(n) || !n.obb) return false;
-        const box = n.obb(),
-          p = ego.toLocal(...box.center),
-          angle = box.heading - ego.psi;
-        const along = Math.abs(Math.cos(angle)) * box.halfLength + Math.abs(Math.sin(angle)) * box.halfWidth;
-        const side = Math.abs(Math.sin(angle)) * box.halfLength + Math.abs(Math.cos(angle)) * box.halfWidth;
-        const mid = ego.spec.length / 2 - ego.spec.rearOverhang;
-        return (
-          Math.abs(p.ahead - mid) < ego.spec.length / 2 + along &&
-          p.right > 0 &&
-          p.right - side - ego.spec.width / 2 < road.edge.lane_width
-        );
-      });
-    const pulled =
-      road.lane &&
-      (boxedRight || road.lateral + 1e-6 >= Math.min(AUDIT_EV_PULLED_M, rightmost - settling, besideParked));
-    const control = road.edge?.control,
-      toLine = control ? control.s_line - road.s - FRONT : Infinity;
-    // Giving way at a junction without a sign or signal, or at a stop sign, the car stops anywhere from its
-    // line to the point it looks from (`sPeek`, map/route.js; sim/priority.js), short of the junction, and
-    // has no more room to pull over there than at the line. Measured along the route, as sensing does.
-    const rp = this.route ? this.route.project(ego.x, ego.y, this.route.hint) : null;
-    const routeFront =
-      rp && rp.distance < AUDIT_ROUTE_CORRIDOR_M && Math.abs(wrap(ego.psi - rp.heading)) < AUDIT_ROUTE_HEADING_RAD
-        ? rp.s + FRONT
-        : null;
-    const look =
-      routeFront === null
-        ? null
-        : this.route.controls.find(
-            (c) =>
-              // (a give-way approach or a stop sign; an uncontrolled junction the car's street has priority at, kept
-              // on a route for a left turn's oncoming traffic, is no line to hold)
-              ((c.control.type === "uncontrolled" && c.control.rule !== "major") || c.control.type === "stop") &&
-              routeFront <= c.sPeek + AUDIT_EV_OVERSHOOT_M,
-          ) || null;
-    const toLook = look ? look.sRoute - routeFront : Infinity,
-      toPeek = look ? look.sPeek - routeFront : -Infinity;
-    const inLook =
-      toLook <= AUDIT_EV_LINE_M &&
-      toPeek >= -AUDIT_EV_OVERSHOOT_M &&
-      (toLook >= -AUDIT_EV_OVERSHOOT_M || toPeek <= AUDIT_EV_LOOK_M);
-    // An existing queue can leave less steering room than a control line. Measure
-    // real bodies here, including a bus standing at an angle, independently of the plan.
-    const queued =
-      Math.abs(ego.v) < 0.3
-        ? this.npcs.find((n) => {
-            if (isEmergency(n) || Math.abs(n.v) >= 1 || !n.obb) return false;
-            const box = n.obb(),
-              p = ego.toLocal(...box.center),
-              angle = box.heading - ego.psi;
-            const along = Math.abs(Math.cos(angle)) * box.halfLength + Math.abs(Math.sin(angle)) * box.halfWidth;
-            const side = Math.abs(Math.sin(angle)) * box.halfLength + Math.abs(Math.cos(angle)) * box.halfWidth;
-            return (
-              p.ahead > FRONT &&
-              p.ahead - along - FRONT <= FOLLOWING_STANDSTILL_M + AUDIT_EV_LINE_M &&
-              Math.abs(p.right) < side + ego.spec.width / 2
-            );
-          }) || this.heldInQueue(FRONT)
-        : null;
-    for (const ev of evs) {
-      const call = emergencyCall(ego, ev);
-      let rec = this.evCalls.get(ev.id);
-      if (!call) {
-        if (rec) this.evCalls.delete(ev.id);
-        continue;
-      }
-      if (!rec) {
-        // Already stopped at a control line when the siren reached it: there is no room to steer
-        // sideways without entering the junction. Holding that stop as the vehicle passes is
-        // yielding too. Capture this at the call, so stopping here later cannot excuse a missed
-        // opportunity to pull over. Moving on ends the exception; blocking the vehicle is still
-        // judged independently below.
-        // (a little over the line, as a short stop overshoots, is stopped at it too: as below, once it stops)
-        const atLine =
-          (control?.type === "stop" || control?.type === "signal") &&
-          Math.abs(ego.v) < 0.3 &&
-          toLine >= -AUDIT_EV_OVERSHOOT_M &&
-          toLine <= AUDIT_EV_LINE_M;
-        // (or between a give-way or stop line and where it looks from)
-        const atLook = !atLine && Math.abs(ego.v) < 0.3 && inLook;
-        const v = Math.max(0, ego.v);
-        // A crawl already running out of steering room before a control can finish
-        // that stop. Judge the opportunity at the call, not from its later choice.
-        // (and one already a little over its line, still able to stop within that overshoot)
-        const stopping = v * ego.spec.accelLag + (v * v) / (2 * AUDIT_EV_DECEL);
-        const approachingLine =
-          !atLine &&
-          (control?.type === "stop" || control?.type === "signal") &&
-          v <= AUDIT_EV_MOVING_MPS &&
-          toLine + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
-          toLine <= stopping + AUDIT_EV_LINE_M;
-        // (and a crawl that stops there, short of where it looks from, whether or not it could also have stopped
-        // at the line: a crawl just over it stops between the two)
-        const approachingLook =
-          !atLine &&
-          !atLook &&
-          look &&
-          // (from the line or already near where it looks from: not a crawl mid-block, past a stop sign set back
-          // from its junction, with room to pull over)
-          (inLook || toLook >= -AUDIT_EV_OVERSHOOT_M) &&
-          v <= AUDIT_EV_MOVING_MPS &&
-          toPeek + AUDIT_EV_OVERSHOOT_M >= (v * v) / (2 * comfort().hardDecel) &&
-          toLook <= stopping + AUDIT_EV_LINE_M;
-        // A car crawling up to a queue can finish stopping when the siren arrives.
-        const hold = !queued && v <= AUDIT_EV_MOVING_MPS ? this.queueHold(FRONT) : null;
-        const approachingQueue =
-          hold && hold.distance >= (v * v) / (2 * comfort().hardDecel) && hold.distance <= stopping + AUDIT_EV_LINE_M
-            ? hold.vehicle
-            : null;
-        this.evCalls.set(
-          ev.id,
-          (rec = {
-            since: this.t,
-            v0: v,
-            lead: false,
-            ahead: null,
-            ...(atLine ? { stoppedAtLine: [ego.x, ego.y], ...(toLine < 0 ? { lineOvershoot: true } : {}) } : {}),
-            ...(atLook ? { stoppedAtLine: [ego.x, ego.y], lookAt: look.control.id } : {}),
-            ...(queued ? { stoppedInQueue: { id: queued.id, at: [ego.x, ego.y] } } : {}),
-            ...(approachingLine
-              ? {
-                  lineApproach: {
-                    edge: road.edge.id,
-                    control: control.id,
-                    until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL,
-                  },
-                }
-              : {}),
-            ...(approachingLook
-              ? { lookApproach: { control: look.control.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } }
-              : {}),
-            ...(approachingQueue
-              ? { queueApproach: { id: approachingQueue.id, until: this.t + AUDIT_EV_REACT_S + v / AUDIT_EV_DECEL } }
-              : {}),
-          }),
-        );
-      }
-      if (rec.queueApproach) {
-        if (this.t > rec.queueApproach.until) delete rec.queueApproach;
-        else if (queued?.id === rec.queueApproach.id) {
-          rec.stoppedInQueue = { id: queued.id, at: [ego.x, ego.y] };
-          delete rec.queueApproach;
-        }
-      }
-      if (rec.lineApproach) {
-        if (
-          this.t > rec.lineApproach.until ||
-          road.edge?.id !== rec.lineApproach.edge ||
-          control?.id !== rec.lineApproach.control
-        )
-          delete rec.lineApproach;
-        else if (Math.abs(ego.v) < 0.3 && toLine >= -AUDIT_EV_OVERSHOOT_M && toLine <= AUDIT_EV_LINE_M) {
-          rec.stoppedAtLine = [ego.x, ego.y];
-          rec.lineOvershoot = true;
-          delete rec.lineApproach;
-        }
-      }
-      if (rec.lookApproach) {
-        if (this.t > rec.lookApproach.until) delete rec.lookApproach;
-        else if (Math.abs(ego.v) < 0.3 && inLook && look.control.id === rec.lookApproach.control) {
-          rec.stoppedAtLine = [ego.x, ego.y];
-          rec.lookAt = look.control.id;
-          delete rec.lookApproach;
-        }
-      }
-      if (
-        rec.stoppedAtLine &&
-        ((rec.lookAt
-          ? !inLook || look.control.id !== rec.lookAt
-          : toLine < (rec.lineOvershoot ? -AUDIT_EV_OVERSHOOT_M : 0) || toLine > AUDIT_EV_LINE_M) ||
-          Math.hypot(ego.x - rec.stoppedAtLine[0], ego.y - rec.stoppedAtLine[1]) > AUDIT_EV_LINE_M)
-      ) {
-        delete rec.stoppedAtLine;
-        delete rec.lookAt;
-      }
-      // (released from the queue, the car has as long to pull over as it had from the call)
-      if (
-        rec.stoppedInQueue &&
-        (queued?.id !== rec.stoppedInQueue.id ||
-          Math.hypot(ego.x - rec.stoppedInQueue.at[0], ego.y - rec.stoppedInQueue.at[1]) > AUDIT_EV_LINE_M)
-      ) {
-        rec.releasedFrom = rec.stoppedInQueue.at;
-        delete rec.stoppedInQueue;
-        rec.released = this.t;
-      }
-      // (but a queue that moves up a car's length or less and stops again within that time leaves it as
-      // boxed in as before: stopped in it again, it is queued again)
-      else if (
-        !rec.stoppedInQueue &&
-        queued &&
-        rec.releasedFrom &&
-        this.t - rec.released < AUDIT_EV_PULL_S &&
-        Math.hypot(ego.x - rec.releasedFrom[0], ego.y - rec.releasedFrom[1]) <= ego.spec.length
-      )
-        rec.stoppedInQueue = { id: queued.id, at: [ego.x, ego.y] };
-      // (where its middle is along the car, from the car's middle)
-      const [cx, cy] = ev.center,
-        local = ego.toLocal(cx, cy),
-        ahead = local.ahead - (ego.spec.length / 2 - ego.spec.rearOverhang),
-        before = rec.ahead;
-      rec.ahead = ahead;
-      // The instruction to drive on is latched while the car is as far over as
-      // it can get, including a captured line stop or queue that prevents steering farther.
-      const blockedInQueue = queued && ev.blockedBy?.includes(queued);
-      const holdingLine = rec.stoppedAtLine && Math.abs(ego.v) < 0.3;
-      const holdingQueue = rec.stoppedInQueue && queued && Math.abs(ego.v) < 0.3;
-      const lead = emergencyLead(this, ev, pulled || blockedInQueue || holdingLine);
-      if (this.evCounted.has(ev.id)) continue;
-      const after = this.t - rec.since;
-      const late =
-        !lead &&
-        after > AUDIT_EV_REACT_S &&
-        ego.v > Math.max(AUDIT_EV_MOVING_MPS, rec.v0 - AUDIT_EV_DECEL * (after - AUDIT_EV_REACT_S));
-      const crossing = call.relation === "left" || call.relation === "right";
-      const level =
-        !crossing &&
-        before !== null &&
-        Math.sign(before) !== Math.sign(ahead) &&
-        Math.abs(local.right) < AUDIT_EV_SIDE_M;
-      const unmoved =
-        level &&
-        after >= AUDIT_EV_PULL_S &&
-        !(this.t - rec.released < AUDIT_EV_PULL_S) &&
-        !pulled &&
-        !lead &&
-        !holdingLine &&
-        !holdingQueue &&
-        junction === null;
-      // A second blocker directly in front of the car prevents it from driving on
-      // when asked. Holding that safe stop is not the cause of this gridlock.
-      // (nor is still standing in the queue it was in at the call, with the queue still in front of it: it
-      // can neither pull over nor drive on, whether or not the vehicle has found a way past the queue's
-      // front, as one coming the other way did on West 5th Avenue in Kitsilano snow s1-9)
-      // Turning changes the relative bearing of a siren behind the car. An authorized lead
-      // remains a drive-on instruction, not a new crossing call as the car clears the junction.
-      if (
-        late ||
-        unmoved ||
-        (!lead && entered && crossing && after >= AUDIT_EV_JUNCTION_S) ||
-        (holdsUp(ev, ego, AUDIT_EV_BLOCK_S) && !pulled && !lead && !blockedInQueue && !holdingQueue)
-      ) {
-        this.evCounted.add(ev.id);
-        this.violations.failed_to_yield++;
-        this.events.push({ type: "failed_to_yield", to: "emergency vehicle", with: ev.id });
-      }
-    }
-  }
-
-  // Within a stopping queue even when the vehicle ahead needs extra room behind it.
-  heldInQueue(front) {
-    const hold = this.queueHold(front);
-    return hold && hold.distance <= AUDIT_EV_LINE_M ? hold.vehicle : null;
-  }
-
-  queueHold(front) {
-    for (const hold of EV_QUEUE_HOLD) {
-      const result = hold(this, front);
-      if (result) return result;
-    }
-    return null;
   }
 
   auditCyclists() {

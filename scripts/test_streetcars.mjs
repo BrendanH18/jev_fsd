@@ -26,6 +26,7 @@ const {
   streetcarRelation,
 } = await import("../static/js/sim/streetcar.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
+const { featureObstacle } = await import("../static/js/sim/features/index.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { toJevState, buildQuestions, situationClauses } = await import("../static/js/brain/state.js");
 const { CHALLENGES } = await import("../static/js/lab/challenges.js");
@@ -138,7 +139,7 @@ function soak(seconds, { seed = 3, count = 25, streetcars = true, buses = true }
   const seen = new Map();
   for (let k = 0; k < 60 * seconds; k++) {
     step(ctx);
-    for (const car of fleet.streetcars) {
+    for (const car of fleet.streetcars.list) {
       log.spawned.add(car.id);
       const t = car.transit,
         pe = car.path.currentEdge();
@@ -182,9 +183,9 @@ test("in a free drive streetcars keep to their track, stop with their doors open
   assert.equal(log.outOfLane, 0, "always in the lane their track is laid in");
   assert.ok(log.stops.size >= 3, `${log.stops.size} stops in 5 minutes`);
   assert.ok(log.spawned.size >= 4, `${log.spawned.size} streetcars came and went`);
-  assert.ok(fleet.streetcars.length <= 2 && fleet.streetcars.every((c) => c.transit.tram), "two at a time");
+  assert.ok(fleet.streetcars.list.length <= 2 && fleet.streetcars.list.every((c) => c.transit.tram), "two at a time");
   assert.ok(
-    fleet.buses.every((b) => !b.transit.tram),
+    fleet.buses.list.every((b) => !b.transit.tram),
     "buses run bus routes only",
   );
   assert.deepEqual([...log.hits], [], "they hit nothing");
@@ -440,9 +441,16 @@ test("a checkpoint and restore brings back the streetcar's riders", () => {
   );
   assert.ok(doorsOpen(target.fleet.vehicles.find((v) => v.id === tram)), "the streetcar, doors open");
   assert.ok(
-    target.fleet.streetcars.some((v) => v.id === tram),
+    target.fleet.streetcars.list.some((v) => v.id === tram),
     "and the fleet's list of them",
   );
+});
+
+test("a streetcar keeps to its track: no easing round what stands at the kerb, no pulling over", () => {
+  const { tram } = doors();
+  const descriptor = featureObstacle(tram);
+  assert.equal(descriptor?.ownLane, true, "keeps its own lane past a bus standing at its stop");
+  assert.equal(descriptor?.onTrack, true, "never pulls over for an emergency vehicle");
 });
 
 console.log(`${checks} streetcar checks passed`);

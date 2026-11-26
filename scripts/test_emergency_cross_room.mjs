@@ -94,7 +94,7 @@ function setup(front, v) {
   world.destination = world.route.endPoint();
   const fleet = new NpcFleet(world, { count: 0, bikes: 0, seed: 3 });
   world._road = world.roadInfo();
-  fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 60 });
+  fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck", distance: 60 });
   return { world, fleet };
 }
 function drive(world, fleet, seconds) {

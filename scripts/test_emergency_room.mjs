@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { MapData, cumulative } = await import("../static/js/map/mapdata.js");
+const { auditEmergency } = await import("../static/js/sim/emergency-audit.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Route } = await import("../static/js/map/route.js");
 const { Vehicle, AMBULANCE, BUS } = await import("../static/js/sim/vehicle.js");
@@ -116,7 +117,7 @@ function passBy(world, ev) {
     world.t = k * 0.5;
     ev.x = world.ego.x + middle + (k - 19.5) * 3 + ev.spec.length / 2 - ev.spec.rearOverhang;
     ev.path.s = ev.x + 200;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
   return world.violations.failed_to_yield;
 }
@@ -189,8 +190,8 @@ function parkBeside(world, right) {
   const ev = ambulance(world);
   ev.x = world.ego.x - 12;
   ev.path.s = ev.x + 200;
-  world.auditEmergency(world.roadInfo());
-  // (the audit's drive-on latch, as World.auditEmergency sets it for a car pulled over that holds it up)
+  auditEmergency(world, world.roadInfo());
+  // (the audit's drive-on latch, as auditEmergency (sim/emergency-audit.js) sets it for a car pulled over that holds it up)
   world.evCalls.get(ev.id).lead = true;
   assert.equal(buildSnapshot(world).emergency?.lead, true, "told to drive on");
   ev.x = world.ego.x - 2;

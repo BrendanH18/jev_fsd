@@ -32,9 +32,9 @@ ambulance.path.start("e574", 0, 70, [["e386", 0]]);
 fleet.vehicles.push(ambulance);
 Object.assign(world.ego, { x: -192.78629851944717, y: -525.9975575137584, psi: 3.1268159702751666, v: 0 });
 const approach = ambulance.path.currentEdge();
-assert.equal(fleet.boxBusy(ambulance, approach), false, "the whole body has left the crossing street");
+assert.equal(fleet.boxBusy(ambulance, approach, true), false, "the whole body has left the crossing street");
 world.ego.x += 1;
-assert.equal(fleet.boxBusy(ambulance, approach), true, "a tail still over the asphalt holds the ambulance");
+assert.equal(fleet.boxBusy(ambulance, approach, true), true, "a tail still over the asphalt holds the ambulance");
 world.ego.x -= 1;
 let touched = false;
 for (let k = 0; k < 20 * 60; k++) {

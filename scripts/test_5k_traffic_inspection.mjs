@@ -41,16 +41,12 @@ function fixture() {
     pulled: 0,
     nextPull: 1,
     nextPark: 2,
-    nextEmergency: -1,
-    nextBus: 14,
-    nextStreetcar: 15,
-    nextSchool: 16,
-    nextTrain: 17,
+    emergency: { next: -1 },
     nextPlow: 18,
-    busTarget: 0,
-    streetcarTarget: 0,
-    schoolTarget: 0,
-    trainTarget: 0,
+    buses: { next: 14, target: 0 },
+    streetcars: { next: 15, target: 0 },
+    schoolBuses: { next: 16, target: 0 },
+    trains: { next: 17, target: 0 },
     plowTarget: 0,
   });
   fleet.world = {
@@ -159,31 +155,31 @@ const fixtures = [
   [
     "fleet_emergency_timer",
     ({ fleet }) => {
-      fleet.nextEmergency = NaN;
+      fleet.emergency.next = NaN;
     },
   ],
   [
     "fleet_bus_timer",
     ({ fleet }) => {
-      fleet.nextBus = NaN;
+      fleet.buses.next = NaN;
     },
   ],
   [
     "fleet_tram_timer",
     ({ fleet }) => {
-      fleet.nextStreetcar = Infinity;
+      fleet.streetcars.next = Infinity;
     },
   ],
   [
     "fleet_school_timer",
     ({ fleet }) => {
-      fleet.nextSchool = -1;
+      fleet.schoolBuses.next = -1;
     },
   ],
   [
     "fleet_train_timer",
     ({ fleet }) => {
-      fleet.nextTrain = Infinity;
+      fleet.trains.next = Infinity;
     },
   ],
   [
@@ -195,25 +191,25 @@ const fixtures = [
   [
     "fleet_bus_target",
     ({ fleet }) => {
-      fleet.busTarget = -1;
+      fleet.buses.target = -1;
     },
   ],
   [
     "fleet_tram_target",
     ({ fleet }) => {
-      fleet.streetcarTarget = 0.5;
+      fleet.streetcars.target = 0.5;
     },
   ],
   [
     "fleet_school_target",
     ({ fleet }) => {
-      fleet.schoolTarget = NaN;
+      fleet.schoolBuses.target = NaN;
     },
   ],
   [
     "fleet_train_target",
     ({ fleet }) => {
-      fleet.trainTarget = Infinity;
+      fleet.trains.target = Infinity;
     },
   ],
   [

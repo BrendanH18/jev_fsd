@@ -97,7 +97,7 @@ function placeStreetcar(world, fleet, { route: routeId, run: runIndex, stop: sto
     run = route.runs[runIndex];
   const k = run.edges.indexOf(edge),
     before = run.edges.slice(0, k).reduce((a, id) => a + map.edges.get(id).length, 0);
-  const car = fleet.spawnBus(0, { route, run }, before + front - (STREETCAR.length - STREETCAR.rearOverhang), true);
+  const car = fleet.streetcars.spawn(0, { route, run }, before + front - (STREETCAR.length - STREETCAR.rearOverhang));
   if (!car) return { streetcarId: null };
   car.v = 0;
   Object.assign(car.transit, {

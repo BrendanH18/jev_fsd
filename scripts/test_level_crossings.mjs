@@ -209,7 +209,7 @@ function soak(seconds, { seed = 3, count = 30, trains = true } = {}) {
   };
   for (let i = 0; i < seconds * 60; i++) {
     step({ world, fleet, autopilot: idle });
-    for (const t of fleet.trains) {
+    for (const t of fleet.trains.list) {
       out.trains.add(t.id);
       if (t.rail.gong) out.rang++;
       for (const o of [world.ego, ...fleet.vehicles, ...world.crowd.list]) {
@@ -219,7 +219,7 @@ function soak(seconds, { seed = 3, count = 30, trains = true } = {}) {
     }
     if (i % 15) continue;
     for (const c of index.crossings) {
-      const at = rail.trainAt(fleet.trains, c);
+      const at = rail.trainAt(fleet.trains.list, c);
       for (const n of fleet.vehicles) {
         if (rail.isTrain(n) || !n.path) continue;
         // (standing on the tracks while one is approaching)

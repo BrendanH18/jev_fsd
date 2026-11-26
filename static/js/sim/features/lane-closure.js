@@ -343,6 +343,8 @@ export default {
   },
   snapshot: { lane_closure: null },
   trafficSpawnBlocked: (world, x, y) => world.laneClosures?.covers(x, y),
+  // (nobody parks on the block of a closed lane: sim/parallel-park.js)
+  parkingObstructed: (world, edge) => !!world.laneClosures?.zones.some((z) => z.edge === edge),
   obstacle: { test: isLaneClosure, traffic: true },
   standingVehicleLabel: (vehicle) => (isLaneClosure(vehicle) ? "lane closure" : null),
   trafficLaneControl(world, vehicle, path, front) {

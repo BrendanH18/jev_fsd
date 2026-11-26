@@ -59,7 +59,7 @@ claimed before the exits it depends on.
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app | Exited 9 Nov |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it | Exited 10 Nov; 1.8 open |
 | [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Met** on 21 November with the Kitsilano dry city suite (2.5b) |
-| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 17 of 41 moved |
+| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 41 of 41 moved 26 Nov |
 | [4](#phase-4-a-benchmark-that-separates-drivers) | Scores tell drivers apart | Two different models get measurably different scores for a stated reason | Met 20 Nov, on one run each |
 | [5](#phase-5-release-and-presentation) | The project presents what it is | 0.3.0 cut; README leads with results | Exited 20 Nov |
 | [6](#phase-6-grow-the-world-again) | New scenarios, under the admission rule | Each one passes the [checklist](#admission-rule-for-new-scenarios) | Gated (see [order](#expansion-plan-from-20-november)) |
@@ -301,7 +301,7 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   ties between equally near lanes in `set` order, so a re-planned route can differ between server
   processes (Python's hash seed); comparisons need one server process or `PYTHONHASHSEED=0` until it
   is made deterministic.
-- [ ] **3.2 Move the rest across.** (L) A few at a time, each with the same before-and-after record.
+- [x] **3.2 Move the rest across.** (L) A few at a time, each with the same before-and-after record.
   *Under way:* 20 November, puddles, black ice and snowbanks moved onto the registry, each in a commit
   of its own, and the core files no longer name them (six of the 41 features were records then). This ends
   the one exception AGENTS.md allowed: traffic's lane hooks hand each other their moves, so puddles read
@@ -329,16 +329,23 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   Overnight flashing, left on red, steady amber and bus lanes, then snow plows, lane closures and
   passing cyclists, bring the total to **34 of 41**, each in a commit of its own with the same
   before-and-after record, adding city rain, snow and 23:30 drives
-  ([five-thousand batch](docs/validation/five-thousand/README.md)). Left: transit buses, emergency
-  vehicles, school buses, streetcars, trains, destination parking and hidden hazards. Still to move
-  out of the core: traffic and the World read a flashing signal's stand-in stop by its `night_flash`
-  flag (`sim/npc.js`, `sim/world.js`), and parking reads `world.laneClosures`
-  (`sim/parallel-park.js`).
-- [ ] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
+  ([five-thousand batch](docs/validation/five-thousand/README.md)).
+  *Done 26 November:* transit buses, school buses, streetcars, trains, emergency vehicles, destination
+  parking and hidden hazards bring the registry to **41 of 41**, and the last two named reads left the
+  core (a flashing signal's stand-in stop, and the streets parking avoids). Three branches, each with its
+  own before-and-after record, then their merge, matched `8c34c637` on the bare and city suites (Kitsilano
+  dry, snow, 23:30 and with parking; Toronto, Edmonton, Calgary and Halifax), all 62 Rules and cautious
+  drives, both prompts and the stub recording ([records](docs/validation/registry-final/merged.md)).
+- [x] **3.3 Break up the long functions.** (M) `NpcFleet.step` (959 lines), `buildSnapshot` (585)
   and the one-line `needsMotionQuestion` test, once the features have moved out of them. Each piece
   under about 150 lines, with the same before-and-after record as 3.2.
   Fleet scheduling and snapshot assembly have been extracted. The per-vehicle traffic loop still
   needs to be split.
+  *Done 26 November:* `NpcFleet.step` (744 lines after the scheduling extraction) is 10 lines and calls
+  `stepVehicle`, which runs 13 named stages in the old order, the longest 101 lines. `buildSnapshot` (71
+  lines) and `needsMotionQuestion` (a 15-line `or`) needed nothing more. Every capture matched before and
+  after ([record](docs/validation/registry-final/split.md)). `desiredSpeed` in `brain/sensors.js` (212 lines)
+  is the longest left; 3.3 did not name it.
 - [x] **3.4 Shrink `AGENTS.md`.** (M) It is 48 KB, mostly one paragraph per feature saying the same
   thing: opt-in, own random stream, one shared conflict test, audit only once seen. State that
   pattern once, and move each feature's detail to the reference docs. Aim for under 12 KB.
@@ -392,7 +399,8 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   re-baselines routes, so the Python router and NPC paths join lanes the same way.
 
 Exit: adding a feature needs its own file, its challenge, its test and one registration line.
-*The proof on three features was met on 14 November; this exit needs 3.2 and 3.10.*
+*The proof on three features was met on 14 November, and 3.2 and 3.3 on 26 November; this exit still
+needs 3.10 (feature meshes and per-frame effects outside a record).*
 
 ## Phase 4: a benchmark that separates drivers
 
@@ -737,3 +745,4 @@ documented path, and adding it grows the repository by a stated, small amount.
 | 16 to 19 Nov | Ruff and Biome with blocking CI, pinned actions, each major lab's own API, faster browser CI |
 | 20 Nov | The open track, Jev and Claude Haiku results, 0.3.0, Boat sandboxes for agent work, 100 offline reports and run comparison, a keyless model replay in the demo, the registry at nine features |
 | 25 Nov | 5000 improvements in 25 areas ([inventory](docs/validation/five-thousand/README.md)); the registry at 34 of 41 features; actor meshes through the feature adapter |
+| 26 Nov | The registry at 41 of 41 features (3.2); the traffic loop split into stages (3.3) |

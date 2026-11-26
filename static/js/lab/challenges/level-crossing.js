@@ -163,7 +163,7 @@ function placeLevelCrossing(world, fleet, { crossing, queue }, seed) {
       const p = pointAt(track.pts, track.cum, o.front);
       return world.visibility.occluded([ego.x, ego.y], p);
     }) || sides.at(-1);
-  const train = hidden && fleet.spawnTrain(false, track, hidden.front, hidden.dir);
+  const train = hidden && fleet.trains.spawn(false, track, hidden.front, hidden.dir);
   if (train) {
     train.v = 0;
     Object.assign(train.rail, { phase: "dwell", held: true, dwell: Infinity, t: 0 });

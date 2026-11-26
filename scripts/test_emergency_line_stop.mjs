@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { MapData, cumulative } = await import("../static/js/map/mapdata.js");
+const { auditEmergency } = await import("../static/js/sim/emergency-audit.js");
 const { Route } = await import("../static/js/map/route.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle, CAR, AMBULANCE } = await import("../static/js/sim/vehicle.js");
@@ -252,12 +253,12 @@ function auditPass(front, v, settle) {
     [ARM, 1.6],
     [-ARM, 1.6],
   ]);
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   if (settle) {
     world.ego.x += settle;
     world.ego.v = 0;
     world.t = 1;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
   const middle = world.ego.spec.length / 2 - world.ego.spec.rearOverhang;
   for (const [t, ahead] of [
@@ -267,7 +268,7 @@ function auditPass(front, v, settle) {
     ev.x = world.ego.x + middle + ahead + ev.spec.length / 2 - ev.spec.rearOverhang;
     ev.path.s = ARM - ev.x;
     world.t = t;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
   return world.violations.failed_to_yield;
 }
@@ -293,20 +294,20 @@ function queuePass(moveUp, requeueAt) {
     id: "queue",
   });
   world.npcs.push(lead);
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   // (the queue moves off, and the car after it)
   lead.v = 1.5;
   world.t = 1;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   lead.x += moveUp;
   world.ego.x += moveUp;
   world.ego.v = 0.5;
   world.t = requeueAt - 0.5;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   lead.v = 0;
   world.ego.v = 0;
   world.t = requeueAt;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   const middle = world.ego.spec.length / 2 - world.ego.spec.rearOverhang;
   for (const [t, ahead] of [
     [9.9, 0.1],
@@ -315,7 +316,7 @@ function queuePass(moveUp, requeueAt) {
     ev.x = world.ego.x + middle + ahead + ev.spec.length / 2 - ev.spec.rearOverhang;
     ev.path.s = ARM - ev.x;
     world.t = t;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
   return world.violations.failed_to_yield;
 }
@@ -337,12 +338,12 @@ for (const queuedAtCall of [true, false]) {
   world.npcs.push(
     Object.assign(new Vehicle(world.ego.x + world.ego.spec.length + 2.8, world.ego.y, 0, 0), { id: "queue" }),
   );
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   world.ego.v = 0;
   world.t = 7;
   ev.blockedBy = [world.ego];
   ev.blockedFor = 7;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(
     world.violations.failed_to_yield,
     queuedAtCall ? 0 : 1,

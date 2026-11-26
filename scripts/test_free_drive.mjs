@@ -16,7 +16,8 @@ const free = freeDriveOptions();
 const worldKeys = Object.keys(free.world).sort(),
   fleetKeys = Object.keys(free.fleet).sort();
 // Every option the World takes is a free-drive feature, apart from what each caller sets itself: those
-// it names, and each registered feature's (sim/features/index.js), which it takes as `...features`.
+// it names, and each registered feature's (sim/features/index.js), which it takes as `...features`,
+// with any option a feature reads beside its own (`freeDriveExtra`: hidden hazards' step-outs, say).
 const worldSource = fs.readFileSync(new URL("../static/js/sim/world.js", import.meta.url), "utf8");
 const named = worldSource
   .match(/constructor\(\s*map,\s*\{([^}]*)\}\s*=\s*\{\}\s*,?\s*\)/)[1]
@@ -24,7 +25,12 @@ const named = worldSource
   .map((s) => s.trim().split(" ")[0])
   .filter(Boolean); // the formatter leaves a trailing comma after the last option
 assert.ok(named.includes("...features"), "the World takes the registered features' options");
-const constructorOptions = [...named.filter((k) => k !== "...features"), ...FEATURE_OPTIONS];
+const extraOptions = (f, enabled) => (f.freeDriveExtra ? f.freeDriveExtra(enabled) : {});
+const constructorOptions = [
+  ...named.filter((k) => k !== "...features"),
+  ...FEATURE_OPTIONS,
+  ...FEATURES.filter((f) => !f.buildFleet).flatMap((f) => Object.keys(extraOptions(f, true))),
+];
 assert.equal(
   new Set(constructorOptions).size,
   constructorOptions.length,
@@ -37,15 +43,30 @@ assert.deepEqual(
 for (const key of worldKeys.filter((k) => k !== "pedestrians"))
   assert.ok(free.world[key], `free drives turn on ${key}`);
 for (const key of fleetKeys) assert.ok(free.fleet[key], `free drives turn on the fleet's ${key}`);
-for (const { key, flag = key.toLowerCase() } of FEATURES.filter((f) => !f.buildFleet)) {
+for (const f of FEATURES.filter((f) => !f.buildFleet)) {
+  const { key, flag = key.toLowerCase() } = f;
   const off = typeof free.world[key] === "number" ? 0 : false;
-  assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).world, { ...free.world, [key]: off });
-  assert.deepEqual(presetOptions("city", { without: [key] }).world, { ...free.world, park: false, [key]: off });
+  assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).world, {
+    ...free.world,
+    [key]: off,
+    ...extraOptions(f, false),
+  });
+  assert.deepEqual(presetOptions("city", { without: [key] }).world, {
+    ...free.world,
+    park: false,
+    [key]: off,
+    ...extraOptions(f, false),
+  });
 }
-for (const { key, flag = key.toLowerCase() } of FLEET_FEATURES) {
+for (const { key, flag = key.toLowerCase(), worldOption } of FLEET_FEATURES) {
   const off = typeof free.fleet[key] === "number" ? 0 : false;
   assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).fleet, { ...free.fleet, [key]: off });
   assert.deepEqual(presetOptions("city", { without: [key] }).fleet, { ...free.fleet, [key]: off });
+  // (a fleet feature the World takes too is off in both)
+  if (worldOption) {
+    assert.deepEqual(freeDriveOptions(new URLSearchParams(`${flag}=0`)).world, { ...free.world, [key]: false });
+    assert.deepEqual(presetOptions("city", { without: [key] }).world, { ...free.world, park: false, [key]: false });
+  }
 }
 assert.equal(freeDriveOptions(new URLSearchParams("plows=0")).fleet.plows, 0);
 assert.equal(freeDriveOptions(new URLSearchParams("hazards=0")).world.stepOuts, 0);

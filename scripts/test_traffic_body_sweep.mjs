@@ -106,7 +106,7 @@ function addFireTruck(world, fleet, { y = 2.5, psi = -0.05 } = {}) {
   // Fog s1-7: the car's axle is outside the leader band; its angled nose occupies the bus's lane.
   const { map, world, fleet } = context("fog");
   Object.assign(world.ego, { x: 139.4085, y: 3.3569, psi: (-152 * Math.PI) / 180, v: 0 });
-  const bus = fleet.addSchoolBus(map.lane("main", 0), 100, 8.2);
+  const bus = fleet.schoolBuses.add(map.lane("main", 0), 100, 8.2);
   bus.school.every = Infinity;
   assert.equal(
     staysClear(world, fleet, bus),
@@ -118,7 +118,7 @@ function addFireTruck(world, fleet, { y = 2.5, psi = -0.05 } = {}) {
   // Snow s1-7: the rear axle follows the corner while the long front swings outside the lane.
   const { map, world, fleet } = context("snow", true);
   Object.assign(world.ego, { x: 106, y: -8, psi: Math.PI / 2, v: 0 });
-  const bus = fleet.addSchoolBus(map.lane("main", 0), 70, 3.4);
+  const bus = fleet.schoolBuses.add(map.lane("main", 0), 70, 3.4);
   bus.school.every = Infinity;
   assert.equal(staysClear(world, fleet, bus), true, "turning bus keeps its real front clear of a car outside its lane");
 }

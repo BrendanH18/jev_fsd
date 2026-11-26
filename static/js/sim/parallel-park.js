@@ -38,6 +38,10 @@ import { obbOverlap } from "./collision.js";
 import { pointAt, headingAt, projectPoint } from "../map/mapdata.js";
 import { busZones } from "./bus.js";
 import { railIndex } from "./rail.js";
+// (from the hook lists alone: the controller loads this module, and the registry loads the controller)
+import { hooks } from "./features/hook-lists.js";
+
+const PARKING_OBSTRUCTED = hooks("parkingObstructed");
 
 export const PARK_NEAR_M = 60; // a space whose back is this close to the destination, before it
 export const PARK_LOOK_M = 70; // chosen once the car is this close to where it would park (and can see the space)
@@ -336,13 +340,11 @@ export function spacesAlong(world, route, spec, { fromS = 0 } = {}) {
   return out.sort((x, y) => y.goalS - x.goalS);
 }
 
-// Temporary obstructions rule out the whole block for both traffic and destination parking.
+// Temporary obstructions rule out the whole block for both traffic and destination parking: each
+// registered feature says whether it obstructs this street (a work zone, a closed lane, a
+// double-parked van).
 export function parkingObstructed(world, edge) {
-  return (
-    !!world.workZones?.zones.some((z) => z.closed === edge || z.open === edge) ||
-    !!world.laneClosures?.zones.some((z) => z.edge === edge) ||
-    !!world.doubleParked?.vans.some((d) => d.edge === edge || d.opposite === edge)
-  );
+  return PARKING_OBSTRUCTED.some((obstructed) => obstructed(world, edge));
 }
 
 // The plan for the space [a, b] along edge `e` (`spans`: what stands in its parking lane), or null where

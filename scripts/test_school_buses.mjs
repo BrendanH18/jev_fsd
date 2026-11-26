@@ -151,7 +151,7 @@ function soak(seconds, { schoolBuses = 3, seed = 4, count = 25 } = {}) {
   const owed = new Map();
   for (let k = 0; k < 60 * seconds; k++) {
     step(ctx);
-    for (const bus of fleet.schoolBuses) {
+    for (const bus of fleet.schoolBuses.list) {
       const sb = bus.school,
         key = `${bus.id}:${sb.stops}`;
       if (sb.lights === "amber") log.ambers.add(`${bus.id}:${sb.stops + 1}`);
@@ -214,7 +214,7 @@ test("traffic stops for a school bus with its reds flashing, and it moves off on
   assert.deepEqual(log.passes, []);
   assert.ok(log.cleared.size >= 1, "reds off again");
   assert.ok(
-    fleet.schoolBuses.every((b) => b.school.phase !== "red" || b.school.t < 45 + 1e-6),
+    fleet.schoolBuses.list.every((b) => b.school.phase !== "red" || b.school.t < 45 + 1e-6),
     "never held for good",
   );
 });
@@ -230,7 +230,7 @@ function standing({ t = 0, red = 20 } = {}) {
   const lane = KITS.lane(e.id, 0),
     range = stopRange(KITS, e),
     scale = lane.length / e.cum.at(-1);
-  const bus = fleet.addSchoolBus(lane, range.lo * scale - front(SCHOOL_BUS), 0);
+  const bus = fleet.schoolBuses.add(lane, range.lo * scale - front(SCHOOL_BUS), 0);
   Object.assign(bus.school, {
     phase: "red",
     lights: "red",
@@ -267,7 +267,7 @@ test("a school bus coming the other way stops for one with its reds on too", () 
   const { fleet, bus, e, range, ctx } = standing();
   const back = KITS.lane(twin(KITS, e).id, 0),
     L = e.cum.at(-1);
-  const other = fleet.addSchoolBus(back, ((L - range.lo - 60) * back.length) / L - front(SCHOOL_BUS), 8);
+  const other = fleet.schoolBuses.add(back, ((L - range.lo - 60) * back.length) / L - front(SCHOOL_BUS), 8);
   assert.equal(schoolBusRelation(other, bus).relation, "oncoming");
   let minGap = Infinity;
   for (let k = 0; k < 60 * 12; k++) {
@@ -288,7 +288,7 @@ test("a school bus never takes a parking bay, nor leaves when a parked car pulls
       x.curb === "right" && KITS.edges.get(x.edge).lanes === 1 && projectOnLane(KITS.lane(x.edge, 0), [x.x, x.y]) > 40,
   );
   const lane = KITS.lane(slot.edge, 0),
-    bus = fleet.addSchoolBus(lane, projectOnLane(lane, [slot.x, slot.y]) - 35, 5);
+    bus = fleet.schoolBuses.add(lane, projectOnLane(lane, [slot.x, slot.y]) - 35, 5);
   assert.ok(!fleet.maybePark() && !bus.parking, "not parking");
   // (a parked car pulling out takes the place of the farthest car once there are too many)
   // (with the car far off, and a car to spare)
@@ -499,7 +499,7 @@ test("Rules stops behind a school bus that stops in its lane, and follows it onc
     range = stopRange(KITS, e),
     scale = lane.length / e.cum.at(-1);
   const busS = range.hi * scale - front(SCHOOL_BUS);
-  const bus = fleet.addSchoolBus(lane, busS, 0);
+  const bus = fleet.schoolBuses.add(lane, busS, 0);
   Object.assign(bus.school, {
     phase: "red",
     lights: "red",

@@ -1529,7 +1529,7 @@ export async function boot() {
       : Infinity;
     audio.siren(nearestEv, world.t, world.paused || document.hidden);
     // a bus ahead signalling to pull out from its stop, with the right of way: say so once
-    const bus = fleet.buses?.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
+    const bus = fleet.buses?.list.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
     const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
     if (bus && busKey !== announcedBus) {
       hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500);
@@ -1547,7 +1547,7 @@ export async function boot() {
     }
     announcedCrosswalk = cwKey;
     // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
-    const school = fleet.schoolBuses?.find((b) => {
+    const school = fleet.schoolBuses?.list.find((b) => {
       const r = redsOn(b) && schoolBusRelation(world.ego, b);
       return (
         r &&
@@ -1563,7 +1563,7 @@ export async function boot() {
     }
     announcedSchool = schoolKey;
     // a streetcar ahead with its doors open, that the car must stop behind: say so once
-    const tram = fleet.streetcars?.find((c) => {
+    const tram = fleet.streetcars?.list.find((c) => {
       const r = doorsOpen(c) && streetcarRelation(world.ego, c);
       return (
         r &&
@@ -1632,7 +1632,7 @@ export async function boot() {
     announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
     if (audio.enabled) {
       let ringing = Infinity;
-      for (const train of fleet.trains || [])
+      for (const train of fleet.trains?.list || [])
         if (train.rail.gong) ringing = Math.min(ringing, Math.hypot(train.x - world.ego.x, train.y - world.ego.y));
       audio.gong(ringing, world.t, world.paused || document.hidden);
     }

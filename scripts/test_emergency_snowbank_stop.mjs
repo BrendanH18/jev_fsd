@@ -13,7 +13,7 @@ w.map.edges.get("street").lane_width = 3.2;
 Object.assign(w.ego, { x: 100, v: 2 });
 for (let x = 90; x < 140; x += 7) w.parked.add(Object.assign(new Vehicle(x, -2.65, 0, 0), { id: `kerb_${x}` }));
 const fleet = new NpcFleet(w, { count: 0, bikes: 0 });
-const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 });
+const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 60 });
 assert.equal(ev?.kind, "ambulance");
 const snap = buildSnapshot(w);
 const detour = { id: "sb:narrow", from: 90, full: 115, back: 150, to: 158, shift: -0.4 };
@@ -100,7 +100,7 @@ assert.equal(
   w.ego.v = 2;
   w.route = new Route(routeFromLanes(map, [map.lane("before", 0), map.lane("right", 0)]), map);
   const f = new NpcFleet(w, { count: 0, bikes: 0 });
-  assert.equal(!!f.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 60 }), true);
+  assert.equal(!!f.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 60 }), true);
   // (from where the polyline passes the node, as the stop is planned: the summed edge lengths run past it
   // round the rounded corner, scripts/test_emergency_line_stop.mjs)
   const needed = w.route.laneEdgeStarts()[1] + map.crossingHalfWidth("before") + w.ego.spec.length + 1 + 8;

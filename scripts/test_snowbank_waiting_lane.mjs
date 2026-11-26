@@ -24,7 +24,7 @@ for (const brain of ["rules", "cautious"]) {
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
   fleet.nextPull = fleet.nextPark = Infinity;
   const busLane = map.lane(nw.edge, 0),
-    bus = fleet.addSchoolBus(busLane, nw.b - 35, 2);
+    bus = fleet.schoolBuses.add(busLane, nw.b - 35, 2);
   bus.school.every = Infinity;
   const shift = keepAt(busLane.edgeRef, bus.spec) - busLane.edgeRef.lane_offsets[0];
   bus.x += Math.sin(bus.psi) * shift;

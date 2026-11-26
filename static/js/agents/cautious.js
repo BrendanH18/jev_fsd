@@ -1,9 +1,11 @@
 import { decisionContext } from "../brain/decision-trace.js";
 import { featureDecisionFields, stopAtLineDrive, firstHookResult, hooks } from "../sim/features/index.js";
 
+const FIRST = hooks("cautious", "first");
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
 const RESERVED_LANE = hooks("cautious", "reservedLane");
 const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
+const PARKING = hooks("cautious", "parking");
 const PASSING = hooks("cautious", "passing");
 const AFTER_PASSING = hooks("cautious", "afterPassing");
 const CAUTIOUS = hooks("cautious");
@@ -12,6 +14,7 @@ const SIGNAL_STOP = hooks("cautious", "signalStop");
 const AFTER_AMBER = hooks("cautious", "afterAmber");
 const FEATURE_STOP = hooks("cautiousStop");
 const FEATURE_DRIVE = hooks("cautiousDrive");
+const PLANNED_STOP = hooks("cautiousDrive", "plannedStop");
 
 function bestCandidate(eligible, target, scores) {
   let best;
@@ -57,7 +60,8 @@ export class CautiousAgent {
     // A legal left on red uses the shared target: zero until stopped and clear.
     const featureStop = FEATURE_STOP.some((shouldStop) => shouldStop(snap));
     const target = featureStop ? 0 : Math.min(snap.target?.v ?? snap.limit, snap.limit * 0.8);
-    // an emergency vehicle is coming: pull over and stop, whatever it costs in lane position
+    // what a registered feature has it do first (an emergency vehicle is coming: pull over and stop, whatever
+    // it costs in lane position, say)
     // parking at the destination, or pulling out of a space, once on offer: carry on with it
     // passing a cyclist through the oncoming lane, once the way is clear: at the pass speed, so as to
     // spend no longer in that lane than the pass was judged clear for
@@ -67,18 +71,14 @@ export class CautiousAgent {
       if (candidate) selection = reason;
       return candidate;
     };
+    // (a feature's first pick is reported by its candidate id)
+    const first = firstHookResult(FIRST, snap, eligible, target);
     const candidate =
-      picked(
-        eligible.find((c) => c.id === "pull_over"),
-        "pull_over",
-      ) ||
+      picked(first, first?.id) ||
       picked(firstHookResult(BEFORE_BUS_LANES, snap, eligible, target), "feature_before_bus_lanes") ||
       picked(firstHookResult(RESERVED_LANE, snap, eligible, target), "feature_reserved_lane") ||
       picked(firstHookResult(AFTER_BUS_LANES, snap, eligible, target), "feature_after_bus_lanes") ||
-      picked(
-        eligible.find((c) => c.id === "park" || c.id === "pull_out"),
-        "parking",
-      ) ||
+      picked(firstHookResult(PARKING, snap, eligible, target), "parking") ||
       picked(firstHookResult(PASSING, snap, eligible, target), "feature_passing") ||
       picked(firstHookResult(AFTER_PASSING, snap, eligible, target), "feature_after_passing") ||
       picked(firstHookResult(CAUTIOUS, snap, eligible, target), "feature") ||
@@ -88,12 +88,12 @@ export class CautiousAgent {
       picked(bestCandidate(eligible, target, scores), "score");
 
     const fields = featureDecisionFields(snap);
-    // A pull-over or parking manoeuvre brings the car to a stop at the planned location.
+    // A parking manoeuvre, or a feature's own (a pull-over, say), brings the car to a stop at the planned location.
     let motionReason = "moving_prediction";
     if (!candidate) motionReason = "no_candidate";
     else if (stopAtLineDrive(snap, candidate)) motionReason = "approach_signal";
     else if (candidate.sim.end_speed < 0.3) {
-      if (["pull_over", "park", "pull_out", "wait_to_park"].includes(candidate.id)) motionReason = "planned_stop";
+      if (PLANNED_STOP.some((planned) => planned(candidate, snap))) motionReason = "planned_stop";
       else if (FEATURE_DRIVE.some((drive) => drive(candidate, snap))) motionReason = "feature_planned_stop";
       else motionReason = "stationary_prediction";
     }
