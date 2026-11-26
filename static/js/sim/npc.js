@@ -58,6 +58,7 @@ const TRAFFIC_MANAGE = hooks("trafficManage"),
   TRAFFIC_INDICATOR = hooks("trafficIndicator"),
   AFTER_MERGE = hooks("trafficStop", "afterMerge"),
   TRAFFIC_LEADER_HOLD = hooks("trafficLeaderHold"),
+  TRAFFIC_KEEP_BACK = hooks("trafficKeepBack"),
   TRAFFIC_PARKING_PLAN = hooks("trafficParkingPlan"),
   TRAFFIC_START = hooks("trafficStart"),
   TRAFFIC_CONTROL_START = hooks("trafficStart", "beforeControl"),
@@ -116,11 +117,6 @@ export function featureTrafficSpeed(world, n, front, speeds = TRAFFIC_SPEED, con
   return limit;
 }
 const UNSIGNED_NEAR_M = 15;
-// Stopped too close behind the driven car as it waits to reverse into a space, a driver backs up this
-// long after, by as much as it needs (up to this).
-const PARK_BACK_S = 2;
-const PARK_BACK_MAX_M = 7;
-const PARK_SIDE_M = 4.5; // (the driven car, parking, is this close to a driver's path: in its lane or the space beside it)
 // A driver backing up (`backOff`) stops with this much room left behind it.
 const BACK_CLEAR_M = 1.5;
 
@@ -927,35 +923,16 @@ export class NpcFleet {
           leadV = Math.max(0, ego.v * Math.cos(ego.psi - n.psi));
         }
       }
-      // behind the driven car while it pulls up to a space and reverses into it (sim/parallel-park.js),
-      // wherever its body is, in the lane or partway into the space: keep back the room it reverses
-      // into until it is in, and, stopped too close already, back up out of it
-      if (world.parkHold > 0) {
-        const ego = world.ego,
-          q = projectPoint(path.pts, path.cum, [ego.x, ego.y], null);
-        if (
-          q &&
-          q.s > path.s &&
-          q.s - path.s < LOOK_M &&
-          Math.abs(q.lateral) < PARK_SIDE_M &&
-          Math.cos(wrap(ego.psi - n.psi)) > 0.5
-        ) {
-          const g = q.s - path.s - (spec.length - spec.rearOverhang) - ego.spec.rearOverhang;
-          if (g - world.parkHold < gap) {
-            gap = Math.max(0.05, g - world.parkHold);
-            leadV = 0;
-            leader = ego;
-          }
-          // (only while the car waits for it, before it starts back)
-          const waits =
-            n.v < 0.2 && world.park?.blocked === n.id && world.parkHold - g > 0.5 && n.kind !== "bike" && !isLong(n);
-          n.parkWait = waits ? (n.parkWait || 0) + dt : 0;
-          if (n.parkWait > PARK_BACK_S) {
-            n.parkWait = 0;
-            n.backoff = { left: Math.min(PARK_BACK_MAX_M, world.parkHold - g + 0.5), t: 0 };
-          }
-        } else n.parkWait = 0;
-      } else if (n.parkWait) n.parkWait = 0;
+      // (what a registered feature has traffic keep back from: the room the driven car reverses into
+      // while it parks at its destination, say, sim/features/destination-parking.js)
+      for (const keepBack of TRAFFIC_KEEP_BACK) {
+        const hold = keepBack(world, n, path, { dt, look: LOOK_M, isLong });
+        if (hold && hold.gap < gap) {
+          gap = Math.max(0.05, hold.gap);
+          leadV = 0;
+          leader = hold.vehicle;
+        }
+      }
       if (leaderHold && leaderHold.gap < gap) {
         gap = Math.max(0.05, leaderHold.gap);
         leadV = 0;
@@ -1036,7 +1013,8 @@ export class NpcFleet {
             this.boxBusy(n, e) ||
             (ctl.all_way
               ? world.allWay.status(n, world)?.go === false || this.unsignedComing(n, e.id)
-              : ctl.night_flash
+              : // (a stop standing in for a grouped junction gives way there, as at an uncontrolled minor approach)
+                firstHookResult(PRIORITY_JUNCTION, world, ctl)
                 ? this.givesWay(n, e.id, e.sEnd - front)
                 : this.crossComing(n, e.to))
           )
@@ -1887,7 +1865,8 @@ export class NpcFleet {
     const edge = this.map.edges.get(edgeId);
     if (!edge) return false;
     const ctl = controlAt(this.world, edge.control, edgeId);
-    const node = ctl?.night_flash ? this.map.intersections.get(ctl.junction) : this.map.nodes.get(edge.to);
+    // (a stop standing in for a grouped junction gives way at that junction)
+    const node = (ctl && firstHookResult(PRIORITY_JUNCTION, this.world, ctl)) || this.map.nodes.get(edge.to);
     if (!node) return false;
     const mine = toNode / Math.max(1, n.v);
     for (const o of [this.world.ego, ...this.vehicles]) {

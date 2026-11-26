@@ -18,7 +18,7 @@ import {
 
 const TIMINGS = new Set(["wall_ms", "latency_ms", "latency_p50_ms", "latency_p95_ms", "started_at"]);
 const REQUIRED = ["bare-dry.json", "city-dry.json", "arena-rules.json", "arena-cautious.json", "system-prompt.json"];
-const USAGE = `Usage: registry_parity.mjs bench DIR PRESET [MAP [WEATHER]] [--hour H] [--port PORT] [--timeout S]
+const USAGE = `Usage: registry_parity.mjs bench DIR PRESET [MAP [WEATHER]] [--hour H] [--park 1] [--port PORT] [--timeout S]
        registry_parity.mjs arena DIR DRIVER [--port PORT]
        registry_parity.mjs prompt DIR
        registry_parity.mjs compare BEFORE AFTER [--expect FILE,...] [--only FILE,...] [--strict] [--limit N] [--json FILE]
@@ -52,9 +52,14 @@ function bench(dir, [features, map = "kitsilano", conditions = "dry"], args) {
   const hour = args.hour === undefined ? undefined : Number(args.hour);
   if (hour !== undefined && (!/^\d+(?:\.\d+)?$/.test(args.hour) || hour < 0 || hour >= 24))
     throw new Error("--hour must be a decimal number from 0 up to 24.");
+  if (args.park !== undefined && !["0", "1"].includes(args.park)) throw new Error("--park must be 0 or 1.");
+  const park = args.park === "1";
   const port = loopbackPort(args.port ?? process.env.PORT ?? "8331");
   const timeout = wholeNumber("timeout", args.timeout, 0, { min: args.timeout === undefined ? 0 : 1, max: 86_400 });
-  const file = join(dir, `${name}-${conditions}${hour === undefined ? "" : `-hour-${hour}`}.json`);
+  const file = join(
+    dir,
+    `${name}-${conditions}${hour === undefined ? "" : `-hour-${hour}`}${park ? "-park" : ""}.json`,
+  );
   // A failing child must never leave its partial capture at the destination.
   const temp = mkdtempSync(join(dir, ".registry-parity-"));
   const capture = join(temp, "capture.json");
@@ -77,6 +82,7 @@ function bench(dir, [features, map = "kitsilano", conditions = "dry"], args) {
         "--port",
         port,
         ...(hour === undefined ? [] : ["--hour", String(hour)]),
+        ...(park ? ["--park", "1"] : []),
         "--json",
         capture,
       ],
@@ -191,7 +197,7 @@ async function main(argv) {
   const [dir, ...targets] = positionals;
   const names = {
     compare: ["expect", "only", "limit", "json"],
-    bench: ["hour", "port", "timeout"],
+    bench: ["hour", "park", "port", "timeout"],
     arena: ["port"],
     prompt: [],
   };

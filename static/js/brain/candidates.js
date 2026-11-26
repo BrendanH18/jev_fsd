@@ -24,7 +24,6 @@ import { poseOf } from "../sim/static-obstacles.js";
 import { STOP_ZONE_M } from "../sim/signals.js";
 import { PEEK_AT_M } from "../sim/priority.js";
 import { planTurnaround } from "../sim/turnaround.js";
-import { TRY_START_M, planParking, planPullOut } from "../sim/parallel-park.js";
 import { wheelPoints } from "../sim/potholes.js";
 import {
   firstHookResult,
@@ -66,7 +65,12 @@ const CANDIDATES = {
   beforeParking: hooks("candidates", "beforeParking"),
   afterParking: hooks("candidates", "afterParking"),
   parking: hooks("candidates", "parking"),
+  destination: hooks("candidates", "destination"),
 };
+// (a feature's own stop in place of the destination's, such as the space it parks in; and its manoeuvres
+// carried on until done, after the turnaround: sim/features/destination-parking.js)
+const REPLACES_DESTINATION_STOP = hooks("replacesDestinationStop");
+const MANOEUVRES = hooks("manoeuvreCandidates", "afterTurnaround");
 const ADJUST_FIRST = hooks("adjust", "first"),
   ADJUST_STREET_HAZARDS = hooks("adjust", "streetHazards"),
   ADJUST_LAST = hooks("adjust"),
@@ -88,6 +92,7 @@ const SIMS = {
   parking: hooks("sim", "parking"),
   merge: hooks("sim", "merge"),
   afterMerge: hooks("sim", "afterMerge"),
+  destination: hooks("sim", "destination"),
   end: hooks("sim"),
 };
 // The first rejection among checkers `list` for candidate `c`, or null.
@@ -109,8 +114,6 @@ const MIN_CHANGE_M = 12;
 const HOLD_LINE_M = 0.75; // a hard brake this far off the lane's centre keeps to its line
 // Scenery standing in the car's lane ahead, as far as this, gets nudges of a full metre on offer.
 const SCENERY_LOOK_M = 40;
-// Pulling up where the car reverses into a space, it brakes at no more than this.
-const PARK_STOP_DECEL = 1.2; // the sharpest lane change offered, for leaving a lane about to end
 
 function speedLabel(v, ego, limit) {
   if (v <= 0.05) return "stop";
@@ -478,30 +481,9 @@ export function sampleCandidates(snap, world) {
         speed: "stop where the car turns round",
       });
     }
-    // A space to park in near the destination (sim/parallel-park.js): pull up alongside the car in front
-    // of it, a little right of the lane's centre, signalling, and wait there until nothing is coming
-    // from behind. The space is the destination now.
-    const pk = snap.parking?.mode === "in" && !world.parking ? snap.parking : null;
-    if (pk && pk.stop_in_m > -TRY_START_M) {
-      // (the last few metres gently: the car stops alongside the car in front, near enough exactly)
-      out.push({
-        id: "wait_to_park",
-        laneUntil,
-        law: inLane({
-          kind: "lane",
-          offset: Math.round(pk.nudge_m * 10) / 10,
-          vTarget: approach,
-          stopAtRoute: stopAt(s + Math.max(0, pk.stop_in_m)),
-          stopDecel: PARK_STOP_DECEL,
-        }),
-        steer: `pull up ${Math.round(pk.nudge_m * 10) / 10} m right, alongside the car in front of the space`,
-        speed:
-          pk.stop_in_m > 0.3
-            ? "stop where the car reverses into the space"
-            : "hold still, signalling right, until it is clear behind",
-      });
-    }
-    if (snap.nav && snap.nav.remaining_m < 40 && !pk) {
+    // (a space to park in near the destination, say: sim/features/destination-parking.js)
+    for (const add of CANDIDATES.destination) add(featureCtx, out);
+    if (snap.nav && snap.nav.remaining_m < 40 && !REPLACES_DESTINATION_STOP.some((own) => own(featureCtx))) {
       out.push({
         id: "stop_at_destination",
         laneUntil,
@@ -542,34 +524,14 @@ export function sampleCandidates(snap, world) {
       });
     }
   }
-  // Parallel parking at the destination (sim/parallel-park.js): on offer once the car is where it starts
-  // and nothing is coming from behind, and carried on until it is parked; and pulling out of the space
-  // the car is parked in, at the start of the next drive.
-  if (world.parking) {
-    const out1 = world.parking.mode === "out";
-    out.push({
-      id: out1 ? "pull_out" : "park",
-      law: { ...world.parking },
-      steer: out1
-        ? "pull out of the space: back up, then out on full lock"
-        : "reverse into the space: full lock toward the kerb, then the other way",
-      speed: "walking pace",
-    });
-  } else if (snap.parking?.ready) {
-    const out1 = snap.parking.mode === "out";
-    out.push({
-      id: out1 ? "pull_out" : "park",
-      law: out1 ? planPullOut(world.parkedIn) : planParking(world.park),
-      steer: out1
-        ? "pull out of the space: back up, then out on full lock"
-        : "reverse into the space: full lock toward the kerb, then the other way",
-      speed: "walking pace",
-    });
-  }
+  // (a registered feature's manoeuvre on offer once the car is where it starts, and carried on until
+  // done: parallel parking at the destination, and pulling out of the space at the start of the next
+  // drive, sim/features/destination-parking.js)
+  for (const add of MANOEUVRES) add({ snap, world }, out);
   // Keep required stopping options when a busy street supplies many lateral alternatives, and lane
   // changes ahead of small nudges.
   const priority = (c) =>
-    c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || c.law.kind === "park" || PRIORITY_IDS.has(c.id)
+    c.law.stopAtRoute !== undefined || c.law.kind === "turnaround" || PRIORITY_IDS.has(c.id)
       ? 0
       : c.change
         ? 2
@@ -688,8 +650,6 @@ export function simulateAll(candidates, snap, world) {
   const give = control?.give_way?.hold_s_route != null ? control.give_way : null;
   // where the car stops to turn round, still ahead (route arc length of the rear axle)
   const turnAt = snap.nav?.turn_round_in_m > 0.3 ? startS + snap.nav.turn_round_in_m : null;
-  // where the car stops to reverse into a space, until it starts (likewise)
-  const parkAt = snap.parking?.mode === "in" && !world.parking ? snap.parking.stop_s_route : null;
   const passClearance = firstHookResult(PASS_CLEARANCE, world, snap);
   const cyclistClearance = passClearance?.metres ?? CYCLIST_CLEARANCE_M;
   // what the registered features check along every forward sim (sim/features/index.js): a checker each, or
@@ -712,6 +672,7 @@ export function simulateAll(candidates, snap, world) {
     ...sims.parking,
     ...sims.merge,
     ...sims.afterMerge,
+    ...sims.destination,
     ...sims.end,
   ];
   const wheelChecks = checks.filter((x) => x.afterLaw),
@@ -730,7 +691,6 @@ export function simulateAll(candidates, snap, world) {
     let passesCw = false,
       passesBox = false,
       pastTurnPoint = false,
-      pastSpace = false,
       lateLeaving = false,
       pedCross = false,
       cutsOff = false,
@@ -813,8 +773,6 @@ export function simulateAll(candidates, snap, world) {
         if (give && s + FRONT > give.hold_s_route + (give.wait_for ? 0.2 : PEEK_AT_M)) passesHold = true;
         // (a metre past it, as a short, slow stop overshoots)
         if (turnAt !== null && s > turnAt + 1 && car.v > 0.5) pastTurnPoint = true;
-        // (likewise)
-        if (parkAt !== null && s > parkAt + 1 && car.v > 0.5) pastSpace = true;
       }
       if (k % 3 === 0 || k === steps) {
         const rd = surfaceDistance(map, car.x, car.y);
@@ -964,7 +922,7 @@ export function simulateAll(candidates, snap, world) {
     else if (passesHold && c.law.kind !== "hard_brake")
       reject = give.wait_for ? "fails_to_yield" : "enters_unseen_junction";
     else if (pastTurnPoint && c.law.kind === "lane") reject = "passes_turn_round_point";
-    else if (pastSpace && c.law.kind === "lane") reject = "passes_parking_space";
+    else if ((reject = rejectBy(sims.destination, c)));
     else if ((reject = rejectBy(sims.end, c)));
     c.reject = reject;
     c.eligible = !reject;

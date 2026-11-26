@@ -16,9 +16,6 @@ import { approachTo, outranks, PEEK_AT_M } from "./priority.js";
 import { canStopShort, frontTo, hiddenByTraffic, looked, noteStop, stoppedAt } from "./crosswalk.js";
 import { zoneLimit } from "./speed-zones.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
-import { leftSpace, reversing, tyres } from "./parallel-park.js";
-import { StepOuts, standingNear } from "./hidden-hazards.js";
-import { hideable, hiddenVehicle } from "./hidden-traffic.js";
 
 import {
   FEATURES,
@@ -48,6 +45,7 @@ const HIDES = hooks("hides"),
 const AUDIT_LATE = hooks("audit", "late");
 const AUDIT_BUSES = hooks("audit", "buses");
 const PARKING_ZONES = hooks("parkingZones");
+const AUDIT_DESTINATION = hooks("audit", "destination");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_PASSING = hooks("audit", "beforeReservedLane");
 const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
@@ -67,6 +65,12 @@ const ARROW_EXIT_AUDIT = hooks("arrowExitAudit");
 const RED_TURN_MEMORY = hooks("redTurnMemory");
 const RED_TURN_EXIT = hooks("redTurnExit");
 const RESET_CONTACT = hooks("resetContact");
+const PRIORITY_JUNCTION = hooks("priorityJunction");
+// (what a registered feature hides: a vehicle standing at the kerb hiding a pedestrian, a road vehicle's
+// body hiding another, sim/features/hidden-hazards.js)
+const STANDING_HIDES = hooks("standingHides"),
+  VEHICLE_HIDES = hooks("vehicleHides"),
+  HIDDEN_BY_VEHICLE = hooks("hiddenByVehicle");
 
 export const AUDIT_ROUTE_CORRIDOR_M = 4;
 export const AUDIT_ROUTE_HEADING_RAD = Math.PI / 3;
@@ -125,13 +129,8 @@ const AUDIT_CROSSWALK_MOVING_MPS = 1;
 // red, blocking the cross street's green. Counted once a visit.
 const AUDIT_BOX_MOVING_MPS = 1;
 export class World {
-  // `park`: the autopilot parks at the
-  // destination (sim/parallel-park.js). `hazards`: vehicles standing at the kerb hide people, and the
-  // driven car keeps to a speed it can stop from beside them; `stepOuts`: with that, how many people at
-  // a time wait hidden between parked cars ahead of it to step out (sim/hidden-hazards.js). With
-  // `hazards`, road vehicles also hide other vehicles and cyclists, and the car turns left, gives way
-  // and turns right on red only once it can see the lanes it must give way to (sim/hidden-traffic.js).
-  // And the option of each registered feature (sim/features/index.js).
+  // And the option of each registered feature (sim/features/index.js), with any option it reads beside
+  // its own (hidden hazards' `stepOuts`, say).
   constructor(
     map,
     {
@@ -140,9 +139,6 @@ export class World {
       pedestrians = PEDESTRIANS,
       weather = "dry",
       vehicleSpec = CAR,
-      park = false,
-      hazards = false,
-      stepOuts = 0,
       ...features
     } = {},
   ) {
@@ -174,17 +170,6 @@ export class World {
     this.crosswalkCalls = new Map(); // "<crosswalk id>:<vehicle id>" -> { owed, counted }: one stopped at it
     this.crosswalkStop = null; // the marked crosswalk the car has stood still at (sim/crosswalk.js)
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
-    // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
-    // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
-    // spaces it gave up, the space it is parked in, and the kerb strikes the audit counted
-    this.parkAtGoal = !!park;
-    this.park = null;
-    this.parking = null;
-    this.parkHold = 0;
-    this.parkTried = [];
-    this.parkedIn = null;
-    this.kerbContact = false;
-    this.hazards = !!hazards;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -207,7 +192,6 @@ export class World {
     this.spawnEgo();
     buildFeatures(this, features, seed, map, "afterSpawn");
     this.crowd = new Crowd(this, { seed, count: pedestrians });
-    this.stepOuts = new StepOuts(this, { count: this.hazards ? stepOuts : 0, seed });
     buildFeatures(this, features, seed, map);
   }
 
@@ -232,11 +216,12 @@ export class World {
   }
 
   // Line of sight: buildings, weather and darkness hide anything, and a vehicle in traffic hides a
-  // pedestrian behind it (sim/crosswalk.js); with hidden hazards on, so does one standing at the kerb
-  // (sim/hidden-hazards.js), and road vehicles hide other vehicles and cyclists (sim/hidden-traffic.js).
-  // (with hidden traffic: a vehicle or cyclist the car would see but for another vehicle's body)
+  // pedestrian behind it (sim/crosswalk.js); a registered feature can add what else hides one (hidden
+  // hazards: a vehicle standing at the kerb hides a pedestrian, and road vehicles hide other vehicles and
+  // cyclists, sim/features/hidden-hazards.js).
+  // (a vehicle or cyclist the car would see but for another vehicle's body)
   hiddenByVehicle(o, observer = this.ego) {
-    return this.hazards && hideable(o) && this.visibility.sees(observer, o) && hiddenVehicle(this, observer, o);
+    return HIDDEN_BY_VEHICLE.some((hidden) => hidden(this, observer, o));
   }
 
   // (`reach`: looking further along a street by clear daylight, see sim/visibility.js PASS_SIGHT_M)
@@ -249,9 +234,15 @@ export class World {
     for (const hides of HIDES) if (hides(this, observer, o)) return false;
     const visible = featureObstacle(o)?.visible;
     if (visible) return visible(this, observer, o);
-    if (o.kind === "pedestrian")
-      return !hiddenByTraffic(observer, o, this.npcs, this.hazards ? standingNear(this, observer, o) : []);
-    return !(this.hazards && hideable(o) && hiddenVehicle(this, observer, o, reach));
+    if (o.kind === "pedestrian") {
+      let standing = [];
+      for (const near of STANDING_HIDES) {
+        const more = near(this, observer, o);
+        if (more) standing = standing.length ? standing.concat(more) : more;
+      }
+      return !hiddenByTraffic(observer, o, this.npcs, standing);
+    }
+    return !VEHICLE_HIDES.some((hides) => hides(this, observer, o, reach));
   }
 
   // Middle of a long residential edge near the map center, facing along it.
@@ -340,14 +331,6 @@ export class World {
     this.inBox = null;
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
-    // (moved by hand: whatever space it was going for, or parked in, is let go)
-    for (const p of [this.park, this.parkedIn])
-      for (const slot of p?.slots || []) if (slot.reserved?.owner === this.ego) slot.reserved = null;
-    this.park = null;
-    this.parking = null;
-    this.parkHold = 0;
-    this.parkedIn = null;
-    this.kerbContact = false;
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
     this.crosswalkStop = null;
@@ -676,9 +659,8 @@ export class World {
           };
         }
         // giving way: at a two-way stop, or where its street has no sign and is not the major road
-        const junction = control.night_flash
-          ? this.map.intersections.get(control.junction)
-          : this.map.nodes.get(edge.to);
+        // (a stop standing in for a grouped junction gives way at that junction)
+        const junction = firstHookResult(PRIORITY_JUNCTION, this, control) || this.map.nodes.get(edge.to);
         this.giveWay =
           junction &&
           ((control.type === "stop" && !control.all_way) ||
@@ -756,21 +738,8 @@ export class World {
     for (const audit of AUDIT_STREET_HAZARDS) audit(this);
     for (const audit of AUDIT_REAR_TRAFFIC) audit(this);
     for (const audit of AUDIT_LATE) audit(this);
-    this.auditKerb();
-    leftSpace(this);
-  }
-
-  // Parking or pulling out (sim/parallel-park.js), a tyre on the kerb is a kerb strike: counted once a
-  // contact (a bumper reaching over it is not).
-  auditKerb() {
-    const law = this.parking;
-    if (!law || law.phase === "done") {
-      this.kerbContact = false;
-      return;
-    }
-    const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
-    if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
-    this.kerbContact = on;
+    // (and last, destination parking's: sim/features/destination-parking.js)
+    for (const audit of AUDIT_DESTINATION) audit(this);
   }
 
   // Through a junction on a left arrow: anything but a left turn (heading more than 45 deg left of

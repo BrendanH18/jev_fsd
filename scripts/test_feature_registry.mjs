@@ -86,6 +86,8 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "leftOnRed",
       "amberLights",
       "busLanes",
+      "park",
+      "hazards",
     ],
   );
   for (const f of R.FEATURES) assert.equal(R.recordProblem(f), null, f.key);
@@ -143,6 +145,7 @@ test("the core runs every slot, and names no registered feature", () => {
     evStop: source("sim/emergency-yield.js"),
     pullOverDetour: source("sim/features/emergency.js"),
     emergencyHold: source("sim/emergency-traffic.js"),
+    parkingObstructed: source("sim/parallel-park.js"),
   };
   for (const [name, slots] of Object.entries(R.SLOTS)) {
     if (["metric", "prompt", "notice"].includes(name)) continue;
@@ -209,6 +212,10 @@ test("the core runs every slot, and names no registered feature", () => {
       'school-bus.js"',
       '/bus.js"',
       'transit-runs.js"',
+      'hidden-hazards.js"',
+      'hidden-traffic.js"',
+      'blind-spot.js"',
+      'parallel-park.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -414,6 +421,32 @@ test("the core runs every slot, and names no registered feature", () => {
       "busYield",
       "n.transit",
       "busZones",
+      "night_flash",
+      "world.hazards",
+      "this.hazards",
+      "world.stepOuts",
+      "this.stepOuts",
+      "snap.blind_spot",
+      "blindSpot(",
+      "blindApproach(",
+      "hiddenVehicle(",
+      "standingNear(",
+      "STEP_OUT_",
+      "world.park.",
+      "world.park?",
+      "world.parking",
+      "parkHold",
+      "parkedIn",
+      "parkAtGoal",
+      "parkTried",
+      "parkWait",
+      "kerbContact",
+      "snap.parking",
+      '"park"',
+      '"wait_to_park"',
+      '"pull_out"',
+      '"passes_parking_space"',
+      '"not parked"',
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -517,7 +550,12 @@ test("the World builds each feature from its option, with its seen flag and its 
     leftOnRed: true,
     amberLights: true,
     busLanes: true,
+    hazards: true,
+    stepOuts: 1,
+    park: true,
   });
+  assert.equal(on.stepOuts.count, 1, "hidden hazards read the step-outs option beside their own");
+  assert.equal(off.stepOuts.count, 0);
   for (const f of R.FEATURES) {
     const property = f.property ?? f.key;
     if (!f.buildFleet) {

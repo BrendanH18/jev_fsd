@@ -17,13 +17,15 @@
 // not recognised goes under "Other".
 
 import { projectPoint } from "../map/mapdata.js";
-import { FEATURE_METRICS, hooks } from "../sim/features/index.js";
+import { FEATURE_EXAMINER_MINORS, FEATURE_METRICS, FEATURE_VERDICTS, hooks } from "../sim/features/index.js";
 
 import { CATEGORIES } from "./examiner-categories.js";
 import { challengeFailures } from "./practice.js";
 
 export { CATEGORIES };
 const BEFORE_TRACKS_FAIL = hooks("examinerFail", "beforeTracks");
+const SCRIPT = hooks("examinerScript");
+const MARKS = hooks("examinerMarks");
 export const EXAMINER_VERSION = 1;
 export const MAX_REPEAT = 3;
 
@@ -324,12 +326,8 @@ export function examinerScript(route) {
         : { kind: "zone", from: z.from - 80, at: z.from + 15, text: `${kind} zone ahead${by}. Watch your speed.` },
     );
   }
-  lines.push({
-    kind: "park",
-    from: route.length - SAY_M,
-    at: route.length + 5,
-    text: "Pull up on the right and parallel park in the gap between the parked cars, within 30 cm of the kerb.",
-  });
+  // (and what a registered feature has the examiner say last: pull up and park, sim/features/destination-parking.js)
+  for (const say of SCRIPT) say(route, lines, { say: SAY_M });
   return lines.sort((a, b) => a.at - b.at);
 }
 // The line to show `s` metres along the route: the nearest manoeuvre already announced and not yet past.
@@ -352,10 +350,10 @@ const CORE_FAIL_CATEGORY = {
   "stop sign": "right_of_way",
   "failed to yield": "right_of_way",
   "off road": "steering",
-  "not parked": "parking",
 };
 const FAIL_CATEGORY = new Map([
   ...Object.entries(CORE_FAIL_CATEGORY),
+  ...FEATURE_VERDICTS.map(({ failure, category }) => [failure, category]),
   ...FEATURE_METRICS.filter(({ category }) => category !== undefined).map(({ failure, category }) => [
     failure,
     category,
@@ -369,11 +367,11 @@ const CORE_FAIL_REMARK = {
   "stop sign": "Did not come to a complete stop at a stop sign",
   "failed to yield": "Failed to yield the right of way",
   "off road": "Left the road",
-  "not parked": "Did not finish parked within 30 cm of the kerb",
   "simulation error": "The simulator stopped before the test could be completed",
 };
 const FAIL_REMARK = new Map([
   ...Object.entries(CORE_FAIL_REMARK),
+  ...FEATURE_VERDICTS.map(({ failure, examinerRemark }) => [failure, examinerRemark]),
   ...FEATURE_METRICS.filter(({ examinerRemark }) => examinerRemark !== undefined).map(({ failure, examinerRemark }) => [
     failure,
     examinerRemark,
@@ -388,7 +386,8 @@ const FAIL_INCIDENT = new Map([
     ({ failure, examinerIncident }) => [failure, examinerIncident],
   ),
 ]);
-// Minor errors from the incident stream: the observer's and the coaching report's own.
+// Minor errors from the incident stream: the observer's and the coaching report's own, and a registered
+// feature's (sim/features/index.js `examinerMinors`: its category, remark and, optionally, when it counts).
 const MINOR = {
   turn_no_signal: "right_of_way",
   lane_change_no_signal: "right_of_way",
@@ -400,15 +399,16 @@ const MINOR = {
   lane_position: "steering",
   lane_change_space: "observation",
   hesitation: "observation",
-  blind_spot_speeding: "observation",
-  kerb: "parking",
+  ...Object.fromEntries(Object.entries(FEATURE_EXAMINER_MINORS).map(([type, { category }]) => [type, category])),
 };
 const MINOR_REMARK = {
   hard_brake: "Braked harshly",
   blocked_junction: "Stopped in the junction",
-  blind_spot_speeding: "Passed parked cars too fast to stop for someone stepping out",
-  kerb: "Touched the kerb",
+  ...Object.fromEntries(Object.entries(FEATURE_EXAMINER_MINORS).map(([type, { remark }]) => [type, remark])),
 };
+// (a registered feature's minor error that counts only in some reports)
+const minorCounts = (type, report) =>
+  !Object.hasOwn(FEATURE_EXAMINER_MINORS, type) || FEATURE_EXAMINER_MINORS[type].when?.(report) !== false;
 
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 // A failure reason's category; one added to `failures()` later, and not listed here, is "other".
@@ -493,7 +493,7 @@ export function examine(test, report) {
   };
   for (const i of incidents) {
     const type = i?.type;
-    if (typeof type !== "string" || !Object.hasOwn(MINOR, type) || (type === "kerb" && !report.parking)) continue;
+    if (typeof type !== "string" || !Object.hasOwn(MINOR, type) || !minorCounts(type, report)) continue;
     const remark = MINOR_REMARK[type] || i.message || capital(type.replaceAll("_", " "));
     mark(type, MINOR[type], remark, i);
   }
@@ -515,13 +515,8 @@ export function examine(test, report) {
     );
   if (report.danger_s > 0.5) mark("closing", "space", "Closed in fast on a road user ahead");
   if (report.off_road_s > 0 && report.off_road_s < 1) mark("edge", "steering", "Put a wheel off the edge of the road");
-  const park = report.parking;
-  if (park?.result === "parked" && park.within_kerb) {
-    if (park.kerb_m > 0.2)
-      mark("park_far", "parking", `Parked ${Math.round(park.kerb_m * 100)} cm from the kerb: closer is better`);
-    if (Math.abs(park.angle_deg) > 4) mark("park_angle", "parking", "Finished at an angle to the kerb");
-    if (park.legs > 5) mark("park_moves", "parking", "Needed extra moves to straighten up in the space");
-  }
+  // (and what a registered feature marks from the report: how the car parked, say)
+  for (const marks of MARKS) marks(report, mark);
   const demerits = minors.reduce((sum, m) => sum + m.points, 0);
   if (demerits > maxDemerits)
     fails.push({

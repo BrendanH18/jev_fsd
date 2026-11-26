@@ -17,7 +17,8 @@
 //   seen      the World flag that gates the metric after the feature has met the driven car
 //             (required unless metric.reportWhenEnabled uses a boolean World option)
 //   calls     an optional World map of the audit's calls, cleared when the car is moved by hand
-//   build(world, { enabled, seed, map })   the feature's World state
+//   build(world, { enabled, seed, map, options })   the feature's World state (`options`: every World option,
+//             for one the feature reads beside its own)
 //   buildFleet(fleet, { enabled, seed, makePath })   fleet state, stored under the option key
 //   worldOption  true: a fleet feature whose option the World takes too (free drives set both)
 //   metric    { at, name, failure, label, category?, decimals?, threshold?, traceType? }: the violation,
@@ -43,6 +44,11 @@
 //   flagText  the model's wording for each road-rule rejection id this feature owns
 //   motion    (snap) => whether the model must be asked to stop or drive
 //   parkingTraffic(n)  whether this traffic is entering a parking bay
+//   freeDriveExtra(enabled)  more free-drive World or fleet options the feature sets with its own (sim/free-drive.js)
+//   verdict   { failure, category, examinerRemark, fails(m) }: a failure reason for a drive as a whole when
+//             `fails` holds for its metrics, after the metrics' own (bench/metrics.js, lab/examiner.js)
+//   examinerMinors  { [incident type]: { category, remark, when?(report) } }: minor errors the examiner marks
+//             from the incident stream (lab/examiner.js), counted only when `when` is not false
 //   day       true: while it is on, the World's clock keeps the `day` of the year (World.setClock)
 //   utcOffset true: while it is on, the World's clock keeps `utc_offset`
 //   and the hooks below.
@@ -55,7 +61,8 @@
 //   cautious(snap, eligible, target)   a candidate the cautious agent should choose, or null
 //                                       ("first", "beforeBusLanes", "end", "beforeAmber", "afterAmber")
 //   cautiousStop(snap)                true when the cautious agent sets a target of zero ("end")
-//   cautiousDrive(candidate, snap)    true when the candidate's own law brings it to a stop ("end")
+//   cautiousDrive(candidate, snap)    true when the candidate's own law brings it to a stop ("end"), or
+//                                       counts as a planned stop like a pull-over ("plannedStop")
 //   legitimateStop(snap, clearing)    true when waiting here is legitimate and should not count as deadlock ("end")
 //
 // A hook is a function, or { at, run } to run it at a slot, or a list of those for a feature that acts at
@@ -69,12 +76,18 @@
 // metrics before the red-light runner's corresponding code. SLOTS lists every supported position.
 //   obstacles(world, x, y, r)          World.obstaclesNear, after the others ("end")
 //   stepBeforeTraffic(world, fleet, dt) sim/step.js: before anything else ("first"), or just before the
-//                                       traffic moves ("end"), with "afterOutages" between them
+//                                       traffic moves ("end"), with "afterOutages" and "stepOuts" between them
 //   stepAfterTraffic(world, fleet, dt)  sim/step.js, after traffic and before the people on foot move ("end")
 //   audit(world, frontOnPath?)           World.audit: "afterCyclists" (with the road), "beforeCollisions" (with dt),
 //                                       "afterFlagger", "afterCalming", "driveways",
-//                                       "streetHazards", "rearTraffic", "late"
+//                                       "streetHazards", "rearTraffic", "late", "destination" (last of all)
 //   hides(world, observer, o)           true: it hides `o` from `observer` (World.sees) ("end")
+//   standingHides(world, observer, ped) vehicles standing at the kerb that may hide pedestrian `ped`, beside
+//                                       moving traffic (World.sees), or null ("end")
+//   vehicleHides(world, observer, o, reach) true: another vehicle's body hides road user `o` (World.sees) ("end")
+//   hiddenByVehicle(world, observer, o) true: `o` is in sight but for another vehicle's body (World.hiddenByVehicle)
+//   trafficSight(world)                 { laneSight(world, observer, lane, from, far) } when road vehicles hide
+//                                       traffic along the lanes the car gives way to, or null ("end")
 //   placeEgo(world, lane)               the driven car has just been put down on `lane` by hand ("end")
 //   evKerb(world, road, front)          the emergency audit's furthest right the car can be asked to pull
 //                                       over, metres right of its lane's centre, or Infinity ("end";
@@ -123,7 +136,8 @@
 //   clause(snap)                        the situation's wording (a sentence or a list), or null: "restrictions",
 //                                       "driveways", "streetHazards", "ice" (after black ice's), "rearTraffic",
 //                                       "afterRearTraffic", "beforeFollowing", "parking"
-//   holdStill(snap)                     when holding still is right, or "": "driveways", "late", "afterLate", "parking"
+//   holdStill(snap)                     when holding still is right, or "": "driveways", "late", "afterLate", "parking",
+//                                       "destination"
 //   prompt                              { at, text }: a section of the LLM system prompt: "afterRightHook", "restrictions",
 //                                       "streetHazards", "driveways", "snowbanks", "junctions", "rearTraffic", "parking", "afterParking"
 //   phaseBansRedTurns(intersection)    true when the current signal plan forbids all turns on red
@@ -174,7 +188,8 @@
 //   activeManeuver(snap, passing)       { keep(candidate), brake } or null, for a passing law under way
 //   activeOutcome(candidate, snap)    how a passing candidate finishes, checked after the road edge
 //   passClearance(world, snap)          { metres, rejection } for bicycle clearance, or null for the default
-//   driveCriterion(snap)               wording appended to the motion question's drive criterion
+//   driveCriterion(snap)               wording appended to the motion question's drive criterion ("end"),
+//                                       or after the turnaround's ("destination")
 //   followingOmitted(snap, vehicle)     true if this vehicle is left out of ordinary leader sensing
 //   laneGapBlocked(snap, side)          true if the destination lane's rear gap is too short
 //   laneTargetFields(sideSnap, offset) adjust constraints for the destination lane's speed calculation
@@ -222,6 +237,22 @@
 //                                       ("beforeControl") or later ("ordinary"), or both ordinary
 //                                       and emergency traffic ("end")
 //   trafficPullOut(world, n)            false: a car parked at the kerb must not pull out yet ("end")
+//   trafficKeepBack(world, n, path, { dt, look, isLong }) { gap, vehicle } traffic keeps back from, as from a
+//                                       stopped leader, or null; it may update the driver's own wait ("end")
+//   replacesDestinationStop(ctx)        true: the feature's own stop takes the place of stop_at_destination ("end")
+//   manoeuvreCandidates(ctx, out)       a manoeuvre on offer and carried on until done, after the turnaround's
+//                                       ("afterTurnaround"); `ctx` is { snap, world }
+//   arrivalCriterion(snap)              wording added to the motion question's "reached the destination" ("end")
+//   keepsDestination(snap)              true: arriving is not yet a reason for Rules to stop ("end")
+//   manoeuvreGoesOn(candidate)          true: Rules carries on with this clear manoeuvre whatever the reasons to
+//                                       stop ahead, as with a turnaround ("end")
+//   rulesTerms(candidate, snap)         { term: amount } added to Rules' cost under those names ("afterTurnaround")
+//   safetyLaw(world, law)               { reversing, gapStill, gapMoving, ttcMoving, passesOncoming } for a
+//                                       manoeuvre the safety brake allows closer, or null ("end")
+//   examinerScript(route, lines, { say }) push the examiner's own lines for the road test ("end")
+//   examinerMarks(report, mark)         mark minor errors from a finished report ("end")
+//   parkingObstructed(world, edgeId)    true when it rules out parking anywhere on the street, for destination
+//                                       parking and traffic parking alike (sim/parallel-park.js) ("end")
 
 // Import a record through this registry (or a core module), never on its own: the snowbanks record's simulation
 // reaches sim/npc.js, which loads this registry while that record is still loading
@@ -267,6 +298,8 @@ import schoolBuses from "./school-buses.js";
 import streetcars from "./streetcars.js";
 import trains from "./trains.js";
 import emergency from "./emergency.js";
+import destinationParking from "./destination-parking.js";
+import hazards from "./hidden-hazards.js";
 
 export const FEATURES = [
   highBeams,
@@ -313,6 +346,13 @@ export const FEATURES = [
   leftOnRed,
   amber,
   busLanes,
+  // Destination parking runs at slots of its own ("destination", "afterTurnaround", "parking" for the
+  // cautious agent, "plannedStop") and hooks no other record has; where it shares one (outcome labels by
+  // candidate id, the motion test, legitimate stops, resetting contact) the order does not matter.
+  destinationParking,
+  // Hidden hazards run at slots of their own ("blindSpots", "stepOuts", "hiddenHazards") and hooks no other
+  // record has, so their place here changes no order.
+  hazards,
 ];
 
 // The slots the core runs each hook and placed field at. A record's hook at any other slot would never
@@ -341,6 +381,7 @@ export const SLOTS = {
     "beforeBusLanes",
     "reservedLane",
     "afterBusLanes",
+    "parking",
     "passing",
     "afterPassing",
     "end",
@@ -350,10 +391,10 @@ export const SLOTS = {
   ],
   cautiousStop: ["end"],
   rulesWait: ["end"],
-  cautiousDrive: ["end"],
+  cautiousDrive: ["plannedStop", "end"],
   legitimateStop: ["end"],
   obstacles: ["end"],
-  stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "end"],
+  stepBeforeTraffic: ["first", "afterParked", "afterMerge", "afterOutages", "stepOuts", "end"],
   stepAfterTraffic: ["end"],
   audit: [
     "afterCyclists",
@@ -370,6 +411,7 @@ export const SLOTS = {
     "streetHazards",
     "rearTraffic",
     "late",
+    "destination",
   ],
   sense: [
     "beforeLaneState",
@@ -390,6 +432,8 @@ export const SLOTS = {
     "following",
     "beforeTarget",
     "end",
+    "blindSpots",
+    "destination",
   ],
   finishLanes: ["end"],
   laneOfferBlocked: ["end"],
@@ -431,6 +475,8 @@ export const SLOTS = {
     "beforeEmergency",
     "beforeParking",
     "parking",
+    "blindSpots",
+    "destination",
   ],
   hazard: [
     "afterRightHook",
@@ -445,6 +491,8 @@ export const SLOTS = {
     "streetHazards",
     "rearTraffic",
     "late",
+    "blindSpots",
+    "destination",
   ],
   laneOffer: ["afterPassing", "end"],
   laneChangeCandidate: ["end"],
@@ -494,6 +542,7 @@ export const SLOTS = {
     "beforeParking",
     "afterParking",
     "parking",
+    "destination",
   ],
   adjust: ["first", "streetHazards", "end", "finish"],
   brakeDetour: ["end"],
@@ -512,6 +561,7 @@ export const SLOTS = {
     "parking",
     "merge",
     "afterMerge",
+    "destination",
     "end",
   ],
   state: [
@@ -536,6 +586,8 @@ export const SLOTS = {
     "beforeTurnaround",
     "beforeParking",
     "parking",
+    "blindSpots",
+    "destination",
   ],
   greenSignalClause: ["end"],
   outcome: ["ids", "laneChange"],
@@ -574,6 +626,18 @@ export const SLOTS = {
     "afterLate",
     "beforeParking",
     "parking",
+    "blindSpots",
+    "destination",
+  ],
+  holdStill: [
+    "beforeMerge",
+    "afterFlagger",
+    "beforeRunner",
+    "driveways",
+    "late",
+    "beforeParking",
+    "parking",
+    "destination",
   ],
   prompt: [
     "introduction",
@@ -594,6 +658,7 @@ export const SLOTS = {
     "beforeRightOnRed",
     "amberDecision",
     "afterGlare",
+    "hiddenHazards",
     "beforeRunner",
     "restrictions",
     "streetHazards",
@@ -605,6 +670,7 @@ export const SLOTS = {
     "afterParkingAdvice",
     "parking",
     "afterParking",
+    "afterTurnaround",
   ],
   metric: [
     "afterRedLights",
@@ -689,6 +755,10 @@ export const SLOTS = {
   trafficStopAt: ["end"],
   trafficHangBack: ["end"],
   hides: ["end"],
+  standingHides: ["end"],
+  vehicleHides: ["end"],
+  hiddenByVehicle: ["end"],
+  trafficSight: ["end"],
   blocksView: ["end"],
   placeEgo: ["end"],
   evKerb: ["end"],
@@ -700,7 +770,7 @@ export const SLOTS = {
   activeOutcome: ["end"],
   passClearance: ["end"],
   suppressFollowingClause: ["end"],
-  driveCriterion: ["end"],
+  driveCriterion: ["destination", "end"],
   followingOmitted: ["end"],
   trafficLaneControl: ["end"],
   trafficCorridor: ["end"],
@@ -709,6 +779,17 @@ export const SLOTS = {
   examinerFail: ["beforeTracks"],
   passBlockReason: ["end"],
   trafficSpawnBlocked: ["end"],
+  parkingObstructed: ["end"],
+  trafficKeepBack: ["end"],
+  replacesDestinationStop: ["end"],
+  manoeuvreCandidates: ["afterTurnaround"],
+  arrivalCriterion: ["end"],
+  keepsDestination: ["end"],
+  manoeuvreGoesOn: ["end"],
+  rulesTerms: ["afterTurnaround"],
+  safetyLaw: ["end"],
+  examinerScript: ["end"],
+  examinerMarks: ["end"],
   detour: ["beforeMerge", "laneControl", "parking", "optional", "end"],
   pullOverDetour: ["end"],
 };
@@ -966,11 +1047,19 @@ export function buildFeatures(world, options, seed, map, position) {
   for (const f of records) {
     const value = Object.hasOwn(options, f.key) ? options[f.key] : undefined;
     const enabled = value ?? (f.defaultCount === undefined ? false : 0);
-    world[f.property ?? f.key] = f.build(world, { enabled, seed, map });
+    world[f.property ?? f.key] = f.build(world, { enabled, seed, map, options });
     if (f.seen) world[f.seen] = false;
     if (f.calls) world[f.calls] = new Map();
   }
 }
+
+// The registered features' verdicts on a drive as a whole (bench/metrics.js failures, lab/examiner.js), in
+// registration order: each a failure reason when `fails(m)` holds for the drive's metrics `m`.
+export const FEATURE_VERDICTS = Object.freeze(FEATURES.filter((f) => f.verdict).map((f) => f.verdict));
+export const featureVerdicts = (m) => FEATURE_VERDICTS.filter(({ fails }) => fails(m)).map(({ failure }) => failure);
+
+// Minor errors a registered feature has the examiner mark (lab/examiner.js), by incident type.
+export const FEATURE_EXAMINER_MINORS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.examinerMinors)));
 
 // Default snapshot fields that older readers expect even when the feature is inactive.
 export const FEATURE_SNAPSHOT_FIELDS = Object.freeze(Object.assign({}, ...FEATURES.map((f) => f.snapshot)));

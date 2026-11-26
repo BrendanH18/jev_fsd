@@ -162,6 +162,8 @@ export default {
   rulesStop: (snap) => snap.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 1.5,
   legitimateStop: (snap) => snap?.double_parked?.wait && snap.double_parked.bumper_to_stop_m < 8,
   rulesCost: (c) => (c.id === "wait_behind_van" ? -6 : 0),
+  // (nobody parks on the block of a double-parked van, either side: sim/parallel-park.js)
+  parkingObstructed: (world, edge) => !!world.doubleParked?.vans.some((d) => d.edge === edge || d.opposite === edge),
   key: "vans",
   coach: {
     init: () => ({

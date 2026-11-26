@@ -5,6 +5,7 @@ const FIRST = hooks("cautious", "first");
 const BEFORE_BUS_LANES = hooks("cautious", "beforeBusLanes");
 const RESERVED_LANE = hooks("cautious", "reservedLane");
 const AFTER_BUS_LANES = hooks("cautious", "afterBusLanes");
+const PARKING = hooks("cautious", "parking");
 const PASSING = hooks("cautious", "passing");
 const AFTER_PASSING = hooks("cautious", "afterPassing");
 const CAUTIOUS = hooks("cautious");
@@ -13,6 +14,7 @@ const SIGNAL_STOP = hooks("cautious", "signalStop");
 const AFTER_AMBER = hooks("cautious", "afterAmber");
 const FEATURE_STOP = hooks("cautiousStop");
 const FEATURE_DRIVE = hooks("cautiousDrive");
+const PLANNED_STOP = hooks("cautiousDrive", "plannedStop");
 
 function bestCandidate(eligible, target, scores) {
   let best;
@@ -74,10 +76,7 @@ export class CautiousAgent {
       picked(firstHookResult(BEFORE_BUS_LANES, snap, eligible, target), "feature_before_bus_lanes") ||
       picked(firstHookResult(RESERVED_LANE, snap, eligible, target), "feature_reserved_lane") ||
       picked(firstHookResult(AFTER_BUS_LANES, snap, eligible, target), "feature_after_bus_lanes") ||
-      picked(
-        eligible.find((c) => c.id === "park" || c.id === "pull_out"),
-        "parking",
-      ) ||
+      picked(firstHookResult(PARKING, snap, eligible, target), "parking") ||
       picked(firstHookResult(PASSING, snap, eligible, target), "feature_passing") ||
       picked(firstHookResult(AFTER_PASSING, snap, eligible, target), "feature_after_passing") ||
       picked(firstHookResult(CAUTIOUS, snap, eligible, target), "feature") ||
@@ -92,7 +91,7 @@ export class CautiousAgent {
     if (!candidate) motionReason = "no_candidate";
     else if (stopAtLineDrive(snap, candidate)) motionReason = "approach_signal";
     else if (candidate.sim.end_speed < 0.3) {
-      if (["park", "pull_out", "wait_to_park"].includes(candidate.id)) motionReason = "planned_stop";
+      if (PLANNED_STOP.some((planned) => planned(candidate, snap))) motionReason = "planned_stop";
       else if (FEATURE_DRIVE.some((drive) => drive(candidate, snap))) motionReason = "feature_planned_stop";
       else motionReason = "stationary_prediction";
     }

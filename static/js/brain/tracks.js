@@ -76,7 +76,6 @@ export const FLAG_TEXT = {
   blocks_junction: "it enters a junction it has no room to clear",
   enters_unseen_junction: "it enters a junction before it can see that it is clear",
   passes_turn_round_point: "it drives past the point where the route turns round",
-  passes_parking_space: "it drives past the parking space at the destination",
   splashes_pedestrian: "it splashes a pedestrian from a puddle",
   hits_pothole_too_fast: "it hits a pothole too fast",
   drives_into_geese: "it drives into geese crossing the road",

@@ -11,6 +11,7 @@ const FIRST = hooks("stepBeforeTraffic", "first");
 const AFTER_PARKED = hooks("stepBeforeTraffic", "afterParked");
 const AFTER_MERGE = hooks("stepBeforeTraffic", "afterMerge");
 const AFTER_OUTAGES = hooks("stepBeforeTraffic", "afterOutages");
+const STEP_OUTS = hooks("stepBeforeTraffic", "stepOuts");
 const BEFORE_TRAFFIC = hooks("stepBeforeTraffic");
 const AFTER_TRAFFIC = hooks("stepAfterTraffic");
 
@@ -31,7 +32,7 @@ export function stepWorld({ world, fleet, autopilot, input = null }, dt, now) {
   for (const step of AFTER_PARKED) step(world, fleet, dt);
   for (const step of AFTER_MERGE) step(world, fleet, dt);
   for (const step of AFTER_OUTAGES) step(world, fleet, dt);
-  world.stepOuts.step(dt);
+  for (const step of STEP_OUTS) step(world, fleet, dt);
   for (const step of BEFORE_TRAFFIC) step(world, fleet, dt);
   fleet.step(dt);
   for (const step of AFTER_TRAFFIC) step(world, fleet, dt);
