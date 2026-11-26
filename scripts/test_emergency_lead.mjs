@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { MapData } = await import("../static/js/map/mapdata.js");
+const { auditEmergency } = await import("../static/js/sim/emergency-audit.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Route } = await import("../static/js/map/route.js");
 const { NpcFleet } = await import("../static/js/sim/npc.js");
@@ -85,12 +86,12 @@ function setup(right, atLine = false, speed = 0) {
     world.map,
   );
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "fire_truck", distance: 60 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "fire_truck", distance: 60 });
   assert.equal(ev?.kind, "fire_truck");
   ev.psi = world.ego.psi;
   ev.blockedBy = [world.ego];
   ev.blockedFor = 4;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   return { world, ev };
 }
 {
@@ -111,7 +112,7 @@ function setup(right, atLine = false, speed = 0) {
   );
   world.t = 10;
   world.ego.v = 3.1;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(world.violations.failed_to_yield, 1, "driving on without pulling over still fails the late-yield audit");
 }
 {
@@ -124,7 +125,7 @@ function setup(right, atLine = false, speed = 0) {
   Object.assign(world.ego, { x: 105, y: 0, psi: -Math.PI / 2, v: 4 });
   ev.blockedBy = null;
   ev.blockedFor = 0;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(
     buildSnapshot(world).emergency?.lead,
     true,
@@ -146,7 +147,7 @@ function setup(right, atLine = false, speed = 0) {
   Object.assign(world.ego, { x: 118, y: 0, psi: -Math.PI / 2, v: 4 });
   ev.blockedBy = null;
   ev.blockedFor = 0;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(world.evJunction, "b", "the moving front has entered the junction with the siren now to its right");
   assert.equal(!!world.evCalls.get(ev.id)?.stoppedAtLine, false);
   assert.equal(buildSnapshot(world).emergency?.lead, true);
@@ -160,7 +161,7 @@ function setup(right, atLine = false, speed = 0) {
   const { world, ev } = setup(0.0134, true, 8);
   world.t = 4;
   world.ego.v = 0;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(
     !!world.evCalls.get(ev.id)?.stoppedAtLine,
     false,
@@ -169,7 +170,7 @@ function setup(right, atLine = false, speed = 0) {
   assert.equal(buildSnapshot(world).emergency?.lead, false);
   world.t = 8;
   world.ego.v = 4;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(world.violations.failed_to_yield, 1, "the shared state preserves penalties for a missed pull-over");
 }
 {
@@ -178,10 +179,10 @@ function setup(right, atLine = false, speed = 0) {
   Object.assign(world.ego, { x: 108, psi: -Math.PI / 2, v: 2 });
   ev.blockedBy = null;
   ev.blockedFor = 0;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   world.t = 4;
   world.ego.x = 118;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(world.evJunction, "b");
   assert.equal(
     world.violations.failed_to_yield,

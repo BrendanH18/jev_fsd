@@ -259,9 +259,26 @@ const dataChecks = {
   },
 };
 
+// A hook at several slots of one pipeline is a list of { at, run }, one a slot.
+export const hookEntries = (hook) => (hook === undefined ? [] : Array.isArray(hook) ? hook : [hook]);
+
 function hookProblem(name, hook, slots) {
   if (!Object.hasOwn(slots, name)) return `has an unknown hook or field ${name}`;
   const data = Object.hasOwn(dataFields, name);
+  if (Array.isArray(hook)) {
+    if (data) return `${name} must be an object`;
+    if (hook.length < 2) return `${name} lists fewer than two slots: use one hook`;
+    if (Object.keys(hook).length !== hook.length) return `${name} must be a plain list`;
+    const at = new Set();
+    for (const entry of hook) {
+      if (!object(entry) || entry.at === undefined) return `${name} lists a hook without its slot`;
+      if (at.has(entry.at)) return `${name} lists the slot "${String(entry.at)}" twice`;
+      at.add(entry.at);
+      const problem = hookProblem(name, entry, slots);
+      if (problem) return problem;
+    }
+    return null;
+  }
   if (data && !object(hook)) return `${name} must be an object`;
   if (object(hook)) {
     const shape = declarationProblem(name, hook, data ? dataFields[name] : HOOK_FIELDS);

@@ -65,6 +65,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "snowbanks",
       "puddles",
       "parkers",
+      "emergency",
       "roadClosures",
       "buses",
       "schoolBuses",
@@ -98,7 +99,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
   );
   assert.deepEqual(
     R.FLEET_FEATURES.map((f) => f.key),
-    ["buses", "schoolBuses", "streetcars", "trains", "collection", "plows"],
+    ["emergency", "buses", "schoolBuses", "streetcars", "trains", "collection", "plows"],
   );
 });
 
@@ -137,6 +138,10 @@ test("the core runs every slot, and names no registered feature", () => {
     busSpawnLane: source("sim/features/buses.js"),
     routeOptions: source("sim/features/index.js"),
     requestReroute: source("brain/brain.js"),
+    evKerb: source("sim/emergency-audit.js"),
+    evQueueHold: source("sim/emergency-audit.js"),
+    evStop: source("sim/emergency-yield.js"),
+    pullOverDetour: source("sim/features/emergency.js"),
   };
   for (const [name, slots] of Object.entries(R.SLOTS)) {
     if (["metric", "prompt", "notice"].includes(name)) continue;
@@ -337,6 +342,37 @@ test("the core runs every slot, and names no registered feature", () => {
       "world.redTurnSigns",
       "this.redTurnSigns",
       "no_turn_on_red",
+      'emergency.js"',
+      'emergency-traffic.js"',
+      'emergency-audit.js"',
+      'emergency-yield.js"',
+      "isEmergency",
+      "snap.emergency",
+      "snap?.emergency",
+      "emergency_vehicle",
+      '"pull_over"',
+      "fails_to_yield_to_emergency",
+      "evCalls",
+      "evCounted",
+      "evJunction",
+      "evYield",
+      "yieldEv",
+      "evShift",
+      "evRejoin",
+      ".evs",
+      "siren",
+      "EV_BOX_M",
+      "AUDIT_EV_",
+      "FOLLOW_M",
+      "heldInQueue",
+      "queueHold",
+      "evQueueHold",
+      "evKerb",
+      "evStop",
+      "pullOverDetour",
+      "dispatchEmergency",
+      "emergencyStep",
+      "auditEmergency",
       "snap.level_crossing",
       '"stop_before_tracks"',
       "crosses_in_front_of_train",
@@ -757,7 +793,17 @@ test("feature records reject malformed configuration with the field that needs f
     [{ coach: { deductions: [{ ...postDeduction, category: "speed" }] } }, /coach.deductions needs a score category/],
     [{ coach: { typo() {} } }, /unknown coach field/],
   ];
+  const at = (slot) => ({ at: slot, run() {} });
+  bad.push(
+    [{ state: [at("afterRearTraffic")] }, /fewer than two slots/],
+    [{ state: [at("afterRearTraffic"), at("afterRearTraffic")] }, /twice/],
+    [{ state: [{ run() {} }, at("afterRearTraffic")] }, /without its slot/],
+    [{ state: [at("afterRearTraffic"), at("nowhere")] }, /never runs/],
+    [{ prompt: [at("afterRightHook"), at("restrictions")] }, /must be an object/],
+  );
   for (const [fields, error] of bad) assert.match(R.recordProblem({ ...valid, ...fields }), error);
+  // (one hook at two slots of a pipeline)
+  assert.equal(R.recordProblem({ ...valid, state: [at("afterRearTraffic"), at("beforeTurnaround")] }), null);
   assert.match(R.recordProblem(null), /must be an object/);
   assert.equal(R.recordProblem({ ...valid, notice, coach: { reports: [coachReport], tips: [coachTip] } }), null);
   assert.equal(R.recordProblem({ ...valid, coach: { deductions: [{ ...postDeduction, category: "control" }] } }), null);
@@ -907,6 +953,7 @@ test("standalone feature simulations can load before the registry", () => {
   for (const [module, className] of [
     ["double-parked", "DoubleParked"],
     ["collection-truck", "CollectionTrucks"],
+    ["emergency-traffic", "EmergencyTraffic"],
     ["outage", "Outages"],
     ["work-zone", "WorkZones"],
     ["signals", "setScrambles"],

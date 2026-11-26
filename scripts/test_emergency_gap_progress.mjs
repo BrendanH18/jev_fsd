@@ -34,7 +34,7 @@ truck.path.start("e519", 0, 173.4, [["e517", 0]]);
 fleet.vehicles.push(truck);
 let hit = false;
 for (let k = 0; k < 8 * 60; k++) {
-  fleet.emergencyStep(truck, 1 / 60, [world.ego, truck]);
+  fleet.emergency.step(truck, 1 / 60, [world.ego, truck]);
   world.t += 1 / 60;
   hit ||= [world.ego, ...world.parked.list].some((o) => obbOverlap(truck.obb(), o.obb()));
 }
@@ -64,12 +64,12 @@ cautious.step = function (dt, input) {
   command = input.accel;
   return Vehicle.prototype.step.call(this, dt, input);
 };
-openFleet.emergencyStep(cautious, 1 / 60, [openWorld.ego, cautious]);
+openFleet.emergency.step(cautious, 1 / 60, [openWorld.ego, cautious]);
 assert.ok(command > 0, "bodies wholly behind the tail do not close the opening ahead");
 for (const parked of [...openWorld.parked.list]) openWorld.parked.remove(parked);
 for (const y of [0, 4.6]) openWorld.parked.add(new Vehicle(94, y, 0, 0));
 Object.assign(cautious, { x: 100, y: 2.35, psi: 0, v: 6, a: 0, side: -2.35 });
-openFleet.emergencyStep(cautious, 1 / 60, [openWorld.ego, cautious]);
+openFleet.emergency.step(cautious, 1 / 60, [openWorld.ego, cautious]);
 assert.ok(command < 0, "slow down while holding a line with no lateral opening");
 console.log("✓ a failed lateral gap search keeps real body clearance without a phantom leader");
 process.exit(0);

@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { fixtureWorld } = await import("../static/tests/jev-fixtures.js");
 const { NpcFleet } = await import("../static/js/sim/npc.js");
+const { auditEmergency } = await import("../static/js/sim/emergency-audit.js");
 const { Vehicle } = await import("../static/js/sim/vehicle.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
@@ -39,9 +40,9 @@ function setup({ weather = "dry", room = 3.4, v = 1.33, age = 2.3 } = {}) {
   }
   const fleet = new NpcFleet(world, { count: 0, bikes: 0 });
   fleet.nextPull = fleet.nextPark = Infinity;
-  const ev = fleet.dispatchEmergency({ relation: "behind", kind: "ambulance", distance: 80 });
+  const ev = fleet.emergency.dispatch({ relation: "behind", kind: "ambulance", distance: 80 });
   assert.equal(!!ev, true);
-  fleet.emergencyStep = () => {};
+  fleet.emergency.step = () => {};
   world.evYield = {
     id: ev.id,
     route: world.route,
@@ -112,7 +113,7 @@ for (const weather of ["dry", "rain"]) {
     ev.psi = 0;
     ev.path.s = ev.x;
     world.t = t;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
   assert.equal(world.violations.failed_to_yield, 0, `${weather}: yields as the ambulance draws level`);
 }

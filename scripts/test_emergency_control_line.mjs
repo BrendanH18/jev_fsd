@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 globalThis.document = { querySelector: () => null };
 const { MapData, cumulative } = await import("../static/js/map/mapdata.js");
+const { auditEmergency } = await import("../static/js/sim/emergency-audit.js");
 const { World } = await import("../static/js/sim/world.js");
 const { Vehicle, AMBULANCE } = await import("../static/js/sim/vehicle.js");
 
@@ -100,7 +101,7 @@ function setup(
     world.snowbanks.build({ narrowings: [{ edge: "in", a: 100, b: 160 }] });
     world.ego.y = -1.6 - narrowing;
   }
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   return { world, ev };
 }
 
@@ -114,7 +115,7 @@ function pass(world, ev) {
     ev.x = world.ego.x + middle + ahead + ev.spec.length / 2 - ev.spec.rearOverhang;
     ev.path.s = 100 - ev.x;
     world.t = t;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
 }
 
@@ -158,7 +159,7 @@ console.log("✓ a car already stopped at a signal or stop line may hold that st
   ev.blockedBy = [world.ego];
   ev.blockedFor = 7;
   world.t = 7;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(world.violations.failed_to_yield, 1, "holding up the ambulance is still audited");
 }
 // Lateral lane control and the pull-over audit use the rear axle. Yaw alone must
@@ -171,7 +172,7 @@ for (const [axleRight, heading, expected] of [
   world.ego.y -= axleRight;
   world.ego.psi = heading;
   world.evCalls.clear();
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   const [cx, cy] = world.ego.center;
   for (const [t, along] of [
     [9.9, 0.1],
@@ -181,7 +182,7 @@ for (const [axleRight, heading, expected] of [
     ev.y = cy + along * Math.sin(heading) + 3.2 * Math.cos(heading);
     ev.path.s = 100 - ev.x;
     world.t = t;
-    world.auditEmergency(world.roadInfo());
+    auditEmergency(world, world.roadInfo());
   }
   assert.equal(
     world.violations.failed_to_yield,
@@ -200,7 +201,7 @@ for (const [speed, gap, travel] of [
   world.ego.x += travel;
   world.ego.v = 0;
   world.t = 2.5;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   pass(world, ev);
   assert.equal(world.violations.failed_to_yield, 0, `finishing the constrained ${speed} m/s stop is yielding`);
 }
@@ -209,7 +210,7 @@ for (const [speed, gap, travel] of [
   world.ego.x += 19.3;
   world.ego.v = 0;
   world.t = 3;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   pass(world, ev);
   assert.equal(
     world.violations.failed_to_yield,
@@ -233,7 +234,7 @@ for (const queueGap of [2.8, 8]) {
   // it had from the call, and it is 9 s before the ambulance draws level)
   world.npcs = [ev];
   world.t = 1;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   pass(world, ev);
   assert.equal(world.violations.failed_to_yield, 1, "a queue that clears no longer prevents pulling over");
 }
@@ -243,10 +244,10 @@ for (const queueGap of [2.8, 8]) {
   world.t = 7;
   ev.blockedBy = [...world.npcs.filter((n) => n !== ev), world.ego];
   ev.blockedFor = 7;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(world.violations.failed_to_yield, 0, "a car cannot drive on into the second blocker in front of it");
   ev.blockedBy = [world.ego];
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(world.violations.failed_to_yield, 1, "blocking the ambulance alone still fails");
 }
 {
@@ -276,12 +277,12 @@ for (const queueGap of [2.8, 8]) {
     s: ev.x + 200,
   };
   world.evCalls.clear();
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   world.ego.v = 0;
   world.t = 4;
   ev.blockedFor = 4;
   ev.blockedBy = [world.ego, world.npcs.find((n) => n.id === "queue")];
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(
     world.evCalls.get(ev.id)?.lead,
     true,
@@ -290,7 +291,7 @@ for (const queueGap of [2.8, 8]) {
   world.npcs = [ev];
   world.ego.v = 5;
   world.t = 8;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   assert.equal(
     world.violations.failed_to_yield,
     0,
@@ -313,7 +314,7 @@ for (const offset of [-0.4, -0.407, -0.49, -0.51, -1]) {
   ev.x -= 60;
   ev.path.s += 60;
   world.evCalls.clear();
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   pass(world, ev);
   assert.equal(world.violations.failed_to_yield, 1, "the narrowing exception cannot apply outside a narrowed stretch");
 }
@@ -340,7 +341,7 @@ console.log(
   world.ego.x += 21.45;
   world.ego.v = 0;
   world.t = 2.5;
-  world.auditEmergency(world.roadInfo());
+  auditEmergency(world, world.roadInfo());
   pass(world, ev);
   assert.equal(world.violations.failed_to_yield, 1, "an approach allowance cannot transfer to another control");
 }

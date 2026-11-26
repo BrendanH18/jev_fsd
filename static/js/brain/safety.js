@@ -122,8 +122,6 @@ export class DeadlockDetector {
       (snap?.following && snap.following.gap_m < 8) ||
       (snap?.pedestrian && snap.pedestrian.bumper_to_crosswalk_m < 12) ||
       (snap?.right_hook && snap.right_hook.bumper_to_yield_m < 8) ||
-      (snap && snap.emergency && snap.emergency.bumper_to_stop_m !== null && snap.emergency.bumper_to_stop_m < 8) ||
-      (snap?.emergency_ahead && snap.emergency_ahead.speed < 1) ||
       (snap?.crosswalk_stop && snap.crosswalk_stop.bumper_to_stop_m < 8) ||
       (snap?.junction_box && snap.junction_box.bumper_to_stop_m < 8) ||
       LEGITIMATE_STOP.some((hold) => hold(snap, CLEARING_M)) ||

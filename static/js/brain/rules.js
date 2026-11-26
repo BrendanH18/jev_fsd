@@ -23,6 +23,8 @@ const STOPS_COST = hooks("rulesCost", "stops");
 const BEFORE_PASSING_COST = hooks("rulesCost", "beforePassing");
 const AFTER_SPECIAL_COST = hooks("rulesCost", "afterSpecial");
 const FEATURE_COST = hooks("rulesCost");
+const SPECIAL_COST = hooks("rulesCost", "special");
+const LANE_GOAL = hooks("rulesLaneGoal");
 
 function explainCost(terms, name, amount) {
   if (terms) terms[name] = amount;
@@ -127,9 +129,16 @@ export class RulesBrain {
       const s = c.sim;
       // a lane change is judged against the speed the car could keep in the new lane
       const vWant = Math.min(c.laneTarget ?? vDesired, snap.limit, c.law.lane ? vTurnLane : Infinity);
-      // (a pull-over is judged by how near it ends to where it pulls over to, across lanes to the
-      // kerb if need be: from the lane's centre, two lanes out, it would cost as much as its bonus)
-      const laneErr = c.id === "pull_over" ? s.lane_err_end - (c.law.offset - c.law.center) : s.lane_err_end;
+      // (a manoeuvre a registered feature has end off its lane's centre, a pull-over to the kerb, say, is judged
+      // by how near it ends to where it is going)
+      let laneErr = s.lane_err_end;
+      for (const goal of LANE_GOAL) {
+        const lateral = goal(c, snap);
+        if (lateral !== null) {
+          laneErr = s.lane_err_end - lateral;
+          break;
+        }
+      }
       const progress = -1.0 * s.progress_m;
       const lateralError = 2.0 * Math.abs(laneErr);
       const headingError = 0.05 * Math.abs(s.heading_err_deg);
@@ -202,9 +211,14 @@ export class RulesBrain {
         cost += adjustment;
         if (terms && adjustment) terms[`feature_${index}`] = adjustment;
       }
-      // giving way to an emergency vehicle: pull over and stop at once, rather than stop in the lane
-      // (outweighing the cost of ending up out of the lane's centre)
-      if (c.id === "pull_over") cost += explainCost(terms, "pull_over", -15);
+      // (what a registered feature's own manoeuvre is worth beside turning round and parking: pulling over for
+      // an emergency vehicle, say)
+      for (let index = 0; index < SPECIAL_COST.length; index++) {
+        const adjust = SPECIAL_COST[index];
+        const adjustment = adjust(c, snap);
+        cost += adjustment;
+        if (terms && adjustment) terms[`feature_special_${index}`] = adjustment;
+      }
       // Turning round where the route makes a U-turn is the only way on, and once begun it carries
       // on whenever its prediction is clear.
       if (c.law.kind === "turnaround") cost += explainCost(terms, "turnaround", -50);

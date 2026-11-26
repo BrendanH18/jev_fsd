@@ -41,7 +41,7 @@ function fixture() {
     pulled: 0,
     nextPull: 1,
     nextPark: 2,
-    nextEmergency: -1,
+    emergency: { next: -1 },
     nextPlow: 18,
     buses: { next: 14, target: 0 },
     streetcars: { next: 15, target: 0 },
@@ -155,7 +155,7 @@ const fixtures = [
   [
     "fleet_emergency_timer",
     ({ fleet }) => {
-      fleet.nextEmergency = NaN;
+      fleet.emergency.next = NaN;
     },
   ],
   [
