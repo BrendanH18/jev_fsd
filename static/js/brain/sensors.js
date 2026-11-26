@@ -57,9 +57,6 @@ import {
   waitsAt,
 } from "../sim/rail.js";
 import { ROOM_M as BOX_ROOM_M, boxBlocker, routeBoxAhead } from "../sim/junction-box.js";
-import { TRY_START_M } from "../sim/parallel-park.js";
-// Pulling up where the car reverses into a space (brain/candidates.js wait_to_park), it brakes at no more than this.
-const PARK_STOP_DECEL = 1.2;
 import {
   alternateSignal,
   clearingLimits,
@@ -102,6 +99,7 @@ const SENSE = {
   late: hooks("sense", "late"),
   junctions: hooks("sense", "junctions"),
   blindSpots: hooks("sense", "blindSpots"),
+  destination: hooks("sense", "destination"),
 };
 const LIMIT = {
   beforeBlindSpots: hooks("limit", "beforeBlindSpots"),
@@ -129,6 +127,7 @@ const TARGET = {
   beforeEmergency: hooks("target", "beforeEmergency"),
   beforeRunner: hooks("target", "beforeRunner"),
   blindSpots: hooks("target", "blindSpots"),
+  destination: hooks("target", "destination"),
 };
 const LANE_GAP_BLOCKED = hooks("laneGapBlocked");
 const LANE_TARGET_FIELDS = hooks("laneTargetFields");
@@ -152,6 +151,7 @@ const HAZARD = {
   rearTraffic: hooks("hazard", "rearTraffic"),
   late: hooks("hazard", "late"),
   blindSpots: hooks("hazard", "blindSpots"),
+  destination: hooks("hazard", "destination"),
 };
 // (and how slowly and gently it crosses a junction over what a registered feature makes slippery)
 const TURN_PACE = hooks("turnPace");
@@ -767,7 +767,6 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
     junction_box: null,
     speed_zone: null,
     ...FEATURE_SNAPSHOT_FIELDS,
-    parking: null,
     rear_follower: null,
     traffic: [],
     current_path_hazard: null,
@@ -797,7 +796,9 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
   // (and coming up beside cars parked at the kerb that hide the sidewalk: sim/features/hidden-hazards.js)
   for (const sense of SENSE.blindSpots) sense(world, snap);
   snap.turnaround = turnaroundState(world, snap, executing);
-  snap.parking = parkingState(world, snap, executing);
+  // (parking at the destination, or pulling out of the space the car is parked in:
+  // sim/features/destination-parking.js)
+  for (const sense of SENSE.destination) sense(world, snap, { executing });
   // (and what a registered feature caps once the turnaround and the parking are known: black ice, say)
   for (const limit of LIMIT.parking) limit(snap);
   for (const sense of SENSE.beforeTarget) sense(world, snap);
@@ -810,37 +811,6 @@ export function buildSnapshot(world, executing = null, { validate = false } = {}
     if (issues.length) throw new TypeError(issues.join("\n"));
   }
   return snap;
-}
-
-// Parking at the destination, or pulling out of the space the car is parked in (sim/parallel-park.js,
-// World.park): the space, where the car stops to reverse into it (rear axle, route arc length) and how
-// far right of its lane's centre it pulls up there, whether something behind keeps it waiting
-// (`wait_for`), and once under way the manoeuvre's leg. Null without one, or once there is no space
-// to be had.
-function parkingState(world, snap, executing) {
-  const p = world.park,
-    law = world.parking;
-  if (!p || p.status === "none" || !snap.routeProj) return null;
-  const leg = law
-    ? { phase: law.phase, legs: law.legs, executing: executing?.law === law, idle_s: law.idle || 0 }
-    : { phase: null, legs: 0, executing: false, idle_s: 0 };
-  if (p.mode === "out") return { mode: "out", status: p.status, id: p.id, wait_for: p.blocked, ready: !law, ...leg };
-  const s = snap.routeProj.s;
-  return {
-    mode: "in",
-    status: p.status,
-    id: p.id,
-    length_m: p.length,
-    kerb: "right",
-    stop_s_route: p.stopS,
-    stop_in_m: p.stopS - s,
-    nudge_m: p.nudge,
-    wait_for: p.blocked,
-    waited_s: p.waited || 0,
-    ready: !law && p.status === "waiting" && !p.blocked,
-    near_start: Math.abs(p.stopS - s) < TRY_START_M,
-    ...leg,
-  };
 }
 
 // The school or playground zone in effect that the car is in (the world's road info says so), or the
@@ -2326,15 +2296,8 @@ export function desiredSpeed(snap) {
       reasons.push("pedestrian crossing");
     }
   }
-  // a space to park in: stop where the car reverses into it
-  const pk = snap.parking;
-  if (pk?.mode === "in" && !pk.phase) {
-    const vk = stopSpeedFor(Math.max(0, pk.stop_in_m - 0.3), Math.min(decel * 0.8, PARK_STOP_DECEL));
-    if (vk < v) {
-      v = vk;
-      reasons.push("parking space ahead");
-    }
-  }
+  // (a space to park in at the destination, say: sim/features/destination-parking.js)
+  for (const cap of TARGET.destination) v = cap(snap, v, reasons, { decel, stopSpeedFor });
   if (snap.nav && snap.nav.turn_round_in_m !== undefined) {
     const vr = stopSpeedFor(Math.max(0, snap.nav.turn_round_in_m), decel);
     if (vr < v) {
@@ -2437,7 +2400,10 @@ export function hazardFlags(snap) {
     if (Array.isArray(x)) f.push(...x);
     else if (x) f.push(x);
   }
-  if (snap.parking) f.push("parking");
+  for (const flag of HAZARD.destination) {
+    const label = flag(snap);
+    if (label) f.push(label);
+  }
   for (const flag of HAZARD.blindSpots) {
     const label = flag(snap);
     if (label) f.push(label);

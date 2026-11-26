@@ -5,10 +5,13 @@
 import { obbOverlap } from "../sim/collision.js";
 import { CAR } from "../sim/vehicle.js";
 import { CLEARING_M, waitsItsTurn } from "./sensors.js";
-import { reversing } from "../sim/parallel-park.js";
-import { hooks } from "../sim/features/index.js";
+import { firstHookResult, hooks } from "../sim/features/index.js";
 
 const LEGITIMATE_STOP = hooks("legitimateStop");
+// A registered feature's manoeuvre that moves up to kerbs and parked cars on purpose, keeping clear of them
+// itself (parking at the destination, sim/features/destination-parking.js): { reversing, gapStill,
+// gapMoving, ttcMoving, passesOncoming } for the law under way, or null.
+const SAFETY_LAW = hooks("safetyLaw");
 
 // Within this many metres of the destination a stop is not a deadlock, and a car that cannot get
 // any closer because something is parked in the way has arrived.
@@ -33,9 +36,9 @@ export function safetyBrake(world, snap, executing) {
   // A three-point turn moves at walking pace up to kerbs and parked cars on purpose, keeping clear
   // of them itself (sim/turnaround.js), so here only what is closer counts.
   const turning = law?.kind === "turnaround" && world.turnaround === law;
-  // Parking, or pulling out of a space, likewise, closer still: up to sim/parallel-park.js CLEAR_M.
-  const parking = law?.kind === "park" && world.parking === law && law.phase !== "done";
-  if (ego.v < -0.05 || (turning && law.phase === "reverse") || (parking && reversing(law))) {
+  // A registered feature's manoeuvre likewise, closer still (parking, or pulling out of a space).
+  const manoeuvre = firstHookResult(SAFETY_LAW, world, law);
+  if (ego.v < -0.05 || (turning && law.phase === "reverse") || manoeuvre?.reversing) {
     // reversing: never back into something right behind (not counted while barely moving). A leg
     // of a turnaround ends further out on its own, so this only catches what it did not.
     const box = sweptBox(ego, -Math.max(0.25, -ego.v * 0.5));
@@ -44,9 +47,9 @@ export function safetyBrake(world, snap, executing) {
     }
     return null;
   }
-  const gapStill = parking ? 0.3 : turning ? 0.5 : 2.0,
-    gapMoving = parking ? 0.3 : turning ? 0.5 : 1.5,
-    ttcMoving = parking ? 0.4 : turning ? 0.5 : 1.0;
+  const gapStill = manoeuvre ? manoeuvre.gapStill : turning ? 0.5 : 2.0,
+    gapMoving = manoeuvre ? manoeuvre.gapMoving : turning ? 0.5 : 1.5,
+    ttcMoving = manoeuvre ? manoeuvre.ttcMoving : turning ? 0.5 : 1.0;
   if (ego.v < 0.3) {
     // standing still: never pull away into a car right in front (not counted as an intervention)
     for (const n of world.visibleObstaclesNear(ego.x, ego.y, 12)) {
@@ -80,7 +83,7 @@ export function safetyBrake(world, snap, executing) {
     if (local.ahead < 0 || local.ahead > 20 || Math.abs(local.right) > ego.spec.width / 2 + 0.45) continue;
     // (parking, or pulling out, at an angle to the street: traffic going the other way in its own lane
     // is not in the way; the prediction still looks out for it)
-    if (parking && (n.v || 0) > 0.5 && Math.cos(n.psi - ego.psi) < 0) continue;
+    if (manoeuvre?.passesOncoming && (n.v || 0) > 0.5 && Math.cos(n.psi - ego.psi) < 0) continue;
     const gap = local.ahead - FRONT - (n.spec || CAR).rearOverhang;
     const closing = ego.v - n.v * Math.cos(n.psi - ego.psi);
     if (gap < gapMoving || (closing > 0.1 && gap / closing < ttcMoving)) return { reason: "ahead", gap, closing };
@@ -133,12 +136,6 @@ export class DeadlockDetector {
       LEGITIMATE_STOP.some((hold) => hold(snap, CLEARING_M)) ||
       (snap?.nav && snap.nav.remaining_m < DESTINATION_ZONE_M) ||
       (snap?.turnaround?.executing && snap.turnaround.idle_s < TURN_ROUND_IDLE_S) ||
-      // (waiting to park, or to pull out, signalling, for what is coming; and parking, at walking pace)
-      (snap?.parking &&
-        ((snap.parking.mode === "in"
-          ? !snap.parking.phase && snap.parking.near_start
-          : !snap.parking.phase || snap.parking.executing) ||
-          (snap.parking.executing && snap.parking.idle_s < TURN_ROUND_IDLE_S))) ||
       !world.route;
     // (creeping forward to look past a building is slow on purpose, unless it is not moving at all)
     const g = snap?.intersection?.give_way,

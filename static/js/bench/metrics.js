@@ -2,7 +2,7 @@
 // comfort (acceleration, jerk, lateral acceleration), lane keeping, legality, and progress.
 // Kinematics are sampled every 0.1 s so the numbers describe the car, not integration noise.
 
-import { featureFailures, featureMetrics } from "../sim/features/index.js";
+import { featureFailures, featureMetrics, featureVerdicts } from "../sim/features/index.js";
 
 const SAMPLE_S = 0.1;
 const HARD_BRAKE = -3.5; // m/s^2, sustained for 0.2 s counts as a hard brake
@@ -186,9 +186,9 @@ export function failures(m) {
   f.push(...featureFailures(m, "rearTraffic"));
   f.push(...featureFailures(m, "late"));
   f.push(...featureFailures(m, "junctions"));
-  // (a drive that parks at the destination, sim/parallel-park.js: arrived, but not parked within 30 cm
-  // of the kerb)
-  if (m.arrived && m.parked === false) f.push("not parked");
+  // (and a registered feature's verdict on the drive as a whole: a drive that parks at the destination,
+  // arrived but not parked within 30 cm of the kerb, say)
+  f.push(...featureVerdicts(m));
   return f;
 }
 

@@ -22,6 +22,9 @@ const STOPS_COST = hooks("rulesCost", "stops");
 const BEFORE_PASSING_COST = hooks("rulesCost", "beforePassing");
 const AFTER_SPECIAL_COST = hooks("rulesCost", "afterSpecial");
 const FEATURE_COST = hooks("rulesCost");
+const NAMED_COSTS = hooks("rulesTerms", "afterTurnaround");
+const KEEPS_DESTINATION = hooks("keepsDestination");
+const GOES_ON = hooks("manoeuvreGoesOn");
 
 function explainCost(terms, name, amount) {
   if (terms) terms[name] = amount;
@@ -106,8 +109,9 @@ export class RulesBrain {
       stop = true;
       holds?.push("feature_stop");
     }
-    // (parking, the space is the destination: sim/parallel-park.js)
-    if (snap.nav?.arrived && snap.parking?.mode !== "in") {
+    // (unless a registered feature keeps the destination for itself: parking, the space is the
+    // destination, sim/features/destination-parking.js)
+    if (snap.nav?.arrived && !KEEPS_DESTINATION.some((keeps) => keeps(snap))) {
       stop = true;
       holds?.push("destination");
     }
@@ -210,10 +214,11 @@ export class RulesBrain {
       // Turning round where the route makes a U-turn is the only way on, and once begun it carries
       // on whenever its prediction is clear.
       if (c.law.kind === "turnaround") cost += explainCost(terms, "turnaround", -50);
-      // Likewise parking at the destination, and pulling out of the space at the start of a drive; and
-      // pulling up where the car reverses into the space comes before driving on past it.
-      if (c.law.kind === "park") cost += explainCost(terms, "parking", -50);
-      if (c.id === "wait_to_park") cost += explainCost(terms, "parking_approach", -12);
+      // Likewise a registered feature's named terms: parking at the destination, and pulling out of the
+      // space at the start of a drive, and pulling up where the car reverses into the space before
+      // driving on past it (sim/features/destination-parking.js).
+      for (const named of NAMED_COSTS)
+        for (const [name, amount] of Object.entries(named(c, snap) || {})) cost += explainCost(terms, name, amount);
       for (let index = 0; index < AFTER_SPECIAL_COST.length; index++) {
         const adjust = AFTER_SPECIAL_COST[index];
         const adjustment = adjust(c, snap);
@@ -238,9 +243,13 @@ export class RulesBrain {
       scores?.push({ id: c.id, targetSpeed: vWant, cost, terms });
       if (best === null || cost < best.cost) best = { c, cost };
     }
-    // (the reasons to stop above are for driving ahead; a turnaround, or parking, that is clear goes on)
+    // (the reasons to stop above are for driving ahead; a turnaround, or a registered feature's manoeuvre
+    // such as parking, that is clear goes on)
     const motion =
-      stop && !stopAtLineDrive(snap, best?.c) && best?.c.law.kind !== "turnaround" && best?.c.law.kind !== "park"
+      stop &&
+      !stopAtLineDrive(snap, best?.c) &&
+      best?.c.law.kind !== "turnaround" &&
+      !GOES_ON.some((goes) => goes(best?.c))
         ? "stop"
         : "drive";
     if (policy)

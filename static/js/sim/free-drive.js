@@ -17,8 +17,6 @@ export function freeDriveOptions(params = new URLSearchParams(), { hour = 15.5 }
     pedestrians: hour >= 22 || hour < 6 ? 18 : hour >= 20 ? 36 : undefined,
     // buses run their routes (`?buses=0`)
     buses,
-    // the autopilot parks at the destination, where there is a space (`?park=0` stops it in its lane)
-    park: on("park"),
   };
   const fleet = {
     // emergency vehicles answer calls now and then (`?emergency=0`)

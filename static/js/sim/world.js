@@ -45,7 +45,6 @@ import {
 } from "./streetcar.js";
 import { HEAR_M, canStopFor as canStopForTrain, crossingAheadOf, fouling, railIndex, trainAt } from "./rail.js";
 import { boxBlocker, routeBoxAhead } from "./junction-box.js";
-import { leftSpace, reversing, tyres } from "./parallel-park.js";
 
 import {
   FEATURES,
@@ -76,6 +75,7 @@ const HIDES = hooks("hides"),
   EV_KERB = hooks("evKerb"),
   EV_QUEUE_HOLD = hooks("evQueueHold");
 const AUDIT_LATE = hooks("audit", "late");
+const AUDIT_DESTINATION = hooks("audit", "destination");
 const AUDIT_BEFORE_MERGE = hooks("audit", "beforeMerge");
 const AUDIT_PASSING = hooks("audit", "beforeReservedLane");
 const AUDIT_AFTER_ROADSIDE_VEHICLES = hooks("audit", "afterRoadsideVehicles");
@@ -216,8 +216,6 @@ const AUDIT_TRAIN_MOVING_MPS = 1;
 const AUDIT_BOX_MOVING_MPS = 1;
 export class World {
   // `buses`: buses run (sim/bus.js), so nobody parks in their bus zones.
-  // `park`: the autopilot parks at the
-  // destination (sim/parallel-park.js).
   // And the option of each registered feature (sim/features/index.js), with any option it reads beside
   // its own (hidden hazards' `stepOuts`, say).
   constructor(
@@ -229,7 +227,6 @@ export class World {
       weather = "dry",
       vehicleSpec = CAR,
       buses = false,
-      park = false,
       ...features
     } = {},
   ) {
@@ -268,16 +265,6 @@ export class World {
     this.trainCalls = new Map(); // "<crossing id>:<train id>:<departure>" -> { owed, counted }: one approaching it
     this.onTracks = null; // the level crossing the car is standing on the tracks of, and since when
     this.inBox = null; // the signal's junction the car is in, whether it had room past it, and since when
-    // parking at the destination (sim/parallel-park.js): whether the autopilot does, the space it is
-    // going for (`park`), the manoeuvre (`parking`), how far traffic behind keeps back (`parkHold`), the
-    // spaces it gave up, the space it is parked in, and the kerb strikes the audit counted
-    this.parkAtGoal = !!park;
-    this.park = null;
-    this.parking = null;
-    this.parkHold = 0;
-    this.parkTried = [];
-    this.parkedIn = null;
-    this.kerbContact = false;
     // the time of day school and playground zones go by (sim/speed-zones.js): { hour, sun_deg }, or
     // null, when no zone is in effect (the seeded benchmark)
     this.clock = null;
@@ -448,14 +435,6 @@ export class World {
     this.inBox = null;
     for (const reset of RESET_CONTACT) reset(this);
     for (const f of FEATURES) if (f.calls) this[f.calls]?.clear();
-    // (moved by hand: whatever space it was going for, or parked in, is let go)
-    for (const p of [this.park, this.parkedIn])
-      for (const slot of p?.slots || []) if (slot.reserved?.owner === this.ego) slot.reserved = null;
-    this.park = null;
-    this.parking = null;
-    this.parkHold = 0;
-    this.parkedIn = null;
-    this.kerbContact = false;
     this.schoolYields?.clear();
     this.crosswalkCalls.clear();
     this.crosswalkYields?.clear();
@@ -867,21 +846,8 @@ export class World {
     for (const audit of AUDIT_STREET_HAZARDS) audit(this);
     for (const audit of AUDIT_REAR_TRAFFIC) audit(this);
     for (const audit of AUDIT_LATE) audit(this);
-    this.auditKerb();
-    leftSpace(this);
-  }
-
-  // Parking or pulling out (sim/parallel-park.js), a tyre on the kerb is a kerb strike: counted once a
-  // contact (a bumper reaching over it is not).
-  auditKerb() {
-    const law = this.parking;
-    if (!law || law.phase === "done") {
-      this.kerbContact = false;
-      return;
-    }
-    const on = tyres(this.ego, this.ego.spec).some((p) => this.map.roadDistance(p[0], p[1]).distance > 0.02);
-    if (on && !this.kerbContact) this.events.push({ type: "kerb_strike", reversing: reversing(law) });
-    this.kerbContact = on;
+    // (and last, destination parking's: sim/features/destination-parking.js)
+    for (const audit of AUDIT_DESTINATION) audit(this);
   }
 
   // Through a junction on a left arrow: anything but a left turn (heading more than 45 deg left of

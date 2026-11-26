@@ -81,6 +81,7 @@ test("every record is whole, its option and flags its own, and every hook at a s
       "leftOnRed",
       "amberLights",
       "busLanes",
+      "park",
       "hazards",
     ],
   );
@@ -198,6 +199,7 @@ test("the core runs every slot, and names no registered feature", () => {
       'hidden-hazards.js"',
       'hidden-traffic.js"',
       'blind-spot.js"',
+      'parallel-park.js"',
     ]) {
       const imports = text
         .split("\n")
@@ -343,6 +345,21 @@ test("the core runs every slot, and names no registered feature", () => {
       "hiddenVehicle(",
       "standingNear(",
       "STEP_OUT_",
+      "world.park.",
+      "world.park?",
+      "world.parking",
+      "parkHold",
+      "parkedIn",
+      "parkAtGoal",
+      "parkTried",
+      "parkWait",
+      "kerbContact",
+      "snap.parking",
+      '"park"',
+      '"wait_to_park"',
+      '"pull_out"',
+      '"passes_parking_space"',
+      '"not parked"',
     ]) {
       assert.ok(!text.includes(field), `${path} names ${field}`);
     }
@@ -448,6 +465,7 @@ test("the World builds each feature from its option, with its seen flag and its 
     busLanes: true,
     hazards: true,
     stepOuts: 1,
+    park: true,
   });
   assert.equal(on.stepOuts.count, 1, "hidden hazards read the step-outs option beside their own");
   assert.equal(off.stepOuts.count, 0);

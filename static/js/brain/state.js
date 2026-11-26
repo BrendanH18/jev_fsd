@@ -37,6 +37,7 @@ const STATE = {
   rearTraffic: hooks("state", "rearTraffic"),
   parking: hooks("state", "parking"),
   blindSpots: hooks("state", "blindSpots"),
+  destination: hooks("state", "destination"),
 };
 const ACTIVE_OUTCOME = hooks("activeOutcome");
 const OUTCOME_BY_ID = hooks("outcome", "ids"),
@@ -62,6 +63,7 @@ const CLAUSE = {
   rearTraffic: hooks("clause", "rearTraffic"),
   parking: hooks("clause", "parking"),
   blindSpots: hooks("clause", "blindSpots"),
+  destination: hooks("clause", "destination"),
 };
 const HOLD_STILL = {
   beforeParking: hooks("holdStill", "beforeParking"),
@@ -71,11 +73,14 @@ const HOLD_STILL = {
   beforeRunner: hooks("holdStill", "beforeRunner"),
   late: hooks("holdStill", "late"),
   parking: hooks("holdStill", "parking"),
+  destination: hooks("holdStill", "destination"),
 };
 const PEDESTRIAN_HANDLERS = hooks("handlesPedestrian");
 const RETURN_CLAUSES = hooks("returnClause");
 const SUPPRESS_FOLLOWING_CLAUSE = hooks("suppressFollowingClause");
 const DRIVE_CRITERIA = hooks("driveCriterion");
+const DESTINATION_DRIVE_CRITERIA = hooks("driveCriterion", "destination");
+const ARRIVAL_CRITERIA = hooks("arrivalCriterion");
 const QUESTIONS = hooks("questions");
 // The situation's wording from a list of clause hooks, each a sentence, a list of them, or nothing.
 const pushClauses = (out, list, snap) => {
@@ -449,7 +454,8 @@ export function toJevState(snap, candidates, meta = {}, style = DEFAULT_STYLE) {
       under_way: snap.turnaround.phase !== "start",
       ...(snap.turnaround.phase !== "start" ? { leg: snap.turnaround.phase, legs_done: snap.turnaround.legs } : {}),
     };
-  if (snap.parking) state.parking = parkingState(snap.parking);
+  // (parking at the destination, say: sim/features/destination-parking.js)
+  for (const add of STATE.destination) add(snap, state);
   if (snap.rear_follower && snap.rear_follower.gap_m < 12)
     state.rear_follower = { id: snap.rear_follower.id, gap_m: r1(snap.rear_follower.gap_m) };
   if (snap.traffic?.length) {
@@ -495,14 +501,6 @@ function outcomeLabel(c, snap) {
   if (c.id === "stop_at_destination") return "clear, reaches the destination";
   if (c.law.kind === "turnaround") return "clear, turns the car round";
   if (c.id === "stop_to_turn_round") return "clear, stops where the car turns round";
-  if (c.law.kind === "park")
-    return c.law.mode === "out"
-      ? "clear, pulls out of the parking space into the lane"
-      : "clear, parks the car in the space";
-  if (c.id === "wait_to_park" && snap.parking)
-    return snap.parking.stop_in_m > 0.3
-      ? `clear, stops ${Math.max(0, r1(snap.parking.stop_in_m - c.sim.progress_m))} m short of where the car reverses into the space`
-      : "clear, holds still where the car reverses into the space";
   if (c.id === "stop_for_oncoming" && snap.intersection?.oncoming)
     return `clear, waits ${Math.max(0, r1(snap.intersection.oncoming.bumper_to_yield_m - c.sim.progress_m))} m short of oncoming traffic's path`;
   if (c.id === "stop_for_cyclist" && snap.right_hook)
@@ -760,7 +758,7 @@ export function situationClauses(snap, { track = "guarded" } = {}) {
     else if (label === "dangerous" || label === "short")
       out.push(`The ${snap.following.kind === "parked car" ? "parked car" : "car"} ahead is close; keep a safe gap.`);
   }
-  if (snap.parking) out.push(parkingClause(snap.parking));
+  pushClauses(out, CLAUSE.destination, snap);
   if (!snap.turnaround && snap.nav?.turn_round_in_m !== undefined && snap.nav.turn_in_m < 40)
     out.push(
       `The route makes a U-turn ${Math.round(snap.nav.turn_in_m)} m ahead, at a dead end: slow down and stop ${Math.max(0, Math.round(snap.nav.turn_round_in_m))} m ahead, where the car will turn round (\`stop_to_turn_round\`), then turn round with a three-point turn.`,
@@ -941,42 +939,6 @@ function crossingClause(snap) {
   return `${where}${train} ${t ? "The car cannot stop short of it in time: keep going and clear the tracks." : "No train is coming and there is room past it: cross without stopping on the tracks."}`;
 }
 
-// Parking at the destination, or pulling out of the space the car is parked in (sim/parallel-park.js).
-function parkingState(p) {
-  if (p.mode === "out")
-    return {
-      pulling_out: true,
-      ...(p.phase ? { leg: p.phase, legs_done: p.legs } : {}),
-      ...(p.wait_for ? { wait_for: p.wait_for } : {}),
-    };
-  return {
-    space_m: r1(p.length_m),
-    kerb: p.kerb,
-    ...(p.phase
-      ? { under_way: true, leg: p.phase, legs_done: p.legs }
-      : {
-          stop_in_m: r1(Math.max(0, p.stop_in_m)),
-          ...(p.wait_for ? { wait_for: p.wait_for } : {}),
-          ...(p.ready ? { clear_behind: true } : {}),
-        }),
-  };
-}
-
-function parkingClause(p) {
-  if (p.mode === "out")
-    return p.phase && p.phase !== "out_back" && p.phase !== "out_wait"
-      ? "The car is pulling out of the parking space it was parked in: carry on with `pull_out` while it is offered; it hands back to the lane once the car is in it."
-      : `The car is parked at the kerb and pulls out of the space to start (\`pull_out\`): it backs up, signals left, and waits until nothing is coming up the lane beside it${p.wait_for ? ` (\`${p.wait_for}\` is coming now)` : ""}; then it pulls out on full lock.`;
-  if (p.phase)
-    return "The car is parallel parking in the space at the destination: carry on with `park` while it is offered, and hold still only to let something go by.";
-  const at = Math.max(0, Math.round(p.stop_in_m));
-  if (p.wait_for)
-    return `There is a space to park in at the destination, on the right. The car is alongside the car in front of it, signalling right, but \`${p.wait_for}\` is behind it, in the way back or coming: hold still where the car is (\`wait_to_park\`) until it is clear behind. Never back into anyone.`;
-  if (p.ready)
-    return "There is a space to park in at the destination, on the right, and it is clear behind: park in it with `park`, reversing in on full lock toward the kerb, then the other way.";
-  return `There is a space to park in at the destination, on the right, ${Math.round(p.length_m * 10) / 10} m long. Signal right, slow down and stop ${at} m ahead, alongside the car in front of it (\`wait_to_park\`), to reverse into it. The space is the destination now: do not drive on past it.`;
-}
-
 export function needsMotionQuestion(snap) {
   return !!(
     (snap.intersection && (snap.intersection.bumper_to_line_m < 30 || snap.intersection.oncoming)) ||
@@ -992,7 +954,6 @@ export function needsMotionQuestion(snap) {
     snap.level_crossing?.wait ||
     snap.level_crossing?.on_tracks ||
     snap.junction_box ||
-    snap.parking ||
     snap.roadside?.some((o) => o.kind !== "parked car" && o.ahead < 25) ||
     snap.traffic?.some((t) => t.ahead > 0 && t.ahead < 25 && Math.abs(t.right) < 4) ||
     snap.stuck ||
@@ -1071,20 +1032,16 @@ export function buildQuestions(snap, eligible, meta = {}) {
     const afterFlaggerWait = HOLD_STILL.afterFlagger.map((h) => h(snap)).join("");
     const approachWait = HOLD_STILL.beforeParking.map((h) => h(snap)).join("");
     const featureParkingWait = HOLD_STILL.parking.map((h) => h(snap)).join("");
-    // And waiting to reverse into a space, or to pull out of one, for traffic behind.
-    const parkWait = snap.parking?.wait_for
-      ? snap.parking.mode === "out"
-        ? ", when the car is parked and waiting to pull out for traffic coming up the lane beside it (`parking.wait_for`)"
-        : ", when the car has pulled up to reverse into a parking space and something is behind it (`parking.wait_for`)"
-      : "";
-    // Parking, the space is the destination: the car has not reached it until it is parked.
-    const parkGoal = snap.parking ? " (while parking, the destination is reached only once the car is parked)" : "";
+    // (and waiting to reverse into a space at the destination, say: sim/features/destination-parking.js)
+    const destinationWait = HOLD_STILL.destination.map((h) => h(snap)).join("");
+    // (what a registered feature adds to reaching the destination: parking, the space is the destination)
+    const arrival = ARRIVAL_CRITERIA.map((criterion) => criterion(snap)).join("");
     questions.motion = {
       type: "choice",
       instructions: `${pre} Decide whether the car should keep moving or hold still right now.`,
       criteria: {
-        drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${snap.parking ? ` ${snap.parking.mode === "out" ? "Pulling out of a parking space (`pull_out`)" : "Parking (`park`)"} is driving too, its legs back included.` : ""}${DRIVE_CRITERIA.map((criterion) => criterion(snap)).join("")}`,
-        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${beforeRunnerWait}${featureWait}${featureWaitLater}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${beforeMergeWait}${afterFlaggerWait}${approachWait}${featureParkingWait}${parkWait}, when the path directly ahead is blocked, or when the car has reached the destination${parkGoal}.`,
+        drive: `Keep moving: cruising, slowing down, or rolling up to a stop line that is not reached yet all count as driving. Use this while safely approaching a line, obstacle, crossing pedestrian (including mid-block), or destination still ahead; slow or brake as needed.${snap.turnaround ? " Turning round (`turn_around`) is driving too, its legs back included." : ""}${DESTINATION_DRIVE_CRITERIA.map((criterion) => criterion(snap)).join("")}${DRIVE_CRITERIA.map((criterion) => criterion(snap)).join("")}`,
+        stop: `Hold completely still right now. Correct only when the car is already at the line (\`intersection.distance\` is "at") with a red or unseen signal${redOk}, a stop not yet completed, or a roundabout yield line with \`ring_traffic\` true, when a pedestrian is crossing right in front (\`pedestrian.distance\` is "at")${waitLeft}${turnWait}${giveWait}${hookWait}${beforeRunnerWait}${featureWait}${featureWaitLater}${evWait}${busWait}${cwWait}${schoolWait}${tramWait}${railWait}${boxWait}${beforeMergeWait}${afterFlaggerWait}${approachWait}${featureParkingWait}${destinationWait}, when the path directly ahead is blocked, or when the car has reached the destination${arrival}.`,
       },
     };
   } else {
