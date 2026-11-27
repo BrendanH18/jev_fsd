@@ -12,6 +12,10 @@ In **Squeeze in**, the car must also park within 30 cm of the kerb. The coaching
 How each driver did is in the
 [results table](../README.md#results) and [docs/model-results.md](model-results.md).
 
+One longer [compound drive](drive-lab.md#compound-drives), **Rush hour on West 4th**
+(`?challenge=rush-hour`), strings five of these situations together on West 4th Avenue. It is not
+one of the sixty and is not in the results table.
+
 | Challenge | Where | What it tests |
 |---|---|---|
 | **Fresh green** | Edmonton, afternoon | Your light turns green as a car on Whyte Avenue runs its red: look both ways and let it clear before you go |

@@ -78,7 +78,7 @@ export const scenario = (map, challenge) =>
     };
   });
 
-function placeBus(world, fleet, { route: routeId, run: runIndex, stop: stopId, edge, front }) {
+export function placeBus(world, fleet, { route: routeId, run: runIndex, stop: stopId, edge, front }) {
   const map = world.map,
     route = map.transit.routes.find((r) => r.id === routeId),
     run = route.runs[runIndex];

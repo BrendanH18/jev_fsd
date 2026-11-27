@@ -441,3 +441,44 @@ The arena includes road tests only when **Include road tests** is ticked, and sh
 attempt's examiner verdict beside the audit result. Two saved runs of both tests with Rules and the
 cautious agent take 832,770 bytes, 8.8% of the 9 MB localStorage fallback cap. Checks:
 `scripts/test_road_test.mjs` and `static/tests/road-test-tests.js` through `/tests`.
+
+## Compound drives
+
+A compound drive strings several of the situations the challenges teach one at a time into one
+longer drive, so that a decision at one bears on the next
+([roadmap 9.3](../ROADMAP.md#phase-9-a-harder-test)). There is one.
+
+| Drive | Map | Route and situations |
+|---|---|---|
+| Rush hour on West 4th (`rush-hour`, seed 63042) | Kitsilano, 17:00, dry | West 4th Avenue east from before Vine Street, left at the Maple Street lights, and up Maple Street past its stop sign at West 3rd Avenue. About 830 m, 300 s allowed. A driver closes up behind in the curb lane; the Vine Street light turns amber seven seconds in, with that driver still behind; a bus at the stop past Yew Street signals to pull out; the left turn at Maple crosses two oncoming cars; West 3rd Avenue's traffic does not stop for Maple's stop sign. |
+
+It opens like a challenge (`?challenge=rush-hour`, `&drive=rules` to watch Rules) and is judged like
+one: a pass is arriving with nothing in `challengeFailures`. The library does not list it yet.
+
+Compound drives are modules in `lab/challenges/` like the challenges, but the registry lists them
+apart, in `COMPOUND_DRIVES` (`lab/challenges.js`). They stay out of `CHALLENGES` and `ROAD_TESTS`,
+so the arena's challenge set, the saved-run budget and [suite v1](reference/benchmarks.md#suite-versions)
+are as they were. Under Node they are a set of their own, and a run of them is labelled `custom`:
+
+```sh
+node --experimental-default-type=module scripts/arena_node.mjs --brain rules --set compound --track open
+```
+
+The drive turns on tailgaters, amber-light decisions and following distance, and places every
+actor with a part an existing challenge uses: the tailgater as "On your bumper" does, the bus with
+"Pulling out"'s `placeBus`, the oncoming cars with `releaseOncoming` and West 3rd Avenue's with
+`releaseThrough`. The signal plan is unchanged; the clock is set so the Vine Street light turns
+amber on cue. The tailgater turns off down Vine Street. Each later situation is set off once, as
+the car comes to it (`step`), and the tailgater closing up is the drive's `hazard` event.
+
+**What it leaves to the driver.** At the amber the car has room to stop, gently, with a driver on
+its bumper. A driver who had braked for the light while it was still green arrives too slow to
+clear and too close to stop, and enters on red. `scripts/driver_latitude.mjs --only rush-hour`
+finds an ordinary manoeuvre that fails at 3 of the 167 decisions it samples, against 4 of 3,042
+over the sixty challenges; Rules and the cautious agent pass it on both tracks. The numbers, the
+method and what was tried first are in the
+[validation record](validation/compound-drive-2026-11-26.md).
+
+Two saved runs with Rules and the cautious agent take about 275,100 bytes, 2.9% of the 9 MB localStorage
+fallback cap. Check: `scripts/test_compound_drive.mjs` (`--write-snapshot` rewrites the saved model
+case, `data/snapshots/rush_hour.json`).

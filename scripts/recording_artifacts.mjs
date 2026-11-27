@@ -24,7 +24,7 @@ export const isCommit = (value) => typeof value === "string" && /^[0-9a-f]{40}$/
 export const isSha256 = (value) => typeof value === "string" && /^[0-9a-f]{64}$/i.test(value);
 export const isFingerprint = (value) => typeof value === "string" && /^[0-9a-f]{16}$/.test(value);
 export const isTrack = (value) => value === "guarded" || value === "open";
-export const isArenaSet = (value) => ["all", "challenges", "road-tests"].includes(value);
+export const isArenaSet = (value) => ["all", "challenges", "road-tests", "compound"].includes(value);
 export const isDateTime = (value) => typeof value === "string" && Number.isFinite(Date.parse(value));
 
 export function readArtifactBytes(path, max = MAX_ARTIFACT_BYTES) {

@@ -328,6 +328,8 @@ Suite [v1](../../data/suites/v1.json) defines the 1.0 test in three parts.
 - Kitsilano city, with 12 routes from seed 1, 40 traffic cars and the lockstep clock. Dry, fog, rain and snow are separate weather legs. The v1 definition pins the generated route fingerprint.
 - Kitsilano city held out, with four routes each from seeds 101, 102 and 103 and the same city settings. The definition pins these routes with a separate fingerprint. Keep these reports apart from the tuned legs.
 
+The [compound drive](../drive-lab.md#compound-drives) is in none of them: `arena_node.mjs --set compound` runs it, `--set all` is still the 60 challenges and two road tests, and a compound run is labelled `custom`. A numbered suite that includes it would be a new definition beside v1.
+
 A numbered run completes one of these members. Failed drives count as completed attempts. Incomplete runs, pilots, other presets and browser-local evaluations are labeled `custom`. The merge tools can qualify a complete run from version-aware shards only after checking the inputs and coverage. Unversioned publications and tapes remain `legacy`, including when they replay exactly. The leaderboard and README show each numbered version separately from legacy history. Custom runs are listed individually on the leaderboard.
 
 The browser can compare new local runs with versionless saved baselines under matching conditions. Comparisons involving a numbered suite require the same version.
