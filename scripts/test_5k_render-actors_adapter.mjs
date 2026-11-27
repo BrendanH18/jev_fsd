@@ -4,7 +4,7 @@ import { test } from "node:test";
 import "./render_actor_test_support.mjs";
 
 const THREE = await import("three");
-const { mountActorViews, mountFeatureViews, mountTransitScenery, replayActorPose } = await import(
+const { mountActorViews, mountFeatureScenery, mountFeatureViews, replayActorPose } = await import(
   "../static/js/render/feature-views.js"
 );
 const { createCarMesh, addHeadlights } = await import("../static/js/render/cars.js");
@@ -194,7 +194,7 @@ function graphDigest(scene) {
 
 test("mixed traffic, parked features, pedestrians and replay go through the browser actor adapter", () => {
   const { view, world, fleet } = sample();
-  mountTransitScenery(view, world.map);
+  mountFeatureScenery(view, world.map);
   const features = mountFeatureViews(view, world);
   const actors = mountActorViews(view, world, fleet);
   const ego = createCarMesh(0x2f7cff);

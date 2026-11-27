@@ -50,6 +50,7 @@ export default {
         : null,
   },
   key: "potholes",
+  view: () => import("../../render/potholes.js"),
   coach: {
     init: () => ({
       potholes: false,

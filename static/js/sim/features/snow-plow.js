@@ -293,6 +293,7 @@ function plowClause(p) {
 
 export default {
   key: "plows",
+  view: () => import("../../render/snow-plow.js"),
   property: "plowPass",
   defaultCount: PLOW_COUNT,
   seen: "plowsSeen",

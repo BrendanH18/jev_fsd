@@ -9,6 +9,8 @@ const countDark = (score, event) => {
 
 export default {
   key: "outages",
+  // (with the power out a signal's lamps show nothing)
+  signalLamp: (world, id) => (world.outages.isDark(id) ? "dark" : null),
   defaultCount: OUTAGE_COUNT,
   buildAt: "afterSpawn",
   build: (world, { enabled, seed }) => new Outages(world, { count: enabled, seed }),
@@ -33,6 +35,7 @@ export default {
     return vehicle.darkGo?.edge === edge.id && world.t - vehicle.darkGo.t < CLEAR_WITHIN_S;
   },
   controlEvent: (control) => (control.dark ? { dark: true } : null),
+  eventBadge: (event) => (event.type === "stop_sign" && event.dark ? "NO STOP AT A DARK SIGNAL" : null),
   intersectionModelFields: {
     at: "beforeCrossTraffic",
     run: (intersection) => (intersection.dark ? { lights_out: true } : null),

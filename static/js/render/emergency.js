@@ -359,3 +359,10 @@ export function syncEmergency(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   rollWheels(u, vehicle, dt, u.tire);
   flashLights(u.lenses, !!vehicle.siren, t, u.phase);
 }
+
+const emergencyVehicle = {
+  create: (v) => createEmergencyMesh(v.kind, v.id),
+  sync: syncEmergency,
+  minimap: "emergency",
+};
+export const view = { vehicles: { ambulance: emergencyVehicle, fire_truck: emergencyVehicle } };

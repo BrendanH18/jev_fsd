@@ -193,6 +193,7 @@ export default {
   cautious: (snap, eligible) =>
     snap.contraflow_cyclist?.wait ? eligible.find((c) => c.id === "yield_to_contraflow_cyclist") : null,
   key: "contraflow",
+  view: () => import("../../render/contraflow.js"),
   coach: {
     init: () => ({
       contraflow: false,

@@ -10,6 +10,7 @@ export default {
       snap.pxo?.bumper_to_crosswalk_m < 3.5 ? eligible.find((c) => c.id === "stop_for_pedestrian") : null,
   },
   key: "pxo",
+  view: () => import("../../render/pxo.js"),
   coach: {
     init: () => ({
       pxoUsed: false,

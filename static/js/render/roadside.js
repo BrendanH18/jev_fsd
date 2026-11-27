@@ -201,3 +201,18 @@ export function syncRoadside(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   }
   flashLights(u.lenses, !!vehicle.flashing, t, u.phase);
 }
+
+export const view = {
+  parked: {
+    order: 1,
+    flag: "roadside",
+    create(car) {
+      const mesh = createRoadsideMesh(car);
+      syncRoadside(mesh, car);
+      return mesh;
+    },
+    sync(world, meshOf, { dt, t, lightsOn }) {
+      for (const v of world.roadside.vehicles) syncRoadside(meshOf(v), v, dt, t, lightsOn);
+    },
+  },
+};

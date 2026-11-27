@@ -221,6 +221,23 @@ function busPullingOut(world, frontS, visible) {
 
 export default {
   key: "buses",
+  view: () => import("../../render/bus.js"),
+  // a bus ahead signalling to pull out from its stop, with the right of way: say so once
+  notice: {
+    at: "first",
+    order: 1,
+    duration: 2500,
+    style: "safety",
+    read(world, _autopilot, _views, _previous, fleet) {
+      const bus = fleet?.buses?.list.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
+      return bus
+        ? {
+            key: `${bus.id}:${bus.transit.departures}`,
+            text: `BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "),
+          }
+        : null;
+    },
+  },
   // (the World takes the option too: nobody parks in the bus zones while buses run)
   worldOption: true,
   // (the fleet places them right after the cyclists, as it always has)

@@ -238,3 +238,20 @@ export function syncVan(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   rollWheels(u, vehicle, dt, TIRE);
   syncAmberLenses(u.lenses, vehicle, flashPhase(t, BLINK_S, u.phase) < 0.5);
 }
+
+export const view = {
+  vehicles: { delivery_van: { create: createVanMesh, sync: syncVan } },
+  parked: {
+    order: 5,
+    flag: "doubleParked",
+    create(car) {
+      const mesh = createVanMesh(car);
+      syncVan(mesh, car);
+      return mesh;
+    },
+    // (a garbage truck at a stop is in traffic, and drawn there: sim/collection-truck.js)
+    sync(world, meshOf, { dt, t, lightsOn }) {
+      for (const d of world.doubleParked.vans) if (!d.truck) syncVan(meshOf(d.van), d.van, dt, t, lightsOn);
+    },
+  },
+};

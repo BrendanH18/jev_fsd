@@ -10,7 +10,16 @@
 // the kerb (`kerbContact`).
 import { r1 } from "../../common.js";
 import { projectPoint } from "../../map/mapdata.js";
-import { TRY_START_M, leftSpace, planParking, planPullOut, reversing, tyres } from "../parallel-park.js";
+import {
+  TRY_START_M,
+  leftSpace,
+  manualParked,
+  parkNotice,
+  planParking,
+  planPullOut,
+  reversing,
+  tyres,
+} from "../parallel-park.js";
 import { wrap } from "../world.js";
 
 // Pulling up where the car reverses into a space (`wait_to_park`), it brakes at no more than this.
@@ -121,6 +130,16 @@ function manoeuvre(id, law) {
 
 export default {
   key: "park",
+  // parking at the destination: the space, checking behind, reversing in, parked
+  notice: {
+    at: "parking",
+    order: 0,
+    duration: 2500,
+    read: (world) => parkNotice(world),
+    style: (line) => (line.wait ? "safety" : "stop"),
+  },
+  // A manual driver finishes parking with the review button; the AI reports its own arrival.
+  manualArrival: (world, challenge) => (challenge?.park ? manualParked(world) : null),
   property: "parkAtGoal",
   buildAt: "early",
   build(world, { enabled }) {

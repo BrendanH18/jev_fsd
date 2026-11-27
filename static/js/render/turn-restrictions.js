@@ -145,3 +145,20 @@ export function buildRestrictions(map, records = map.restrictions) {
   }
   return group;
 }
+
+// (the no-turn-on-red signs stand on the same posts, so this view draws both features' signs)
+export const view = {
+  mount: {
+    order: 2,
+    run({ scene, world, map }) {
+      if (!world.restrictions && !world.redTurnSigns) return null;
+      scene.add(
+        buildRestrictions(map, [
+          ...(world.restrictions ? map.restrictions : []),
+          ...(world.redTurnSigns ? map.redTurns : []),
+        ]),
+      );
+      return true;
+    },
+  },
+};

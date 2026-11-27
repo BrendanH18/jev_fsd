@@ -72,3 +72,15 @@ export function buildPxos(world) {
     },
   };
 }
+
+export const view = {
+  mount: {
+    order: 15,
+    run({ scene, world }) {
+      const crossing = world.pxo ? buildPxos(world) : null;
+      if (crossing) scene.add(crossing.group);
+      return crossing;
+    },
+    signals: (crossing) => crossing.update(),
+  },
+};

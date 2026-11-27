@@ -38,6 +38,7 @@ export default {
   cautious: (snap, eligible) =>
     snap.tailgater?.can_move_right ? eligible.find((c) => c.id === "let_tailgater_pass") : null,
   key: "tailgaters",
+  view: () => import("../../render/tailgaters.js"),
   coach: {
     init: () => ({
       tailgaters: false,

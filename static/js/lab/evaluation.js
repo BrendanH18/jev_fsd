@@ -16,6 +16,7 @@ import { RoadTestObserver } from "./examiner.js";
 import { mapClock } from "../sim/speed-zones.js";
 import { parseHour } from "../sim/world-clock.js";
 import { dayOfYear } from "../sim/sun-glare.js";
+import { FEATURE_OPTIONS } from "../sim/features/index.js";
 
 // A sun glare challenge's date ("MM-DD") and UTC offset, for the clock (sim/sun-glare.js).
 const sunClock = (challenge) => ({
@@ -26,12 +27,20 @@ const sunClock = (challenge) => ({
 // (3: school and playground zones apply in every challenge, so earlier runs no longer compare)
 export const EVALUATION_ENGINE_VERSION = "drive-lab-3";
 
+export const challengeFeatureOptions = (challenge) =>
+  Object.fromEntries(
+    FEATURE_OPTIONS.filter((key) => Object.hasOwn(challenge, key)).map((key) => [key, challenge[key]]),
+  );
+
 export function setupChallenge(
   map,
   challenge,
   { brain = "rules", onDecision = () => {}, onEvent = () => {}, tape = null, track = "guarded" } = {},
 ) {
   const world = new World(map, {
+    // (a registered feature's challenge turns its World option on under the feature's own key, so a new
+    // feature adds no line here; the options below keep the names their challenges have always used)
+    ...challengeFeatureOptions(challenge),
     seed: challenge.seed,
     weather: challenge.weather,
     parked: 0,

@@ -85,6 +85,7 @@ export default {
   },
   cautiousDrive: (candidate) => candidate.id === "wait_for_officer",
   key: "officers",
+  view: () => import("../../render/traffic-officer.js"),
   coach: {
     init: () => ({
       officers: false,

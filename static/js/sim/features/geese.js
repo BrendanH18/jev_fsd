@@ -32,6 +32,7 @@ export default {
   rulesCost: (c, snap) => (c.id === "wait_for_geese" && snap.geese_crossing?.wait ? -6 : 0),
   cautious: (snap, eligible) => (snap.geese_crossing?.wait ? eligible.find((c) => c.id === "wait_for_geese") : null),
   key: "geese",
+  view: () => import("../../render/geese.js"),
   coach: {
     init: () => ({
       geese: false,

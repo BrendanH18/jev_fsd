@@ -251,6 +251,16 @@
 //                                       manoeuvre the safety brake allows closer, or null ("end")
 //   examinerScript(route, lines, { say }) push the examiner's own lines for the road test ("end")
 //   examinerMarks(report, mark)         mark minor errors from a finished report ("end")
+//   eventBadge(event)                   the HUD badge for an event the core raises too, when it is this
+//                                       feature's (a stop missed at a flagger), or null ("end")
+//   signalLamp(world, id)               what a signal's lamps show in place of its phase ("dark"), or null ("end")
+//   manualArrival(world, challenge)     the arrival a drive finished by hand counts as ({ parked, ... }), or null ("end")
+//   view      () => import(RENDER_MODULE): the feature's render module (render/geese.js, say, by its path
+//             from the record), whose `view` export declares its scenery, meshes and frame effects
+//             (render/feature-views.js lists the fields)
+//   sound     { name, distance(world, fleet) }: a drive sound (ui/drive-audio.js) and its nearest source, in metres
+//   notice    { at, order, duration, read(world, autopilot, views, previous, fleet), style, hold? }, or a list
+//             of them: a HUD badge shown once while `read` returns { key, text }
 //   parkingObstructed(world, edgeId)    true when it rules out parking anywhere on the street, for destination
 //                                       parking and traffic parking alike (sim/parallel-park.js) ("end")
 
@@ -363,7 +373,21 @@ export const SLOTS = {
   requestReroute: ["beforeOffRoute", "afterOffRoute"],
   checkpointShare: ["end"],
   rulesStop: ["beforeSignal", "end"],
-  notice: ["beforeMerge", "beforePlow", "afterTraffic", "beforeLeftOnRed", "afterTurnNotice", "end", "beforeZone"],
+  notice: [
+    "first",
+    "afterCrosswalk",
+    "beforeMerge",
+    "beforePlow",
+    "parking",
+    "afterTraffic",
+    "beforeLeftOnRed",
+    "afterTurnNotice",
+    "end",
+    "beforeZone",
+  ],
+  signalLamp: ["end"],
+  eventBadge: ["end"],
+  manualArrival: ["end"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
   rulesCost: ["beforeSpeedCost", "beforeSignalStop", "beforeStops", "stops", "afterSpecial", "beforePassing", "end"],
@@ -869,17 +893,24 @@ export function recordsAt(name, slot) {
   return FEATURES.filter((f) => f[name] && slotOf(f[name]) === slot);
 }
 
+// A record's notices, each under its own name in the map of what has been announced (the first under the
+// record's key, as when a record could have only one).
 const NOTICES = Object.fromEntries(
-  SLOTS.notice.map((slot) => [slot, recordsAt("notice", slot).sort((a, b) => a.notice.order - b.notice.order)]),
+  SLOTS.notice.map((slot) => [
+    slot,
+    FEATURES.flatMap((f) => hookEntries(f.notice).map((notice, i) => ({ key: i ? `${f.key}/${i}` : f.key, notice })))
+      .filter(({ notice }) => slotOf(notice) === slot)
+      .sort((a, b) => a.notice.order - b.notice.order),
+  ]),
 );
 const EVENT_BADGES = Object.assign(Object.create(null), ...FEATURES.map((f) => f.eventBadges));
 const PERCEPTION_REJECTIONS = Object.assign(Object.create(null), ...FEATURES.map((f) => f.perceptionRejections));
 
-export function announceFeatureNotices(slot, world, autopilot, views, announced, hud) {
+export function announceFeatureNotices(slot, world, autopilot, views, announced, hud, fleet = null) {
   if (!Object.hasOwn(NOTICES, slot)) throw new Error(`Feature registry: no notice slot "${slot}".`);
   for (const { key, notice } of NOTICES[slot]) {
     const previous = announced.get(key);
-    const line = notice.read(world, autopilot, views, previous);
+    const line = notice.read(world, autopilot, views, previous, fleet);
     if (line && line.key !== previous) {
       if (line.key == null || typeof line.text !== "string" || !line.text.trim())
         throw new Error(`Feature registry: ${key} returned a notice without a key or text.`);
@@ -890,9 +921,33 @@ export function announceFeatureNotices(slot, world, autopilot, views, announced,
   }
 }
 
+// The render module of each feature that draws something, for the browser adapter (render/feature-views.js)
+// to load: this registry stays free of Three.js, so a record only says where its view is.
+export const FEATURE_VIEWS = Object.freeze(
+  FEATURES.filter((f) => f.view).map((f) => Object.freeze({ key: f.key, load: f.view })),
+);
+
+// The sounds features make: the name of a drive sound (ui/drive-audio.js) and how far off its nearest source is.
+export const FEATURE_SOUNDS = Object.freeze(FEATURES.filter((f) => f.sound).map((f) => f.sound));
+
+// What a signal's lamps show in place of its phase ("dark" with the power out), or null.
+const SIGNAL_LAMPS = hooks("signalLamp");
+export const featureSignalLamp = (world, id) => firstHookResult(SIGNAL_LAMPS, world, id);
+
+// What a vehicle stopped at a crosswalk is called, for the HUD: a feature's name for it, or "car".
+const CROSSWALK_VEHICLES = hooks("crosswalkVehicle");
+export const crosswalkVehicleName = (vehicle) => firstHookResult(CROSSWALK_VEHICLES, vehicle) ?? "car";
+
+// A drive finished by hand that a feature counts as an arrival: the fields of that arrival, or null.
+const MANUAL_ARRIVALS = hooks("manualArrival");
+export const featureManualArrival = (world, challenge) => firstHookResult(MANUAL_ARRIVALS, world, challenge);
+
+const EVENT_BADGE_HOOKS = hooks("eventBadge");
 export function featureEventBadge(event) {
   const badge = EVENT_BADGES[event?.type];
-  return typeof badge === "function" ? badge(event) : badge;
+  if (badge !== undefined) return typeof badge === "function" ? badge(event) : badge;
+  // (an event the core raises too, that a feature words its own way: a stop missed at a flagger, say)
+  return event ? (firstHookResult(EVENT_BADGE_HOOKS, event) ?? undefined) : undefined;
 }
 
 export const featurePerceptionRejection = (id) => PERCEPTION_REJECTIONS[id];

@@ -52,19 +52,21 @@ export function actorTime(t, next, alpha) {
   return t + (next - t) * Math.max(0, Math.min(1, alpha));
 }
 
+// A renderer that keeps motion history of its own on a mesh says how to clear it, under its own name.
+export function onMotionReset(mesh, name, reset) {
+  (mesh.userData.motionResets ??= new Map()).set(name, reset);
+}
+
 export function resetActorMotion(mesh) {
   const actor = mesh.userData;
   if (Object.hasOwn(actor, "prevV")) actor.prevV = null;
-  if (actor.potholeJolt) delete actor.potholeJolt;
+  for (const reset of actor.motionResets?.values() ?? []) reset(mesh);
   mesh.position.y = 0;
   mesh.rotation.z = 0;
   if (Object.hasOwn(actor, "spin")) actor.spin = 0;
   if (Object.hasOwn(actor, "crank")) actor.crank = 0;
   if (Object.hasOwn(actor, "open")) actor.open = null;
   if (Object.hasOwn(actor, "swing")) actor.swing = null;
-  if (actor.workZone) {
-    for (const flagger of Object.values(actor.workZone.flaggers)) flagger.turn = null;
-  }
   if (actor.pivot) {
     actor.pitch = actor.roll = 0;
     actor.pivot.rotation.set(0, 0, 0);

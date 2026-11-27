@@ -2,6 +2,7 @@ import { isScramble, scrambleNotice, scrambleState, setScrambles } from "../sign
 
 export default {
   key: "scrambles",
+  view: () => import("../../render/scrambles.js"),
   flag: "scramble",
   buildAt: "early",
   build: (_world, { enabled }) => setScrambles(enabled),

@@ -332,3 +332,17 @@ export function buildTracks(map) {
   root.userData.edges = seen.size;
   return root;
 }
+
+export const view = {
+  scenery: { order: 2, build: buildTracks },
+  vehicles: {
+    streetcar: {
+      create: (v) => createStreetcarMesh(v.id, v.headsign || v.ref || ""),
+      sync: syncStreetcar,
+      onRails: true,
+      minimap: "transit",
+    },
+  },
+  // (riders getting on and off: sim/pedestrians.js)
+  transientPeople: ["rider_"],
+};

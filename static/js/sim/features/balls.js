@@ -29,6 +29,7 @@ export default {
   cautious: (snap, eligible) =>
     snap.ball_in_road?.limit_mps != null && !snap.pedestrian ? eligible.find((c) => c.id === "slow_for_ball") : null,
   key: "balls",
+  view: () => import("../../render/ball-chase.js"),
   coach: {
     init: () => ({
       balls: false,

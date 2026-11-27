@@ -4,6 +4,7 @@ import { GLARE_THRESHOLD_S, auditHighBeams, beamChoice, headlights, wellLit } fr
 
 export default {
   key: "highBeams",
+  view: () => import("../../render/high-beams.js"),
   coach: {
     init: () => ({
       glareSeconds: 0,
