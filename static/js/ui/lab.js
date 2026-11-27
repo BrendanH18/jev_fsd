@@ -1,7 +1,7 @@
 import { showDrive } from "./published-replay.js";
 import { describe } from "./hud.js";
 import { $, h, appUrl } from "../common.js";
-import { CHALLENGES, challengeConfig } from "../lab/challenges.js";
+import { CHALLENGES, COMPOUND_DRIVES, challengeConfig } from "../lab/challenges.js";
 import { driveLink } from "../lab/share.js";
 import { agentDefinitions, registerAgent, agentOptionLabel } from "../brain/registry.js";
 import { replayPosition } from "../lab/playback.js";
@@ -419,6 +419,7 @@ export class DriveLab {
         )),
       );
     const grid = h("div", { class: "challenge-grid" });
+    const compoundGrid = h("div", { class: "challenge-grid" });
     const count = h("p", { class: "challenge-results", role: "status", "aria-live": "polite", "aria-atomic": "true" });
     const next = h("a", { class: "chip-button challenge-next" });
     const backupStatus = h("span", { class: "practice-backup-status muted", role: "status", "aria-live": "polite" });
@@ -511,52 +512,58 @@ export class DriveLab {
         return 0;
       });
     };
+    const challengeCard = (c) => {
+      const status = practiceStatus(c, practice.records);
+      const best = cleanScore(c);
+      const aiFail = AI_FAILED_CHALLENGES[c.id];
+      const city = challengeCity(c);
+      const neighbourhood = challengeNeighbourhood(c);
+      const place = neighbourhood.toLowerCase() === city.toLowerCase() ? city : `${city} · ${neighbourhood}`;
+      return h(
+        "a",
+        {
+          class: "challenge-card",
+          [c.compound ? "data-compound-drive" : "data-challenge"]: c.id,
+          href: challengeUrl(c),
+        },
+        h(
+          "div",
+          { class: "challenge-card-top" },
+          h("span", { class: "challenge-icon", "aria-hidden": "true" }, c.icon),
+          c.compound ? null : h("span", { class: "label" }, c.difficulty),
+        ),
+        h(c.compound ? "h3" : "h2", {}, c.title),
+        h(
+          "div",
+          { class: "challenge-badges" },
+          h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
+          best == null ? null : h("span", { class: "practice-badge" }, `Best: ${best}/100`),
+          aiFail ? h("span", { class: "practice-badge beat-ai-badge", title: aiFail }, "Beat the AI") : null,
+        ),
+        h("p", {}, c.description),
+        h("div", { class: "challenge-card-meta" }, `${place} · ${c.weather} · ${c.time}`),
+        h(
+          "strong",
+          {},
+          c.compound
+            ? "Drive it →"
+            : status === "attempted"
+              ? "Retry challenge →"
+              : status === "completed"
+                ? "Practise again →"
+                : "Try challenge →",
+        ),
+      );
+    };
     const render = () => {
       renderRoadTests();
+      compoundGrid.replaceChildren(...COMPOUND_DRIVES.map(challengeCard));
       const filtered = filterChallenges(CHALLENGES, filters, practice.records);
       const matches = sortMatches(filtered);
       const completed = CHALLENGES.filter((c) => practiceStatus(c, practice.records) === "completed").length;
       count.textContent = `${matches.length} of ${CHALLENGES.length} challenges · ${completed} completed cleanly by you`;
       empty.hidden = matches.length > 0;
-      grid.replaceChildren(
-        ...matches.map((c) => {
-          const status = practiceStatus(c, practice.records);
-          const best = cleanScore(c);
-          const aiFail = AI_FAILED_CHALLENGES[c.id];
-          const city = challengeCity(c);
-          const neighbourhood = challengeNeighbourhood(c);
-          const place = neighbourhood.toLowerCase() === city.toLowerCase() ? city : `${city} · ${neighbourhood}`;
-          return h(
-            "a",
-            { class: "challenge-card", "data-challenge": c.id, href: challengeUrl(c) },
-            h(
-              "div",
-              { class: "challenge-card-top" },
-              h("span", { class: "challenge-icon", "aria-hidden": "true" }, c.icon),
-              h("span", { class: "label" }, c.difficulty),
-            ),
-            h("h2", {}, c.title),
-            h(
-              "div",
-              { class: "challenge-badges" },
-              h("span", { class: `practice-badge practice-${status}` }, PRACTICE_LABELS[status]),
-              best == null ? null : h("span", { class: "practice-badge" }, `Best: ${best}/100`),
-              aiFail ? h("span", { class: "practice-badge beat-ai-badge", title: aiFail }, "Beat the AI") : null,
-            ),
-            h("p", {}, c.description),
-            h("div", { class: "challenge-card-meta" }, `${place} · ${c.weather} · ${c.time}`),
-            h(
-              "strong",
-              {},
-              status === "attempted"
-                ? "Retry challenge →"
-                : status === "completed"
-                  ? "Practise again →"
-                  : "Try challenge →",
-            ),
-          );
-        }),
-      );
+      grid.replaceChildren(...matches.map(challengeCard));
       const recommendation =
         matches.find((c) => practiceStatus(c, practice.records) === "attempted") ||
         matches.find((c) => practiceStatus(c, practice.records) === "untried") ||
@@ -658,7 +665,7 @@ export class DriveLab {
         h(
           "p",
           { class: "lab-hero-copy" },
-          "Choose a short drive. Compare complete arrivals under the same conditions; a higher score alone does not mean a safer driver.",
+          "Choose a drive. Compare complete arrivals under the same conditions; a higher score alone does not mean a safer driver.",
         ),
         h(
           "label",
@@ -683,6 +690,12 @@ export class DriveLab {
             `Longer licence-style drives on a fixed route, with an examiner's directions and sheet. Any dangerous action or violation fails; minor errors are demerits. Any driver can take one; only an unchanged manual attempt is recorded as yours${roadTests.available ? "" : ", and browser storage is unavailable"}.`,
           ),
           roadGrid,
+        ),
+        h(
+          "section",
+          { class: "compound-drive-library", "aria-labelledby": "compound-drives-heading" },
+          h("h2", { id: "compound-drives-heading", class: "road-test-heading" }, "Compound drives"),
+          compoundGrid,
         ),
         h("h2", { class: "road-test-heading" }, "Challenges"),
         h(

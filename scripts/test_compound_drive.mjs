@@ -269,6 +269,16 @@ async function modelCase() {
   throw new Error("The compound drive never reached its amber with the tailgater behind.");
 }
 const built = await modelCase();
+await test("a safe amber stop takes priority over letting the tailgater pass", () => {
+  assert.equal(built.state.intersection.signal, "yellow");
+  assert.equal(built.state.intersection.amber.stop, true);
+  assert.deepEqual(built.expect.vector_in, ["stop_at_line"]);
+  const { instructions, criteria } = built.questions.vector;
+  assert.equal(Object.hasOwn(criteria, "ease_off_for_tailgater"), true);
+  assert.match(instructions, /choose `stop_at_line` when offered/);
+  assert.doesNotMatch(instructions, /`(?:ease_off_for_tailgater|let_tailgater_pass)`/);
+});
+
 if (process.argv.includes("--write-snapshot")) {
   fs.writeFileSync(snapshotUrl, `${JSON.stringify(built, null, 2)}\n`);
   console.log(`wrote ${snapshotUrl.pathname}`);

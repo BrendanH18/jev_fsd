@@ -12,6 +12,7 @@ const { stepWorld } = await import("../static/js/sim/step.js");
 const { comfort, Vehicle, ROAD } = await import("../static/js/sim/vehicle.js");
 const { StopMemory, amberTimeLeft } = await import("../static/js/sim/signals.js");
 const { observeAmber } = await import("../static/js/sim/amber.js");
+const { default: tailgaters } = await import("../static/js/sim/features/tailgaters.js");
 const timing = {
   offset_s: 5,
   plan: {
@@ -34,10 +35,15 @@ world.placeOnLane(lane, start);
 world.ego.v = 7.41;
 const next = map.successors(edge.id).find((id) => map.classifyTurn(map.turnAngle(edge.id, id)) === "right");
 world.route = new Route(routeFromLanes(map, [lane, map.lane(next, 0)], start, 80), map);
-const choice = buildSnapshot(world).intersection.amber;
+const snap = buildSnapshot(world);
+const choice = snap.intersection.amber;
 assert.equal(choice.stop, true);
 assert.equal(choice.firm, true);
 assert.ok(choice.stop_decel > comfort().decel && choice.stop_decel <= comfort().hardDecel);
+const tailgater = { id: "behind", gap_m: 7, headway_s: 0.9, gentle_mps2: 3 };
+const clause = tailgaters.clause.run({ ...snap, tailgater });
+assert.match(clause, /Brake as firmly as needed and choose `stop_at_line` when offered/);
+assert.doesNotMatch(clause, /`(?:ease_off_for_tailgater|let_tailgater_pass)`/);
 const autopilot = new Autopilot(world);
 autopilot.setBrain("rules");
 autopilot.setEnabled(true);

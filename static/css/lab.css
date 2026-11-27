@@ -15,7 +15,7 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .welcome-card:hover, .challenge-card:hover { background: #83d9c410; border-color: #83d9c477; transform: translateY(-3px); }
 .welcome-card:focus-visible, .challenge-card:focus-visible { outline: 2px solid #83d9c4; outline-offset: 3px; }
 .welcome-number { color: #83d9c4; font: 12px var(--mono); }
-.welcome-card h2, .challenge-card h2 { font-size: 19px; letter-spacing: -.02em; margin: 24px 0 10px; }
+.welcome-card h2, .challenge-card h2, .challenge-card h3 { font-size: 19px; letter-spacing: -.02em; margin: 24px 0 10px; }
 .welcome-card p, .challenge-card p { color: #afc0cc; font-size: 13px; line-height: 1.7; min-height: 65px; }
 .welcome-card strong, .challenge-card strong { color: #83d9c4; font-size: 12px; display: block; margin-top: 24px; }
 .lab-footer { border-top: 1px solid #ffffff12; padding-top: 20px; margin-top: 25px; font-size: 12px; color: #afc0cc; }
@@ -28,7 +28,7 @@ body:not(.telemetry-expanded) #decision-card, body:not(.telemetry-expanded) .inc
 .challenge-card { display: block; padding: 20px; text-decoration: none; }
 .challenge-card-top { display: flex; align-items: center; justify-content: space-between; }
 .challenge-icon { color: #83d9c4; font-size: 30px; }
-.challenge-card h2 { margin-top: 16px; }
+.challenge-card h2, .challenge-card h3 { margin-top: 16px; }
 .challenge-card-meta { color: #8da3b1; font: 11px var(--mono); text-transform: capitalize; }
 .challenge-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .challenge-filters label { display: grid; gap: 7px; color: #afc0cc; font-size: 12px; min-width: 0; }
@@ -107,7 +107,7 @@ body:has(.replay-controls:not([hidden])) .cluster { bottom: 180px; }
 @media (max-width: 760px) { .challenge-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .challenge-filters input, .challenge-filters select { font-size: 16px; } .challenge-driver { flex-wrap: wrap; } .challenge-driver select { max-width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .welcome-card, .challenge-card { transition: none; } .welcome-card:hover, .challenge-card:hover { transform: none; } }
 /* Road tests (lab/road-tests.js): the library section, the examiner's directions and sheet */
-.road-test-library { margin: 4px 0 30px; }
+.road-test-library, .compound-drive-library { margin: 4px 0 30px; }
 .road-test-heading { font-size: 20px; letter-spacing: -.02em; margin: 0 0 6px; }
 .road-test-library .lab-footnote { margin: 0 0 14px; max-width: 720px; }
 .road-test-card { display: block; padding: 20px; color: var(--text); font: inherit; text-align: left; text-decoration: none; background: #f2ce9006; border: 1px solid #f2ce9033; border-radius: 14px; cursor: pointer; transition: transform .2s, background .2s, border-color .2s; }
