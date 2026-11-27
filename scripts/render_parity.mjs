@@ -5,6 +5,12 @@
 //   node --experimental-default-type=module scripts/render_parity.mjs capture OUT.json [--only ID,...]
 //   node --experimental-default-type=module scripts/render_parity.mjs compare BEFORE.json AFTER.json
 //   node --experimental-default-type=module scripts/render_parity.mjs detail ID      (per-object hashes of one scene)
+//   node --experimental-default-type=module scripts/render_parity.mjs notices [--only ID,...]
+//
+// `notices` drives the same scenes for 25 seconds and checks, ten times a second, that the HUD notices
+// the records announce (emergency vehicles, buses, school buses, streetcars, level crossings, parking,
+// hidden hazards) are the badges the app's frame loop showed while it worded them itself, in the same
+// order: `legacyNotices` below is that code as it stood in main.js at 7209939a.
 //
 // Scenes: every challenge and both road tests, driven by Rules for six seconds and drawn ten times a
 // second, then two replay frames of the same drive restored from the recorder (interpolating toward the
@@ -48,8 +54,10 @@ if (mode === "compare") {
   );
   process.exit(different ? 1 : 0);
 }
-if (mode !== "capture" && mode !== "detail") {
-  console.error("Usage: render_parity.mjs capture OUT.json [--only ID,...] | compare BEFORE AFTER | detail ID");
+if (mode !== "capture" && mode !== "detail" && mode !== "notices") {
+  console.error(
+    "Usage: render_parity.mjs capture OUT.json [--only ID,...] | compare BEFORE AFTER | detail ID | notices [--only ID,...]",
+  );
   process.exit(2);
 }
 
@@ -239,6 +247,133 @@ function freeDrive(mapId, { weather, hour, seed }) {
   return { world, fleet, autopilot };
 }
 
+// The app's own notices as main.js had them before they moved to the records (7209939a), kept to compare.
+async function legacyNotices() {
+  const { busYield } = await import("../static/js/sim/bus.js");
+  const { crossingNotice } = await import("../static/js/sim/rail.js");
+  const streetcar = await import("../static/js/sim/streetcar.js");
+  const { parkNotice } = await import("../static/js/sim/parallel-park.js");
+  const { hazardNotice } = await import("../static/js/sim/hidden-hazards.js");
+  const { trafficNotice } = await import("../static/js/sim/hidden-traffic.js");
+  const school = await import("../static/js/sim/school-bus.js");
+  const { isEmergency, nearestCall, EMERGENCY_NAMES } = await import("../static/js/sim/emergency.js");
+  return ({ world, fleet, autopilot }, hud) => {
+    let announcedEv = null,
+      announcedAt = -Infinity,
+      announcedBus = null,
+      announcedSchool = null,
+      announcedStreetcar = null,
+      announcedCrossing = null,
+      announcedPark = null,
+      announcedHazard = null,
+      announcedTraffic = null;
+    return {
+      first() {
+        const evs = fleet.vehicles.filter(isEmergency);
+        const call = evs.length ? nearestCall(world.ego, evs) : null;
+        if (call && (call.ev.id !== announcedEv || world.t - announcedAt > 1)) {
+          announcedEv = call.ev.id;
+          announcedAt = world.t;
+          hud.badge(
+            `${EMERGENCY_NAMES[call.ev.kind].toUpperCase()} ${call.relation === "behind" ? "BEHIND" : call.relation === "ahead" ? "AHEAD" : `FROM THE ${call.relation.toUpperCase()}`} · PULL OVER AND STOP`,
+            "safety",
+            2500,
+          );
+        }
+        if (!call) announcedEv = null;
+        const bus = fleet.buses?.list.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
+        const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
+        if (bus && busKey !== announcedBus) {
+          hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500);
+        }
+        announcedBus = busKey;
+      },
+      afterCrosswalk() {
+        const stopping = fleet.schoolBuses?.list.find((b) => {
+          const r = school.redsOn(b) && school.schoolBusRelation(world.ego, b);
+          return (
+            r &&
+            r.ahead_m > 0 &&
+            r.ahead_m < 70 &&
+            Math.abs(r.right_m) < school.SIDE_M &&
+            world.visibility.sees(world.ego, b)
+          );
+        });
+        const schoolKey = stopping ? `${stopping.id}:${stopping.school.stops}` : null;
+        if (stopping && schoolKey !== announcedSchool) {
+          hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500);
+        }
+        announcedSchool = schoolKey;
+        const tram = fleet.streetcars?.list.find((c) => {
+          const r = streetcar.doorsOpen(c) && streetcar.streetcarRelation(world.ego, c);
+          return (
+            r &&
+            r.ahead_m > 0 &&
+            r.ahead_m < 70 &&
+            r.right_m > -streetcar.IN_LANE_M &&
+            r.right_m < streetcar.SIDE_M &&
+            world.visibility.sees(world.ego, c)
+          );
+        });
+        const tramKey = tram ? `${tram.id}:${tram.transit.departures}` : null;
+        if (tram && tramKey !== announcedStreetcar) {
+          hud.badge("STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS", "safety", 2500);
+        }
+        announcedStreetcar = tramKey;
+        const crossing = crossingNotice(world);
+        if (crossing && crossing.key !== announcedCrossing) {
+          announcedCrossing = crossing.key;
+          hud.badge(crossing.text, "safety", 2500);
+        }
+        if (!crossing) announcedCrossing = null;
+      },
+      parking() {
+        const parkLine = parkNotice(world);
+        if (parkLine && parkLine.key !== announcedPark) {
+          announcedPark = parkLine.key;
+          hud.badge(parkLine.text, parkLine.wait ? "safety" : "stop", 2500);
+        }
+        if (!parkLine) announcedPark = null;
+        const hazardLine = hazardNotice(world);
+        if (hazardLine && hazardLine.key !== announcedHazard) {
+          announcedHazard = hazardLine.key;
+          hud.badge(hazardLine.text, hazardLine.wait ? "safety" : "", 2500);
+        }
+        if (!hazardLine) announcedHazard = null;
+        const trafficLine = trafficNotice(world, autopilot.snap);
+        if (trafficLine && trafficLine.key !== announcedTraffic) {
+          announcedTraffic = trafficLine.key;
+          hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500);
+        }
+        if (!trafficLine) announcedTraffic = null;
+      },
+    };
+  };
+}
+
+async function notices(ctx, legacy, announce) {
+  const { world, fleet, autopilot } = ctx;
+  const before = [],
+    after = [];
+  const old = legacy(ctx, { badge: (...badge) => before.push(badge.join(" | ")) });
+  const hud = { badge: (...badge) => after.push(badge.join(" | ")) },
+    announced = new Map();
+  let frames = 0;
+  for (let k = 1; k <= 25 / STEP; k++) {
+    stepWorld(ctx, STEP, world.t * 1000);
+    if (autopilot.firing) await autopilot.firing;
+    if (k % DRAW_EVERY) continue;
+    frames++;
+    for (const slot of ["first", "afterCrosswalk", "parking"]) {
+      old[slot]();
+      announce(slot, world, autopilot, {}, announced, hud, fleet);
+      if (before.length !== after.length || before.at(-1) !== after.at(-1))
+        return { frames, before, after, differs: `t=${world.t.toFixed(1)} at "${slot}"` };
+    }
+  }
+  return { frames, before, after, differs: null };
+}
+
 const scenes = [
   ...[...CHALLENGES, ...ROAD_TESTS].map((challenge) => ({
     id: challenge.id,
@@ -266,6 +401,28 @@ const scenes = [
 ];
 
 const only = mode === "detail" ? [args[0]] : option("--only")?.split(",");
+if (mode === "notices") {
+  const { announceFeatureNotices } = await import("../static/js/sim/features/index.js");
+  const legacy = await legacyNotices();
+  const shown = new Map();
+  let frames = 0,
+    different = 0;
+  for (const scene of scenes) {
+    if (only && !only.includes(scene.id)) continue;
+    const result = await notices(scene.build(), legacy, announceFeatureNotices);
+    frames += result.frames;
+    if (result.differs) {
+      different++;
+      console.log(`✗ ${scene.id}: ${result.differs}: ${result.before.at(-1)} / ${result.after.at(-1)}`);
+    }
+    for (const badge of result.after) shown.set(badge, (shown.get(badge) ?? 0) + 1);
+  }
+  for (const [badge, count] of [...shown].sort()) console.log(`${String(count).padStart(4)}  ${badge}`);
+  console.log(
+    `${different ? `${different} scenes differ` : "every scene's notices match"} (${frames} frames, ${[...shown.values()].reduce((a, b) => a + b, 0)} badges of ${shown.size} kinds)`,
+  );
+  process.exit(different ? 1 : 0);
+}
 const out = { node: process.version, scenes: {} };
 for (const scene of scenes) {
   if (only && !only.includes(scene.id)) continue;

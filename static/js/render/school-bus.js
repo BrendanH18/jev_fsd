@@ -338,7 +338,7 @@ export function syncSchoolBus(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
 }
 
 export const view = {
-  vehicles: { school_bus: { create: (v) => createSchoolBusMesh(v.id), sync: syncSchoolBus } },
+  vehicles: { school_bus: { create: (v) => createSchoolBusMesh(v.id), sync: syncSchoolBus, minimap: "transit" } },
   // (children get off and go home: sim/pedestrians.js)
   transientPeople: ["kid_"],
 };

@@ -375,7 +375,11 @@ export function buildBusStops(map) {
 export const view = {
   scenery: { order: 1, build: buildBusStops },
   vehicles: {
-    bus: { create: (v) => createBusMesh(v.id, `${v.ref || ""} ${v.headsign || ""}`.trim()), sync: syncBus },
+    bus: {
+      create: (v) => createBusMesh(v.id, `${v.ref || ""} ${v.headsign || ""}`.trim()),
+      sync: syncBus,
+      minimap: "transit",
+    },
   },
   // (riders getting on and off: sim/pedestrians.js)
   transientPeople: ["rider_"],

@@ -340,6 +340,7 @@ export const view = {
       create: (v) => createStreetcarMesh(v.id, v.headsign || v.ref || ""),
       sync: syncStreetcar,
       onRails: true,
+      minimap: "transit",
     },
   },
   // (riders getting on and off: sim/pedestrians.js)

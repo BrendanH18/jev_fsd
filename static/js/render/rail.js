@@ -320,5 +320,7 @@ export function buildRail(map) {
 
 export const view = {
   scenery: { order: 3, build: buildRail },
-  vehicles: { train: { create: (v) => createTrainMesh(v.id), sync: syncTrain, roadEffects: false } },
+  vehicles: {
+    train: { create: (v) => createTrainMesh(v.id), sync: syncTrain, roadEffects: false, minimap: "transit" },
+  },
 };

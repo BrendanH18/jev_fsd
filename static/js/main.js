@@ -1384,14 +1384,8 @@ export async function boot() {
             hud.flash();
             hud.badge(`COLLISION · ${(ev.kind || "object").replace(/_/g, " ").toUpperCase()}`, "alert", 1500);
           } else if (ev.type === "red_light") hud.badge("RAN A RED LIGHT", "alert", 1500);
-          else if (ev.type === "stop_sign")
-            hud.badge(
-              ev.flagger ? "WENT PAST THE FLAGGER'S STOP" : ev.dark ? "NO STOP AT A DARK SIGNAL" : "RAN A STOP SIGN",
-              "alert",
-              1500,
-            );
+          else if (ev.type === "stop_sign") hud.badge(featureEventBadge(ev) ?? "RAN A STOP SIGN", "alert", 1500);
           else if (ev.type === "failed_to_yield") hud.badge(`FAILED TO YIELD TO ${ev.to.toUpperCase()}`, "alert", 1500);
-          else if (ev.type === "merged_out_of_turn") hud.badge("MERGED OUT OF TURN", "alert", 1500);
           else if (ev.type === "close_pass") hud.badge("PASSED A CYCLIST TOO CLOSE", "alert", 1500);
           else if (ev.type === "kerb_strike") hud.badge("KERB STRIKE", "alert", 1200);
           else {
@@ -1540,6 +1534,7 @@ export async function boot() {
     minimap.draw({
       ego: world.ego,
       npcs: actors.minimapVehicles(),
+      marks: actors.minimapMarks,
       route: world.route,
       destination: world.destination,
     });

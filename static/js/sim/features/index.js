@@ -251,10 +251,13 @@
 //                                       manoeuvre the safety brake allows closer, or null ("end")
 //   examinerScript(route, lines, { say }) push the examiner's own lines for the road test ("end")
 //   examinerMarks(report, mark)         mark minor errors from a finished report ("end")
+//   eventBadge(event)                   the HUD badge for an event the core raises too, when it is this
+//                                       feature's (a stop missed at a flagger), or null ("end")
 //   signalLamp(world, id)               what a signal's lamps show in place of its phase ("dark"), or null ("end")
 //   manualArrival(world, challenge)     the arrival a drive finished by hand counts as ({ parked, ... }), or null ("end")
-//   view      () => import("../../render/<feature>.js"): the feature's render module, whose `view` export
-//             declares its scenery, meshes and frame effects (render/feature-views.js lists the fields)
+//   view      () => import(RENDER_MODULE): the feature's render module (render/geese.js, say, by its path
+//             from the record), whose `view` export declares its scenery, meshes and frame effects
+//             (render/feature-views.js lists the fields)
 //   sound     { name, distance(world, fleet) }: a drive sound (ui/drive-audio.js) and its nearest source, in metres
 //   notice    { at, order, duration, read(world, autopilot, views, previous, fleet), style, hold? }, or a list
 //             of them: a HUD badge shown once while `read` returns { key, text }
@@ -383,6 +386,7 @@ export const SLOTS = {
     "beforeZone",
   ],
   signalLamp: ["end"],
+  eventBadge: ["end"],
   manualArrival: ["end"],
   perceptionLine: ["end"],
   perceptionFocus: ["end"],
@@ -938,9 +942,12 @@ export const crosswalkVehicleName = (vehicle) => firstHookResult(CROSSWALK_VEHIC
 const MANUAL_ARRIVALS = hooks("manualArrival");
 export const featureManualArrival = (world, challenge) => firstHookResult(MANUAL_ARRIVALS, world, challenge);
 
+const EVENT_BADGE_HOOKS = hooks("eventBadge");
 export function featureEventBadge(event) {
   const badge = EVENT_BADGES[event?.type];
-  return typeof badge === "function" ? badge(event) : badge;
+  if (badge !== undefined) return typeof badge === "function" ? badge(event) : badge;
+  // (an event the core raises too, that a feature words its own way: a stop missed at a flagger, say)
+  return event ? (firstHookResult(EVENT_BADGE_HOOKS, event) ?? undefined) : undefined;
 }
 
 export const featurePerceptionRejection = (id) => PERCEPTION_REJECTIONS[id];

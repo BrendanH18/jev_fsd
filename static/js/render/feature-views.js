@@ -1,7 +1,7 @@
 // The browser side of the feature registry (docs/feature-interface.md). The simulation registry
 // (sim/features/index.js) loads in Node without Three.js, so a record only says where its render module is:
 //
-//   view: () => import("../../render/<feature>.js")
+//   view: () => import(RENDER_MODULE)        (the path of render/geese.js, say, from the record's file)
 //
 // This adapter loads those modules once and reads the `view` each exports. It draws traffic, parked cars
 // and people itself and never names a feature: whatever a feature draws, it declares in its own view.
@@ -12,9 +12,10 @@
 //               camera, dt, lightsOn }), signals?(mounted) }   its scene objects for this World: `run` returns
 //               null while the feature is off, or what it mounted, kept under the record's key for its
 //               notices to read; `frame` then runs once a frame, and `signals` as the signal lamps change
-//   vehicles    { [kind]: { create(vehicle), sync(mesh, pose, dt, t, lightsOn), roadEffects?, onRails? } }
-//               the mesh and animator of a kind of traffic. `roadEffects: false` leaves it out of the road
-//               effects below, and `onRails: true` tells them it runs on rails.
+//   vehicles    { [kind]: { create(vehicle), sync(mesh, pose, dt, t, lightsOn), roadEffects?, onRails?,
+//               minimap? } }   the mesh and animator of a kind of traffic. `roadEffects: false` leaves it out
+//               of the road effects below, `onRails: true` tells them it runs on rails, and `minimap` marks
+//               it on the minimap as "emergency" or "transit" (an ordinary dot otherwise).
 //   traffic     { order, list(world), after?(mesh, actor), minimap? }   road users it keeps outside the
 //               fleet, drawn and interpolated as traffic (`list` is also read from a replay's next
 //               checkpoint); `after` runs once the mesh is in place, `minimap` shows them on the minimap
@@ -77,7 +78,8 @@ const REQUIRED = {
   roadEffect: ["run"],
   person: ["mount", "sync"],
 };
-const VEHICLE_FIELDS = ["create", "sync", "roadEffects", "onRails"];
+const VEHICLE_FIELDS = ["create", "sync", "roadEffects", "onRails", "minimap"];
+const MINIMAP_MARKS = ["emergency", "transit"];
 const RESERVED = ["update", "updateSignals"];
 
 function viewProblem(key, view) {
@@ -93,6 +95,8 @@ function viewProblem(key, view) {
         if (unknown) return `vehicles.${kind} has an unknown field "${unknown}"`;
         if (typeof adapter.create !== "function" || typeof adapter.sync !== "function")
           return `vehicles.${kind} needs create and sync`;
+        if (adapter.minimap !== undefined && !MINIMAP_MARKS.includes(adapter.minimap))
+          return `vehicles.${kind}.minimap must be one of ${MINIMAP_MARKS.join(", ")}`;
       }
     } else if (Object.hasOwn(ORDERED, field)) {
       const unknown = Object.keys(value).find((name) => !ORDERED[field].includes(name));
@@ -113,7 +117,7 @@ function viewProblem(key, view) {
 
 // Every feature's declarations, each list in the order its features asked for.
 export function compileViews(views) {
-  const out = { vehicles: new Map([["bike", bikeView]]), transient: [] };
+  const out = { vehicles: new Map([["bike", bikeView]]), transient: [], minimapMarks: new Map() };
   for (const { key, view } of views) {
     const problem = viewProblem(key, view);
     if (problem) throw new Error(`Feature views: ${key}: ${problem}.`);
@@ -133,6 +137,7 @@ export function compileViews(views) {
       if (out.vehicles.has(kind))
         throw new Error(`Feature views: ${key}: the vehicle kind "${kind}" is already drawn.`);
       out.vehicles.set(kind, adapter);
+      if (adapter.minimap) out.minimapMarks.set(kind, adapter.minimap);
     }
     out.transient.push(...(view.transientPeople ?? []));
   }
@@ -173,9 +178,11 @@ export function mountFeatureViews(view, world) {
   };
 }
 
+const ON_ROAD = Object.freeze({ onRails: false }),
+  ON_RAILS = Object.freeze({ onRails: true });
 function updateRoadEffects(world, mesh, pose, dt, adapter = carView) {
   mesh.rotation.z = 0;
-  const context = { onRails: adapter.onRails === true };
+  const context = adapter.onRails === true ? ON_RAILS : ON_ROAD;
   for (const effect of VIEWS.roadEffect) effect.run(world, mesh, pose, dt, context);
 }
 
@@ -324,10 +331,15 @@ export function mountActorViews(view, world, fleet) {
   return {
     people: pedMeshes,
     sync: syncFleetMeshes,
+    minimapMarks: VIEWS.minimapMarks,
     // The vehicles the minimap shows: the fleet, and the road users features keep outside it.
     minimapVehicles() {
-      const extra = VIEWS.traffic.filter((group) => group.minimap).flatMap(({ list }) => list(world) ?? []);
-      return extra.length ? [...fleet.vehicles, ...extra] : fleet.vehicles;
+      let all = null;
+      for (const { list, minimap } of VIEWS.traffic) {
+        const extra = minimap ? list(world) : null;
+        if (extra?.length) (all ??= [...fleet.vehicles]).push(...extra);
+      }
+      return all ?? fleet.vehicles;
     },
     capture() {
       for (const group of trafficGroups())

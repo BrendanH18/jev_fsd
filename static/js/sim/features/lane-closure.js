@@ -317,6 +317,7 @@ function mustStop(snap, distance) {
 export default {
   key: "closures",
   view: () => import("../../render/lane-closure.js"),
+  eventBadges: { merged_out_of_turn: "MERGED OUT OF TURN" },
   property: "laneClosures",
   seen: "closuresSeen",
   defaultCount: LANE_CLOSURE_COUNT,
