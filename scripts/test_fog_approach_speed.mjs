@@ -187,24 +187,22 @@ let alone = 0;
   );
 }
 
-{
-  // The other car timed as in the drive, to be coming into the ring as the driven car reaches its
-  // line: before, the driven car was at the line at the street's limit for each of these arrivals
-  // and entered in front of it. Now it has slowed, sees the car come out of the fog and waits.
-  // (Not closed: with 28 m of sight a car can still come in at the far entry after the driven car
-  // has seen the ring empty and gone, about 12 m further back than these; ROADMAP 1.8.)
-  for (const lead of [40, 42, 44, 46]) {
-    const { atLine, failed, t } = await drive(lead);
-    assert.notEqual(atLine, null, `lead ${lead}: it gets in`);
-    assert.equal(failed, 0, `lead ${lead}: entered in front of the car in the ring`);
-    assert.equal(t > alone + 1.5, true, `lead ${lead}: it waited`);
-  }
-  // and one well ahead of it, or well behind, does not hold it up
-  for (const lead of [10, 70]) {
-    const { failed, t } = await drive(lead);
-    assert.equal(failed, 0);
-    assert.equal(t < alone + 1.5, true, `lead ${lead}`);
-  }
-  console.log("✓ a car coming into the ring out of the fog as the driven car arrives is given way to");
+// The other car timed as in the drive, to be coming into the ring as the driven car reaches its
+// line: before, the driven car was at the line at the street's limit for each of these arrivals
+// and entered in front of it. Now it has slowed, sees the car come out of the fog and waits.
+// (Not closed: with 28 m of sight a car can still come in at the far entry after the driven car
+// has seen the ring empty and gone, about 12 m further back than these; ROADMAP 1.8.)
+for (const lead of [40, 42, 44, 46]) {
+  const { atLine, failed, t } = await drive(lead);
+  assert.notEqual(atLine, null, `lead ${lead}: it gets in`);
+  assert.equal(failed, 0, `lead ${lead}: entered in front of the car in the ring`);
+  assert.equal(t > alone + 1.5, true, `lead ${lead}: it waited`);
 }
+// and one well ahead of it, or well behind, does not hold it up
+for (const lead of [10, 70]) {
+  const { failed, t } = await drive(lead);
+  assert.equal(failed, 0);
+  assert.equal(t < alone + 1.5, true, `lead ${lead}`);
+}
+console.log("✓ a car coming into the ring out of the fog as the driven car arrives is given way to");
 process.exit(0);

@@ -4,6 +4,13 @@ Starting tree: `7209939a`. Node 22.23.5 and Python 3.12.3 in Boat sandboxes, Rul
 traffic cars, suite seed 1. The unchanged tree and the changed tree each ran in their own sandbox,
 each suite against its own server. No live model calls, no new dependencies.
 
+**Merged 27 November 2026**, as ROADMAP D9 decided: on top of main `309e9a9f`, with a fix for the
+fog failure the change exposed ([Fog `s1-3`](#fog-s1-3)), suite `v2` as the active suite
+([Suite `v2`](#suite-v2)) and a new Rules baseline
+([results on the merged tree](#results-on-the-merged-tree-27-november)). The sections up to
+[the 26 November results](#results-of-the-change-alone-26-november) describe the change as built on
+`7209939a`; the later ones describe the merged tree.
+
 `tests/test_parity.py` (ROADMAP 3.8) runs the Python router and the JavaScript lane joins on
 `tests/fixtures/parity_cases.json`. It had three join cases marked `known_difference` (the roadmap
 and the 20 November audit say four: a `grep` count that includes the fixture's own description) and
@@ -60,7 +67,7 @@ turn, and two ring-like joins where the edges turn under 20° and the lane lines
 (`sharp_limit`): the turn angle set to exactly the limit, to minus the limit and to the next number
 above it. The test requires the three sides to agree on each and the limits to be the same number.
 
-## Results
+## Results of the change alone, 26 November
 
 "Changed" counts drives whose result differs in any field but `wall_ms`, latencies and provenance
 (`saved_at`, `source_commit`, `source_dirty`, `name`).
@@ -113,35 +120,171 @@ the arena's score stayed 65.
 
 The run files are in `data/runs/lane-join-parity/before/` and `after/` in the worktree that made
 the change (`bare.json`, `city.json`, `hard.json`, `arena.json.gz` and their logs); they are not
-committed. The committed baseline in `data/runs/` and `docs/rules-baseline.md` are re-recorded on
-the merged tree.
+committed. The committed baseline was recorded again on the merged tree
+([below](#results-on-the-merged-tree-27-november)).
+
+## Fog `s1-3`
+
+On the lane-join tree Rules failed to yield on Kitsilano city fog `s1-3` (seed 1, a tuned route): at
+t = 54.8 s it crossed the yield line of the Trafalgar Street and West 6th Avenue traffic circle at
+5.5 m/s, braking hard, while `car_18`, which had come in at the opposite entry, was in the ring 16 m
+of arc from the car's entry at 6 m/s. On main the same route passed. A per-tick trace of both trees
+(`bench_node.mjs --trace`) showed the same approach on both: the car comes up Trafalgar Street at
+8.3 m/s, the street's limit, with 28 m of sight, and sees `car_18` only when it is 28 m away. On main
+`car_18` was 1.3 s further along and came into view with 10 m to the line, enough to stop; with
+traffic's lane joins fixed it came into view with 5.8 m to the line, which at 8.3 m/s is not.
+
+**The car was wrong, not the audit.** The audit counts every vehicle in the ring (`ringBusy`,
+`sim/roundabout.js`), seen or not, and `car_18` was in it. Sensing took a ring with no traffic *in
+sight* as an empty one, however little of the ring the car could see: `crossingTraffic`
+(`brain/sensors.js`) looked for circulating and joining vehicles among the visible ones only, so in
+fog the approach was planned as if the ring were clear until a vehicle appeared.
+
+**Fix.** Within stopping distance of a roundabout's yield line (the car's stopping distance at its
+comfortable rate plus a second to react), sensing now takes the ring as occupied while the car cannot
+see as far round it as a vehicle that would hold the entry can be: `ringLookPoint`
+(`sim/roundabout.js`) is the point a vehicle at the street's limit would be at now to reach the entry
+within the yield horizon, on a small traffic circle the far side of the ring. Weather and light alone
+decide (`visibility.rangeAt`), as they do for the vehicles the car would be looking for. The car
+slows as for a stop until the ring comes into view and goes on if it is then clear; inside the 6 m
+stop zone it goes by the traffic it sees, as before, so a ring too large to see across cannot hold it
+at the line for good. In clear daylight the ring is in sight long before the car is within stopping
+distance, so nothing changes there: every dry, rain and snow result, the hard city slice, the eleven
+other maps and all 62 arena drives with Rules and with the cautious agent are identical with and
+without the fix. In fog five of the twelve routes change (`s1-3`, `s1-4`, `s1-8`, `s1-9`, `s1-12`).
+
+`scripts/test_fog_approach_speed.mjs` checks the look point, the sensing (occupied within stopping
+distance in fog; not further back, not once the ring is in view, not in clear weather), the rejected
+manoeuvres, and closed loop with Rules: alone, the car has the ring in view 8.9 m short of the line
+at 3.4 m/s (8.3 m/s before); with a car timed to come into the ring as it arrives, as in the drive, it
+waits (before, it entered in front of it at four of the four timings checked). The check fails
+without the fix.
+
+**Not closed, and recorded in ROADMAP 1.8.** With 28 m of sight a car can still come in at the far
+entry after the driven car has seen the ring empty and gone: over 31 arrival times 2 m apart, 2 still
+fail (4 before the fix, at other times). Closing it means reaching the line slowly enough to stop
+there, and Rules does not: it scores a manoeuvre on its end speed alone, so before a bend that slows
+every manoeuvre by the end it takes the one that went fastest on the way, and comes up to a yield line
+above its own target speed. Scoring the peak speed closed all 31, but it changed most suites and
+failed two dry city routes (a close pass of a cyclist on `s1-7`, with and without parking, and
+parking on `s1-12`), so under standing policy 4.5 it was measured and left out.
+
+## Suite `v2`
+
+The change alters results under suite `v1`'s conditions (11 of 12 Kitsilano city dry routes, and
+routes in fog, rain and snow), so `v1` cannot label runs made after it.
+[`data/suites/v2.json`](../../data/suites/v2.json) has `v1`'s members unchanged (the 60 challenges
+and two road tests with their seeds, versions and map fingerprints; Kitsilano city seed 1 in four
+weathers with route fingerprint `1607d4bf5bdaaeec`; the held-out plan) and is defined from
+`309e9a9f`, main before this change. No route, map or drive differs: only the tree the drives run on.
+
+- **Writers.** `scripts/canonical_suite.mjs` loads every definition (`SUITES`) and names `v2` the
+  active one (`activeSuite`). `bench_node.mjs`, `arena_node.mjs` and the merge tools label a new
+  complete run `v2`.
+- **`v1` artifacts still verify as `v1`.** An artifact is checked against the definition it declares
+  (`definitionFor`): `canonical_suite.mjs --check` passes a `v1` report whose inputs match `v1`,
+  `merge_recordings.mjs` and `merge_bench_recordings.mjs` keep a `v1` label on parts that declare it
+  and refuse to mix them with `v2` parts, `arena_node.mjs --check submission` checks a tape against
+  the suite it declares, `compare_repeats.mjs --plan` loads the suite its plan names, and
+  `build_results.py` loads every definition in `data/suites/`. Comparisons across versions stay
+  refused (`compatibleSuiteVersions`, the leaderboard's per-version tables).
+- **Nothing was published as `v1`.** Every published row before this change is `legacy`. The Rules
+  city runs recorded here are the first numbered rows, as `v2`.
+- **The repeat plan** for ROADMAP 7.5 had not been run. It is reissued for `v2`
+  ([plan](arena-repeat-plan.md), `arena-open-repeats-v2.json`) with the same drivers, track and
+  repeat count.
+- **The hard city slice** (`data/suites/hard-city-v1.json`) pins routes and conditions, which did not
+  change, and stays as it is; all five legs pass.
+
+Checks: `scripts/test_5k_bench_canonical.mjs` (the active suite is `v2`; a `v1`-declared artifact is
+explained against `v1` and stays `v1`), `scripts/test_merge_recordings.mjs` (`v1` parts merge as `v1`;
+parts from two versions are refused; the reissued plan), `scripts/test_5k_submissions_repeats.mjs` (a
+`v1` plan with `v1` tapes), `tests/test_5k_results_publication.py`.
+
+## Results on the merged tree, 27 November
+
+Main `309e9a9f` merged with the change, the fog fix and suite `v2` (`f58d3ad`): Node 22.23.5 in Boat
+sandboxes, Rules, lockstep, 40 traffic cars, suite seed 1, every leg from a clean checkout of that
+commit. "Before" is the committed reference each run replaces (`docs/rules-baseline.md`), and for the
+challenges and road tests a run of main `309e9a9f` the same day. "Changed" counts drives that differ
+in any field but timings and provenance.
+
+| Suite | Drives | Before | After | Changed |
+| --- | --- | --- | --- | --- |
+| Kitsilano bare, dry | 12 | 12/12 | 12/12 | 10 (all but `s1-3`, `s1-7`) |
+| Kitsilano city, dry | 12 | 12/12 | 12/12 | 11 (all but `s1-1`) |
+| Kitsilano city, fog | 12 | 12/12 | 12/12 | 11 (all but `s1-1`) |
+| Kitsilano city, rain | 12 | 12/12 | 12/12 | 11 (all but `s1-1`) |
+| Kitsilano city, snow | 12 | 12/12 | 12/12 | 12 |
+| Kitsilano city, dry, destination parking | 12 | 12/12 | 12/12 | 11 (all but `s1-1`) |
+| City dry, two routes on each of the other eleven maps | 22 | 22/22 | 22/22 | 10 (Calgary 2, Edmonton `s1-2`, Halifax `s1-1`, Mount Pleasant 2, Québec City `s1-1`, Saskatoon 2, Winnipeg `s1-1`) |
+| Hard city slice | 5 | 5/5 | 5/5 | 5 (as on 26 November; the fog fix changes none) |
+| Challenges and road tests, Rules | 62 | 62/62 | 62/62 | 2 (`roundabout-gap`, `road-test-kitsilano`) |
+| Challenges and road tests, cautious agent | 62 | 62/62 | 62/62 | 2 (`roundabout-gap`, `road-test-kitsilano`) |
+
+Every leg of the weekly city matrix passes (`bench.yml`: Kitsilano city in fog, rain and snow, with
+dry, bare and the hard city slice), as do the seventeen references `docs/rules-baseline.md` lists:
+94 of 94 drives. The dry Kitsilano times and counters are those of the 26 November table above: merging
+main (#135, rendering and the compound drive) and the fog fix change no dry result. Per-route times, the
+counters that moved and the totals are in
+[the baseline](../rules-baseline.md#references-on-suite-v2-after-the-lane-join-parity-fix--2026-11-27).
+
+The fog fix was measured apart from the lane joins, on the merged tree without it and with it:
+
+| Suite | Without the fog fix | With it | Changed by it |
+| --- | --- | --- | --- |
+| Kitsilano city, fog | 11/12 (`s1-3` failed to yield) | 12/12 | 5 (`s1-3`, `s1-4`, `s1-8`, `s1-9`, `s1-12`) |
+| Kitsilano bare dry; city dry, rain, snow and dry with parking | 60/60 | 60/60 | 0 |
+| The other eleven maps | 22/22 | 22/22 | 0 |
+| Hard city slice | 5/5 | 5/5 | 0 |
+| Challenges and road tests, Rules and the cautious agent | 62/62 each | 62/62 each | 0 |
+
+Arena drives that changed against main, with every counter that moved:
+
+| Drive | Driver | Time before → after (s) | Counters |
+| --- | --- | --- | --- |
+| `roundabout-gap` | Rules | 37.2 → 36.9 | `min_headway_s` 0.48 → 0.32, `min_ttc_s` 3 → 2.8, decisions 142 → 141 |
+| `roundabout-gap` | cautious | unchanged | `min_headway_s` 0.92 → 1.09, `min_ttc_s` 4.6 → 4.3 |
+| `road-test-kitsilano` | Rules | 254.6 → 259.3 | `hard_brakes` 6 → 7, decisions 799 → 816 |
+| `road-test-kitsilano` | cautious | 342.1 → 344 | decisions 1,085 → 1,092 |
+
+**The compound drive** (`rush-hour`, #135) is unchanged in what it measures:
+`scripts/test_compound_drive.mjs` passes with its saved model case as committed, and
+`scripts/driver_latitude.mjs --only rush-hour` finds 3 of 167 sampled decisions with an ordinary
+manoeuvre that fails, as on 26 November, so nothing was retuned.
 
 ## Recordings and fixtures
 
 - `scripts/test_model_recording.mjs` passes unchanged: the stub recording
   `data/recordings/stub-llm-kitsilano-s1.json` did not drift.
-- `scripts/build_jev_fixtures.mjs --check` passes unchanged.
-- Published tapes replay on their declared revision and were not touched. Replayed on both trees
-  with `--check replay` to see which this change adds to those that no longer replay on main:
+- `scripts/build_jev_fixtures.mjs --check` passes unchanged (no stale fixture), with the fog fix too.
+- Published tapes were not touched. Each already declares the revision it replays exactly on
+  (`source_commit` in its manifest, or `replay_source_commit` in its published row, from
+  `LEGACY_REPLAY_SOURCES` in `scripts/build_results.py`), so no declaration had to change: none
+  claimed main. Replayed on 27 November on the declared revision and on the merged tree
+  (`scripts/report_replay_drift.py run`, Node 22.23.5):
 
-| Tape (`data/recordings/`) | On `7209939a` | With this change |
-| --- | --- | --- |
-| `20261121-075524-jev` (Kitsilano city, 12 drives) | all 12 as recorded | none as recorded |
-| `20261121-092730-llmclaudehaiku55` (Kitsilano city, 12 drives) | all 12 as recorded | none as recorded |
-| `claude-haiku-arena-2026-11-20`, `claude-haiku-open-2026-11-20`, `jev-open-2026-11-20` (62 drives each) | all 62 as recorded | 58 as recorded; `scramble`, `roundabout-gap`, `bridges-freeze-first` and `road-test-kitsilano` drift |
-| `jev-arena-2026-11-11`, `deepseek-arena-2026-11-11` (62 drives each) | 8 already drift (`door-zone`, `snow-plow`, `zipper`, `roundabout-gap`, `make-room`, `on-your-bumper`, `road-test-kitsilano`, `road-test-toronto`) | 10 drift: those and `scramble`, `bridges-freeze-first` |
-| `deepseek-door-zone-2026-11-11`, `liquid-d1-door-zone-2026-11-11`, `luna-door-zone-2026-11-11` | already drift | still drift |
-| `granite-local-2026-11-11` (2 drives) | as recorded | as recorded |
+| Tape (`data/recordings/`) | Declares | On the declared revision | On the merged tree |
+| --- | --- | --- | --- |
+| `20261121-075524-jev` (Kitsilano city, 12 drives) | `9b53a07` | all 12 as recorded | none as recorded |
+| `20261121-092730-llmclaudehaiku55` (Kitsilano city, 12 drives) | `9b53a07` | all 12 as recorded | none as recorded |
+| `jev-open-2026-11-20`, `claude-haiku-arena-2026-11-20`, `claude-haiku-open-2026-11-20` (62 drives each) | `a616469` | all 62, each tape | 58; `scramble`, `roundabout-gap`, `bridges-freeze-first` and `road-test-kitsilano` drift |
+| `jev-arena-2026-11-11`, `deepseek-arena-2026-11-11` (62 drives each) | `dcfc663` | all 62, each tape | 52; `door-zone`, `snow-plow`, `zipper`, `roundabout-gap`, `make-room`, `on-your-bumper`, `road-test-kitsilano` and `road-test-toronto` drifted already, now `scramble` and `bridges-freeze-first` too |
+| `deepseek-door-zone-2026-11-11`, `liquid-d1-door-zone-2026-11-11`, `luna-door-zone-2026-11-11` (1 drive each) | `dcfc663` | as recorded, each tape | drift, as before |
+| `granite-local-2026-11-11` (2 drives) | `dcfc663` | as recorded | as recorded |
 
-  So five tapes that replay exactly on main today stop doing so on the merged tree: the two city
-  tapes entirely, and four drives of each of the three November 20 arena tapes. A drifted replay
-  runs out of recorded answers and falls back to Rules, so its verdicts are not the model's and are
-  not reported here. The Rules results for `scramble` and `bridges-freeze-first` are unchanged in
-  every saved field; the tapes are keyed by the full decision request, which differs.
+  So five tapes that replayed exactly on main before this change no longer do: the two city tapes
+  entirely, and four drives of each of the three 20 November arena tapes. A drifted replay runs out
+  of recorded answers and falls back to Rules, so its verdicts are not the model's and are not
+  reported here. The Rules results for `scramble` and `bridges-freeze-first` are unchanged in every
+  saved field; the tapes are keyed by the full decision request, which differs.
+- The published rows, the leaderboard's replay commands and the weekly replay drift workflow
+  (`.github/workflows/replay-drift.yml`, report-only) read those declared revisions, so none of
+  them claims a replay on main; `docs/model-results.md` now lists what replays where.
+- The four exported replays the demo plays (`static/replays/*.json`: sampled poses and signal states
+  from exact replays of 20 November tapes) are data and were not exported again; none is of a drive
+  that drifted. The checks that read them and the published results pass (`scripts/test_replay.mjs`,
+  `scripts/test_5k_arena-ui_replay.mjs`, `scripts/test_results_page.mjs`,
+  `scripts/test_demo_bench_runs.mjs`, `tests/test_results.py`, the demo build).
 
-## Checks
-
-On Boat, Node 22.23.5: `tests/test_parity.py` (7 tests), `tests/test_routing.py`,
-`tests/test_doc_links.py`, `ruff check`, `ruff format --check`, `npm run lint`,
-`scripts/build_jev_fixtures.mjs --check`, and the 109 `scripts/test_*.mjs` files that build a route
-or traffic (`node scripts/node_checks.mjs`, all passed). CI runs the full suite.
+CHECKS_SECTION

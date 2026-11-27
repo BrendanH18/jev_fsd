@@ -60,6 +60,71 @@ there uses the distance driven, so a longer way round looks like less time lost)
 route length when a road closure re-plans the route (a drive that does not arrive after a detour
 under-reports its progress).
 
+# References on suite v2, after the lane-join parity fix — 2026-11-27
+
+Rules, lockstep, 40 traffic cars, suite seed 1, Node 22.23.5 through `scripts/bench_node.mjs` in a Boat
+sandbox, from a clean checkout of `f58d3ad` (each run's manifest names it; saved without the
+`--diagnostics` field). These replace every reference below. Traffic now joins lanes the way the
+router does (ROADMAP 3.11), which changes the traffic the car meets at traffic circles, and the car
+slows for a traffic circle it cannot yet see round in fog; causes, checks and the full comparison are in
+[the validation record](validation/lane-join-parity-2026-11-26.md). The four Kitsilano city weather
+runs are complete suite members and are labelled `v2`, the first numbered runs; the others (bare,
+parking, two routes on another map) are `custom`, as their kind always is.
+
+| Run | Map | Preset | Weather | Routes | Passed | km | Changed against the earlier reference |
+|---|---|---|---|---|---|---|---|
+| `20261127-090234-rules` | Kitsilano | bare | dry | 12 | 12 | 10.53 | 10 (all but `s1-3`, `s1-7`), against `20261114-210000-rules` |
+| `20261127-090850-rules` | Kitsilano | city | dry | 12 | 12 | 12.8 | 11 (all but `s1-1`), against `20261121-075044-rules` |
+| `20261127-090849-rules` | Kitsilano | city | fog | 12 | 12 | 12.6 | 11 (all but `s1-1`), against `20261114-210002-rules` |
+| `20261127-090949-rules` | Kitsilano | city | rain | 12 | 12 | 12.6 | 11 (all but `s1-1`), against `20261114-210003-rules` |
+| `20261127-091927-rules` | Kitsilano | city | snow | 12 | 12 | 13.99 | 12, against `20261114-210004-rules` (`s1-1` in `min_gap_m` and `min_headway_s` only) |
+| `20261127-090902-rules` | Kitsilano | city, parking | dry | 12 | 12 | 12.6 | 11 (all but `s1-1`), against `20261118-081011-rules` |
+| `20261127-085949-rules` | Calgary | city | dry | 2 | 2 | 1.4 | 2 |
+| `20261127-090232-rules` | Edmonton | city | dry | 2 | 2 | 2.68 | 1 (`s1-2`) |
+| `20261127-090324-rules` | Halifax | city | dry | 2 | 2 | 1.83 | 1 (`s1-1`) |
+| `20261127-090419-rules` | Montréal | city | dry | 2 | 2 | 1.33 | 0 |
+| `20261127-090557-rules` | Mount Pleasant | city | dry | 2 | 2 | 1.83 | 2 |
+| `20261127-090650-rules` | Ottawa | city | dry | 2 | 2 | 1.39 | 0 |
+| `20261127-090805-rules` | Québec City | city | dry | 2 | 2 | 2.0 | 1 (`s1-1`) |
+| `20261127-090941-rules` | Saskatoon | city | dry | 2 | 2 | 1.92 | 2 |
+| `20261127-091155-rules` | Toronto | city | dry | 2 | 2 | 2.6 | 0 |
+| `20261127-091309-rules` | Victoria | city | dry | 2 | 2 | 2.07 | 0 |
+| `20261127-091410-rules` | Winnipeg | city | dry | 2 | 2 | 2.36 | 1 (`s1-1`) |
+
+All 94 drives pass, as all 94 did in the references they replace. "Changed" counts a
+drive that differs in any field but timings; the references for the other maps are from 12 to 20
+November, and Calgary and Québec City already differed from theirs on the unchanged tree
+(18 November, below), so not all of those changes are from this one.
+
+**What changed and why.** No route changed: the route fingerprints of the bare and city suites
+(`4c9554f6790d5765`, `1607d4bf5bdaaeec`) are the same. Traffic's paths changed where an outgoing lane
+is under 3 m long (entries to traffic circles: 16 on Kitsilano) and where the ring segments of a
+traffic circle join (7 on Kitsilano): traffic no longer runs past the corner and backs up, and takes
+the ring as the router's own routes do. The car meets that traffic at other times, so its drives
+differ from the first circle on. In fog the car also slows as for a stop until it can see round a
+traffic circle (five of the twelve fog routes differ for that reason: `s1-3`, `s1-4`, `s1-8`, `s1-9`,
+`s1-12`; nothing outside fog does).
+
+**Totals, earlier reference to this one.**
+
+| Suite | Decisions | Average speed (km/h) | Safety brakes | Hard brakes |
+|---|---|---|---|---|
+| Kitsilano bare, dry | 5,258 → 5,367 | 23.23 → 22.83 | 8 → 9 | 0 → 0 |
+| Kitsilano city, dry | 10,588 → 10,306 | 17.15 → 17.62 | 18 → 16 | 0 → 0 |
+| Kitsilano city, fog | 11,222 → 11,048 | 14.83 → 15.27 | 13 → 10 | 0 → 0 |
+| Kitsilano city, rain | 12,057 → 11,488 | 14.38 → 15.18 | 11 → 12 | 0 → 0 |
+| Kitsilano city, snow | 18,683 → 18,385 | 10.21 → 10.43 | 9 → 6 | 0 → 0 |
+| Kitsilano city, dry, parking | 10,852 → 10,497 | 16.53 → 17.07 | 17 → 17 | 0 → 0 |
+
+The largest moves on Kitsilano: bare `s1-9` 139.3 → 171.5 s (one safety brake more); city dry `s1-5`
+191.8 → 148.7 s and `s1-8` 291.8 → 214.6 s; fog `s1-3` 129.5 → 105.9 s and `s1-8` 279.9 → 219.1 s; rain
+`s1-3` 148.6 → 107.5 s, `s1-5` 272.7 → 211.7 s and `s1-9` 393.8 → 333.8 s; snow `s1-4` 801.4 → 743.5 s,
+and snow `s1-9` drives 1,834 m where it drove 1,491 m; with parking, `s1-8` now parks (226.7 s)
+where it had found no space. The hard city slice passes 5/5, and the 60 challenges and 2 road tests
+pass 62/62 with Rules and with the cautious agent; against main, `roundabout-gap` and
+`road-test-kitsilano` differ for each driver and the other 60 are identical. The stub model
+recording replays unchanged and no Jev fixture is stale.
+
 # Emergency yields on Martha Street and Vine Street — 2026-11-20
 
 Rules, lockstep, suite seed 1, 40 traffic cars, Node 22.23.4. The two failures to yield left open in

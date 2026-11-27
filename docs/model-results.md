@@ -17,12 +17,37 @@ and only on a tree whose traffic, sensing and candidates ask the same questions.
 of the 62 drives replay exactly; `door-zone`, `snow-plow`, `zipper`, `roundabout-gap`, `make-room`,
 `on-your-bumper` and both road tests ask questions the recordings have no answer for, which fall back
 to Rules (Jev still passes all 62, DeepSeek still fails only `double-parked`). Check out `dcfc663`
-to replay every drive exactly, or record those eight again.
+to replay every drive exactly, or record those eight again. Since 27 November 2026
+`scramble` and `bridges-freeze-first` drift too (52 of 62): see
+[which tapes replay on the current tree](#which-tapes-replay-on-the-current-tree).
 The per-drive results are in `data/results/2026-11-11/`.
 
 The [Kitsilano city results](validation/city-model-pilots.md#complete-city-suites)
 cover the 12-route dry suite for Rules, Cautious, Jev and Claude Haiku 5.5,
 with recorded replies and provider usage for both models.
+
+## Which tapes replay on the current tree
+
+Every published tape declares the revision and Node release it replays exactly on: `source_commit`
+in its manifest, or `replay_source_commit` in its [published row](../data/results.json) for the
+tapes that predate manifests. The leaderboard gives the command for each. A change to traffic,
+sensing or candidates changes the questions a drive asks, so a tape can stop replaying on later
+trees while its published result stands on the declared one. On 27 November 2026 traffic's lane
+joins at traffic circles were made to match the router's
+([record](validation/lane-join-parity-2026-11-26.md)); checked that day on Node 22.23.5:
+
+| Tape (`data/recordings/`) | Declared revision | On the declared revision | On the current tree |
+|---|---|---|---|
+| `20261121-075524-jev` (Kitsilano city, 12 drives) | `9b53a07` | all 12 | none of 12: traffic differs from the first circle on every route |
+| `20261121-092730-llmclaudehaiku55` (Kitsilano city, 12 drives) | `9b53a07` | all 12 | none of 12 |
+| `jev-open-2026-11-20`, `claude-haiku-arena-2026-11-20`, `claude-haiku-open-2026-11-20` (62 drives each) | `a616469` | all 62, each tape | 58 of 62: `scramble`, `roundabout-gap`, `bridges-freeze-first` and `road-test-kitsilano` drift |
+| `jev-arena-2026-11-11`, `deepseek-arena-2026-11-11` (62 drives each) | `dcfc663` | all 62, each tape | 52 of 62: `door-zone`, `snow-plow`, `zipper`, `scramble`, `roundabout-gap`, `make-room`, `on-your-bumper`, `bridges-freeze-first` and both road tests drift |
+| `deepseek-door-zone-2026-11-11`, `liquid-d1-door-zone-2026-11-11`, `luna-door-zone-2026-11-11` (1 drive each) | `dcfc663` | as recorded, each tape | drifts, as before |
+| `granite-local-2026-11-11` (2 drives) | `dcfc663` | both drives | both drives |
+
+A drifted replay runs out of recorded answers and falls back to Rules, so its verdicts are not the
+model's. The weekly [replay drift workflow](../.github/workflows/replay-drift.yml) replays every
+published tape on main and on its declared revision and reports both; it never fails a change.
 
 ## The open track (ROADMAP 4.2), 20 November 2026
 
@@ -32,7 +57,7 @@ On the open track the filter flags a manoeuvre that breaks a road rule instead o
 and leaves the choice to the driver; a predicted collision is still removed and the emergency brake still runs
 ([how it works](reference/benchmarks.md#benchmarks-and-validation)). The same 60 challenges and 2 road tests,
 Node 22.23.4, lockstep, each challenge's authored seed. Every model drive is recorded and replays exactly on the
-tree it was published with:
+tree it was published with (`a616469`; [58 of 62 on the current tree](#which-tapes-replay-on-the-current-tree)):
 
 ```sh
 node --experimental-default-type=module scripts/arena_node.mjs --replay data/recordings/claude-haiku-open-2026-11-20.json.gz --check replay
