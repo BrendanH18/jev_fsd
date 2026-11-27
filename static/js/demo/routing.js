@@ -54,7 +54,9 @@ export function routeFromLanes(map, chain, startS = 0, goalS = null) {
       if (dir !== "straight")
         turns.push({ dir, at_m: cumulative(polyline).at(-1), street: edge.name || "", exit: null });
     }
-    polyline = joinLanes(polyline, sliceLane(lane, i ? 0 : startS, end));
+    polyline = joinLanes(polyline, sliceLane(lane, i ? 0 : startS, end), {
+      turn: i ? map.turnAngle(chain[i - 1].edge, lane.edge) : null,
+    });
   }
   // Resample to metre spacing, as on the local server.
   const cum = cumulative(polyline),

@@ -58,3 +58,16 @@ export function ringJoining(rb, node, vehicles, extra = 0) {
   }
   return false;
 }
+
+// The point on the ring a vehicle circulating at `speed` would be at now to reach the entry at `node`
+// within the yield horizon: `ringBusy` holds the entry for a vehicle anywhere between there and
+// the entry, so a driver who cannot see that far round the ring cannot know the entry is free. On a
+// small traffic circle it is the far side of the ring (no further: beyond it a vehicle is nearer the
+// entry the other way round).
+export function ringLookPoint(rb, node, speed) {
+  const dir = rb.ccw === false ? -1 : 1;
+  const entry = Math.atan2(node.y - rb.y, node.x - rb.x);
+  const back = Math.min(Math.PI, (YIELD_HORIZON_S * speed) / rb.lane_r);
+  const theta = entry - dir * back;
+  return [rb.x + rb.lane_r * Math.cos(theta), rb.y + rb.lane_r * Math.sin(theta)];
+}

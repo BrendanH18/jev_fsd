@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Join traffic's lanes the way the router does, and allow a turn of exactly 130° on both sides, so the
+  Python and JavaScript routing checks agree with no known differences. Results under suite `v1`'s
+  conditions changed, so suite `v2` (the same drives) is now the active suite; `v1` artifacts still
+  verify as `v1`, and the Rules baseline is recorded again
+  ([record](docs/validation/lane-join-parity-2026-11-26.md)).
+- Slow for a traffic circle the car cannot yet see round in fog, as for a stop, until the ring comes
+  into view.
 - Replace the project icon with a road drawn as a check mark, and show it on the arena and benchmark
   pages too.
 

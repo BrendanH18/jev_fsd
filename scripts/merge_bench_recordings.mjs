@@ -4,7 +4,12 @@ import { lstatSync, linkSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } f
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { aggregate } from "../static/js/bench/metrics.js";
-import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
+import {
+  CUSTOM_SUITE,
+  LEGACY_SUITE,
+  setRecordingSuiteVersion,
+  suiteVersion,
+} from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording, sameResult } from "../static/js/brain/recording.js";
 import { checkFiles } from "./cli_tools.mjs";
 import {
@@ -18,7 +23,7 @@ import {
   readRecordingJson,
 } from "./recording_artifacts.mjs";
 import { benchRouteFingerprint, benchRunName, runCost } from "./run_manifest.mjs";
-import { benchSuiteVersion } from "./canonical_suite.mjs";
+import { benchSuiteVersion, mergeDefinition } from "./canonical_suite.mjs";
 
 const mismatched = (file, detail) => new Error(`${file}: ${detail}`);
 
@@ -186,7 +191,11 @@ function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
   merged.header.manifest = manifest;
   let suite_version = first.report.suite_version;
   if (suiteVersion(first.tape.header) !== LEGACY_SUITE) {
-    suite_version = benchSuiteVersion({ ...manifest.suite, map_sha: merged.header.map_sha }, ordered);
+    // (shards that declare a numbered suite are checked against that definition, not the active one)
+    const definition = mergeDefinition(first.tape.header);
+    suite_version = definition
+      ? benchSuiteVersion({ ...manifest.suite, map_sha: merged.header.map_sha }, ordered, definition)
+      : CUSTOM_SUITE;
     setRecordingSuiteVersion(merged, suite_version);
     for (const result of ordered) result.suite_version = suite_version;
   }

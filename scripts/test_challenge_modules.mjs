@@ -48,7 +48,7 @@ await test("the registry lists every module once, and nothing else", () => {
     compound = COMPOUND_DRIVES.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length, "challenge ids are unique");
   assert.deepEqual([...ids, ...compound].sort(), Object.keys(modules).sort());
-  assert.equal(ids.length, 60, "suite v1 pins the sixty challenges: a new drive goes in a list of its own");
+  assert.equal(ids.length, 60, "the numbered suites pin the sixty challenges: a new drive goes in a list of its own");
   assert.equal(
     COMPOUND_DRIVES.every((c) => modules[c.id].challenge === c && challengeById(c.id) === c && c.compound === true),
     true,

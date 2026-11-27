@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
-import suiteV1 from "../data/suites/v1.json" with { type: "json" };
+import suiteV2 from "../data/suites/v2.json" with { type: "json" };
 import { setRecordingSuiteVersion } from "../static/js/bench/suite-version.js";
 globalThis.document = { querySelector: () => null };
 const { ModelRecording } = await import("../static/js/brain/recording.js");
@@ -174,7 +174,8 @@ assert.deepEqual(Object.fromEntries(authored), canonical.arena.drives);
 const { seeds, count } = canonical.bench.heldout;
 assert.deepEqual(heldoutPlan("kitsilano"), { seeds, count });
 
-function arenaShard(name, entries) {
+// (a partial run is labelled custom and names the suite its writer was recording for)
+function arenaShard(name, entries, version = "custom", target = version === "custom" ? canonical.version : undefined) {
   const maps = Object.fromEntries(entries.map(([, { map }]) => [map, canonical.maps[map]]));
   const ids = entries.map(([id]) => id);
   const recording = new ModelRecording({
@@ -193,7 +194,8 @@ function arenaShard(name, entries) {
       entries.map(([id, drive]) => [id, { challenge: id, ...drive, pass: false, result_sha: id }]),
     ),
   });
-  setRecordingSuiteVersion(recording, "custom");
+  setRecordingSuiteVersion(recording, version);
+  if (target) recording.header.suite_target = target;
   const file = path.join(dir, name);
   fs.writeFileSync(file, recording.serialize());
   return file;
@@ -218,6 +220,31 @@ const [left, right] = Object.keys(swapped.results);
 const changed = path.join(dir, "arena-swapped.json");
 fs.writeFileSync(changed, swapped.serialize());
 refused([shardA, changed], /disagrees with its authored drive/, "arena results swapped between two drive keys");
+// Parts that declare an earlier numbered suite are checked against that definition and keep its
+// label: merging on a tree whose active suite is newer must not relabel them.
+assert.notEqual(canonical.version, "v1");
+merge(
+  arenaShard("arena-v1-a.json", authored.slice(0, division), "v1"),
+  arenaShard("arena-v1-b.json", authored.slice(division), "v1"),
+);
+assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "v1");
+refused(
+  [shardA, arenaShard("arena-v1-c.json", authored.slice(division), "v1")],
+  /differs from .* in its source/,
+  "parts from two suite versions",
+);
+// Custom parts that name no target were written before suite v2, perhaps on a tree that drove
+// differently, so a complete set of them stays custom.
+merge(
+  arenaShard("arena-old-a.json", authored.slice(0, division), "custom", null),
+  arenaShard("arena-old-b.json", authored.slice(division), "custom", null),
+);
+assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "custom");
+refused(
+  [shardA, arenaShard("arena-old-c.json", authored.slice(division), "custom", null)],
+  /differs from .* in its source/,
+  "a part with a target suite and one without",
+);
 merge(shardA, arenaShard("arena-short.json", authored.slice(division, -1)));
 assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "custom");
 
@@ -414,9 +441,9 @@ fs.writeFileSync(repeatTwo, missingAnswers.serialize());
 assert.throws(() => compare(repeatOne, repeatTwo), /complete arena recording/);
 console.log("✓ repeat comparison preserves per-run outcomes and costs and rejects duplicate and incomplete tapes");
 
-const plan = new URL("../docs/validation/arena-open-repeats-v1.json", import.meta.url).pathname;
-const { drives: plannedDrives } = suiteV1.arena;
-const { maps: plannedMaps } = suiteV1;
+const plan = new URL("../docs/validation/arena-open-repeats-v2.json", import.meta.url).pathname;
+const { drives: plannedDrives } = suiteV2.arena;
+const { maps: plannedMaps } = suiteV2;
 function plannedRepeat(driver, number, { track = "open", effort = "low", ids = Object.keys(plannedDrives) } = {}) {
   const llm = driver.startsWith("llm:");
   const model = llm ? "claude-haiku-5-5" : "jev-test";
@@ -475,7 +502,7 @@ function plannedRepeat(driver, number, { track = "open", effort = "low", ids = O
     drives: Object.fromEntries(ids.map((id) => [id, { [id]: [outcome] }])),
     results,
   });
-  setRecordingSuiteVersion(tape, "v1");
+  setRecordingSuiteVersion(tape, suiteV2.version);
   const file = path.join(dir, `planned-${llm ? "haiku" : "jev"}-${number}-${track}-${effort}-${ids.length}.json`);
   fs.writeFileSync(file, tape.serialize());
   return file;
@@ -536,7 +563,7 @@ assert.throws(
       plan,
       ...["jev", haiku].flatMap((driver) => [1, 2, 3].map((number) => plannedRepeat(driver, number, { ids: subset }))),
     ),
-  /must cover the complete v1 arena/,
+  /must cover the complete v2 arena/,
 );
 console.log("✓ planned repeats check canonical coverage, driver counts and provider settings");
 

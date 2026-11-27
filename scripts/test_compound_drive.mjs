@@ -1,5 +1,5 @@
 // The compound drive (ROADMAP 9.3; lab/challenges/rush-hour.js): listed apart from the challenges and
-// the road tests, so suite v1 is as it was; one deterministic drive through its five situations in
+// the road tests, so the numbered suites are as they were; one deterministic drive through its five situations in
 // order; Rules and the cautious agent on both tracks; a driver who brakes for the stale green and is
 // caught short by the amber fails with a red light; what two saved arena runs of it take; and the
 // saved model case.
@@ -33,7 +33,7 @@ const lesson = drive.challenge,
   map = load(lesson.map),
   DT = 1 / 60;
 
-await test("the compound drive is listed apart, and suite v1 does not know it", () => {
+await test("the compound drive is listed apart, and the numbered suites do not know it", () => {
   assert.equal(COMPOUND_DRIVES.length, 1);
   assert.equal(COMPOUND_DRIVES[0] === lesson && challengeById("rush-hour") === lesson, true);
   assert.equal(lesson.compound, true);

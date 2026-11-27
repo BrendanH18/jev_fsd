@@ -167,6 +167,14 @@ To compare it with other drivers, load the same path under **Add a trusted local
 Built from the committed records (2026-11-11 to 2026-11-21) by `scripts/build_results.py`, which also writes [`data/results.json`](data/results.json) with each row's source files. The [leaderboard](https://brendanh18.github.io/jev_fsd/results.html) shows published challenge results and the newest standard benchmark run for each suite version, driver, map, preset, weather, suite size and seed. City runs in this table use suite seed 1, lockstep clock, 40 traffic cars. A driver's runs may come from different dates. On the open track the safety filter flags a manoeuvre that breaks a road rule instead of removing it, so the driver's own judgment decides ([how](docs/reference/benchmarks.md#benchmarks-and-validation)). "Flagged choices" counts how often the driver went on with one. "Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. Model drives are recorded under `data/recordings/` and replay without a key. Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).
 
 One-challenge pilots: GPT-6 Luna (`openai/gpt-6-luna`) 1/1 (door-zone); Liquid d1 (`liquid/d1-20260930`) 1/1 (door-zone); Granite 4.2 3B (`granite4.2:3b`) 2/2 (dont-splash, left-on-red).
+
+### Suite v2
+
+| Driver | Model | Challenges and road tests | Open track | City suite, Kitsilano: dry · fog · rain · snow | City suite, other maps (dry) | Own decisions | Cost of the challenges |
+|---|---|---|---|---|---|---|---|
+| Rules | none | not run | not run | 12/12 · 12/12 · 12/12 · 12/12 | not run | n/a | $0 |
+
+Built from the committed records (2026-11-27 to 2026-11-27) by `scripts/build_results.py`, which also writes [`data/results.json`](data/results.json) with each row's source files. The [leaderboard](https://brendanh18.github.io/jev_fsd/results.html) shows published challenge results and the newest standard benchmark run for each suite version, driver, map, preset, weather, suite size and seed. City runs in this table use suite seed 1, lockstep clock, 40 traffic cars. A driver's runs may come from different dates. On the open track the safety filter flags a manoeuvre that breaks a road rule instead of removing it, so the driver's own judgment decides ([how](docs/reference/benchmarks.md#benchmarks-and-validation)). "Flagged choices" counts how often the driver went on with one. "Own decisions" are the share of the challenge decisions the driver made itself, not answered locally or by a Rules fallback. Model drives are recorded under `data/recordings/` and replay without a key. Details, failures and costs: [model results](docs/model-results.md) and [Rules baseline](docs/rules-baseline.md).
 <!-- results:end -->
 
 ## Twelve neighbourhoods, four kinds of weather, any hour

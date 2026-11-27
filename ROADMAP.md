@@ -32,13 +32,13 @@ Release rows were brought up to date on 26 November. How each figure was counted
 | World | 12 neighbourhoods in 11 cities, 60 challenges, 2 road tests, 1 compound drive (built, not yet admitted: 9.3), 41 opt-in world features (42 free-drive switches), all 41 on the feature registry with their rendering |
 | Drivers | Rules, the cautious agent, decision models (Jev and others), LLMs through any OpenAI-compatible endpoint or a major lab's own API (Claude through the Claude Platform), your own module |
 | Public demo | Live on GitHub Pages: Rules and the browser agents drive; the results leaderboard; a gallery of four keyless model replays; a manual drive set beside Rules, Jev and Claude Haiku |
-| Checks | About 1,200 Python tests, 237 Node checks in six shards, four browser jobs, blocking Ruff and Biome lint; the hard city slice on every change; the city matrix weekly; the interaction soak weekly, report-only |
+| Checks | About 1,200 Python tests, 238 Node checks in six shards, four browser jobs, blocking Ruff and Biome lint; the hard city slice on every change; the city matrix weekly; the interaction soak weekly, report-only |
 | Tools | 100 offline reports on saved runs and a matched comparison of two runs (`scripts/inspect_run.py`) |
 | Seeded benchmark, features off | Rules 12/12 on Kitsilano dry, on every change |
-| Seeded routes, features on (`city`) | Rules 48/48 on Kitsilano in four weathers, 22/22 on the other eleven maps; on held-out routes no fix was tuned against, Kitsilano dry bare 10/12 and city 8/12 (14 November, not fixed by design) |
+| Seeded routes, features on (`city`) | Rules 48/48 on Kitsilano in four weathers (suite `v2`, 27 November), 22/22 on the other eleven maps; on held-out routes no fix was tuned against, Kitsilano dry bare 10/12 and city 8/12 (14 November, not fixed by design) |
 | Model results | Challenges and road tests: Jev 62/62 on both tracks (8 flagged choices on the open track), Claude Haiku 5.5 61/62 on each (216 flagged), DeepSeek V4.1 Flash 61/62 guarded (11 November). One run each, all recorded. Kitsilano dry city suite (21 November): Rules 12/12, Cautious 9/12, Claude Haiku 5.5 3/12, Jev 2/12. **No repeated runs yet (7.5)** |
-| Replay | The 20 November Jev and Claude Haiku tapes replayed exactly when published (#95); Jev's open-track tape was checked again at #99, Claude Haiku's was not. The 11 November Jev and DeepSeek tapes replay exactly on 54 of 62 (the rest need `dcfc663`). CI replays only the stub tape |
-| Release | `0.4.0` (26 November), with the city results, suite `v1`, the complete feature registry and outside submissions |
+| Replay | Every published tape declares the revision it replays exactly on, and on 27 November each did (11 tapes; Node 22.23.5). On main after the lane-join parity fix (3.11): the two 21 November Kitsilano city tapes no longer replay, the three 20 November arena tapes replay on 58 of 62 drives, and the 11 November Jev and DeepSeek tapes on 52 of 62 ([what replays where](docs/model-results.md#which-tapes-replay-on-the-current-tree)). CI replays only the stub tape; the weekly drift report replays the rest |
+| Release | `0.4.0` (26 November), with the city results, suite `v1`, the complete feature registry and outside submissions. Unreleased since: suite `v2`, the active suite (27 November) |
 | Size | `static/js` 70,392 lines in 253 files. Not comparable with earlier counts: Biome's formatting (#80) took it from 44,706 to 69,111 lines with no code change. Since #80 it has grown 1.9% while `sim/npc.js` (3,953) and `brain/sensors.js` (3,406) shrank as six features moved out |
 | Model spend | About $144 to date: $8.36 to 11 November, $136 on 20 November (of which $116 was a Claude Sonnet run that was dropped) |
 
@@ -194,11 +194,33 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
   - Unprotected lefts in fog: 28 m of sight is too short to judge 11 m/s oncoming traffic
     (`docs/validation/night-2026-11-12.md`); the fog-night `s1-6` failure is gone for now only because
     traffic changed.
+  - Traffic circles in fog. *Fixed 27 November:* the car slows as for a stop until it can see round
+    the ring (Kitsilano fog `s1-3`, `scripts/test_fog_approach_speed.mjs`). Still open: with 28 m of
+    sight a car can come in at the far entry after the driven car has seen the ring empty and gone
+    (2 of 31 arrival times in the check's sweep, 4 of 31 before the fix), and the audit counts it.
+    Behind it, Rules scores a manoeuvre on its end speed alone, so before a bend that slows every
+    manoeuvre it takes the fastest one and reaches a yield line above its own target speed; scoring
+    the peak speed fixed the sweep but changed most suites and failed two dry city routes (a close
+    pass of a cyclist on `s1-7`, parking on `s1-12`), so it was not merged
+    ([record](docs/validation/lane-join-parity-2026-11-26.md#fog-s1-3)).
+    From the review of #136: the precaution reads weather and light range only, so a ring hidden by a
+    building within range counts as seen, and it ends at the stop zone even where the far side of a
+    large ring is still out of sight.
+  - Edge spans at shortening joins (review of #136). At 29 lane joins on the bundled maps (13 on
+    Kitsilano, most at entries to traffic circles; about half of the 29 predate 3.11) the joined
+    path is shorter than the previous edge's recorded end, so `NpcPath.append` (`sim/npc.js`) gives
+    the next edge a span that runs backwards (`sStart > sEnd`): traffic never takes it as its
+    current edge, and code that scales along the span gets a negative factor. Two fixes were
+    measured on 27 November and not merged, because both change the traffic the car meets. Ending
+    the previous edge where the join starts changed 47 of 94 baseline drives and failed three
+    (collisions on Kitsilano city dry `s1-9` and snow `s1-11`, and dry with parking `s1-9`). Starting
+    the short edge at the path's end changed six and failed one (Kitsilano city rain `s1-9`, a
+    timeout). It needs its own round: fix, find why those routes fail, re-baseline.
   - Long vehicles other than school buses (transit buses, plows, garbage and emergency trucks) can
     still sweep parked cars at corners; turns other than U-turns still take their position from summed
     edge lengths; the car's own contraflow sensing keeps the old junction-entry rule.
-  - The committed Jev and DeepSeek challenge recordings replay exactly on 54 of 62 drives on this tree
-    (`docs/model-results.md`); re-record the other eight.
+  - The committed Jev and DeepSeek challenge recordings replay exactly on 52 of 62 drives on this tree
+    (54 before 3.11; `docs/model-results.md`); re-record the other ten (7.7).
   - From the review of #75, each changing traffic, so each needs its own re-baseline: re-sort turns
     after a U-turn moves (`map/route.js`); a rounding tolerance on the lanes a pull-over can cross
     (`brain/sensors.js`); keep a parker's stuck timeout running through blocked retries
@@ -411,16 +433,17 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   tests, four free drives) gave identical scene graphs over 4,158 frames, and both arena drivers'
   62 drives are unchanged ([record](docs/validation/render-registry-exit-2026-11-26.md)).
   `scripts/test_feature_exit.mjs` checks the exit test with a throwaway feature registered in the test.
-- [ ] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in
+- [x] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in
   `tests/fixtures/parity_cases.json`, and the exact-130° U-turn comparison, in one change that
   re-baselines routes, so the Python router and NPC paths join lanes the same way.
-  *26 November: built, not merged* (branch `t3/make-parity-differences-agree`). JavaScript now joins
-  as the router does, the three marked cases (the fourth was a miscount) and exactly 130° agree, and
-  the router's own routes are unchanged. It is held for [D9](#open-decisions) because it changes the
-  traffic the car meets at traffic circles: 10 of 12 bare and 11 of 12 city Kitsilano routes change
-  (all still passing in dry weather), Rules then fails to yield on Kitsilano city fog `s1-3`, both
-  Kitsilano city tapes and four drives of each 20 November arena tape stop replaying on main, and the
-  canonical results change, which calls for suite `v2` before the 7.5 repeats.
+  *Done 27 November.* JavaScript now joins as the router does, the three marked cases (the fourth was
+  a miscount) and exactly 130° agree, and the router's own routes are unchanged. It changes the
+  traffic the car meets at traffic circles, so it was merged as [D9](#open-decisions) decided: with
+  suite `v2` (10 of 12 bare and 11 of 12 city Kitsilano dry routes change, all still passing), a fix
+  for Kitsilano city fog `s1-3` (the car now slows for a traffic circle it cannot yet see round), and
+  a new Rules baseline. Both Kitsilano city tapes and four drives of each 20 November arena tape
+  replay only on their declared revisions from here on
+  ([record](docs/validation/lane-join-parity-2026-11-26.md)).
 
 Exit: adding a feature needs its own file, its challenge, its test and one registration line.
 **Exited 26 November** with 3.10. A new feature is its own files, its challenge, its test, its entry
@@ -430,7 +453,7 @@ in `sim/features/index.js` and its challenge's entry in `lab/challenges.js`;
 keeps the core, `main.js` and the shared renderers from naming a feature again. Still naming older
 features, and free to shrink: the AI Eyes wording for eleven of them, 29 options listed in
 `setupChallenge`, and the turn-restriction view, which also draws the no-turn-on-red signs
-(`render/turn-restrictions.js`). 3.11 is not part of the exit.
+(`render/turn-restrictions.js`). 3.11 was not part of the exit; it landed on 27 November.
 
 ## Phase 4: a benchmark that separates drivers
 
@@ -548,7 +571,7 @@ one run that replays only on the tree it was made on is weak evidence. Both put 
 | 1 | [7.1](#phase-7-results-that-hold-up), then [2.5b](#phase-2-put-the-models-on-the-road) | Closes Phase 2, the original point of the project | Budget ([D7](#open-decisions)) |
 | 2 | [Phase 7](#phase-7-results-that-hold-up) | Every later comparison stands on it | 2.5b for 7.5 and 7.6 |
 | 3 | [Phase 8](#phase-8-you-against-the-models) | The "take it yourself" half of the one-line statement; cheap, since the replay player, debriefs and scores exist | 7.2, to know which drives can be shown |
-| alongside | [Phase 3](#phase-3-make-features-cheap-to-add): 3.2, 3.10, 3.3, 3.11 | A batch at a time beside 1 to 3; new scenarios wait for its exit | — |
+| alongside | [Phase 3](#phase-3-make-features-cheap-to-add): 3.2, 3.10, 3.3 (3.11 done 27 November) | A batch at a time beside 1 to 3; new scenarios wait for its exit | — |
 | 4 | [Phase 9](#phase-9-a-harder-test) | Separates drivers by judgment once the evidence is sound | 7.5; Phase 3 for 9.3 |
 | 5 | [Phase 10](#phase-10-open-to-outside-drivers) | Lets others bring drivers once the format has settled | 7.2, 7.3 |
 | 6 | [Phase 6](#phase-6-grow-the-world-again) | New scenarios and cities, one at a time | Phase 3's exit (met 26 November) |
@@ -585,10 +608,10 @@ forward; do not add scenarios early.
 | 1 | 23 Nov to 18 Dec | **Models on the city** | 7.1, the 2.5b pilot, then 2.5b; 7.3; 5.7; 3.2 batch (the `"officers"` and `"tailgaters"` neighbours) | Phase 2 exits. Release **0.4.0** with the city results |
 | — | 21 Dec to 1 Jan | Holidays | The weekly city matrix and soak keep running; fix only what they break | — |
 | 2 | 4 Jan to 29 Jan | **Results that hold up** | 7.2, 7.4 (two days, then write down what is known), 7.5, 7.6, 7.7, 7.8; 8.1, 8.2; 3.2 batches (the `"parking"` and `"late"` neighbours) | Phase 7 exits; the D6 gate passes. About 20 of 41 features registered. Release **0.5.0** as the 1.0 candidate |
-| 3 | 1 Feb to 26 Feb | **1.0** | 8.3, 8.4; 3.10; the rest of 3.2; fixes found on the candidate | Phase 8 exits. Release **1.0.0**, scored on suite `v1` |
-| 4 | 1 Mar to 26 Mar | **Finish the interface; start the harder test** | 3.3, 3.11; 9.1, 9.2, 9.4 | Phase 3 exits: a new feature is one file, its challenge, its test and one line. 1.1.0 |
+| 3 | 1 Feb to 26 Feb | **1.0** | 8.3, 8.4; 3.10; the rest of 3.2; fixes found on the candidate | Phase 8 exits. Release **1.0.0**, scored on suite `v2` |
+| 4 | 1 Mar to 26 Mar | **Finish the interface; start the harder test** | 3.3; 9.1, 9.2, 9.4 (3.11 landed early, 27 November) | Phase 3 exits: a new feature is one file, its challenge, its test and one line. 1.1.0 |
 | 5 | 29 Mar to 30 Apr | **Compound drives; outside drivers** | 9.3 (one compound drive through the admission rule); 10.1, 10.2, 10.3, 10.4 | Phase 9 and Phase 10 exit. 1.2.0 |
-| 6 | 3 May to 21 May | **Grow by one; second results round** | The provincial-rule gap list (Phase 6), then one new city or one season condition through the admission rule; Jev's current version and Claude Haiku over suite `v1` again, with repeats | The new scenario passes all six admission checks. A second dated results round, and the next plan written here |
+| 6 | 3 May to 21 May | **Grow by one; second results round** | The provincial-rule gap list (Phase 6), then one new city or one season condition through the admission rule; Jev's current version and Claude Haiku over suite `v2` again, with repeats | The new scenario passes all six admission checks. A second dated results round, and the next plan written here |
 
 **Every week.** Triage the weekly city matrix (Mondays) and the soak (Thursdays). A failed leg becomes a fix with a Node
 check, or a line in 1.8. Add each PR's changelog line as it merges (5.7).
@@ -597,7 +620,7 @@ check, or a line in 1.8. Add each PR's changelog line as it merges (5.7).
 `scripts/verify_jev.py` when Jev ships a new version, and record which version each result used.
 
 **Spend.** About $30 for blocks 1 and 2 ([D7](#open-decisions)). The second round in block 6 is about
-$18 for three repeats of both models over the 62 drives, plus suite `v1`'s city routes in four weathers
+$18 for three repeats of both models over the 62 drives, plus suite `v2`'s city routes in four weathers
 at the cost the block 1 pilot measures (Jev about $1.40 a weather; Claude Haiku not yet known). Agree a
 figure for it at the end of block 1. Check the provider's bill during each run, and ask before going
 past an agreed amount.
@@ -611,7 +634,7 @@ past an agreed amount.
 - *A new Jev version or a change in Claude Haiku's pricing or limits* can move a results round. A
   new Jev version is a live check and a re-record, not a reason to change the prompt wording.
 - *Open decisions D6 to D8.* The plan assumes the recommendations. If 1.0 is tied to Phase 2 alone
-  (D6), release it at the end of block 1 and move `v1` (7.8) into block 2. If recordings must stay
+  (D6), release it at the end of block 1 and move the suite definition (7.8) into block 2. If recordings must stay
   in Git as they are (D8), 10.3 becomes a size limit on each new tape.
 
 ## Phase 7: results that hold up
@@ -639,6 +662,8 @@ past an agreed amount.
   separate numbers. The [open-track repeat plan](docs/validation/arena-repeat-plan.md) fixes the
   drives and repeat count. The comparison checks the plan and reports the score spread and
   recurring failures per drive. The repeated live runs and their results are still due.
+  *27 November:* the plan is reissued for suite `v2`, the suite the repeats will be recorded and
+  published under ([D9](#open-decisions)); nothing was recorded on `v1`.
   *25 November:* the offline tools validate a repeat plan, report each drive's spread on a fixed
   panel and attribute matched route changes; the live runs are unchanged.
 - [ ] **7.6 Models on the held-out routes.** (S) Jev and Claude Haiku on the held-out Kitsilano
@@ -646,10 +671,16 @@ past an agreed amount.
 - [ ] **7.7 The eight drifted tapes.** (S) Record Jev's eight drifted 11 November drives again on main,
   and mark DeepSeek's (no longer run, AGENTS.md) in `results.json` as replaying on `dcfc663` only.
   The generated rows now expose the known replay revisions for the legacy tapes, including DeepSeek.
+  *27 November:* ten drives since 3.11 (`scramble` and `bridges-freeze-first` too), and four drives
+  of each 20 November arena tape; all replay on their declared revisions.
 - [x] **7.8 Version the test.** [Suite `v1`](data/suites/v1.json) pins the 60 challenges, two road
   tests, and Kitsilano's tuned and held-out city routes across four weathers. New reports, manifests
   and tapes declare their suite version. The leaderboard ranks each version separately. A change
   that alters a canonical result needs a new suite definition.
+  *27 November:* [suite `v2`](data/suites/v2.json) is the active suite: the same drives, routes and
+  maps as `v1`, defined from the lane-join parity fix (3.11), which changed results under `v1`'s
+  conditions. `v1` stays loaded, and an artifact that declares it is still checked against it
+  ([suite versions](docs/reference/benchmarks.md#suite-versions)). No result was published as `v1`.
 - [x] **7.9 Investigate differences across routes.** Offline profiles group saved measurements by
   route geometry, verdict, parking and recorded behavior. Trace comparisons identify missing
   ticks and changed verdict fields. Repeated-run reports include each attempt's results and cost.
@@ -707,7 +738,7 @@ ordinary manoeuvre that fails) and that most open-track flags never became viola
   *26 November: one built, not yet admitted.* "Rush hour on West 4th" (`rush-hour`, Kitsilano, about
   830 m): a tailgater, an amber with the tailgater behind, a bus pulling out, an unprotected left and
   a stop sign with through traffic. It is listed apart (`COMPOUND_DRIVES`, `arena_node.mjs --set
-  compound`, labelled `custom`), so suite `v1` and its 62 drives are untouched. Latitude: 3 of 167
+  compound`, labelled `custom`), so the numbered suites and their 62 drives are untouched. Latitude: 3 of 167
   sampled decisions offer an ordinary manoeuvre that fails (the sixty challenges: 4 of 3,042). Rules
   and the cautious agent both pass on both tracks, so it does not separate them. Admission checks 1
   to 4 and 6 pass; check 5 does not: on the saved case, live, Jev eased off for the tailgater (67%)
@@ -737,7 +768,7 @@ Exit: on a set built for it, Rules, Jev and Claude Haiku differ by a stated marg
   Maintainers [replay and curate a bundle](docs/agents.md#publish-a-verified-submission) for the
   generated leaderboard. The report binds the tape by SHA-256 and keeps attribution in both
   versioned rankings and custom runs. A local driver submission replayed exactly across all 62
-  suite `v1` drives.
+  suite `v1` drives (the active suite then; it is `v2` since 27 November).
 - [x] **10.3 Where recordings live.** (M) [New recordings](docs/agents.md#record-a-model-run-and-replay-it-without-a-key)
   stay in Git and rebuild exact prompt and metadata copies at replay time. Re-encoding the two
   published Claude Haiku arena tapes and the dry Kitsilano city tape reduced their gzip sizes
@@ -772,7 +803,7 @@ documented path, and adding it grows the repository by a stated, small amount.
 | **D5** | Is the next release 0.3.0 or 1.0? | *Decided:* 0.3.0, cut 20 November. What makes 1.0 is now D6 |
 | **D6** | What makes 1.0? | Phase 2's exit (2.5b), 7.1 to 7.3, 7.8 and 8.1 on the public demo: models on the city, results that verify on a named suite, and a person set beside them. Until then, release 0.x on a rhythm (5.7). The [six-month plan](#six-month-plan-23-november-2026-to-21-may-2027) meets this at the end of January and cuts 1.0.0 on 26 February |
 | **D7** | What is the budget for 2.5b, 7.5 and 7.6? | **21 November:** up to $30 approved for the Jev and Claude Haiku city work, starting with one route per model. Provider-reported usage at published rates put the completed suites at $10.259457 in total, including the $0.3237 pilots. That verification method was approved for this city run. At 20 November prices Jev's 62 open-track drives cost $1.47 and Claude Haiku's $4.53 (effort low), so three repeats of both are about $18. The repeat and held-out budgets are open |
-| **D9** | Merge the lane-join parity fix (3.11), and when? | It is right on the geometry and ready on its branch, but it changes canonical results. Merge it together with suite `v2` (same members as `v1`, defined from the merge) and a fix for Kitsilano fog `s1-3`, **before** the 7.5 repeat runs, so the repeats are recorded once on the suite they will be published under. The cost is that the 20 and 21 November tapes then replay only on their declared revisions, which Phase 7 already allows for |
+| **D9** | Merge the lane-join parity fix (3.11), and when? | *Decided 27 November:* merged with suite `v2` (same members as `v1`, defined from main before the merge) and the fix for Kitsilano fog `s1-3`, before the 7.5 repeat runs, so the repeats are recorded once on the suite they will be published under. The 20 and 21 November tapes replay only on their declared revisions, which Phase 7 already allows for |
 | **D8** | Where do model recordings live? | First slim them in Git (keep only what replay needs). Moving them to release assets, with a hash in Git, is a change of service and needs the owner's approval |
 
 ## Done so far

@@ -1,0 +1,283 @@
+{
+ "suite_version": "custom",
+ "config": {
+  "brain": "rules",
+  "count": 2,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "saskatoon",
+  "bbox": [
+   -106.672,
+   52.117,
+   -106.65,
+   52.131
+  ],
+  "pack": "6",
+  "engine": "node v22.23.5"
+ },
+ "summary": {
+  "scenarios": 2,
+  "pass_rate": 1,
+  "arrived_rate": 1,
+  "km": 1.92,
+  "collisions": 0,
+  "at_fault": 0,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 0,
+  "off_road_s": 0,
+  "safety_brakes": 2,
+  "deadlocks": 0,
+  "fallbacks": 0,
+  "violations_per_km": 0,
+  "avg_kmh": 14.85,
+  "min_gap_m": 2.3,
+  "min_ttc_s": 1.1,
+  "hard_brakes": 0,
+  "rms_jerk": 2.79,
+  "max_lat_accel": 5.26,
+  "lane_rms_m": 0.39,
+  "lane_changes": 0,
+  "speeding_s": 0,
+  "decisions": 1820,
+  "calls": 0,
+  "tokens": 0,
+  "cost_usd": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 741,
+    "signals": 1,
+    "stops": 0,
+    "lefts": 3,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 206,
+   "distance_m": 955,
+   "progress": 0.897,
+   "avg_kmh": 16.7,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.3,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.57,
+   "max_decel": -6.93,
+   "hard_brakes": 0,
+   "rms_jerk": 3.29,
+   "max_jerk": 62.4,
+   "max_lat_accel": 5.54,
+   "lane_rms_m": 0.2,
+   "lane_max_m": 1.02,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 17.7,
+   "decisions": 791,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 58.9,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 132.4,
+     "type": "safety",
+     "brake": {
+      "reason": "ahead",
+      "gap": 4.283014178826992,
+      "closing": 4.307245484318094
+     }
+    },
+    {
+     "t": 173.2,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1918293945302902,
+      "gap": 3.52254556691064
+     }
+    },
+    {
+     "t": 206,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 40584,
+   "suite_version": "custom"
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 747,
+    "signals": 1,
+    "stops": 0,
+    "lefts": 2,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 267.5,
+   "distance_m": 964,
+   "progress": 0.802,
+   "avg_kmh": 13,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "crew_close_passes": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 0,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 9.1,
+   "min_ttc_s": 3.2,
+   "min_headway_s": 3.2,
+   "max_accel": 2.55,
+   "max_decel": -6.74,
+   "hard_brakes": 0,
+   "rms_jerk": 2.29,
+   "max_jerk": 49.9,
+   "max_lat_accel": 4.98,
+   "lane_rms_m": 0.58,
+   "lane_max_m": 1.57,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 101.2,
+   "decisions": 1029,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 145.3,
+     "type": "reroute",
+     "count": 1
+    },
+    {
+     "t": 267.4,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 54287,
+   "suite_version": "custom"
+  }
+ ],
+ "name": "20261127-090941-rules",
+ "saved_at": "2026-11-27T09:09:41.198Z",
+ "manifest": {
+  "format": "jev-run-manifest/2",
+  "suite_version": "custom",
+  "source_commit": "f58d3adaf2eda730275ac020e2fa7c9c74499d54",
+  "source_dirty": false,
+  "engine": "node v22.23.5",
+  "engine_version": "12.4.254.21-node.57",
+  "driver": "rules",
+  "model": null,
+  "prompt_hash": null,
+  "track": "guarded",
+  "suite": {
+   "kind": "bench",
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "saskatoon",
+    "bbox": [
+     -106.672,
+     52.117,
+     -106.65,
+     52.131
+    ],
+    "pack": "6",
+    "engine": "node v22.23.5"
+   },
+   "ids": [
+    "s1-1",
+    "s1-2"
+   ],
+   "generated_ids": [
+    "s1-1",
+    "s1-2"
+   ],
+   "route_sha": "7658fbb959a2d4aa"
+  },
+  "maps": {
+   "saskatoon": {
+    "pack_version": "6",
+    "fingerprint": "f881164b6b5aea9c",
+    "components": {
+     "bbox": "180afc8ed0d2d5d0",
+     "bridges": "d02deccae2311812",
+     "buildings": "d253cb2981ffb693",
+     "buslanes": "f25f717d209ceaf6",
+     "calming": "888b337053dc991b",
+     "contraflow": "de685de636acc25c",
+     "crossings": "06089135cd253f62",
+     "driveways": "d6286732326fb588",
+     "edges": "230f178f684f767d",
+     "extent": "9ad62dc4251d9516",
+     "intersections": "85ec574116d97bba",
+     "lanes": "01630ed07cfdc82a",
+     "name": "ecf37447b1278bfa",
+     "nodes": "1d83fb69258b15c2",
+     "origin": "b7a7e90209b8af32",
+     "pack_version": "d561ed8d020d5c15",
+     "parks": "310d53a8d4ebeda0",
+     "restrictions": "e70f52dbc202eea5",
+     "roundabouts": "d7d0a943b4bf27c2",
+     "routing_bbox": "180afc8ed0d2d5d0",
+     "scrambles": "b6f39e2ec09e6b8c",
+     "stats": "f64a82ffc0b174c0",
+     "stops": "72747ab5529ab49f",
+     "transit": "72fdce59eb007ff4",
+     "utc_offset": "a3acf3ed52f52771",
+     "yields": "97cfd178a8452e4a",
+     "zones": "41a18e8225e05e75"
+    }
+   }
+  },
+  "cost_usd": 0
+ }
+}

@@ -22,6 +22,7 @@ import {
   resultVersions,
   suiteLabel,
   selectedSuite,
+  defaultSuite,
   mapDisplayName,
   driverDisplayName,
 } from "../lab/results.js";
@@ -936,7 +937,8 @@ async function main() {
       ...(versions.length ? versions : [LEGACY_SUITE]).map((v) => h("option", { value: v }, suiteLabel(v))),
     );
     $("#suite-filter").hidden = versions.length < 2;
-    const readSuite = () => selectedSuite(versions, new URL(location.href).searchParams.get("suite"));
+    const opensOn = defaultSuite(data);
+    const readSuite = () => selectedSuite(versions, new URL(location.href).searchParams.get("suite"), opensOn);
     filter.value = readSuite();
     const renderVersion = () => {
       const version = filter.value || LEGACY_SUITE;

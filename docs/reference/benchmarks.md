@@ -322,15 +322,15 @@ suite, track, drivers, repeat counts and declared model settings.
 
 ## Suite versions
 
-Suite [v1](../../data/suites/v1.json) defines the 1.0 test in three parts.
+Suite [v2](../../data/suites/v2.json) is the active suite and defines the 1.0 test in three parts. [v1](../../data/suites/v1.json) pins the same drives, routes and maps; `v2` exists because the [lane-join parity fix](../validation/lane-join-parity-2026-11-26.md) (27 November 2026) changed the traffic the car meets at traffic circles, and with it results under `v1`'s conditions. Results from the two are never compared with each other.
 
 - The 60 authored challenges and two road tests on the lockstep clock, with their recorded seeds, authored versions and map fingerprints. Guarded and open are separate tracks.
-- Kitsilano city, with 12 routes from seed 1, 40 traffic cars and the lockstep clock. Dry, fog, rain and snow are separate weather legs. The v1 definition pins the generated route fingerprint.
+- Kitsilano city, with 12 routes from seed 1, 40 traffic cars and the lockstep clock. Dry, fog, rain and snow are separate weather legs. The definition pins the generated route fingerprint.
 - Kitsilano city held out, with four routes each from seeds 101, 102 and 103 and the same city settings. The definition pins these routes with a separate fingerprint. Keep these reports apart from the tuned legs.
 
-The [compound drive](../drive-lab.md#compound-drives) is in none of them: `arena_node.mjs --set compound` runs it, `--set all` is still the 60 challenges and two road tests, and a compound run is labelled `custom`. A numbered suite that includes it would be a new definition beside v1.
+The [compound drive](../drive-lab.md#compound-drives) is in none of them: `arena_node.mjs --set compound` runs it, `--set all` is still the 60 challenges and two road tests, and a compound run is labelled `custom`. A numbered suite that includes it would be a new definition beside these.
 
-A numbered run completes one of these members. Failed drives count as completed attempts. Incomplete runs, pilots, other presets and browser-local evaluations are labeled `custom`. The merge tools can qualify a complete run from version-aware shards only after checking the inputs and coverage. Unversioned publications and tapes remain `legacy`, including when they replay exactly. The leaderboard and README show each numbered version separately from legacy history. Custom runs are listed individually on the leaderboard.
+A numbered run completes one of these members. Failed drives count as completed attempts. Incomplete runs, pilots, other presets and browser-local evaluations are labeled `custom`. The merge tools can qualify a complete run from version-aware shards only after checking the inputs and coverage. Unversioned publications and tapes remain `legacy`, including when they replay exactly. The leaderboard and README show each numbered version separately from legacy history. The leaderboard opens on the newest suite in which a model has a published result (`defaultSuite`, `static/js/lab/results.js`), so a new suite that so far holds only Rules' runs, as `v2` did on 27 November 2026, is one pick away and the models' legacy results stay in front until a model is published on it. Custom runs are listed individually on the leaderboard. A partial recording names the suite its writer was recording for (`suite_target` in the tape header) beside its `custom` label, and a complete set of parts qualifies for that suite only; parts with no target predate `v2` and merge as `custom`.
 
 The browser can compare new local runs with versionless saved baselines under matching conditions. Comparisons involving a numbered suite require the same version.
 
@@ -338,7 +338,7 @@ New Node publication manifests use `jev-run-manifest/2`. The report, manifest, t
 
 Use `bench_node.mjs --replay TAPE.json.gz --check replay --json RUN.json` to export a complete exact benchmark replay for publication. The report retains the tape's manifest and recording date when the recorded engine and suite match.
 
-When a change alters any canonical result, add a new definition and switch the Node writers to it. Keep earlier definitions and recordings so publication and replay can verify older results on their declared source and engine.
+When a change alters any canonical result, add a new definition and switch the Node writers to it: add `data/suites/vN.json` (`defined_from` is the main commit the change was built on), list it in `SUITES` in `scripts/canonical_suite.mjs` and make it `activeSuite`. Keep earlier definitions and recordings so publication and replay can verify older results on their declared source and engine. Every definition stays loaded: `canonical_suite.mjs --check`, the merge tools, `compare_repeats.mjs --plan` and `build_results.py` check an artifact against the definition it declares, so a `v1` report or tape still verifies as `v1` and never becomes `v2`. No `v1` result was published before `v2` replaced it; the rows published before either are `legacy`.
 
 ## Select and rerun benchmark routes
 

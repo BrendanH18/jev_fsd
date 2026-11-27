@@ -5,7 +5,7 @@
 // Road tests (lab/road-tests.js) open and play the same way, but are not listed.
 // Compound drives (ROADMAP 9.3) are modules here too, listed apart in `COMPOUND_DRIVES`: longer drives
 // that string several situations together. They stay out of `CHALLENGES`, so the arena's challenge set,
-// its saved runs and suite v1 are as they were.
+// its saved runs and the numbered suites (data/suites/) are as they were.
 import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { finishInstall, installBase, laneScenario, stepAuthored } from "./challenges/shared/kit.js";
 import * as doorZone from "./challenges/door-zone.js";

@@ -21,6 +21,7 @@ const {
   resultVersions,
   suiteLabel,
   selectedSuite,
+  defaultSuite,
   matchesCoverage,
   fraction,
 } = await import("../static/js/lab/results.js");
@@ -29,7 +30,12 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 
 const data = checkResults(JSON.parse(fs.readFileSync(new URL("../data/results.json", import.meta.url), "utf8")));
 const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
-const block = readme.slice(readme.indexOf("### Legacy results"), readme.indexOf("<!-- results:end -->"));
+// (the legacy tables alone: a suite's own table may follow them, README order as on the leaderboard)
+const legacyAt = readme.indexOf("### Legacy results");
+const legacyEnd = [readme.indexOf("\n### ", legacyAt + 1), readme.indexOf("<!-- results:end -->")].filter(
+  (i) => i > legacyAt,
+);
+const block = readme.slice(legacyAt, Math.min(...legacyEnd));
 // README rows: | Driver | Model | challenges | open track | Kitsilano weathers | other maps | own decisions | cost |
 const readmeRows = block
   .split("\n")
@@ -229,6 +235,30 @@ test("Select an available leaderboard suite by its shareable URL value", () => {
   assert.equal(selectedSuite(["v2", "v1", "legacy"], "v1"), "v1");
   assert.equal(selectedSuite(["v2", "v1", "legacy"], "v3"), "v2");
   assert.equal(selectedSuite([], null), "legacy");
+  assert.equal(selectedSuite(["v2", "legacy"], null, "legacy"), "legacy");
+  assert.equal(selectedSuite(["v2", "legacy"], "v2", "legacy"), "v2");
+});
+test("Open the leaderboard on the newest suite a model has a result in", () => {
+  const drivers = { rules: { kind: "rules" }, cautious: { kind: "agent" }, jev: { kind: "jev" } };
+  const row = (driver, suite_version) => ({ driver, suite_version });
+  // a new suite with only the built-in drivers' runs: the models' results are still the legacy ones
+  const fresh = { drivers, rows: [row("rules", "v2"), row("cautious", "v2"), row("rules", "custom"), row("jev")] };
+  assert.deepEqual(resultVersions(fresh), ["v2", "legacy", "custom"]);
+  assert.equal(defaultSuite(fresh), "legacy");
+  assert.equal(selectedSuite(resultVersions(fresh), null, defaultSuite(fresh)), "legacy");
+  assert.equal(selectedSuite(resultVersions(fresh), "v2", defaultSuite(fresh)), "v2");
+  // once a model is published on it, the newest suite
+  assert.equal(defaultSuite({ drivers, rows: [...fresh.rows, row("jev", "v2")] }), "v2");
+  assert.equal(defaultSuite({ drivers, rows: [row("jev", "v1"), row("rules", "v2"), row("jev")] }), "v1");
+  // nothing from a model anywhere: the newest numbered suite; custom runs are never the default
+  assert.equal(defaultSuite({ drivers, rows: [row("rules", "v2"), row("rules")] }), "v2");
+  assert.equal(defaultSuite({ drivers, rows: [row("jev", "custom"), row("rules", "v2")] }), "v2");
+  assert.equal(defaultSuite({ drivers, rows: [row("rules", "custom")] }), "custom");
+  assert.equal(defaultSuite({ drivers, rows: [] }), undefined);
+  // an unknown driver id is not taken for a model (nor an inherited key for a driver)
+  assert.equal(defaultSuite({ drivers, rows: [row("constructor", "v2"), row("jev")] }), "legacy");
+  // the published results today
+  assert.equal(defaultSuite(data), "legacy");
 });
 test("Filter leaderboard rows by whether every driver has a result", () => {
   const pass = { pass: true },

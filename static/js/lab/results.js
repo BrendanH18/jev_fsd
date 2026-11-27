@@ -103,8 +103,23 @@ export function resultVersions(data) {
 export const suiteLabel = (version) =>
   version === LEGACY_SUITE ? "Legacy results" : version === CUSTOM_SUITE ? "Custom runs" : `Suite ${version}`;
 
-export const selectedSuite = (versions, requested) =>
-  versions.includes(requested) ? requested : (versions[0] ?? LEGACY_SUITE);
+export const selectedSuite = (versions, requested, preferred = versions[0]) =>
+  versions.includes(requested) ? requested : (preferred ?? LEGACY_SUITE);
+
+// The suite the leaderboard opens on when its address names none: the newest in which a model has a
+// published result, else the newest. A suite that so far holds only the built-in drivers' runs (a
+// new suite the day Rules is recorded on it) has nothing to compare yet, and stays one pick away.
+const BUILT_IN_KINDS = new Set(["rules", "agent"]);
+export function defaultSuite(data) {
+  const versions = resultVersions(data).filter((version) => version !== CUSTOM_SUITE);
+  const hasModel = (version) =>
+    data.rows.some((row) => {
+      if (suiteVersion(row) !== version) return false;
+      const driver = Object.hasOwn(data.drivers ?? {}, row.driver) ? data.drivers[row.driver] : null;
+      return Boolean(driver?.kind) && !BUILT_IN_KINDS.has(driver.kind);
+    });
+  return versions.find(hasModel) ?? versions[0] ?? resultVersions(data)[0];
+}
 
 export function matchesCoverage(cells, coverage) {
   if (!coverage) return true;

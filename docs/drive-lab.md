@@ -457,7 +457,7 @@ one: a pass is arriving with nothing in `challengeFailures`. The library does no
 
 Compound drives are modules in `lab/challenges/` like the challenges, but the registry lists them
 apart, in `COMPOUND_DRIVES` (`lab/challenges.js`). They stay out of `CHALLENGES` and `ROAD_TESTS`,
-so the arena's challenge set, the saved-run budget and [suite v1](reference/benchmarks.md#suite-versions)
+so the arena's challenge set, the saved-run budget and the [numbered suites](reference/benchmarks.md#suite-versions)
 are as they were. Under Node they are a set of their own, and a run of them is labelled `custom`:
 
 ```sh

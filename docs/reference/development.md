@@ -261,6 +261,23 @@ register its factory with `registerAgent` in `static/js/brain/registry.js` or lo
 through the simulator and arena. Before contributing, run the tests that cover the change (CI
 runs the full suite) and include a baseline comparison when a change affects driving.
 
+## Routing parity check
+
+The sharp-turn rule and the lane-join geometry exist in Python (`jev/routing.py`) and in JavaScript
+(`static/js/map/mapdata.js`, `static/js/sim/npc.js`, `static/js/demo/routing.js`).
+`tests/test_parity.py` runs both on `tests/fixtures/parity_cases.json`
+(`scripts/parity_js.mjs` is the JavaScript side) and requires the same turn angle, turn kind and
+sharp-turn decision, the same answer at exactly 130°, and route polylines within 0.05 m of each
+other. Both sides agree on every case since 26 November 2026
+([record](../validation/lane-join-parity-2026-11-26.md)): a join is rounded or blended however short
+its pieces are, and the turn angle between the two edges decides the 20° rounding rule. A case
+marked `known_difference` (none is) must still disagree, so the mark comes off with the fix.
+
+```sh
+scripts/boat-check.sh -- uv run --locked python -m unittest discover -s tests -p "test_parity.py"
+node --experimental-default-type=module scripts/parity_js.mjs --kind joins --match "short outgoing" --pretty
+```
+
 ## Plan Node checks
 
 Preview the dispatch order with `node scripts/node_checks.mjs --list`.

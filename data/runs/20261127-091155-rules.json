@@ -1,0 +1,292 @@
+{
+ "suite_version": "custom",
+ "config": {
+  "brain": "rules",
+  "count": 2,
+  "seed": 1,
+  "npcs": 40,
+  "mode": "lockstep",
+  "weather": "dry",
+  "features": "city",
+  "map": "toronto",
+  "bbox": [
+   -79.412,
+   43.66,
+   -79.394,
+   43.671
+  ],
+  "pack": "6",
+  "engine": "node v22.23.5"
+ },
+ "summary": {
+  "scenarios": 2,
+  "pass_rate": 1,
+  "arrived_rate": 1,
+  "km": 2.6,
+  "collisions": 0,
+  "at_fault": 0,
+  "red_lights": 0,
+  "stop_signs": 0,
+  "failed_to_yield": 0,
+  "off_road_s": 0,
+  "safety_brakes": 3,
+  "deadlocks": 0,
+  "fallbacks": 0,
+  "violations_per_km": 0,
+  "avg_kmh": 15.6,
+  "min_gap_m": 2.1,
+  "min_ttc_s": 1.1,
+  "hard_brakes": 0,
+  "rms_jerk": 2.8,
+  "max_lat_accel": 5.3,
+  "lane_rms_m": 0.31,
+  "lane_changes": 0,
+  "speeding_s": 0,
+  "decisions": 2346,
+  "calls": 0,
+  "tokens": 0,
+  "cost_usd": 0
+ },
+ "results": [
+  {
+   "id": "s1-1",
+   "tags": {
+    "length_m": 1220,
+    "signals": 4,
+    "stops": 3,
+    "lefts": 1,
+    "rights": 3
+   },
+   "arrived": true,
+   "time_s": 268.7,
+   "distance_m": 1216,
+   "progress": 0.999,
+   "avg_kmh": 16.3,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "amber_lights_run": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "illegal_turns": 0,
+   "hump_hits": 0,
+   "guard_violations": 0,
+   "reversing_conflicts": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 2,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.1,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.65,
+   "max_decel": -6.23,
+   "hard_brakes": 0,
+   "rms_jerk": 2.83,
+   "max_jerk": 58.1,
+   "max_lat_accel": 5.16,
+   "lane_rms_m": 0.17,
+   "lane_max_m": 0.84,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 51,
+   "decisions": 994,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 90,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1980757443856367,
+      "gap": 3.5660036479490036
+     }
+    },
+    {
+     "t": 147.3,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1929640852054473,
+      "gap": 3.5343934057152073
+     }
+    },
+    {
+     "t": 268.7,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 59331,
+   "suite_version": "custom"
+  },
+  {
+   "id": "s1-2",
+   "tags": {
+    "length_m": 776,
+    "signals": 1,
+    "stops": 4,
+    "lefts": 2,
+    "rights": 1
+   },
+   "arrived": true,
+   "time_s": 335.4,
+   "distance_m": 1388,
+   "progress": 1,
+   "avg_kmh": 14.9,
+   "collisions": 0,
+   "at_fault": 0,
+   "red_lights": 0,
+   "stop_signs": 0,
+   "failed_to_yield": 0,
+   "merge_cut_ins": 0,
+   "close_passes": 0,
+   "guard_violations": 0,
+   "pothole_hits": 0,
+   "ball_warnings_ignored": 0,
+   "wildlife_conflicts": 0,
+   "parking_conflicts": 0,
+   "closure_entries": 0,
+   "officer_violations": 0,
+   "off_road_s": 0,
+   "safety_brakes": 1,
+   "deadlocks": 0,
+   "fallbacks": 0,
+   "min_gap_m": 2.2,
+   "min_ttc_s": 1.1,
+   "min_headway_s": 1.16,
+   "max_accel": 2.64,
+   "max_decel": -6.66,
+   "hard_brakes": 0,
+   "rms_jerk": 2.76,
+   "max_jerk": 37.7,
+   "max_lat_accel": 5.44,
+   "lane_rms_m": 0.44,
+   "lane_max_m": 3.29,
+   "lane_changes": 0,
+   "speeding_s": 0,
+   "stopped_s": 50.5,
+   "decisions": 1352,
+   "calls": 0,
+   "tokens": 0,
+   "cost_usd": 0,
+   "latency_p50_ms": null,
+   "latency_p95_ms": null,
+   "failures": [],
+   "pass": true,
+   "events": [
+    {
+     "t": 141.6,
+     "type": "reroute",
+     "count": 2
+    },
+    {
+     "t": 219,
+     "type": "safety",
+     "brake": {
+      "reason": "following",
+      "ttc": 1.1947726628004844,
+      "gap": 3.5592815652706125
+     }
+    },
+    {
+     "t": 335.4,
+     "type": "arrived"
+    }
+   ],
+   "wall_ms": 74250,
+   "suite_version": "custom"
+  }
+ ],
+ "name": "20261127-091155-rules",
+ "saved_at": "2026-11-27T09:11:55.479Z",
+ "manifest": {
+  "format": "jev-run-manifest/2",
+  "suite_version": "custom",
+  "source_commit": "f58d3adaf2eda730275ac020e2fa7c9c74499d54",
+  "source_dirty": false,
+  "engine": "node v22.23.5",
+  "engine_version": "12.4.254.21-node.57",
+  "driver": "rules",
+  "model": null,
+  "prompt_hash": null,
+  "track": "guarded",
+  "suite": {
+   "kind": "bench",
+   "config": {
+    "brain": "rules",
+    "count": 2,
+    "seed": 1,
+    "npcs": 40,
+    "mode": "lockstep",
+    "weather": "dry",
+    "features": "city",
+    "map": "toronto",
+    "bbox": [
+     -79.412,
+     43.66,
+     -79.394,
+     43.671
+    ],
+    "pack": "6",
+    "engine": "node v22.23.5"
+   },
+   "ids": [
+    "s1-1",
+    "s1-2"
+   ],
+   "generated_ids": [
+    "s1-1",
+    "s1-2"
+   ],
+   "route_sha": "599f7f73e7458cbf"
+  },
+  "maps": {
+   "toronto": {
+    "pack_version": "6",
+    "fingerprint": "cfdd948bbe741675",
+    "components": {
+     "bbox": "54508f1059cda87b",
+     "bridges": "2a29161b67dc95b6",
+     "buildings": "63bcda4ffe89220f",
+     "buslanes": "f34022e4e92bff53",
+     "calming": "aceda399c22db9cc",
+     "contraflow": "c2b85bec13595ae0",
+     "crossings": "d102eb6041262ecd",
+     "driveways": "2c4c916394647620",
+     "edges": "162e3e2bd20c240f",
+     "extent": "d77f8fb540f22550",
+     "intersections": "8f04a5b6eaf42b73",
+     "lanes": "1b3927036a39f821",
+     "name": "d0ad91f435ef7cf1",
+     "nodes": "993a0a793ec5bb03",
+     "origin": "40f6fe883b997174",
+     "pack_version": "d561ed8d020d5c15",
+     "parks": "4a47ce7eebafdae4",
+     "restrictions": "848f4566fb1b9fb5",
+     "roundabouts": "b8c987d312c21f74",
+     "routing_bbox": "54508f1059cda87b",
+     "scrambles": "d19680331391e6ea",
+     "stats": "d38c6837e7e34235",
+     "stops": "59e358c71efff98b",
+     "transit": "dec7ef1b61d8aa0e",
+     "utc_offset": "422de100d90618c4",
+     "yields": "b8c987d312c21f74",
+     "zones": "a8ebe26aff226307"
+    }
+   }
+  },
+  "cost_usd": 0
+ }
+}

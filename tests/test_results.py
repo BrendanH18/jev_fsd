@@ -297,8 +297,10 @@ class ResultsTest(unittest.TestCase):
     def test_uncommitted_and_variant_runs_are_not_published(self):
         # data/runs/ is gitignored, so any saved benchmark lands there; held-out and other variant
         # runs are reported apart. Neither may change the published rows.
-        newest = max(build_results.committed_runs(), key=lambda p: json.loads(p.read_text())["name"])
-        run = json.loads(newest.read_text())
+        # (a run from before suite labels: an unlabelled variant is left out without a manifest check,
+        # where a numbered or custom run whose config disagrees with its manifest is an error)
+        runs = [json.loads(p.read_text()) for p in build_results.committed_runs()]
+        run = max((r for r in runs if "suite_version" not in r), key=lambda r: r["name"])
         run["name"] = "99991231-235959-" + run["name"]
         for r in run["results"]:
             r["pass"] = False
@@ -729,10 +731,22 @@ class ResultsTest(unittest.TestCase):
         self.assertIsNone(rows[("rules", "challenges")]["recording"])
 
     def test_city_rows_are_the_newest_runs(self):
-        city = [r for r in self.data["rows"] if r["suite"] == "city" and r["driver"] == "rules"]
+        rules = [r for r in self.data["rows"] if r["suite"] == "city" and r["driver"] == "rules"]
+        # Legacy history: the newest unlabelled run of each Kitsilano weather and each other map.
+        city = [r for r in rules if r["suite_version"] == "legacy"]
         self.assertEqual(len(city), 4 + 11)
         snow = next(r for r in city if r["map"] == "kitsilano" and r["weather"] == "snow")
         self.assertEqual(snow["sources"], ["data/runs/20261114-210004-rules.json"])
+        # Suite v2 (27 November 2026): the four Kitsilano weather legs, each a complete suite member.
+        v2 = {r["weather"]: r for r in rules if r["suite_version"] == "v2"}
+        self.assertEqual(sorted(v2), ["dry", "fog", "rain", "snow"])
+        self.assertEqual({(r["map"], r["passed"], r["total"]) for r in v2.values()}, {("kitsilano", 12, 12)})
+        self.assertEqual(v2["snow"]["sources"], ["data/runs/20261127-091927-rules.json"])
+        # The two-route runs on the other maps and the parking run are not suite members: each is its own row.
+        custom = [r for r in rules if r["suite_version"] == "custom"]
+        self.assertEqual(len(custom), 11 + 1)
+        self.assertEqual(len({r["label"] for r in custom}), len(custom))
+        self.assertEqual({r["suite_version"] for r in rules}, {"legacy", "v2", "custom"})
 
 
 if __name__ == "__main__":

@@ -1,14 +1,23 @@
 import assert from "node:assert/strict";
 import {
+  SUITES,
   activeSuite,
   arenaSuiteIssues,
   arenaSuiteVersion,
   benchSuiteIssues,
   benchSuiteVersion,
   explainSuite,
+  suiteDefinition,
 } from "./canonical_suite.mjs";
 import { compatibleSuiteVersions, replaySuiteVersion } from "../static/js/bench/suite-version.js";
 
+// The active suite is the newest definition; earlier ones stay loadable.
+const ACTIVE = activeSuite.version;
+assert.equal(ACTIVE, "v2");
+assert.deepEqual(Object.keys(SUITES), ["v1", "v2"]);
+assert.equal(suiteDefinition("v1").version, "v1");
+assert.equal(suiteDefinition("legacy"), null);
+assert.equal(suiteDefinition("toString"), null);
 const bench = activeSuite.bench;
 const metadata = {
   kind: "bench",
@@ -19,17 +28,17 @@ const metadata = {
 };
 const results = bench.ids.map((id) => ({ id, pass: true }));
 const paths = (value) => value.map(({ path }) => path).join(",");
-assert.equal(benchSuiteVersion(metadata, results), "v1");
+assert.equal(benchSuiteVersion(metadata, results), ACTIVE);
 assert.equal(
   benchSuiteVersion(
     metadata,
     results.map((r) => ({ ...r, pass: false })),
   ),
-  "v1",
+  ACTIVE,
 );
 assert.equal(benchSuiteVersion(metadata, results.toReversed()), "custom");
 for (const weather of bench.weathers)
-  assert.equal(benchSuiteVersion({ ...metadata, config: { ...metadata.config, weather } }, results), "v1");
+  assert.equal(benchSuiteVersion({ ...metadata, config: { ...metadata.config, weather } }, results), ACTIVE);
 const issues = (change) => benchSuiteIssues({ ...metadata, config: { ...metadata.config, ...change } }, results);
 for (const [field, value] of [
   ["weather", "mist"],
@@ -66,7 +75,7 @@ const heldoutConfig = {
 };
 const heldoutMetadata = { ...metadata, config: heldoutConfig, ids: heldoutIds, route_sha: heldout.route_sha };
 const heldoutResults = heldoutIds.map((id) => ({ id, pass: true }));
-assert.equal(benchSuiteVersion(heldoutMetadata, heldoutResults), "v1");
+assert.equal(benchSuiteVersion(heldoutMetadata, heldoutResults), ACTIVE);
 assert.equal(
   paths(
     benchSuiteIssues(
@@ -85,7 +94,10 @@ const drives = activeSuite.arena.drives;
 const authored = Object.entries(drives).map(([challenge, drive]) => ({ challenge, ...drive }));
 const arena = { set: "all", drives, maps: activeSuite.maps };
 const id = authored[0].challenge;
-assert.equal(arenaSuiteVersion(arena, authored.toReversed()), "v1");
+assert.equal(arenaSuiteVersion(arena, authored.toReversed()), ACTIVE);
+assert.equal(arenaSuiteVersion(arena, authored, SUITES.v1), "v1");
+assert.equal(arenaSuiteVersion(arena, authored.slice(1), SUITES.v1), "custom");
+assert.equal(benchSuiteVersion(metadata, results, SUITES.v1), "v1");
 assert.equal(paths(arenaSuiteIssues({ ...arena, set: "challenges" }, authored)), "set");
 assert.equal(
   paths(arenaSuiteIssues({ ...arena, drives: { ...drives, extra: authored[0] } }, authored)),
@@ -108,8 +120,15 @@ assert.throws(() => {
 }, TypeError);
 
 const manifest = { suite: metadata, maps: { [metadata.config.map]: { fingerprint: metadata.map_sha } } };
-const artifact = { suite_version: "v1", manifest, results };
-assert.equal(explainSuite(artifact).eligible, "v1");
+const artifact = { suite_version: ACTIVE, manifest, results };
+assert.equal(explainSuite(artifact).eligible, ACTIVE);
+// An artifact that declares an earlier suite is checked against that definition and keeps its
+// label; one that declares none is checked against the active definition.
+const earlier = explainSuite({ ...artifact, suite_version: "v1" });
+assert.deepEqual([earlier.declared, earlier.eligible, earlier.issues.length], ["v1", "v1", 0]);
+assert.equal(explainSuite({ ...artifact, suite_version: "v1", stopped: true }).eligible, "custom");
+assert.equal(explainSuite({ ...artifact, suite_version: "custom" }).eligible, ACTIVE);
+assert.equal(explainSuite({ ...artifact, suite_version: undefined }).eligible, ACTIVE);
 assert.equal(explainSuite({ ...artifact, suite_version: undefined }).declared, "legacy");
 assert.equal(
   paths(

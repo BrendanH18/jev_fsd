@@ -9,10 +9,15 @@
 // merge_bench_recordings.mjs for seeded benchmark recordings.
 import { lstatSync, statSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
+import {
+  CUSTOM_SUITE,
+  LEGACY_SUITE,
+  setRecordingSuiteVersion,
+  suiteVersion,
+} from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording } from "../static/js/brain/recording.js";
 import { sameArenaTrack } from "./arena_tape.mjs";
-import { arenaSuiteVersion } from "./canonical_suite.mjs";
+import { arenaSuiteVersion, mergeDefinition } from "./canonical_suite.mjs";
 import {
   isArenaSet,
   isDateTime,
@@ -93,6 +98,7 @@ const identity = (h) =>
     engine: h.engine,
     versions: h.versions,
     suite_version: h.suite_version,
+    suite_target: h.suite_target ?? null,
     manifest: manifestIdentity(h.manifest),
     set: h.arena?.set,
     track: h.arena?.track ?? "guarded",
@@ -190,7 +196,14 @@ if (first.manifest)
 if (suiteVersion(first) !== LEGACY_SUITE)
   setRecordingSuiteVersion(
     merged,
-    arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
+    // (shards that declare a numbered suite are checked against that definition, not the active one)
+    mergeDefinition(first)
+      ? arenaSuiteVersion(
+          { set: first.arena.set, drives: manifestDrives, maps },
+          Object.values(merged.results),
+          mergeDefinition(first),
+        )
+      : CUSTOM_SUITE,
   );
 if (values["dry-run"]) {
   console.log(

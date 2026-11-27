@@ -18,6 +18,9 @@ from .osm.restrictions import banned, in_effect  # noqa: F401
 
 TURN_PENALTY_S = {"straight": 0.0, "right": 2.0, "left": 4.0, "uturn": 20.0}
 SHARP_TURN_DEG = 130.0
+# The same limit in radians, worked out as static/js/sim/npc.js and static/js/demo/routing.js do, so
+# the three compare a turn angle with the very same number: a turn of exactly 130 degrees is allowed.
+SHARP_TURN = SHARP_TURN_DEG * math.pi / 180
 MAX_LIMIT_MPS = 29.0
 FILLET_RADIUS_M = 6.0
 FILLET_MIN_DEG = 20.0
@@ -198,9 +201,9 @@ class Router:
     def turn_penalty(self, edge_in: str, edge_out: str) -> float:
         angle = self.turn_angle(edge_in, edge_out)
         kind = g.classify_turn(angle)
-        # A turn sharper than SHARP_TURN_DEG doubles back on itself (the tip of a traffic island
+        # A turn sharper than SHARP_TURN (130 degrees) doubles back on itself (the tip of a traffic island
         # where the two one-way halves of a street meet): no car makes it, so treat it as a U-turn.
-        if abs(math.degrees(angle)) > SHARP_TURN_DEG:
+        if abs(angle) > SHARP_TURN:
             kind = "uturn"
         if kind == "uturn" and len(self.successors(edge_in)) > 1:
             return 1e6  # only at dead ends

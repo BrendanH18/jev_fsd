@@ -9,7 +9,7 @@ import { corridorQuery } from "../sim/collision.js";
 import { advanceHolds, approachPhase, movementSignal, protectedLeft, STOP_ZONE_M } from "../sim/signals.js";
 import { wrap } from "../sim/world.js";
 import { curveProfileSpeed, detourAt, laneCenterAt, laneChangeLength } from "../sim/controller.js";
-import { ringBusy, ringJoining } from "../sim/roundabout.js";
+import { ringBusy, ringJoining, ringLookPoint } from "../sim/roundabout.js";
 import { crosswalkConflict, kerbConflict } from "../sim/pedestrians.js";
 import { PREPARE_LANE_M } from "../map/route.js";
 import { headingAt, pointAt } from "../map/mapdata.js";
@@ -333,6 +333,23 @@ function onRoute(distance, headingError) {
   return distance < 25 && Math.abs(headingError) < (Math.PI * 100) / 180;
 }
 
+// Coming up to a roundabout's yield line in fog or after dark, the car may not yet see as far round
+// the ring as a vehicle that would hold the entry can be (`ringLookPoint`). A ring it cannot see is
+// not an empty one: from where it would have to start slowing to stop at the line (its stopping
+// distance at an easy rate, and a second to react), the car takes the unseen ring as occupied, so it
+// slows as for a stop until the ring comes into view, and goes on if it is then clear. Short of the
+// stop zone only: at the line it has seen what it can, and goes by the traffic it sees, as before.
+// Weather and light alone decide (`rangeAt`), as they do for the vehicles it would be looking for.
+const RING_REACTION_S = 1;
+function ringUnseen(world, rb, node, edge, bumperToLine) {
+  const { ego, visibility } = world;
+  if (bumperToLine < STOP_ZONE_M) return false;
+  const v = Math.max(0, ego.v);
+  if (bumperToLine - 0.5 > (v * v) / (2 * comfort().decel) + v * RING_REACTION_S) return false;
+  const [x, y] = ringLookPoint(rb, node, edge.limit || 8.3);
+  return Math.hypot(x - ego.x, y - ego.y) > visibility.rangeAt(ego, x, y);
+}
+
 function crossingTraffic(world, control, entry, junction, bumperToLine, visibleNpcs) {
   const { ego, map } = world;
   let crossTraffic = false;
@@ -340,10 +357,13 @@ function crossingTraffic(world, control, entry, junction, bumperToLine, visibleN
   // yielding at a roundabout: look further round the ring the longer the car needs to reach the line
   // (and for a vehicle about to come into the ring at another entry: it will be in it first)
   if (rb) {
-    const node = map.nodes.get(map.edges.get(entry.edge).to),
+    const edge = map.edges.get(entry.edge),
+      node = map.nodes.get(edge.to),
       extra = Math.min(4, Math.max(0, bumperToLine) / Math.max(1, ego.v));
     crossTraffic =
-      ringBusy(rb, node, visibleNpcs, null, extra) || (bumperToLine > 0 && ringJoining(rb, node, visibleNpcs, extra));
+      ringBusy(rb, node, visibleNpcs, null, extra) ||
+      (bumperToLine > 0 && ringJoining(rb, node, visibleNpcs, extra)) ||
+      ringUnseen(world, rb, node, edge, bumperToLine);
   } else if (junction) {
     // crossing traffic in the junction, or heading for it and due within a few seconds (at a
     // two-way stop the through road does not stop, so its traffic must be waited for)

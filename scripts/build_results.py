@@ -1300,7 +1300,8 @@ def readme_cohort(data: dict, rows: list[dict]) -> str:
     other_maps = sorted({r["map"] for r in city_rows if r["map"] != HOME_MAP})
     lines = [
         f"| Driver | Model | Challenges and road tests | Open track | City suite, {home_map}: {' · '.join(WEATHERS)} "
-        f"| City suite, {len(other_maps)} other maps (dry) | Own decisions | Cost of the challenges |",
+        f"| City suite, {f'{len(other_maps)} ' if other_maps else ''}other maps (dry) "
+        "| Own decisions | Cost of the challenges |",
         "|---|---|---|---|---|---|---|---|",
     ]
     pilots = []
@@ -1389,14 +1390,18 @@ def readme_cohort(data: dict, rows: list[dict]) -> str:
 
 
 def readme_block(data: dict) -> str:
-    blocks = []
     versions = sorted(CANONICAL, key=lambda version: int(version[1:]), reverse=True)
+    # As on the leaderboard (`defaultSuite`): suites in which a model has a result come first, so a new
+    # suite that holds only the built-in drivers' runs does not push the comparison down the page.
+    with_model, without = [], []
     for version in [*versions, LEGACY_SUITE]:
         title = "Legacy results" if version == LEGACY_SUITE else f"Suite {version}"
         rows = [r for r in data["rows"] if r["suite_version"] == version]
         if any(r["suite"] in ("challenges", "open", "city") for r in rows):
-            blocks.append(f"### {title}\n\n" + readme_cohort(data, rows))
-    return "\n\n".join(blocks)
+            kinds = {data["drivers"].get(r["driver"], {}).get("kind") for r in rows}
+            has_model = any(kind and kind not in ("rules", "agent") for kind in kinds)
+            (with_model if has_model else without).append(f"### {title}\n\n" + readme_cohort(data, rows))
+    return "\n\n".join(with_model + without)
 
 
 def render(data: dict) -> str:
