@@ -1399,7 +1399,7 @@ def readme_block(data: dict) -> str:
         rows = [r for r in data["rows"] if r["suite_version"] == version]
         if any(r["suite"] in ("challenges", "open", "city") for r in rows):
             kinds = {data["drivers"].get(r["driver"], {}).get("kind") for r in rows}
-            has_model = bool(kinds - {None, "rules", "agent"})
+            has_model = any(kind and kind not in ("rules", "agent") for kind in kinds)
             (with_model if has_model else without).append(f"### {title}\n\n" + readme_cohort(data, rows))
     return "\n\n".join(with_model + without)
 
