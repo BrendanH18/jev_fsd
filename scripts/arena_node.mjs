@@ -61,7 +61,7 @@ const USAGE = [
   "Usage: node --experimental-default-type=module scripts/arena_node.mjs [options]",
   "  --brain <id>                 driver id: rules, cautious, jev, decision:<name>, llm:<name>",
   "  --agent <path>               load a trusted local driver module",
-  "  --set <name>                 challenges (default), road-tests, all (both: suite v1), or compound",
+  "  --set <name>                 challenges (default), road-tests, all (both: the active suite), or compound",
   "  --only <id,id>               run only selected drive ids",
   "  --track <guarded|open>       rule enforcement track (default: guarded)",
   "  --port <port>                local server port (default: PORT or 8331)",
@@ -262,13 +262,13 @@ if (replayJson) {
 }
 const localTape = replayJson?.format === LOCAL_RECORDING_FORMAT || Boolean(args.agent && args.record);
 if (localTape && (browserOutput || comparisonOutput)) fail("Replay exports currently require a model recording.");
-const { arenaSuiteVersion, authoredDrive } = await import("./canonical_suite.mjs");
+const { arenaSuiteVersion, authoredDrive, definitionFor } = await import("./canonical_suite.mjs");
 const { driverScores } = await import("../static/js/bench/scores.js");
 const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).captureBrowserReplay() : null;
 
 let brain = String(args.brain || "rules");
-// (`all` is suite v1's arena member, the challenges and road tests; compound drives, ROADMAP 9.3, are a
-// set of their own, so a run of them is labelled custom and v1 stays as it was)
+// (`all` is the numbered suites' arena member, the challenges and road tests; compound drives, ROADMAP
+// 9.3, are a set of their own, so a run of them is labelled custom and the suites stay as they were)
 const SETS = {
   challenges: CHALLENGES,
   "road-tests": ROAD_TESTS,
@@ -582,7 +582,7 @@ const exactReplay =
   results.length === Object.keys(recording.results).length;
 if (checkSubmission) {
   if (replayManifest.cost_usd !== summary.cost_usd) fail("The manifest cost differs from the replay.");
-  const version = arenaSuiteVersion({ ...suite, maps: shas }, results);
+  const version = arenaSuiteVersion({ ...suite, maps: shas }, results, definitionFor(recording.header));
   if (![CUSTOM_SUITE, version].includes(recording.header.suite_version))
     fail("The recording declares a different suite version.");
 }

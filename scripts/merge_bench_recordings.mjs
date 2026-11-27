@@ -18,7 +18,7 @@ import {
   readRecordingJson,
 } from "./recording_artifacts.mjs";
 import { benchRouteFingerprint, benchRunName, runCost } from "./run_manifest.mjs";
-import { benchSuiteVersion } from "./canonical_suite.mjs";
+import { benchSuiteVersion, definitionFor } from "./canonical_suite.mjs";
 
 const mismatched = (file, detail) => new Error(`${file}: ${detail}`);
 
@@ -186,7 +186,12 @@ function merge(paths, reportPath, recordingPath, suitePath, dryRun) {
   merged.header.manifest = manifest;
   let suite_version = first.report.suite_version;
   if (suiteVersion(first.tape.header) !== LEGACY_SUITE) {
-    suite_version = benchSuiteVersion({ ...manifest.suite, map_sha: merged.header.map_sha }, ordered);
+    // (shards that declare a numbered suite are checked against that definition, not the active one)
+    suite_version = benchSuiteVersion(
+      { ...manifest.suite, map_sha: merged.header.map_sha },
+      ordered,
+      definitionFor(first.tape.header),
+    );
     setRecordingSuiteVersion(merged, suite_version);
     for (const result of ordered) result.suite_version = suite_version;
   }

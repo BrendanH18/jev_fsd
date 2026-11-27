@@ -12,7 +12,7 @@ import { parseArgs } from "node:util";
 import { LEGACY_SUITE, setRecordingSuiteVersion, suiteVersion } from "../static/js/bench/suite-version.js";
 import { canonicalJson, ModelRecording } from "../static/js/brain/recording.js";
 import { sameArenaTrack } from "./arena_tape.mjs";
-import { arenaSuiteVersion } from "./canonical_suite.mjs";
+import { arenaSuiteVersion, definitionFor } from "./canonical_suite.mjs";
 import {
   isArenaSet,
   isDateTime,
@@ -190,7 +190,12 @@ if (first.manifest)
 if (suiteVersion(first) !== LEGACY_SUITE)
   setRecordingSuiteVersion(
     merged,
-    arenaSuiteVersion({ set: first.arena.set, drives: manifestDrives, maps }, Object.values(merged.results)),
+    // (shards that declare a numbered suite are checked against that definition, not the active one)
+    arenaSuiteVersion(
+      { set: first.arena.set, drives: manifestDrives, maps },
+      Object.values(merged.results),
+      definitionFor(first),
+    ),
   );
 if (values["dry-run"]) {
   console.log(

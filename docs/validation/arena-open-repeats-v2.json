@@ -1,6 +1,6 @@
 {
   "format": "jev-arena-repeat-plan/1",
-  "suite_version": "v1",
+  "suite_version": "v2",
   "track": "open",
   "repeats_per_driver": 3,
   "drivers": {

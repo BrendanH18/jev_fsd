@@ -165,7 +165,7 @@ A [compound drive](drive-lab.md#compound-drives) is written like a challenge, in
 `lab/challenges.js` instead of `MODULES`. It is admitted under the same rule, and
 `scripts/driver_latitude.mjs --only <id>` must find an ordinary manoeuvre that fails at one
 sampled decision or more: a drive in which none can fail does not separate drivers. Keep it out of
-`CHALLENGES` while [suite v1](reference/benchmarks.md#suite-versions) is the published test;
+`CHALLENGES` while a [numbered suite](reference/benchmarks.md#suite-versions) (`v2` today) pins the published test;
 putting one in a numbered suite means a new suite definition.
 
 ## Rules for practice, debriefs and road tests

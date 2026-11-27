@@ -1,5 +1,5 @@
 {
-  "about": "Seconds each scripts/test_*.mjs took, run one at a time under Node 22 on an M-series Mac (2026-11-14). scripts/ci_shard.mjs balances the CI shards with them; only their proportions matter. A file not listed counts as the median. Remeasure when a check gets much slower or faster. On 2026-11-21 test_drive_lab.mjs was scaled to its new time (its arena drives now run on four worker threads, 102 s down to 32 s in Boat) and the files that had no entry were added from a Boat run scaled to this table (Boat took about 1.1 times as long). On 2026-11-25 the five-thousand batch's test_5k_*.mjs checks were added from their Boat runs, scaled the same way. On 2026-11-26 test_feature_exit.mjs (0.57 s) and test_compound_drive.mjs (34.8 s) were added from their Boat runs, scaled the same way.",
+  "about": "Seconds each scripts/test_*.mjs took, run one at a time under Node 22 on an M-series Mac (2026-11-14). scripts/ci_shard.mjs balances the CI shards with them; only their proportions matter. A file not listed counts as the median. Remeasure when a check gets much slower or faster. On 2026-11-21 test_drive_lab.mjs was scaled to its new time (its arena drives now run on four worker threads, 102 s down to 32 s in Boat) and the files that had no entry were added from a Boat run scaled to this table (Boat took about 1.1 times as long). On 2026-11-25 the five-thousand batch's test_5k_*.mjs checks were added from their Boat runs, scaled the same way. On 2026-11-26 test_feature_exit.mjs (0.57 s) and test_compound_drive.mjs (34.8 s) were added from their Boat runs, scaled the same way. On 2026-11-27 test_fog_approach_speed.mjs (2.8 s) was added from its Boat run, scaled the same way.",
   "seconds": {
     "test_5k_app-ui_compatibility.mjs": 0.1,
     "test_5k_app-ui_readouts.mjs": 0.1,
@@ -133,6 +133,7 @@
     "test_emergency_traffic_stop.mjs": 0.2,
     "test_feature_exit.mjs": 0.5,
     "test_feature_registry.mjs": 1.4,
+    "test_fog_approach_speed.mjs": 2.5,
     "test_follower_stop.mjs": 0.1,
     "test_following_challenges.mjs": 2.8,
     "test_following_integration.mjs": 0.1,

@@ -1,7 +1,8 @@
 // The frozen input definition used by the Node writers and the publication builder.
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import canonical from "../data/suites/v1.json" with { type: "json" };
+import v1 from "../data/suites/v1.json" with { type: "json" };
+import v2 from "../data/suites/v2.json" with { type: "json" };
 import { CUSTOM_SUITE } from "../static/js/bench/suite-version.js";
 import { canonicalJson } from "../static/js/brain/recording.js";
 import { readJson } from "./cli_tools.mjs";
@@ -14,7 +15,16 @@ function freeze(value) {
   return value;
 }
 
-export const activeSuite = freeze(canonical);
+// Every numbered definition stays loadable, so an artifact that declares an earlier version is
+// still checked against the definition it declares. The Node writers label new runs with the
+// active one. v2 has v1's members: it exists because the lane joins traffic follows changed
+// (docs/validation/lane-join-parity-2026-11-26.md), which changed results under v1's conditions.
+export const SUITES = freeze({ v1, v2 });
+export const activeSuite = SUITES.v2;
+export const suiteDefinition = (version) => (Object.hasOwn(SUITES, version) ? SUITES[version] : null);
+// The definition an artifact is checked against: the one it declares, or the active one when it
+// declares none (legacy, custom, or a run still being written).
+export const definitionFor = (artifact) => suiteDefinition(artifact?.suite_version) ?? activeSuite;
 
 export const authoredDrive = (challenge) => ({
   map: challenge.map,
@@ -23,10 +33,10 @@ export const authoredDrive = (challenge) => ({
 });
 
 const same = (a, b) => canonicalJson(a) === canonicalJson(b);
-const versionFor = (issues) => (issues.length ? CUSTOM_SUITE : canonical.version);
+const versionFor = (issues, canonical) => (issues.length ? CUSTOM_SUITE : canonical.version);
 const issue = (path, expected, actual) => ({ path, expected: expected ?? null, actual: actual ?? null });
 
-export function arenaSuiteIssues({ set, drives, maps }, results) {
+export function arenaSuiteIssues({ set, drives, maps }, results, canonical = activeSuite) {
   const issues = [];
   if (set !== "all") issues.push(issue("set", "all", set));
   const expected = canonical.arena.drives;
@@ -57,11 +67,11 @@ export function arenaSuiteIssues({ set, drives, maps }, results) {
   return issues;
 }
 
-export function arenaSuiteVersion(metadata, results) {
-  return versionFor(arenaSuiteIssues(metadata, results));
+export function arenaSuiteVersion(metadata, results, canonical = activeSuite) {
+  return versionFor(arenaSuiteIssues(metadata, results, canonical), canonical);
 }
 
-export function benchSuiteIssues({ config, ids, route_sha, map_sha }, results) {
+export function benchSuiteIssues({ config, ids, route_sha, map_sha }, results, canonical = activeSuite) {
   const { bench, maps } = canonical;
   const issues = [];
   const check = (key, wanted, actual) => {
@@ -97,8 +107,8 @@ export function benchSuiteIssues({ config, ids, route_sha, map_sha }, results) {
   return issues;
 }
 
-export function benchSuiteVersion(metadata, results) {
-  return versionFor(benchSuiteIssues(metadata, results));
+export function benchSuiteVersion(metadata, results, canonical = activeSuite) {
+  return versionFor(benchSuiteIssues(metadata, results, canonical), canonical);
 }
 
 // An artifact may be custom even when its drives match, for example when it was produced
@@ -107,22 +117,24 @@ export function explainSuite(report) {
   const { suite, maps } = report?.manifest || {};
   if (!suite || !maps || !Array.isArray(report.results))
     throw new Error("Expected a completed benchmark or arena report with a run manifest and results.");
+  const canonical = definitionFor(report);
   let issues;
   if (suite.kind === "bench") {
     if (!suite.config) throw new Error("Benchmark manifest is missing its config.");
-    issues = benchSuiteIssues({ ...suite, map_sha: maps[suite.config.map]?.fingerprint }, report.results);
+    issues = benchSuiteIssues({ ...suite, map_sha: maps[suite.config.map]?.fingerprint }, report.results, canonical);
     if (report.config && !same(report.config, suite.config)) issues.push(issue("config", suite.config, report.config));
   } else if (suite.kind === "arena") {
     issues = arenaSuiteIssues(
       { ...suite, maps: Object.fromEntries(Object.entries(maps).map(([id, map]) => [id, map?.fingerprint])) },
       report.results,
+      canonical,
     );
   } else throw new Error(`Unknown suite kind "${suite.kind}".`);
   if (suite.only) issues.push(issue("manifest.suite.only", false, suite.only));
   if (report.stopped) issues.push(issue("stopped", false, report.stopped));
   return {
     declared: report.suite_version ?? "legacy",
-    eligible: versionFor(issues),
+    eligible: versionFor(issues, canonical),
     issues,
   };
 }
@@ -139,7 +151,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       if (positionals.length !== 1) throw new Error(usage);
       const explanation = explainSuite(readJson(positionals[0]));
       console.log(JSON.stringify(explanation, null, 2));
-      if (values.check && (explanation.eligible !== canonical.version || explanation.declared !== explanation.eligible))
+      if (values.check && (!suiteDefinition(explanation.eligible) || explanation.declared !== explanation.eligible))
         process.exitCode = 1;
     }
   } catch (error) {

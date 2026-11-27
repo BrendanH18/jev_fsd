@@ -1,7 +1,10 @@
 # Open-track arena repeat plan
 
-The [experiment definition](arena-open-repeats-v1.json) for [roadmap 7.5](../../ROADMAP.md#phase-7-results-that-hold-up)
-calls for three repeats each of Jev and Claude Haiku 5.5 on the [v1 arena](../../data/suites/v1.json).
+The [experiment definition](arena-open-repeats-v2.json) for [roadmap 7.5](../../ROADMAP.md#phase-7-results-that-hold-up)
+calls for three repeats each of Jev and Claude Haiku 5.5 on the [v2 arena](../../data/suites/v2.json).
+The plan was first written for suite `v1` and reissued for `v2` on 27 November 2026, before any repeat
+was recorded: `v2` has the same drives, and exists because the
+[lane-join parity fix](lane-join-parity-2026-11-26.md) changed results under `v1`'s conditions.
 Each recording covers the 60 authored challenges and both road tests on the open track with the
 lockstep clock, for 372 drives in total. Claude uses the Claude Platform at low effort.
 

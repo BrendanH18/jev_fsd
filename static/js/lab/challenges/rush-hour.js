@@ -17,7 +17,7 @@
 // Only existing world features are switched on (tailgaters, amber lights, following distance), and every
 // actor is placed with a part an existing challenge uses; nothing here changes how anything drives.
 // A compound drive is authored and plays like a challenge but is listed apart from them
-// (lab/challenges.js `COMPOUND_DRIVES`), so the sixty challenges, the road tests and suite v1 stay as
+// (lab/challenges.js `COMPOUND_DRIVES`), so the sixty challenges, the road tests and the numbered suites stay as
 // they are. What it measures, and why the tailgater leaves before the bus:
 // docs/validation/compound-drive-2026-11-26.md.
 import { routeFromLanes } from "../../demo/routing.js";
