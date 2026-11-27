@@ -9,6 +9,8 @@
   ([record](docs/validation/lane-join-parity-2026-11-26.md)).
 - Slow for a traffic circle the car cannot yet see round in fog, as for a stop, until the ring comes
   into view.
+- Replace the project icon with a road drawn as a check mark, and show it on the arena and benchmark
+  pages too.
 
 ## 0.4.0 (26 November 2026)
 
