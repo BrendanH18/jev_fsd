@@ -8,6 +8,10 @@ does. Over the sixty challenges the same script found 4 such decisions in 3,042.
 cautious agent both pass the drive on both tracks, so it does not yet separate the two built-in
 drivers: what it adds is room for a driver to be wrong.
 
+The one live model check found more than the built-in drivers did: at the amber with the tailgater
+behind, Jev chose to ease off for the tailgater where a stop was expected (admission check 5, below).
+The drive is built and measured but not yet admitted.
+
 Measured on Boat, Node 22.23.5, on the tree this record was committed with (base `7209939a`).
 
 ## The design, and why
@@ -70,8 +74,18 @@ parts existing challenges use.
    (`brake_no_harder_than_mps2: 3`). Motion is answered locally; the vector question expects
    `stop_at_line`. `verify_jev.py --offline` reports it valid; its question instructions are 2,351
    characters (ceiling 4,000) and the whole request 6,155 characters, about 1,540 tokens at four
-   characters a token (ceiling 5,500 input tokens). **Not checked live**: the live check is the
-   owner's to approve.
+   characters a token (ceiling 5,500 input tokens).
+   **Checked live, and Jev disagrees.** One call on `jev-1.14.0` (26 November, in its own
+   `jev-fsd-live` sandbox, the owner's approval for this one case): 2,777 input tokens, 241 ms,
+   $0.000117, inside the ceiling. Jev chose `ease_off_for_tailgater` (67%) over `stop_at_line` (30%)
+   and `keep_lane_target` (3%). The instructions carry two clauses that pull apart when an amber and
+   a tailgater coincide: the amber clause says "stop before the line and wait for green", and the
+   tailgater clause says "ease off a little, gently (`ease_off_for_tailgater`, where it is offered)".
+   Jev takes wording literally and followed the second. No existing challenge puts the two together,
+   so this is the first thing the compound drive found about a model. The wording is unchanged here:
+   a change needs its own fixtures and another live check. Until then the case fails a live
+   `verify_jev.py` run, check 5 is not met, and the drive stays outside the library and every suite
+   (ROADMAP 9.3).
    `uv run scripts/verify_jev.py data/snapshots/rush_hour.json`
 6. **Arena storage.** Two saved runs with Rules and the cautious agent: about 275,100 bytes, 2.9% of the
    9 MB fallback cap, outside the 60-challenge run, which is unchanged
@@ -139,8 +153,9 @@ Open-track drives match the guarded ones in every field but the track's own, as
 
 ## Limits
 
-- One traced point of latitude is thin. The drive is admitted as a place where a driver can be
-  wrong, not as proof that it separates drivers; that needs model runs (7.5).
+- One traced point of latitude is thin. The drive is a place where a driver can be wrong, not
+  proof that it separates drivers; that needs model runs (7.5). It is not admitted until the saved
+  case passes a live check (admission check 5).
 - The cautious agent's red light in the eight-second variant shows the failure is reachable by a
   plausible policy, but that variant is not the one committed.
 - The drive's timing rests on traffic paths: the tailgater's turn at Vine Street, the oncoming

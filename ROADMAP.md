@@ -23,26 +23,28 @@ Not goals: controlling a real vehicle, a general-purpose traffic simulator, phot
 
 ## Where we are
 
-Measured on 2026-11-20 at `3ca3178` (#99). How each figure was counted is in the
+Measured on 2026-11-20 at `3ca3178` (#99); the World, Public demo, Checks, Model results, Replay and
+Release rows were brought up to date on 26 November. How each figure was counted is in the
 [audit record](docs/validation/roadmap-audit-2026-11-20.md#how-the-figures-were-measured).
 
 | Area | State |
 |---|---|
-| World | 12 neighbourhoods in 11 cities, 60 challenges, 2 road tests, 41 opt-in world features (42 free-drive switches); **9 of the 41 are on the feature registry** |
+| World | 12 neighbourhoods in 11 cities, 60 challenges, 2 road tests, 1 compound drive (built, not yet admitted: 9.3), 41 opt-in world features (42 free-drive switches), all 41 on the feature registry with their rendering |
 | Drivers | Rules, the cautious agent, decision models (Jev and others), LLMs through any OpenAI-compatible endpoint or a major lab's own API (Claude through the Claude Platform), your own module |
-| Public demo | Live on GitHub Pages: Rules and the browser agents drive; the results leaderboard; one keyless model replay (Jev, **Right on red**) |
-| Checks | 325 Python tests, 162 Node checks in six shards, four browser jobs, blocking Ruff and Biome lint; the city matrix weekly; the interaction soak weekly, report-only |
+| Public demo | Live on GitHub Pages: Rules and the browser agents drive; the results leaderboard; a gallery of four keyless model replays; a manual drive set beside Rules, Jev and Claude Haiku |
+| Checks | About 1,200 Python tests, 237 Node checks in six shards, four browser jobs, blocking Ruff and Biome lint; the hard city slice on every change; the city matrix weekly; the interaction soak weekly, report-only |
 | Tools | 100 offline reports on saved runs and a matched comparison of two runs (`scripts/inspect_run.py`) |
 | Seeded benchmark, features off | Rules 12/12 on Kitsilano dry, on every change |
 | Seeded routes, features on (`city`) | Rules 48/48 on Kitsilano in four weathers, 22/22 on the other eleven maps; on held-out routes no fix was tuned against, Kitsilano dry bare 10/12 and city 8/12 (14 November, not fixed by design) |
-| Model results | Challenges and road tests: Jev 62/62 on both tracks (8 flagged choices on the open track), Claude Haiku 5.5 61/62 on each (216 flagged), DeepSeek V4.1 Flash 61/62 guarded (11 November). One run each, all recorded. **No model has a city-suite result** |
+| Model results | Challenges and road tests: Jev 62/62 on both tracks (8 flagged choices on the open track), Claude Haiku 5.5 61/62 on each (216 flagged), DeepSeek V4.1 Flash 61/62 guarded (11 November). One run each, all recorded. Kitsilano dry city suite (21 November): Rules 12/12, Cautious 9/12, Claude Haiku 5.5 3/12, Jev 2/12. **No repeated runs yet (7.5)** |
 | Replay | The 20 November Jev and Claude Haiku tapes replayed exactly when published (#95); Jev's open-track tape was checked again at #99, Claude Haiku's was not. The 11 November Jev and DeepSeek tapes replay exactly on 54 of 62 (the rest need `dcfc663`). CI replays only the stub tape |
-| Release | `0.3.0` (20 November); four PRs since, and the changelog's Unreleased section is empty |
+| Release | `0.4.0` (26 November), with the city results, suite `v1`, the complete feature registry and outside submissions |
 | Size | `static/js` 70,392 lines in 253 files. Not comparable with earlier counts: Biome's formatting (#80) took it from 44,706 to 69,111 lines with no code change. Since #80 it has grown 1.9% while `sim/npc.js` (3,953) and `brain/sensors.js` (3,406) shrank as six features moved out |
 | Model spend | About $144 to date: $8.36 to 11 November, $136 on 20 November (of which $116 was a Claude Sonnet run that was dropped) |
 
-The bold rows set the order below. The thing the project was built to show, a model driving the city
-people drive, still has no result; and three in four features still reach into the core files.
+The bold row sets the order below. A model has now driven the city people drive, once; what is
+missing is how far one run can be trusted (7.5, 7.6) and a test that separates drivers by judgment
+(9.3).
 
 ## How work is ordered
 
@@ -59,17 +61,17 @@ claimed before the exits it depends on.
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app | Exited 9 Nov |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it | Exited 10 Nov; 1.8 open |
 | [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Met** on 21 November with the Kitsilano dry city suite (2.5b) |
-| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Proof on three met 14 Nov; 41 of 41 moved 26 Nov |
+| [3](#phase-3-make-features-cheap-to-add) | A new feature stops touching the core files | A new feature needs its own file, its challenge, its test and one registration line | Exited 26 Nov |
 | [4](#phase-4-a-benchmark-that-separates-drivers) | Scores tell drivers apart | Two different models get measurably different scores for a stated reason | Met 20 Nov, on one run each |
 | [5](#phase-5-release-and-presentation) | The project presents what it is | 0.3.0 cut; README leads with results | Exited 20 Nov |
-| [6](#phase-6-grow-the-world-again) | New scenarios, under the admission rule | Each one passes the [checklist](#admission-rule-for-new-scenarios) | Gated (see [order](#expansion-plan-from-20-november)) |
+| [6](#phase-6-grow-the-world-again) | New scenarios, under the admission rule | Each one passes the [checklist](#admission-rule-for-new-scenarios) | Open since Phase 3 exited; one at a time (see [order](#expansion-plan-from-20-november)) |
 | [7](#phase-7-results-that-hold-up) | Published results survive the simulator changing, and say how sure they are | A clean checkout verifies every published row on its declared tree, failures included; a repeated comparison reports its spread | New |
 | [8](#phase-8-you-against-the-models) | "Take it yourself" meets the leaderboard | On the public demo, with no key, a visitor drives a challenge and sees their result beside Rules, Jev and Claude Haiku on the same drive | New |
 | [9](#phase-9-a-harder-test) | The test separates drivers by judgment, not by the filter | Rules, Jev and Claude Haiku differ by a stated margin on a set built for it, for reasons the report names, over repeated runs | New |
 | [10](#phase-10-open-to-outside-drivers) | Someone else can bring a driver and a result | An outside driver goes from scaffold to a verified submission bundle offline in one documented path | Verified offline on all 62 drives |
 
-**Scenario freeze.** Lifted on 10 November under [D3](#open-decisions). New scenarios now wait for
-Phase 3's exit and the order below.
+**Scenario freeze.** Lifted on 10 November under [D3](#open-decisions). Phase 3 exited on 26 November,
+so new scenarios may come one at a time, each through the admission rule, in the order below.
 
 ---
 
@@ -206,6 +208,10 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
     stopped car in a contraflow rider's gap check until its body clears (`sim/contraflow.js`); use the
     achieved, not commanded, deceleration in `ringJoining` (`sim/roundabout.js`). Tried together, the
     first four broke Kitsilano city dry `s1-12`.
+  - From the compound drive (26 November): when a standing vehicle becomes the leader of a tailgated
+    car, `followingPolicy` (`sim/following.js`) doubles the gap and drops the speed target to near
+    zero in one decision, so the car brakes at up to 6.5 m/s² with 45 m of room and the audit counts a
+    brake check ([record](docs/validation/compound-drive-2026-11-26.md)).
 
 ## Phase 2: put the models on the road
 
@@ -381,10 +387,10 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   decision), recorded as known differences and left for a change that re-baselines routes; and exactly
   130° is a U-turn in `sim/npc.js` (`<`) but not in Python or `demo/routing.js` (`>`), unreachable from
   real geometry.
-- [ ] **3.9 Trace the engine difference.** (M) The same seed gives different results in V8 and
+- [x] **3.9 Trace the engine difference.** (M) The same seed gives different results in V8 and
   WebKit, and the cause has never been found. Find the first step where they part. *Moved to 7.4*,
   since it decides which published tapes a reader can replay.
-- [ ] **3.10 Hooks for what still sits outside a record.** (L) The registry now supplies free-drive
+- [x] **3.10 Hooks for what still sits outside a record.** (L) The registry now supplies free-drive
   switches, trace labels, road-test categories, driver preferences, legitimate stops, checkpoint
   sharing and restore, routing options and triggers, coach checks, incident and HUD notices, and
   AI Eyes text. Feature scenery and frame updates have a
@@ -394,13 +400,32 @@ after Biome's formatting:* `sim/npc.js` 3,953 lines with a 959-line `NpcFleet.st
   now go through the adapter (`mountActorViews`); three mixed-traffic scene graphs, one of them a
   replay frame, matched before the change
   ([inventory](docs/validation/five-thousand/19-render-actors.md)).
+  *Done 26 November:* a record points at its own render module (`view`), which declares its scenery,
+  scene objects, vehicle kinds, parked meshes, frame effects and what people carry; HUD notices, event
+  badges, sounds, signal lamps and the manual parking arrival are record fields. `main.js`, the
+  adapter and the shared renderers name no registered feature. 66 scenes (every challenge, both road
+  tests, four free drives) gave identical scene graphs over 4,158 frames, and both arena drivers'
+  62 drives are unchanged ([record](docs/validation/render-registry-exit-2026-11-26.md)).
+  `scripts/test_feature_exit.mjs` checks the exit test with a throwaway feature registered in the test.
 - [ ] **3.11 Make the parity known differences agree.** (M) The four `known_difference` lane joins in
   `tests/fixtures/parity_cases.json`, and the exact-130° U-turn comparison, in one change that
   re-baselines routes, so the Python router and NPC paths join lanes the same way.
+  *26 November: built, not merged* (branch `t3/make-parity-differences-agree`). JavaScript now joins
+  as the router does, the three marked cases (the fourth was a miscount) and exactly 130° agree, and
+  the router's own routes are unchanged. It is held for [D9](#open-decisions) because it changes the
+  traffic the car meets at traffic circles: 10 of 12 bare and 11 of 12 city Kitsilano routes change
+  (all still passing in dry weather), Rules then fails to yield on Kitsilano city fog `s1-3`, both
+  Kitsilano city tapes and four drives of each 20 November arena tape stop replaying on main, and the
+  canonical results change, which calls for suite `v2` before the 7.5 repeats.
 
 Exit: adding a feature needs its own file, its challenge, its test and one registration line.
-*The proof on three features was met on 14 November, and 3.2 and 3.3 on 26 November; this exit still
-needs 3.10 (feature meshes and per-frame effects outside a record).*
+**Exited 26 November** with 3.10. A new feature is its own files, its challenge, its test, its entry
+in `sim/features/index.js` and its challenge's entry in `lab/challenges.js`;
+[what else it can touch](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)
+(its documentation row, a new sound, a new map layer) is listed there, and `scripts/test_feature_exit.mjs`
+keeps the core, `main.js` and the shared renderers from naming a feature again. Still naming older
+features, and free to shrink: the AI Eyes wording for eleven of them and 29 options listed in
+`setupChallenge`. 3.11 is not part of the exit.
 
 ## Phase 4: a benchmark that separates drivers
 
@@ -474,8 +499,9 @@ never became a violation, because it chose again before the line; whether a flag
   *Done 14 November:* `docs/adding-a-challenge.md`, linked from the README and the reference index.
 - ~~**5.6 Tidy the repository.**~~ Dropped 20 November: the branches and worktrees were on one
   machine, not in the repository, so the roadmap cannot track them.
-- [ ] **5.7 Keep the changelog current.** (S) Unreleased now covers #96 to #100. Add each PR's line
-  as it merges, and cut 0.3.1 or 0.4.0 when 2.5b lands.
+- [x] **5.7 Keep the changelog current.** (S) Unreleased now covers #96 to #100. Add each PR's line
+  as it merges, and cut 0.3.1 or 0.4.0 when 2.5b lands. *Done 26 November:* 0.4.0 cut with
+  everything since 0.3.0. Standing practice from here: each PR adds its line, and a release each month.
 
 ## Phase 6: grow the world again
 
@@ -520,7 +546,7 @@ one run that replays only on the tree it was made on is weak evidence. Both put 
 | alongside | [Phase 3](#phase-3-make-features-cheap-to-add): 3.2, 3.10, 3.3, 3.11 | A batch at a time beside 1 to 3; new scenarios wait for its exit | — |
 | 4 | [Phase 9](#phase-9-a-harder-test) | Separates drivers by judgment once the evidence is sound | 7.5; Phase 3 for 9.3 |
 | 5 | [Phase 10](#phase-10-open-to-outside-drivers) | Lets others bring drivers once the format has settled | 7.2, 7.3 |
-| 6 | [Phase 6](#phase-6-grow-the-world-again) | New scenarios and cities, one at a time | Phase 3's exit |
+| 6 | [Phase 6](#phase-6-grow-the-world-again) | New scenarios and cities, one at a time | Phase 3's exit (met 26 November) |
 
 What makes 1.0 is [D6](#open-decisions). The dates are in the
 [six-month plan](#six-month-plan-23-november-2026-to-21-may-2027).
@@ -673,6 +699,18 @@ ordinary manoeuvre that fails) and that most open-track flags never became viola
   situations together, like the road tests, each passing the admission rule. Run the latitude script of
   4.1 on each before admitting it: a drive in which no ordinary manoeuvre can fail does not separate
   drivers.
+  *26 November: one built, not yet admitted.* "Rush hour on West 4th" (`rush-hour`, Kitsilano, about
+  830 m): a tailgater, an amber with the tailgater behind, a bus pulling out, an unprotected left and
+  a stop sign with through traffic. It is listed apart (`COMPOUND_DRIVES`, `arena_node.mjs --set
+  compound`, labelled `custom`), so suite `v1` and its 62 drives are untouched. Latitude: 3 of 167
+  sampled decisions offer an ordinary manoeuvre that fails (the sixty challenges: 4 of 3,042). Rules
+  and the cautious agent both pass on both tracks, so it does not separate them. Admission checks 1
+  to 4 and 6 pass; check 5 does not: on the saved case, live, Jev eased off for the tailgater (67%)
+  where a stop at the amber was expected (30%), because the amber and tailgater clauses give opposite
+  advice when the two coincide ([record](docs/validation/compound-drive-2026-11-26.md)). Next: decide
+  the wording for an amber with a tailgater behind, check it live, then admit the drive and run the
+  models on it. Found on the way and added to 1.8: a tailgated car that comes up on standing traffic
+  brakes hard with room to spare.
 - [x] **9.4 A hard city slice.** (M) A small fixed set of city routes from the soak's hardest
   conditions (night, unprotected lefts in fog, snow narrowings, parking). Rules' failures there are
   results under 4.5; the slice becomes blocking once Rules passes it.
@@ -729,6 +767,7 @@ documented path, and adding it grows the repository by a stated, small amount.
 | **D5** | Is the next release 0.3.0 or 1.0? | *Decided:* 0.3.0, cut 20 November. What makes 1.0 is now D6 |
 | **D6** | What makes 1.0? | Phase 2's exit (2.5b), 7.1 to 7.3, 7.8 and 8.1 on the public demo: models on the city, results that verify on a named suite, and a person set beside them. Until then, release 0.x on a rhythm (5.7). The [six-month plan](#six-month-plan-23-november-2026-to-21-may-2027) meets this at the end of January and cuts 1.0.0 on 26 February |
 | **D7** | What is the budget for 2.5b, 7.5 and 7.6? | **21 November:** up to $30 approved for the Jev and Claude Haiku city work, starting with one route per model. Provider-reported usage at published rates put the completed suites at $10.259457 in total, including the $0.3237 pilots. That verification method was approved for this city run. At 20 November prices Jev's 62 open-track drives cost $1.47 and Claude Haiku's $4.53 (effort low), so three repeats of both are about $18. The repeat and held-out budgets are open |
+| **D9** | Merge the lane-join parity fix (3.11), and when? | It is right on the geometry and ready on its branch, but it changes canonical results. Merge it together with suite `v2` (same members as `v1`, defined from the merge) and a fix for Kitsilano fog `s1-3`, **before** the 7.5 repeat runs, so the repeats are recorded once on the suite they will be published under. The cost is that the 20 and 21 November tapes then replay only on their declared revisions, which Phase 7 already allows for |
 | **D8** | Where do model recordings live? | First slim them in Git (keep only what replay needs). Moving them to release assets, with a hash in Git, is a change of service and needs the owner's approval |
 
 ## Done so far
@@ -745,4 +784,4 @@ documented path, and adding it grows the repository by a stated, small amount.
 | 16 to 19 Nov | Ruff and Biome with blocking CI, pinned actions, each major lab's own API, faster browser CI |
 | 20 Nov | The open track, Jev and Claude Haiku results, 0.3.0, Boat sandboxes for agent work, 100 offline reports and run comparison, a keyless model replay in the demo, the registry at nine features |
 | 25 Nov | 5000 improvements in 25 areas ([inventory](docs/validation/five-thousand/README.md)); the registry at 34 of 41 features; actor meshes through the feature adapter |
-| 26 Nov | The registry at 41 of 41 features (3.2); the traffic loop split into stages (3.3) |
+| 26 Nov | The registry at 41 of 41 features (3.2); the traffic loop split into stages (3.3); feature rendering in records and Phase 3's exit (3.10); the first compound drive built (9.3); 0.4.0 |
