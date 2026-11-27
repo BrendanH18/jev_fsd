@@ -9,6 +9,8 @@ const countDark = (score, event) => {
 
 export default {
   key: "outages",
+  // (with the power out a signal's lamps show nothing)
+  signalLamp: (world, id) => (world.outages.isDark(id) ? "dark" : null),
   defaultCount: OUTAGE_COUNT,
   buildAt: "afterSpawn",
   build: (world, { enabled, seed }) => new Outages(world, { count: enabled, seed }),

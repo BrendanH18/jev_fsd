@@ -59,6 +59,7 @@ export default {
   cautious: (snap, eligible) =>
     snap.snowbank?.narrowing?.wait ? eligible.find((c) => c.id === "wait_for_oncoming_narrowing") : null,
   key: "snowbanks",
+  view: () => import("../../render/snowbanks.js"),
   coach: {
     init: () => ({
       snowbanks: false,

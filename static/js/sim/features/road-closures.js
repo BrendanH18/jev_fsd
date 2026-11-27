@@ -45,6 +45,7 @@ export default {
   cautious: { at: "beforeBusLanes", run: (_snap, eligible) => eligible.find((c) => c.id === "stop_for_closure") },
   cautiousStop: (snap) => snap.road_closed?.on_route && snap.road_closed.bumper_to_stop_m < 12,
   key: "roadClosures",
+  view: () => import("../../render/road-closures.js"),
   coach: {
     init: () => ({
       roadClosures: false,

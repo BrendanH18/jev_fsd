@@ -206,6 +206,7 @@ function workZoneClause(snap) {
 
 export default {
   key: "workZones",
+  view: () => import("../../render/work-zone.js"),
   defaultCount: WORK_ZONE_COUNT,
   calls: "flaggerCalls",
   buildAt: "afterSpawn",

@@ -52,6 +52,7 @@ export default {
   cautious: (snap, eligible) =>
     snap.black_ice && !snap.following ? eligible.find((c) => c.id === "slow_for_ice") : null,
   key: "ice",
+  view: () => import("../../render/black-ice.js"),
   coach: {
     init: () => ({
       ice: false,

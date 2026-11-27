@@ -64,3 +64,14 @@ export function buildBusLanes(map) {
   group.add(groundLayer(mesh, LAYER.marking));
   return group;
 }
+
+export const view = {
+  mount: {
+    order: 1,
+    run({ scene, world, map }) {
+      if (!world.busLanes) return null;
+      scene.add(buildBusLanes(map));
+      return true;
+    },
+  },
+};

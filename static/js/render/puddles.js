@@ -217,3 +217,17 @@ export class PuddleView {
     }
   }
 }
+
+export const view = {
+  mount: {
+    order: 12,
+    run({ scene, world }) {
+      const group = world.puddles?.enabled ? buildPuddles(world) : null;
+      if (!group) return null;
+      scene.add(group);
+      return new PuddleView(scene, group);
+    },
+    frame: (puddles, { world, fleet, people, camera, dt }) =>
+      puddles.update(world, [world.ego, ...fleet.vehicles], people, camera, dt),
+  },
+};

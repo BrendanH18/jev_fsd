@@ -61,3 +61,17 @@ export function syncGuardSign(mesh, ped) {
     arm.elbow.rotation.z = 1.1;
   }
 }
+
+export const view = {
+  person: {
+    order: 1,
+    mount(mesh, person) {
+      if (person.crossingGuard) addGuardSign(mesh);
+    },
+    sync(mesh, person) {
+      if (person.crossingGuard && mesh.visible) syncGuardSign(mesh, person);
+    },
+  },
+  // (the children a guard walks across)
+  transientPeople: ["kid_g"],
+};

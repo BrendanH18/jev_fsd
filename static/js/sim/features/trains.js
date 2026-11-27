@@ -8,6 +8,7 @@ import {
   canStopFor,
   crossingAheadOf,
   crossingHold,
+  crossingNotice,
   crossingsAhead,
   fouling,
   isTrain,
@@ -256,6 +257,19 @@ function crossingClause(snap) {
 
 export default {
   key: "trains",
+  view: () => import("../../render/rail.js"),
+  // a level crossing ahead to wait at, for a train coming or for room past the tracks: say so once
+  notice: { at: "afterCrosswalk", order: 2, duration: 2500, style: "safety", read: (world) => crossingNotice(world) },
+  // (the gong of the nearest one ringing)
+  sound: {
+    name: "gong",
+    distance(world, fleet) {
+      let ringing = Infinity;
+      for (const train of fleet.trains?.list || [])
+        if (train.rail.gong) ringing = Math.min(ringing, Math.hypot(train.x - world.ego.x, train.y - world.ego.y));
+      return ringing;
+    },
+  },
   // (where the car stands on the tracks: sim/drive-score.js)
   property: "onTracks",
   build: () => null,

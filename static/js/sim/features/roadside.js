@@ -98,6 +98,7 @@ export default {
     run: (c, snap) => (snap.roadside_stop?.other_lane && c.law.lane === snap.roadside_stop.adjacent_delta ? 6 : 0),
   },
   key: "roadside",
+  view: () => import("../../render/roadside.js"),
   coach: {
     init: () => ({
       roadsideSpeeding: 0,

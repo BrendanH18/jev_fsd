@@ -150,3 +150,13 @@ export class GeeseView {
     }
   }
 }
+
+export const view = {
+  mount: {
+    order: 9,
+    run({ scene, world }) {
+      return world.geese.enabled ? new GeeseView(scene) : null;
+    },
+    frame: (geese, { world, camera }) => geese.sync(world, world.t, camera),
+  },
+};

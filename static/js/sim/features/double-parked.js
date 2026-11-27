@@ -165,6 +165,7 @@ export default {
   // (nobody parks on the block of a double-parked van, either side: sim/parallel-park.js)
   parkingObstructed: (world, edge) => !!world.doubleParked?.vans.some((d) => d.edge === edge || d.opposite === edge),
   key: "vans",
+  view: () => import("../../render/delivery-van.js"),
   coach: {
     init: () => ({
       vanCutoffs: 0,

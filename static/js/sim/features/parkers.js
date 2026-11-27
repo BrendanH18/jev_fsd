@@ -35,6 +35,7 @@ export default {
   rulesCost: (c, snap) => (c.id === "wait_for_parker" && snap.parking_ahead?.wait ? -6 : 0),
   cautious: (snap, eligible) => (snap.parking_ahead?.wait ? eligible.find((c) => c.id === "wait_for_parker") : null),
   key: "parkers",
+  view: () => import("../../render/parkers.js"),
   coach: {
     init: () => ({
       parkers: false,

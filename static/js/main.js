@@ -6,10 +6,14 @@ import { Route } from "./map/route.js";
 import { World } from "./sim/world.js";
 import { actorTime } from "./render/actor-motion.js";
 import { SceneView } from "./render/scene.js";
-import { mountActorViews, mountFeatureViews, mountTransitScenery, replayActorPose } from "./render/feature-views.js";
+import { mountActorViews, mountFeatureScenery, mountFeatureViews, replayActorPose } from "./render/feature-views.js";
 import {
+  FEATURE_SOUNDS,
   announceFeatureNotices,
+  crosswalkVehicleName,
   featureEventBadge,
+  featureManualArrival,
+  featureSignalLamp,
   featureNeedsDay,
   featureNeedsWeekday,
   featureRouteOptions,
@@ -17,22 +21,9 @@ import {
 import { buildRoads } from "./render/roads.js";
 import { buildBuildings } from "./render/buildings.js";
 import { buildTrees } from "./render/trees.js";
-import { busYield, isBus } from "./sim/bus.js";
-import { crossingNotice } from "./sim/rail.js";
 import { boxNotice } from "./sim/junction-box.js";
-import {
-  IN_LANE_M as STREETCAR_IN_LANE_M,
-  SIDE_M as STREETCAR_SIDE_M,
-  doorsOpen,
-  streetcarRelation,
-} from "./sim/streetcar.js";
-import { parkNotice, spacesAlong, frameOf, parkedPose } from "./sim/parallel-park.js";
-import { hazardNotice } from "./sim/hidden-hazards.js";
-import { trafficNotice } from "./sim/hidden-traffic.js";
-import { SIDE_M as SCHOOL_SIDE_M, redsOn, schoolBusRelation } from "./sim/school-bus.js";
 import { ZONE_NAMES, mapClock } from "./sim/speed-zones.js";
 import { frontTo, looked, stoppedAt } from "./sim/crosswalk.js";
-import { isEmergency, nearestCall, EMERGENCY_NAMES } from "./sim/emergency.js";
 import { addHeadlights, createCarMesh, syncCarLights } from "./render/cars.js";
 import { Minimap } from "./render/minimap.js";
 import { Overlays } from "./render/overlays.js";
@@ -159,7 +150,7 @@ export async function boot() {
   const buildings = buildBuildings(map, { houseColors: cityStyle?.houses });
   view.scene.add(buildings);
   view.addScenery(buildTrees(map));
-  mountTransitScenery(view, map);
+  mountFeatureScenery(view, map);
   view.scene.add(buildSurroundings(map));
   view.scene.add(buildCityIdentity(map, status.map.id));
   view.backdrop.visible = inVancouver(pack.origin); // the North Shore mountains
@@ -888,27 +879,12 @@ export async function boot() {
     if (lab?.reviewing) return;
     if (!drive || drive.finished) return;
     if (drive.simulationError) reason = "error";
-    // A manual driver finishes parking with the review button; the AI reports its own arrival.
-    if (
-      reason === "finished" &&
-      challenge?.park &&
-      drive.driver === "manual" &&
-      world.route &&
-      Math.abs(world.ego.v) < 0.05
-    ) {
-      const car = world.ego,
-        spec = car.spec;
-      const space = spacesAlong(world, world.route, spec).find((p) => {
-        const f = frameOf(car, p),
-          side = (spec.width / 2) * Math.abs(Math.sin(f.phi));
-        return (
-          parkedPose(car, p).within_kerb &&
-          f.u - spec.rearOverhang * Math.cos(f.phi) - side >= p.sFrom &&
-          f.u + (spec.length - spec.rearOverhang) * Math.cos(f.phi) + side <= p.sTo
-        );
-      });
-      if (space) {
-        drive.noteArrival({ parked: true, ...parkedPose(car, space) });
+    // A manual driver finishes a drive with the review button; a feature may count where the car stands as
+    // an arrival (parked in a space, say). The AI reports its own arrival.
+    if (reason === "finished" && drive.driver === "manual" && world.route && Math.abs(world.ego.v) < 0.05) {
+      const arrival = featureManualArrival(world, challenge);
+      if (arrival) {
+        drive.noteArrival(arrival);
         reason = "arrived";
       }
     }
@@ -1315,19 +1291,10 @@ export async function boot() {
   let acc = 0;
   const announcedFeatures = new Map();
   let indicatorLit = false,
-    announcedEv = null,
-    announcedAt = -Infinity,
-    announcedBus = null,
     announcedCrosswalk = null,
-    announcedSchool = null,
     announcedZone = null,
-    announcedStreetcar = null,
-    announcedCrossing = null,
     announcedBox = null,
-    announcedAdvance = null,
-    announcedPark = null,
-    announcedHazard = null,
-    announcedTraffic = null;
+    announcedAdvance = null;
   let lastWeather, lastClockLabel, lastSight;
   let skyAt = world.t;
   function frame(now) {
@@ -1474,8 +1441,8 @@ export async function boot() {
         ? interpolatePose(world.ego, previousEgo, alpha)
         : world.ego;
     for (const inter of map.intersections.values()) {
-      // (with an advance green, each approach shows its own lights; with the power out, none do)
-      const dark = world.outages.isDark(inter.id);
+      // (with an advance green, each approach shows its own lights; a feature may put them out)
+      const dark = featureSignalLamp(world, inter.id) === "dark";
       roads.signals.set(
         inter.id,
         inter.plan?.advance
@@ -1506,35 +1473,10 @@ export async function boot() {
     }
     const lightsOn = syncCarLights(lighting.night.value, weatherView.name !== "dry");
     const actorDt = (world.paused || photo.active) && !lab.playing ? 0 : dt;
-    beamIndicator.hidden = !world.highBeams || !world.ego.highBeam;
     actors.updateEgo(egoMesh, renderEgo, actorDt, lightsOn, actorTime(world.t, replayNext?.world.t, replayAlpha));
     featureViews.updateSignals();
     actors.updateVehicles(actorDt, lightsOn, alpha, replayNext, replayAlpha);
-    // an emergency vehicle calling on the car to give way: say so once, and sound its siren
-    const evs = fleet.vehicles.filter(isEmergency);
-    const call = evs.length ? nearestCall(world.ego, evs) : null;
-    // (kept up for as long as it calls on the car)
-    if (call && (call.ev.id !== announcedEv || world.t - announcedAt > 1)) {
-      announcedEv = call.ev.id;
-      announcedAt = world.t;
-      hud.badge(
-        `${EMERGENCY_NAMES[call.ev.kind].toUpperCase()} ${call.relation === "behind" ? "BEHIND" : call.relation === "ahead" ? "AHEAD" : `FROM THE ${call.relation.toUpperCase()}`} · PULL OVER AND STOP`,
-        "safety",
-        2500,
-      );
-    }
-    if (!call) announcedEv = null;
-    const nearestEv = audio.enabled
-      ? evs.reduce((best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)), Infinity)
-      : Infinity;
-    audio.siren(nearestEv, world.t, world.paused || document.hidden);
-    // a bus ahead signalling to pull out from its stop, with the right of way: say so once
-    const bus = fleet.buses?.list.find((b) => busYield(world.ego, b) && world.visibility.sees(world.ego, b));
-    const busKey = bus ? `${bus.id}:${bus.transit.departures}` : null;
-    if (bus && busKey !== announcedBus) {
-      hud.badge(`BUS ${bus.ref || ""} PULLING OUT · YIELD`.replace("  ", " "), "safety", 2500);
-    }
-    announcedBus = busKey;
+    announceFeatureNotices("first", world, autopilot, featureViews, announcedFeatures, hud, fleet);
     // a vehicle stopped at a crosswalk ahead in the next lane, that the car must not pass: say so once
     const cw = world.crowd.marked.find((c) => {
       const d = frontTo(c, world.ego);
@@ -1543,50 +1485,10 @@ export async function boot() {
     const stopped = cw && stoppedAt(world, cw, world.ego).find((n) => world.visibility.sees(world.ego, n));
     const cwKey = stopped ? `${cw.id}:${stopped.id}` : null;
     if (stopped && cwKey !== announcedCrosswalk) {
-      hud.badge(`${isBus(stopped) ? "BUS" : "CAR"} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500);
+      hud.badge(`${crosswalkVehicleName(stopped).toUpperCase()} STOPPED AT CROSSWALK · DON'T PASS`, "safety", 2500);
     }
     announcedCrosswalk = cwKey;
-    // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
-    const school = fleet.schoolBuses?.list.find((b) => {
-      const r = redsOn(b) && schoolBusRelation(world.ego, b);
-      return (
-        r &&
-        r.ahead_m > 0 &&
-        r.ahead_m < 70 &&
-        Math.abs(r.right_m) < SCHOOL_SIDE_M &&
-        world.visibility.sees(world.ego, b)
-      );
-    });
-    const schoolKey = school ? `${school.id}:${school.school.stops}` : null;
-    if (school && schoolKey !== announcedSchool) {
-      hud.badge("SCHOOL BUS · RED LIGHTS FLASHING · STOP", "safety", 2500);
-    }
-    announcedSchool = schoolKey;
-    // a streetcar ahead with its doors open, that the car must stop behind: say so once
-    const tram = fleet.streetcars?.list.find((c) => {
-      const r = doorsOpen(c) && streetcarRelation(world.ego, c);
-      return (
-        r &&
-        r.ahead_m > 0 &&
-        r.ahead_m < 70 &&
-        r.right_m > -STREETCAR_IN_LANE_M &&
-        r.right_m < STREETCAR_SIDE_M &&
-        world.visibility.sees(world.ego, c)
-      );
-    });
-    const tramKey = tram ? `${tram.id}:${tram.transit.departures}` : null;
-    if (tram && tramKey !== announcedStreetcar) {
-      hud.badge("STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS", "safety", 2500);
-    }
-    announcedStreetcar = tramKey;
-    // a level crossing ahead to wait at, for a train coming or for room past the tracks: say so once,
-    // and sound the gong of a train ringing nearby
-    const crossing = crossingNotice(world);
-    if (crossing && crossing.key !== announcedCrossing) {
-      announcedCrossing = crossing.key;
-      hud.badge(crossing.text, "safety", 2500);
-    }
-    if (!crossing) announcedCrossing = null;
+    announceFeatureNotices("afterCrosswalk", world, autopilot, featureViews, announcedFeatures, hud, fleet);
     // a signal ahead the car could not clear, for traffic past the junction: say so once
     const box = boxNotice(world);
     if (box && box.key !== announcedBox) {
@@ -1602,41 +1504,18 @@ export async function boot() {
       hud.badge(advance.text, advance.protected ? "stop" : "safety", 2500);
     }
     if (!advance) announcedAdvance = null;
-    announceFeatureNotices("beforeMerge", world, autopilot, featureViews, announcedFeatures, hud);
-    announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud);
-    // parking at the destination: the space, checking behind, reversing in, parked
-    const parkLine = parkNotice(world);
-    if (parkLine && parkLine.key !== announcedPark) {
-      announcedPark = parkLine.key;
-      hud.badge(parkLine.text, parkLine.wait ? "safety" : "stop", 2500);
-    }
-    if (!parkLine) announcedPark = null;
-    // cars parked at the kerb that hide the sidewalk ahead, and someone stepping out from between them
-    const hazardLine = hazardNotice(world);
-    if (hazardLine && hazardLine.key !== announcedHazard) {
-      announcedHazard = hazardLine.key;
-      hud.badge(hazardLine.text, hazardLine.wait ? "safety" : "", 2500);
-    }
-    if (!hazardLine) announcedHazard = null;
-    // a vehicle hiding a lane the car must give way to (sim/hidden-traffic.js)
-    const trafficLine = trafficNotice(world, autopilot.snap);
-    if (trafficLine && trafficLine.key !== announcedTraffic) {
-      announcedTraffic = trafficLine.key;
-      hud.badge(trafficLine.text, trafficLine.wait ? "safety" : "", 2500);
-    }
-    if (!trafficLine) announcedTraffic = null;
-    announceFeatureNotices("afterTraffic", world, autopilot, featureViews, announcedFeatures, hud);
-    // a cyclist riding against a one-way street the car waits or moves over for (sim/contraflow.js)
-    announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud);
-    announceFeatureNotices("afterTurnNotice", world, autopilot, featureViews, announcedFeatures, hud);
-    announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud);
-    if (audio.enabled) {
-      let ringing = Infinity;
-      for (const train of fleet.trains?.list || [])
-        if (train.rail.gong) ringing = Math.min(ringing, Math.hypot(train.x - world.ego.x, train.y - world.ego.y));
-      audio.gong(ringing, world.t, world.paused || document.hidden);
-    }
-    announceFeatureNotices("beforeZone", world, autopilot, featureViews, announcedFeatures, hud);
+    announceFeatureNotices("beforeMerge", world, autopilot, featureViews, announcedFeatures, hud, fleet);
+    announceFeatureNotices("beforePlow", world, autopilot, featureViews, announcedFeatures, hud, fleet);
+    announceFeatureNotices("parking", world, autopilot, featureViews, announcedFeatures, hud, fleet);
+    announceFeatureNotices("afterTraffic", world, autopilot, featureViews, announcedFeatures, hud, fleet);
+    announceFeatureNotices("beforeLeftOnRed", world, autopilot, featureViews, announcedFeatures, hud, fleet);
+    announceFeatureNotices("afterTurnNotice", world, autopilot, featureViews, announcedFeatures, hud, fleet);
+    announceFeatureNotices("end", world, autopilot, featureViews, announcedFeatures, hud, fleet);
+    // (a siren, a level crossing's gong: each feature's sound from its nearest source)
+    if (audio.enabled)
+      for (const sound of FEATURE_SOUNDS)
+        audio[sound.name](sound.distance(world, fleet), world.t, world.paused || document.hidden);
+    announceFeatureNotices("beforeZone", world, autopilot, featureViews, announcedFeatures, hud, fleet);
     // into a school or playground zone in effect: say so once
     const zone = world._road?.zone;
     if (zone && zone.id !== announcedZone)
@@ -1660,7 +1539,7 @@ export async function boot() {
     rightIndicator.classList.toggle("active", !!blink && world.ego.signal === "right");
     minimap.draw({
       ego: world.ego,
-      npcs: world.contraflow.riders.length ? [...fleet.vehicles, ...world.contraflow.riders] : fleet.vehicles,
+      npcs: actors.minimapVehicles(),
       route: world.route,
       destination: world.destination,
     });
@@ -1697,10 +1576,3 @@ export async function boot() {
   };
   requestAnimationFrame(frame);
 }
-
-const beamIndicator = document.createElement("div");
-beamIndicator.textContent = "≋ HIGH BEAM";
-beamIndicator.hidden = true;
-beamIndicator.style.cssText =
-  "position:fixed;right:24px;bottom:calc(var(--touch-h, 0px) + 100px);color:#59aaff;background:#102341;padding:6px 10px;border-radius:6px;z-index:20;font:600 13px sans-serif;pointer-events:none";
-document.body.append(beamIndicator);

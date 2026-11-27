@@ -336,3 +336,9 @@ export function syncSchoolBus(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   for (const m of u.blinkers.right) m.visible = blink && vehicle.signal === "right";
   syncBrakeMaterial(u, vehicle.v, dt, lightsOn);
 }
+
+export const view = {
+  vehicles: { school_bus: { create: (v) => createSchoolBusMesh(v.id), sync: syncSchoolBus } },
+  // (children get off and go home: sim/pedestrians.js)
+  transientPeople: ["kid_"],
+};

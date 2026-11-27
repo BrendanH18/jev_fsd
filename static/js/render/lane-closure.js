@@ -137,3 +137,20 @@ export function syncLaneClosure(mesh, zone, t = 0, camera = null) {
   const view = camera || { position: { x: zone.x, z: -zone.y } };
   for (const p of u.people) syncPerson(p.mesh, p.pose, view);
 }
+
+export const view = {
+  parked: {
+    order: 4,
+    flag: "closure",
+    create(car, world) {
+      const zone = world.laneClosures.zones.find((z) => z.closure === car);
+      if (!zone) return null;
+      const mesh = createLaneClosureMesh(zone, world.map);
+      syncLaneClosure(mesh, zone);
+      return mesh;
+    },
+    sync(world, meshOf, { t, camera }) {
+      for (const z of world.laneClosures.zones) syncLaneClosure(meshOf(z.closure), z, t, camera);
+    },
+  },
+};

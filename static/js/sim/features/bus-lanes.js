@@ -20,6 +20,7 @@ const busLaneForPath = (path, edge, index) =>
 
 export default {
   key: "busLanes",
+  view: () => import("../../render/bus-lanes.js"),
   weekday: true,
   seen: "busLanesSeen",
   build: (_world, { enabled }) => !!enabled,

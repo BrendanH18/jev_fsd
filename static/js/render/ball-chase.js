@@ -100,3 +100,14 @@ export class BallView {
     }
   }
 }
+
+export const view = {
+  mount: {
+    order: 8,
+    run({ scene, world }) {
+      return world.balls?.enabled ? new BallView(scene) : null;
+    },
+    frame: (balls, { world, camera }) => balls.update(world, camera),
+  },
+  transientPeople: ["kid_ball_"],
+};
