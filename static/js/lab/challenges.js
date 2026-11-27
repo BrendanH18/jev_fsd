@@ -3,6 +3,9 @@
 // places in the world (`install`) and what it does as the drive goes on (`step`); what they share is in
 // lab/challenges/shared/kit.js. Adding one means writing its module and listing it here.
 // Road tests (lab/road-tests.js) open and play the same way, but are not listed.
+// Compound drives (ROADMAP 9.3) are modules here too, listed apart in `COMPOUND_DRIVES`: longer drives
+// that string several situations together. They stay out of `CHALLENGES`, so the arena's challenge set,
+// its saved runs and suite v1 are as they were.
 import { ROAD_TESTS, roadTestScenario, installRoadTest } from "./road-tests.js";
 import { finishInstall, installBase, laneScenario, stepAuthored } from "./challenges/shared/kit.js";
 import * as doorZone from "./challenges/door-zone.js";
@@ -65,6 +68,7 @@ import * as dontSplash from "./challenges/dont-splash.js";
 import * as roomToPark from "./challenges/room-to-park.js";
 import * as roadClosed from "./challenges/road-closed.js";
 import * as followTheOfficer from "./challenges/follow-the-officer.js";
+import * as rushHour from "./challenges/rush-hour.js";
 
 const MODULES = [
   doorZone,
@@ -129,19 +133,27 @@ const MODULES = [
   followTheOfficer,
 ];
 
+const COMPOUND_MODULES = [rushHour];
+
 export const CHALLENGE_VERSION = 2;
 export const CHALLENGES = MODULES.map((m) => m.challenge);
-// (road tests, lab/road-tests.js, open and play the same way)
-export const challengeById = (id) => CHALLENGES.find((c) => c.id === id) || ROAD_TESTS.find((t) => t.id === id) || null;
+export const COMPOUND_DRIVES = COMPOUND_MODULES.map((m) => m.challenge);
+// (road tests, lab/road-tests.js, and compound drives open and play the same way)
+export const challengeById = (id) =>
+  CHALLENGES.find((c) => c.id === id) ||
+  ROAD_TESTS.find((t) => t.id === id) ||
+  COMPOUND_DRIVES.find((c) => c.id === id) ||
+  null;
 
 // The module that sets up a challenge (or its `world.challenge` state): its own, by id, unless its
 // hazard has been changed, as a test does to drive one without it; then the first with that hazard;
 // else none, and the drive starts on a plain lane with nothing placed.
-const byId = new Map(MODULES.map((m) => [m.challenge.id, m]));
+const ALL_MODULES = [...MODULES, ...COMPOUND_MODULES];
+const byId = new Map(ALL_MODULES.map((m) => [m.challenge.id, m]));
 function moduleFor({ id, hazard }) {
   const own = byId.get(id);
   if (own && own.challenge.hazard === hazard) return own;
-  return MODULES.find((m) => m.challenge.hazard === hazard) || null;
+  return ALL_MODULES.find((m) => m.challenge.hazard === hazard) || null;
 }
 
 export function challengeScenario(map, challenge) {
