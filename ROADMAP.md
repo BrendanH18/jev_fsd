@@ -48,9 +48,12 @@ the world is lit, shaded, batched and presented.
 
 - [ ] **R2.1 Batch/instance dynamic vehicles, pedestrians and signal lamps.** (L) Collapse moving
   NPC cars (~18 draw calls each → `< 15` total via `BatchedMesh`/`InstancedMesh`), pedestrians
-  (9 meshes each → single `SkinnedMesh` or GPU-instanced crowd) and traffic signal lamps (~300+
-  draw calls + sprites → 1 `InstancedMesh` driven by a phase `DataTexture`). Target fewer than 300
-  draw calls in the dry High profile. The September first-pass comparison recorded 1,524.
+  (9 meshes each → single `SkinnedMesh` or GPU-instanced crowd) and traffic signal lamps into
+  instanced batches. Target fewer than 300 draw calls in the dry High profile. The September
+  first-pass comparison recorded 1,524. Signal faces now share up to four instanced meshes, and the
+  glows share one per mast. The matched measurements are in
+  [rendering performance](docs/render-performance.md#traffic-signal-batching).
+  Moving vehicles and pedestrians are still open.
 - [ ] **R2.2 GPU-driven weather particles & tire spray.** (M) Move rain and snow particle wrapping
   and sway (`static/js/render/weather.js`) 100% into vertex shaders (zero per-frame JS loop and zero
   buffer uploads). Render rain as soft, velocity-stretched camera-facing quads and add wet-road tire
