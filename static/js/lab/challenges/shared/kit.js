@@ -77,7 +77,7 @@ export function laneScenario(map, challenge, find = null) {
     const previous = chain.at(-1);
     const successors = map
       .successors(previous.edge)
-      .filter((id) => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) < (130 * Math.PI) / 180);
+      .filter((id) => !seen.has(id) && Math.abs(map.turnAngle(previous.edge, id)) <= (130 * Math.PI) / 180);
     successors.sort(
       (a, b) =>
         Math.abs(map.turnAngle(previous.edge, a)) - Math.abs(map.turnAngle(previous.edge, b)) ||

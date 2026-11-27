@@ -116,7 +116,7 @@ export function defaultSuite(data) {
     data.rows.some((row) => {
       if (suiteVersion(row) !== version) return false;
       const driver = Object.hasOwn(data.drivers ?? {}, row.driver) ? data.drivers[row.driver] : null;
-      return Boolean(driver) && !BUILT_IN_KINDS.has(driver.kind);
+      return Boolean(driver?.kind) && !BUILT_IN_KINDS.has(driver.kind);
     });
   return versions.find(hasModel) ?? versions[0] ?? resultVersions(data)[0];
 }

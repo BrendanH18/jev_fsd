@@ -20,7 +20,6 @@ const { Route } = await import("../static/js/map/route.js");
 const { routeFromLanes } = await import("../static/js/demo/routing.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
-const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
 
 const pack = JSON.parse(fs.readFileSync(new URL("../data/maps/623b012bc8b5.v6.pack.json", import.meta.url)));
@@ -64,6 +63,7 @@ function approach(weather, toLine, v, brain = null) {
   const autopilot = new Autopilot(world, {});
   if (brain) {
     autopilot.setBrain(brain);
+    assert.equal(autopilot.brainName, brain);
     autopilot.setEnabled(true);
   }
   return { world, fleet, autopilot };
@@ -145,7 +145,7 @@ function southbound(lead) {
 
 // Closed loop with Rules from 45 m back.
 async function drive(lead) {
-  const ctx = approach("fog", 45, FOG_MPS, new RulesBrain());
+  const ctx = approach("fog", 45, FOG_MPS, "rules");
   const { world, autopilot } = ctx;
   const front = world.ego.spec.length - world.ego.spec.rearOverhang;
   const other = lead === null ? null : southbound(lead);

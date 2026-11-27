@@ -203,6 +203,19 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
     the peak speed fixed the sweep but changed most suites and failed two dry city routes (a close
     pass of a cyclist on `s1-7`, parking on `s1-12`), so it was not merged
     ([record](docs/validation/lane-join-parity-2026-11-26.md#fog-s1-3)).
+    From the review of #136: the precaution reads weather and light range only, so a ring hidden by a
+    building within range counts as seen, and it ends at the stop zone even where the far side of a
+    large ring is still out of sight.
+  - Edge spans at shortening joins (review of #136). At 29 lane joins on the bundled maps (13 on
+    Kitsilano, most at entries to traffic circles; about half of the 29 predate 3.11) the joined
+    path is shorter than the previous edge's recorded end, so `NpcPath.append` (`sim/npc.js`) gives
+    the next edge a span that runs backwards (`sStart > sEnd`): traffic never takes it as its
+    current edge, and code that scales along the span gets a negative factor. Two fixes were
+    measured on 27 November and not merged, because both change the traffic the car meets. Ending
+    the previous edge where the join starts changed 47 of 94 baseline drives and failed three
+    (collisions on Kitsilano city dry `s1-9` and snow `s1-11`, and dry with parking `s1-9`). Starting
+    the short edge at the path's end changed six and failed one (Kitsilano city rain `s1-9`, a
+    timeout). It needs its own round: fix, find why those routes fail, re-baseline.
   - Long vehicles other than school buses (transit buses, plows, garbage and emergency trucks) can
     still sweep parked cars at corners; turns other than U-turns still take their position from summed
     edge lengths; the car's own contraflow sensing keeps the old junction-entry rule.

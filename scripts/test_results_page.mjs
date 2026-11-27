@@ -30,7 +30,10 @@ const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 
 const data = checkResults(JSON.parse(fs.readFileSync(new URL("../data/results.json", import.meta.url), "utf8")));
 const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
-const block = readme.slice(readme.indexOf("### Legacy results"), readme.indexOf("<!-- results:end -->"));
+// (the legacy tables alone: a suite's own table may follow them, README order as on the leaderboard)
+const legacyAt = readme.indexOf("### Legacy results");
+const legacyEnd = [readme.indexOf("\n### ", legacyAt + 1), readme.indexOf("<!-- results:end -->")].filter((i) => i > legacyAt);
+const block = readme.slice(legacyAt, Math.min(...legacyEnd));
 // README rows: | Driver | Model | challenges | open track | Kitsilano weathers | other maps | own decisions | cost |
 const readmeRows = block
   .split("\n")
