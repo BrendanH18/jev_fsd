@@ -362,8 +362,9 @@ export function mountActorViews(view, world, fleet) {
       for (const { pose } of VIEWS.ego) renderEgo = pose(world, renderEgo);
       syncCar(egoMesh, renderEgo, dt, t, lightsOn);
       updateRoadEffects(world, egoMesh, renderEgo, dt);
+      return renderEgo;
     },
-    updateVehicles(dt, lightsOn, alpha, replayNext, replayAlpha) {
+    updateVehicles(dt, lightsOn, alpha, replayNext, replayAlpha, visitRoadVehicle) {
       lastVehicleTime = world.t;
       const t = actorTime(world.t, replayNext?.world.t, replayAlpha);
       const fleetNext = indexReplay(replayNext?.fleet.vehicles);
@@ -375,6 +376,7 @@ export function mountActorViews(view, world, fleet) {
         adapter.sync(mesh, pose, dt, t, lightsOn);
         if (adapter.roadEffects !== false) updateRoadEffects(world, mesh, pose, dt, adapter);
         if (car) for (const drawn of VIEWS.car) drawn.effect?.(world, mesh, n);
+        if (visitRoadVehicle && adapter.roadEffects !== false && !adapter.onRails) visitRoadVehicle(pose);
       }
       for (const { list, after } of VIEWS.traffic) {
         const next = indexReplay(replayNext && list(replayNext.world));
@@ -384,6 +386,7 @@ export function mountActorViews(view, world, fleet) {
           if (!entry) continue;
           entry.adapter.sync(entry.mesh, pose, dt, t, lightsOn);
           after?.(entry.mesh, n);
+          if (visitRoadVehicle && entry.adapter.roadEffects !== false && !entry.adapter.onRails) visitRoadVehicle(pose);
         }
       }
       const frame = { dt, t, lightsOn, camera: view.camera };

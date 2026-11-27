@@ -1,7 +1,7 @@
 // Run from the simulator console (its import map provides Three.js):
 // await import('/tests/render-tests.js').then(m => m.runRenderTests())
 import * as THREE from "three";
-import { runRendererRegressions } from "./renderer-regressions.js";
+import { checkWeatherDraws, runRendererRegressions } from "./renderer-regressions.js";
 import { chunkLOD } from "../js/render/lod.js";
 import { createCarMesh, addHeadlights, buildParkedCars, hideParkedCar } from "../js/render/cars.js";
 import { CAR } from "../js/sim/vehicle.js";
@@ -634,6 +634,7 @@ export function runRenderTests() {
         mirrorSamples.high === sceneSamples.high &&
         mirrorSamples.ultra === 0,
     );
+    checkWeatherDraws(live.renderer, check);
   }
 
   // Dispose fixture buffers; materials/geometries shared with the live scene stay cached.

@@ -54,10 +54,10 @@ the world is lit, shaded, batched and presented.
   glows share one per mast. The matched measurements are in
   [rendering performance](docs/render-performance.md#traffic-signal-batching).
   Moving vehicles and pedestrians are still open.
-- [ ] **R2.2 GPU-driven weather particles & tire spray.** (M) Move rain and snow particle wrapping
-  and sway (`static/js/render/weather.js`) 100% into vertex shaders (zero per-frame JS loop and zero
-  buffer uploads). Render rain as soft, velocity-stretched camera-facing quads and add wet-road tire
-  spray behind moving vehicles.
+- [x] **R2.2 GPU-driven weather particles & tire spray.** Rain and snow wrap and move in vertex
+  shaders with static seed buffers. Rain uses soft, velocity-stretched quads, and moving road
+  vehicles kick up spray from their tires in rain. See the
+  [matched weather profiles](docs/render-performance.md#gpu-weather-and-tire-spray).
 - [ ] **R2.3 Unified `PostFX` & reflection pipeline.** (M) Fuse tone-mapping, color grade, vignette
   and dither into a single pass (dropping `ldrRT` and `gradeRT`), resolve Ultra's MSAA-vs-GTAO
   conflict via a lightweight opaque depth prepass (so Ultra keeps both MSAA + alpha-to-coverage and

@@ -3,9 +3,8 @@
 // `userData.surface`; snow settles on whatever faces up (a shader tweak), so roofs, lawns, and the
 // tops of trees and parked cars turn white while walls stay as they are.
 
-import * as THREE from "three";
-import { rng } from "../common.js";
-import { flakeTexture } from "./textures.js";
+import { makeRain, makeSnow, updatePrecipitation } from "./weather-particles.js";
+import { TireSpray } from "./tire-spray.js";
 
 // what each weather does to surfaces and the air around the camera (the sky and light are in
 // atmosphere.js)
@@ -73,7 +72,7 @@ export class WeatherView {
     this.name = "dry";
     this.rain = null;
     this.snow = null;
-    this.cameraPosition = new THREE.Vector3();
+    this.spray = null;
   }
 
   apply(name) {
@@ -105,7 +104,7 @@ export class WeatherView {
 
   setParticles(kind) {
     if ((kind === "rain" && this.rain) || (kind === "snow" && this.snow)) return;
-    for (const k of ["rain", "snow"]) {
+    for (const k of ["rain", "snow", "spray"]) {
       if (this[k]) {
         const { mesh } = this[k];
         mesh.removeFromParent();
@@ -114,113 +113,21 @@ export class WeatherView {
         this[k] = null;
       }
     }
-    if (kind === "rain") this.rain = makeRain();
+    if (kind === "rain") {
+      this.rain = makeRain();
+      this.spray = new TireSpray();
+      this.view.scene.add(this.spray.mesh);
+    }
     if (kind === "snow") this.snow = makeSnow();
     const effect = this.rain ?? this.snow;
     if (effect) {
-      effect.update(0, this.view.camera.getWorldPosition(this.cameraPosition));
+      updatePrecipitation(effect, 0, this.view.camera);
       this.view.scene.add(effect.mesh);
     }
   }
 
   update(dt) {
-    const step = Number.isFinite(dt) && dt > 0 ? dt : 0;
-    (this.rain ?? this.snow)?.update(step, this.view.camera.getWorldPosition(this.cameraPosition));
+    const effect = this.rain ?? this.snow;
+    if (effect) updatePrecipitation(effect, Number.isFinite(dt) && dt > 0 ? dt : 0, this.view.camera);
   }
 }
-
-const BOX = { w: 70, h: 32 };
-
-// Rain: short streaks falling fast with a little wind, recycled in a box around the camera.
-function makeRain(count = 5000) {
-  const seeds = new Float32Array(count * 3);
-  const random = rng(32051);
-  for (let i = 0; i < seeds.length; i++) seeds[i] = random();
-  const pos = new Float32Array(count * 6);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
-  const mesh = new THREE.LineSegments(
-    geo,
-    new THREE.LineBasicMaterial({ color: 0xb8c2cc, transparent: true, opacity: 0.45, depthWrite: false }),
-  );
-  mesh.frustumCulled = false;
-  let t = 0;
-  const lastCamera = new THREE.Vector3(Infinity, Infinity, Infinity);
-  return {
-    mesh,
-    update(dt, cam) {
-      if (dt === 0 && cam.equals(lastCamera)) return;
-      lastCamera.copy(cam);
-      t += dt;
-      const bottom = Math.max(0, cam.y - BOX.h / 2);
-      for (let i = 0; i < count; i++) {
-        const x = wrap(seeds[i * 3] * BOX.w + t * 1.2 - cam.x, BOX.w) + cam.x - BOX.w / 2;
-        const z = wrap(seeds[i * 3 + 1] * BOX.w - cam.z, BOX.w) + cam.z - BOX.w / 2;
-        const y = wrap(seeds[i * 3 + 2] * BOX.h - t * 9.5, BOX.h) + bottom;
-        const j = i * 6;
-        pos[j] = x;
-        pos[j + 1] = y;
-        pos[j + 2] = z;
-        pos[j + 3] = x - (0.55 * 1.2) / 9.5;
-        pos[j + 4] = y + 0.55;
-        pos[j + 5] = z;
-      }
-      geo.attributes.position.needsUpdate = true;
-    },
-  };
-}
-
-// Snow: flakes drifting down slowly, swaying.
-function makeSnow(count = 6000) {
-  const seeds = new Float32Array(count * 4);
-  const random = rng(91041);
-  for (let i = 0; i < seeds.length; i++) seeds[i] = random();
-  const pos = new Float32Array(count * 3);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
-  // Round, soft-edged flakes. Plain points are hard squares, and a flake passing just in front of
-  // the lens grew into a large flat tile, so the on-screen size is also capped.
-  // Three sets `scale` to half the CSS height but `size` to the flake size times the pixel ratio,
-  // so `size / FLAKE` is the pixel ratio and the cap is 1.5% of the view height on any screen.
-  const FLAKE = 0.12;
-  const material = new THREE.PointsMaterial({
-    color: 0xffffff,
-    size: FLAKE,
-    map: flakeTexture(),
-    transparent: true,
-    opacity: 0.95,
-    depthWrite: false,
-  });
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <fog_vertex>",
-      `#include <fog_vertex>\n  gl_PointSize = min( gl_PointSize, scale * 0.03 * size / ${FLAKE.toFixed(2)} );`,
-    );
-  };
-  const mesh = new THREE.Points(geo, material);
-  mesh.frustumCulled = false;
-  let t = 0;
-  const lastCamera = new THREE.Vector3(Infinity, Infinity, Infinity);
-  return {
-    mesh,
-    update(dt, cam) {
-      if (dt === 0 && cam.equals(lastCamera)) return;
-      lastCamera.copy(cam);
-      t += dt;
-      const bottom = Math.max(0, cam.y - BOX.h / 2);
-      for (let i = 0; i < count; i++) {
-        const sway = Math.sin(t * 0.8 + seeds[i * 4 + 3] * 6.28) * 0.6;
-        const x = wrap(seeds[i * 4] * BOX.w + sway + t * 0.4 - cam.x, BOX.w) + cam.x - BOX.w / 2;
-        const z = wrap(seeds[i * 4 + 1] * BOX.w - cam.z, BOX.w) + cam.z - BOX.w / 2;
-        const y = wrap(seeds[i * 4 + 2] * BOX.h - t * (0.9 + seeds[i * 4 + 3] * 0.5), BOX.h) + bottom;
-        const j = i * 3;
-        pos[j] = x;
-        pos[j + 1] = y;
-        pos[j + 2] = z;
-      }
-      geo.attributes.position.needsUpdate = true;
-    },
-  };
-}
-
-const wrap = (v, m) => ((v % m) + m) % m;

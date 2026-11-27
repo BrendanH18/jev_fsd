@@ -1467,9 +1467,19 @@ export async function boot() {
     }
     const lightsOn = syncCarLights(lighting.night.value, weatherView.name !== "dry");
     const actorDt = (world.paused || photo.active) && !lab.playing ? 0 : dt;
-    actors.updateEgo(egoMesh, renderEgo, actorDt, lightsOn, actorTime(world.t, replayNext?.world.t, replayAlpha));
+    const renderTime = actorTime(world.t, replayNext?.world.t, replayAlpha);
+    const drawnEgo = actors.updateEgo(egoMesh, renderEgo, actorDt, lightsOn, renderTime);
     featureViews.updateSignals();
-    actors.updateVehicles(actorDt, lightsOn, alpha, replayNext, replayAlpha);
+    roads.streetLights.setOutage?.(!!world.streetLightsOut);
+    if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
+    view.updateCamera(renderEgo, dt);
+    const spray = weatherView.spray;
+    if (spray) {
+      spray.begin(view.camera, renderTime);
+      spray.add(drawnEgo);
+    }
+    actors.updateVehicles(actorDt, lightsOn, alpha, replayNext, replayAlpha, spray?.add);
+    spray?.end();
     announceFeatureNotices("first", world, autopilot, featureViews, announcedFeatures, hud, fleet);
     // a vehicle stopped at a crosswalk ahead in the next lane, that the car must not pass: say so once
     const cw = world.crowd.marked.find((c) => {
@@ -1519,9 +1529,6 @@ export async function boot() {
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision, autopilot.executing));
     weatherView.update(dt);
-    roads.streetLights.setOutage?.(!!world.streetLightsOut);
-    if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
-    view.updateCamera(renderEgo, dt);
     featureViews.update(fleet, actors.people, actorDt, lightsOn);
     if (!graphicsLost) view.render(dt, photo.active);
     cockpit.update(view.mode, world.weather, world.t, wipers.checked);
