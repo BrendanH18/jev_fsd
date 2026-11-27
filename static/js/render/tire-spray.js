@@ -10,6 +10,10 @@ const LIFETIME = 0.5;
 export class TireSpray {
   constructor() {
     this.vehicles = new Float32Array(MAX_VEHICLES * 8);
+    this.distances = new Float32Array(MAX_VEHICLES);
+    this.frustum = new THREE.Frustum();
+    this.viewProjection = new THREE.Matrix4();
+    this.bounds = new THREE.Sphere();
     this.phase = { value: 0 };
     this.mesh = particleQuads(
       0,
@@ -63,30 +67,41 @@ export class TireSpray {
     this.count = 0;
   }
 
-  begin(ego, time) {
-    this.mesh.position.set(ego.x, 0, -ego.y);
+  begin(camera, time) {
+    camera.getWorldPosition(this.mesh.position);
+    this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.viewProjection);
     this.phase.value = (time % LIFETIME) / LIFETIME;
     this.count = 0;
   }
 
   add = (pose) => {
-    const speed = Math.abs(pose.v);
+    const speed = pose.v;
     const track = pose.spec?.track;
+    if (!(speed > 3 && track > 0)) return;
     const anchor = this.mesh.position;
-    if (this.count === MAX_VEHICLES || !(speed > 3 && track > 0)) return;
-    if ((pose.x - anchor.x) ** 2 + (pose.y + anchor.z) ** 2 > 50 ** 2) return;
-    const reversing = pose.v < 0;
-    const forwardX = Math.cos(pose.psi);
-    const forwardZ = -Math.sin(pose.psi);
-    const axle = reversing ? pose.spec.wheelbase : 0;
-    const i = this.count * 8;
-    this.vehicles[i] = pose.x + axle * forwardX;
-    this.vehicles[i + 1] = -pose.y + axle * forwardZ;
+    const distance = (pose.x - anchor.x) ** 2 + (pose.y + anchor.z) ** 2;
+    if (distance > 50 ** 2) return;
+    this.bounds.center.set(pose.x, 0, -pose.y);
+    this.bounds.radius = track * 0.5 + speed * LIFETIME + 1;
+    if (!this.frustum.intersectsSphere(this.bounds)) return;
+
+    let slot = this.count;
+    if (slot === MAX_VEHICLES) {
+      slot = 0;
+      for (let j = 1; j < MAX_VEHICLES; j++) if (this.distances[j] > this.distances[slot]) slot = j;
+      if (distance >= this.distances[slot]) return;
+    } else {
+      this.count++;
+    }
+    this.distances[slot] = distance;
+    const i = slot * 8;
+    this.vehicles[i] = pose.x;
+    this.vehicles[i + 1] = -pose.y;
     this.vehicles[i + 2] = track * 0.5;
     this.vehicles[i + 3] = speed;
-    this.vehicles[i + 4] = reversing ? -forwardX : forwardX;
-    this.vehicles[i + 5] = reversing ? -forwardZ : forwardZ;
-    this.count++;
+    this.vehicles[i + 4] = Math.cos(pose.psi);
+    this.vehicles[i + 5] = -Math.sin(pose.psi);
   };
 
   end() {

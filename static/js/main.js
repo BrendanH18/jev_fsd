@@ -1468,12 +1468,15 @@ export async function boot() {
     const lightsOn = syncCarLights(lighting.night.value, weatherView.name !== "dry");
     const actorDt = (world.paused || photo.active) && !lab.playing ? 0 : dt;
     const renderTime = actorTime(world.t, replayNext?.world.t, replayAlpha);
-    actors.updateEgo(egoMesh, renderEgo, actorDt, lightsOn, renderTime);
+    const drawnEgo = actors.updateEgo(egoMesh, renderEgo, actorDt, lightsOn, renderTime);
     featureViews.updateSignals();
+    roads.streetLights.setOutage?.(!!world.streetLightsOut);
+    if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
+    view.updateCamera(renderEgo, dt);
     const spray = weatherView.spray;
     if (spray) {
-      spray.begin(renderEgo, renderTime);
-      spray.add(renderEgo);
+      spray.begin(view.camera, renderTime);
+      spray.add(drawnEgo);
     }
     actors.updateVehicles(actorDt, lightsOn, alpha, replayNext, replayAlpha, spray?.add);
     spray?.end();
@@ -1525,9 +1528,6 @@ export async function boot() {
     actors.updatePeople(alpha, replayNext, replayAlpha, weatherView.name);
     overlays.tick(world.t);
     lab.showPerception(perception.update(world, now, autopilot.lastDecision, autopilot.executing));
-    roads.streetLights.setOutage?.(!!world.streetLightsOut);
-    if (roads.streetLights.lights) roads.streetLights.lights.update(view.camera, dt);
-    view.updateCamera(renderEgo, dt);
     weatherView.update(dt);
     featureViews.update(fleet, actors.people, actorDt, lightsOn);
     if (!graphicsLost) view.render(dt, photo.active);

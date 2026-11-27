@@ -362,6 +362,7 @@ export function mountActorViews(view, world, fleet) {
       for (const { pose } of VIEWS.ego) renderEgo = pose(world, renderEgo);
       syncCar(egoMesh, renderEgo, dt, t, lightsOn);
       updateRoadEffects(world, egoMesh, renderEgo, dt);
+      return renderEgo;
     },
     updateVehicles(dt, lightsOn, alpha, replayNext, replayAlpha, visitRoadVehicle) {
       lastVehicleTime = world.t;

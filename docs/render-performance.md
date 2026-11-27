@@ -214,7 +214,8 @@ clock and camera anchor, eliminating the 120,000-byte rain or 72,000-byte snow p
 on moving frames. Rain now uses soft-edged quads stretched along the fall direction. Snow keeps
 its round texture and on-screen size cap.
 
-In rain, the ego car and nearby moving road traffic share one tire-spray batch. The shader spreads
+In rain, forward-moving road vehicles near the camera share one tire-spray batch. The closest
+24 vehicles whose spray can reach the view get a slot. The shader spreads
 and fades the spray behind the wheels using each vehicle's rendered pose and speed. Spray phase
 follows the drive clock, so paused and replayed poses produce a consistent spray pattern.
 

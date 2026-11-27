@@ -344,7 +344,7 @@ export function checkWeatherDraws(renderer, check) {
     weather.update(0);
     weather.rain.mesh.visible = false;
     const car = { x: 0, y: 0, v: 13, psi: 0, spec: CAR };
-    weather.spray.begin(car, 0.25);
+    weather.spray.begin(camera, 0.25);
     weather.spray.add(car);
     weather.spray.end();
     check("The tire spray shader draws a moving car's spray", showsParticles());
