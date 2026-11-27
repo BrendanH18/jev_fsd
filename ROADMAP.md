@@ -212,6 +212,10 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
     car, `followingPolicy` (`sim/following.js`) doubles the gap and drops the speed target to near
     zero in one decision, so the car brakes at up to 6.5 m/s² with 45 m of room and the audit counts a
     brake check ([record](docs/validation/compound-drive-2026-11-26.md)).
+  - From the review of the compound drive: the arena's time limit and real-time pacing read `world.t`
+    (`lab/evaluation.js`), which several drives set ahead to cue a signal (`rush-hour` by about 24 s), so
+    their limit is shorter than stated and a real-time run pauses at the start. Measuring from the
+    start changes those drives' limits, so it needs its own before-and-after record.
 
 ## Phase 2: put the models on the road
 
@@ -424,8 +428,9 @@ in `sim/features/index.js` and its challenge's entry in `lab/challenges.js`;
 [what else it can touch](docs/feature-interface.md#how-close-a-new-feature-is-to-its-own-file-its-challenge-its-test-and-one-registration-line)
 (its documentation row, a new sound, a new map layer) is listed there, and `scripts/test_feature_exit.mjs`
 keeps the core, `main.js` and the shared renderers from naming a feature again. Still naming older
-features, and free to shrink: the AI Eyes wording for eleven of them and 29 options listed in
-`setupChallenge`. 3.11 is not part of the exit.
+features, and free to shrink: the AI Eyes wording for eleven of them, 29 options listed in
+`setupChallenge`, and the turn-restriction view, which also draws the no-turn-on-red signs
+(`render/turn-restrictions.js`). 3.11 is not part of the exit.
 
 ## Phase 4: a benchmark that separates drivers
 
