@@ -754,7 +754,7 @@ class HealthDiagnosticsVersionTests(unittest.TestCase):
     """#33, #34, #35: Centralized VERSION, GET /api/health, and GET /api/diagnostics."""
 
     def test_centralized_version(self):
-        self.assertEqual(jev.VERSION, "0.3.0")
+        self.assertEqual(jev.VERSION, "0.4.0")
         self.assertEqual(server.VERSION, jev.VERSION)
         self.assertEqual(endpoints.USER_AGENT, "jev-fsd/%s" % jev.VERSION)
         self.assertEqual(server.Handler.server_version, "JevFSD/%s" % jev.VERSION)
