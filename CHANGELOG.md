@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replace the project icon with a road drawn as a check mark, and show it on the arena and benchmark
+  pages too.
+
 ## 0.4.0 (26 November 2026)
 
 - Declare each feature's meshes, scenery, frame effects, HUD notices, event badges and sounds in its
