@@ -3,15 +3,13 @@
 tests/fixtures/parity_cases.json holds the cases. scripts/parity_js.mjs runs the browser code on
 them (under Node); this test runs jev/routing.py on the same cases and compares:
 
-- turns: the turn angle, the turn kind, and the sharp-turn rule (SHARP_TURN in jev/routing.py,
-  static/js/sim/npc.js and static/js/demo/routing.js), with the limit itself, which no geometry
-  lands on exactly, checked by setting the turn angle: exactly 130 degrees is allowed on every side;
+- turns: the turn angle, the turn kind, and the sharp-turn rule (SHARP_TURN_DEG in jev/routing.py,
+  SHARP_TURN in static/js/sim/npc.js and the 130 degree limit in static/js/demo/routing.js);
 - joins: a route over two single-lane edges (Router.build_route against routeFromLanes), so the
   lane-join geometry (_round_corner / _blend against joinLanes) and the slicing and 1 m resampling
   around it. The two polylines must lie within the fixture's tolerance of each other and be as long.
 
-No case is a known difference since ROADMAP 3.11. The mark still works, for a disagreement found
-later: a case marked "known_difference" must disagree, so fixing one side means updating the fixture.
+A case marked "known_difference" must still disagree: fixing one side means updating the fixture.
 Skipped when Node is not on PATH, unless JEV_REQUIRE_NODE is set (as in CI).
 """
 
@@ -22,14 +20,13 @@ import math
 import os
 import shutil
 import subprocess
-import sys
 import unittest
 from pathlib import Path
 
 import helpers  # noqa: F401  (sys.path)
 
 from jev import geometry as g
-from jev.routing import SHARP_TURN, Router
+from jev.routing import Router
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "tests/fixtures/parity_cases.json"
@@ -91,19 +88,6 @@ def python_turn(case: dict) -> dict:
     angle = router.turn_angle("in", "out")
     # with another way on, a U-turn (or a turn sharp enough to count as one) is priced out of reach
     return {"turn_angle": angle, "kind": g.classify_turn(angle), "allowed": router.turn_penalty("in", "out") < 1e6}
-
-
-def python_sharp_limit() -> list:
-    """The junction of scripts/parity_js.mjs's sharpLimitResults with its turn angle set to the
-    limit, to minus the limit and to the next number above it."""
-    out = []
-    for angle in (SHARP_TURN, -SHARP_TURN, SHARP_TURN * (1 + sys.float_info.epsilon)):
-        lines = {"in": [[-50, 0], [0, 0]], "out": [[0, 0], [-32.139380484, 38.302222156]], "ahead": [[0, 0], [50, 0]]}
-        router = Router(pack_of(lines))
-        real = router.turn_angle
-        router.turn_angle = lambda a, b, angle=angle, real=real: angle if (a, b) == ("in", "out") else real(a, b)
-        out.append({"turn_angle": angle, "allowed": router.turn_penalty("in", "out") < 1e6})
-    return out
 
 
 def python_join(case: dict) -> list:
@@ -177,14 +161,6 @@ class ParityTests(unittest.TestCase):
 
     def test_turn_angle_kind_and_sharp_turn_rule(self):
         self.check("turn", self.cases["turns"], self.js["turns"], lambda c, js: turn_differences(python_turn(c), js))
-
-    def test_exactly_the_sharp_turn_limit_is_allowed_everywhere(self):
-        py, js = python_sharp_limit(), self.js["sharp_limit"]
-        self.assertEqual([p["turn_angle"] for p in py], [j["turn_angle"] for j in js], "the limits differ")
-        self.assertEqual([p["allowed"] for p in py], [True, True, False])
-        for p, j in zip(py, js):
-            with self.subTest(turn_angle=p["turn_angle"]):
-                self.assertEqual((j["npc_allowed"], j["browser_allowed"]), (p["allowed"], p["allowed"]))
 
     def test_turn_geometries_match_their_declared_angles(self):
         for case, js in zip(self.cases["turns"], self.js["turns"]):

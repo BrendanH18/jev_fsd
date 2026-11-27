@@ -143,8 +143,7 @@ export const LOOK_M = 60;
 const ZONE_AHEAD_M = 15;
 export const BIKES = 12;
 const BIKE_COLORS = [0x2b6cb0, 0xc53030, 0x2f855a, 0xd69e2e, 0x553c9a, 0x1a202c, 0xdd6b20];
-// Mirrors SHARP_TURN in jev/routing.py: a turn of exactly this much is still allowed.
-const SHARP_TURN = (130 * Math.PI) / 180;
+const SHARP_TURN = (130 * Math.PI) / 180; // mirrors SHARP_TURN_DEG in jev/routing.py
 const LINK_M = 20; // a street this short going straight on is a link inside a junction
 // A driver starts a lane change no later than LC_END_M before its street ends, nor within LC_END_M
 // before a control line (maybeChangeLane), so a turn from the wrong lane needs this much stretch
@@ -332,9 +331,7 @@ export class NpcPath {
   }
   append(edgeId, laneIdx) {
     const lane = this.map.lane(edgeId, laneIdx) || this.map.lane(edgeId, 0);
-    // the turn between the two edges decides whether the corner is rounded, as in the router
-    const previous = this.edges.length ? this.edges[this.edges.length - 1].id : null;
-    this.pts = joinLanes(this.pts, lane.pts, { turn: previous === null ? null : this.map.turnAngle(previous, edgeId) });
+    this.pts = joinLanes(this.pts, lane.pts);
     this.cum = cumulative(this.pts);
     this.length = this.cum[this.cum.length - 1];
     const edge = this.map.edges.get(edgeId);
@@ -361,7 +358,7 @@ export class NpcPath {
         .filter((id) => !this.closures?.closed.has(id));
       if (!succ.length) return false;
       // no U-turns, nor turns so sharp they double back (the tip of a traffic island)
-      const noU = succ.filter((e) => Math.abs(this.map.turnAngle(last.id, e)) <= SHARP_TURN);
+      const noU = succ.filter((e) => Math.abs(this.map.turnAngle(last.id, e)) < SHARP_TURN);
       let pool = noU.length ? noU : succ;
       for (const filter of TRAFFIC_SUCCESSOR_POOL) pool = filter(this, pool);
       if (this.classes) {
@@ -2126,7 +2123,7 @@ export class NpcFleet {
       .filter(
         (id) =>
           !not.has(id) &&
-          Math.abs(this.map.turnAngle(from, id)) <= SHARP_TURN &&
+          Math.abs(this.map.turnAngle(from, id)) < SHARP_TURN &&
           !TRAFFIC_TURN_BLOCKED.some((blocked) => blocked(this.world, from, id, false)) &&
           !path.closures?.closed.has(id),
       );

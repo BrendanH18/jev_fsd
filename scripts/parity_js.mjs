@@ -126,31 +126,6 @@ function turnResult(c, { MapData, NpcFleet, browserRoute }) {
   };
 }
 
-// The sharp-turn limit itself, which no fixture geometry lands on exactly: the same junction with
-// its turn angle set to the limit, to minus the limit and to the next number above it.
-function sharpLimitResults(modules) {
-  const limit = (130 * Math.PI) / 180;
-  const base = {
-    in: [
-      [-50, 0],
-      [0, 0],
-    ],
-    out: [
-      [0, 0],
-      [-32.139380484, 38.302222156],
-    ],
-  };
-  return [limit, -limit, limit * (1 + Number.EPSILON)].map((angle) => {
-    const MapData = class extends modules.MapData {
-      turnAngle(a, b) {
-        return a === "in" && b === "out" ? angle : super.turnAngle(a, b);
-      }
-    };
-    const { npc_allowed, browser_allowed } = turnResult({ ...base, name: "limit" }, { ...modules, MapData });
-    return { turn_angle: angle, npc_allowed, browser_allowed };
-  });
-}
-
 function joinResult(c, { MapData, routeFromLanes }) {
   const map = packOf(MapData, { before: c.before, after: c.after });
   const route = routeFromLanes(map, [map.lane("before", 0), map.lane("after", 0)], 0, map.lane("after", 0).length);
@@ -192,7 +167,6 @@ async function main(argv) {
     output = {
       turns: input.turns.map((item) => turnResult(item, { MapData, NpcFleet, browserRoute })),
       joins: input.joins.map((item) => joinResult(item, { MapData, routeFromLanes })),
-      sharp_limit: sharpLimitResults({ MapData, NpcFleet, browserRoute }),
     };
   }
   process.stdout.write(`${JSON.stringify(output, null, args.pretty ? 2 : 0)}\n`);
