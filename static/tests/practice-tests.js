@@ -58,7 +58,7 @@ export async function runPracticeTests() {
         !lab.dialog.textContent.includes("Six authored challenges"),
     );
     lab.challenges();
-    const cards = () => [...lab.dialog.querySelectorAll(".challenge-card")];
+    const cards = () => [...lab.dialog.querySelectorAll("[data-challenge]")];
     const control = (label) => lab.dialog.querySelector(`[aria-label="${label}"]`);
     const search = () => control("Search challenges");
     const type = (value) => {
