@@ -11,6 +11,8 @@
   into view.
 - Replace the project icon with a car seen from above, sensing the road ahead between lane lines, and
   show it on the arena and benchmark pages too.
+- Ease off when approaching stopped traffic with a tailgater behind, and brake firmly when the
+  remaining gap requires it.
 
 ## 0.4.0 (26 November 2026)
 

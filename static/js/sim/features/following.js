@@ -78,7 +78,8 @@ export default {
   sense: {
     at: "following",
     run(world, snap) {
-      if (world.followingDistance && snap.following) snap.following.policy = followingPolicy(world.ego, snap.following);
+      if (world.followingDistance && snap.following)
+        snap.following.policy ??= followingPolicy(world.ego, snap.following);
     },
   },
   followingPolicy: (world, vehicle, lead) => (world.followingDistance ? followingPolicy(vehicle, lead) : null),
@@ -102,7 +103,11 @@ export default {
             Math.abs(wrap(o.psi - car.psi)) < Math.PI / 4
           ) {
             const gap = ahead - box.halfLength - ob.halfLength;
-            const future = followingPolicy(car, { gap_m: gap, speed: f.speed, vehicle: o });
+            const future = followingPolicy(
+              car,
+              { gap_m: gap, speed: f.speed, vehicle: o },
+              { scale: f.policy.gap_scale },
+            );
             const deficit = future.target_gap_m - gap;
             closes =
               deficit > Math.max(1, f.policy.target_gap_m - f.gap_m - 0.5) && car.v > f.policy.safe_speed_mps + 0.2;
