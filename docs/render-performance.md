@@ -206,6 +206,30 @@ Map-wide face batches submit some off-screen lamp geometry, adding less than 0.5
 triangle count in each profile. These measurements cover draw submission in a single view with
 software WebGL. Use hardware timings to evaluate GPU performance.
 
+## GPU weather and tire spray
+
+Rain and snow keep their seeded positions on the GPU. The vertex shaders wrap them around the
+viewing camera and apply wind, fall and snowfall sway. Each frame updates only the precipitation
+clock and camera anchor, eliminating the 120,000-byte rain or 72,000-byte snow position upload
+on moving frames. Rain now uses soft-edged quads stretched along the fall direction. Snow keeps
+its round texture and on-screen size cap.
+
+In rain, the ego car and nearby moving road traffic share one tire-spray batch. The shader spreads
+and fades the spray behind the wheels using each vehicle's rendered pose and speed. Spray phase
+follows the drive clock, so paused and replayed poses produce a consistent spray pattern.
+
+The matched High-preset profiles reused the frozen Kitsilano chase pose above, at 1440 × 900 on
+Boat Chromium 151 (ANGLE, Intel UHD 620). Counts include shadows, reflections and post-processing.
+
+| Weather | Draw calls before → after | Triangles before → after |
+|---|---:|---:|
+| Dry | 1,350 → 1,350 | 2,992,841 → 2,992,841 |
+| Rain | 2,494 → 2,494 | 5,031,031 → 5,051,031 |
+
+The rain quads add 20,000 triangles across the main and reflection passes, about 0.4% of the
+matched frame. The frozen pose had no vehicle moving fast enough to spray. With spray active, the
+batch adds one draw per scene pass. These profiles measure submitted geometry and calls.
+
 ## Reproduce and test
 
 Start `uv run server.py`, open `/?quality=high&weather=dry&time=afternoon`, and pause with `P`.

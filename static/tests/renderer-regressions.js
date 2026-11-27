@@ -212,18 +212,17 @@ function weatherChecks(check) {
   const weather = new WeatherView({ scene, camera });
   weather.apply("rain");
   const rain = weather.rain.mesh;
+  const spray = weather.spray.mesh;
   check(
     "Cover wet-road darkening and gloss without affecting roof roughness",
     material.color.r < dry && material.roughness < 0.3 && roof.roughness === 1,
   );
   check("Keep untagged surfaces out of weather recolouring", dirt.color.getHex() === 0x64412d);
   check(
-    "Populate the rain buffer before the next animation frame",
-    rain.geometry.attributes.position.array.some((x) => x !== 0),
-  );
-  check(
-    "Align streak lean with falling rain and its wind direction",
-    rain.geometry.attributes.position.getX(0) > rain.geometry.attributes.position.getX(1),
+    "Seed all rain streaks as instances of a single quad",
+    rain.geometry.attributes.position.count === 4 &&
+      rain.geometry.instanceCount === rain.geometry.attributes.dropSeed.count &&
+      rain.geometry.attributes.dropSeed.array.some((x) => x !== 0),
   );
   const wet = material.color.r;
   weather.apply("rain");
@@ -233,18 +232,20 @@ function weatherChecks(check) {
   for (const [name, resource] of [
     ["geometry", rain.geometry],
     ["material", rain.material],
+    ["spray geometry", spray.geometry],
+    ["spray material", spray.material],
   ])
     resource.addEventListener("dispose", () => disposed.add(name));
   weather.apply("snow");
   const snow = weather.snow.mesh;
   check(
-    "Mark streaming rain and snow vertices as dynamic GPU data",
-    rain.geometry.attributes.position.usage === THREE.DynamicDrawUsage &&
-      snow.geometry.attributes.position.usage === THREE.DynamicDrawUsage,
+    "Keep precipitation seeds in static GPU buffers",
+    rain.geometry.attributes.dropSeed.usage === THREE.StaticDrawUsage &&
+      snow.geometry.attributes.position.usage === THREE.StaticDrawUsage,
   );
   check(
     "Release obsolete weather particle resources on a weather change",
-    disposed.size === 2 && rain.parent === null && snow.parent === scene,
+    disposed.size === 4 && rain.parent === null && spray.parent === null && snow.parent === scene,
   );
   check(
     "Cover the plowed-road snow level relative to rooftop accumulation",
@@ -253,10 +254,11 @@ function weatherChecks(check) {
   syncAt(camera, -400, 60, 120);
   weather.update(1 / 60);
   const flakes = snow.geometry.attributes.position;
-  check("Keep snowfall around elevated camera views", flakes.getY(0) >= 44 && flakes.getY(0) <= 76);
   check(
-    "Recycle snow around the new viewing area after a camera jump",
-    flakes.getX(0) >= -435 && flakes.getX(0) <= -365 && flakes.getZ(0) >= 85 && flakes.getZ(0) <= 155,
+    "Update snowfall's camera anchor and clock without rewriting seed data",
+    weather.snow.uniforms.weatherCamera.value.equals(camera.position) &&
+      weather.snow.uniforms.weatherTime.value === 1 / 60 &&
+      flakes.version === 0,
   );
   const flakeTexture = snow.material.map;
   let textureReleased = false;
@@ -271,7 +273,7 @@ function weatherChecks(check) {
   check("Keep shared flake textures alive when removing a snow particle system", !textureReleased);
   check(
     "Render fog without precipitation and with partial wet sheen",
-    !weather.rain && !weather.snow && material.color.r > wet && material.color.r < dry,
+    !weather.rain && !weather.snow && !weather.spray && material.color.r > wet && material.color.r < dry,
   );
   weather.apply("constructor");
   check(
@@ -284,8 +286,10 @@ function weatherChecks(check) {
   );
   weather.apply("rain");
   check(
-    "Reproduce precipitation placement at a fixed camera and weather time",
-    close(weather.rain.mesh.geometry.attributes.position.getY(0) - 44, rain.geometry.attributes.position.getY(0)),
+    "Restart rain with the same seeds and the current camera anchor",
+    weather.rain.mesh.geometry.attributes.dropSeed.getY(0) === rain.geometry.attributes.dropSeed.getY(0) &&
+      weather.rain.uniforms.weatherCamera.value.equals(camera.position) &&
+      weather.rain.uniforms.weatherTime.value === 0,
   );
   weather.apply("dry");
   shared.dispose();
@@ -303,6 +307,56 @@ function weatherChecks(check) {
     atmosphereFor(12, "fog").clouds.cover === 0 &&
       atmosphereFor(12, "fog").fogDensity > atmosphereFor(12, "rain").fogDensity,
   );
+}
+
+export function checkWeatherDraws(renderer, check) {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0);
+  scene.fog = new THREE.FogExp2(0, 0.016);
+  const camera = new THREE.PerspectiveCamera(58, 2, 0.3, 100);
+  camera.position.set(-8, 2, 0);
+  camera.lookAt(0, 0.5, 0);
+  const weather = new WeatherView({ scene, camera });
+  const target = new THREE.WebGLRenderTarget(160, 80);
+  const previous = renderer.getRenderTarget();
+  const pixels = new Uint8Array(160 * 80 * 4);
+  function showsParticles(inView = () => true) {
+    renderer.render(scene, camera);
+    renderer.readRenderTargetPixels(target, 0, 0, 160, 80, pixels);
+    return pixels.some((value, i) => i % 4 !== 3 && value > 0 && inView(Math.floor(i / 4) % 160));
+  }
+  try {
+    renderer.setRenderTarget(target);
+    weather.apply("rain");
+    weather.update(0.3);
+    check("The rain shader draws visible streaks", showsParticles());
+    camera.position.set(0, 28, 0);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(0, 0, 0);
+    weather.update(0);
+    check(
+      "Overhead rain covers the left and right edges",
+      showsParticles((x) => x < 40) && showsParticles((x) => x > 120),
+    );
+    camera.position.set(-8, 2, 0);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(0, 0.5, 0);
+    weather.update(0);
+    weather.rain.mesh.visible = false;
+    const car = { x: 0, y: 0, v: 13, psi: 0, spec: CAR };
+    weather.spray.begin(car, 0.25);
+    weather.spray.add(car);
+    weather.spray.end();
+    check("The tire spray shader draws a moving car's spray", showsParticles());
+    weather.apply("snow");
+    weather.update(0.3);
+    check("The snow shader draws visible flakes", showsParticles());
+    check("Rain, spray and snow draw without WebGL errors", renderer.getContext().getError() === 0);
+  } finally {
+    weather.apply("dry");
+    renderer.setRenderTarget(previous);
+    target.dispose();
+  }
 }
 
 function minimapChecks(check) {
