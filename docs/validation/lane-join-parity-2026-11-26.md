@@ -189,7 +189,11 @@ weathers with route fingerprint `1607d4bf5bdaaeec`; the held-out plan) and is de
   `build_results.py` loads every definition in `data/suites/`. Comparisons across versions stay
   refused (`compatibleSuiteVersions`, the leaderboard's per-version tables).
 - **Nothing was published as `v1`.** Every published row before this change is `legacy`. The Rules
-  city runs recorded here are the first numbered rows, as `v2`.
+  city runs recorded here are the first numbered rows, as `v2`. The leaderboard would have opened on
+  them, a suite with Rules alone in it (and the browser check of the results page would have
+  failed), so it now opens on the newest suite in which a model has a published result
+  (`defaultSuite`, `static/js/lab/results.js`; `scripts/test_results_page.mjs`): the legacy results,
+  until a model is recorded on `v2`. The README block lists `v2` first, as generated.
 - **The repeat plan** for ROADMAP 7.5 had not been run. It is reissued for `v2`
   ([plan](arena-repeat-plan.md), `arena-open-repeats-v2.json`) with the same drivers, track and
   repeat count.
@@ -287,4 +291,30 @@ manoeuvre that fails, as on 26 November, so nothing was retuned.
   `scripts/test_5k_arena-ui_replay.mjs`, `scripts/test_results_page.mjs`,
   `scripts/test_demo_bench_runs.mjs`, `tests/test_results.py`, the demo build).
 
-CHECKS_SECTION
+## Checks
+
+On Boat, Node 22.23.5 and Python 3.12.3, 27 November, on the merged tree:
+
+- `scripts/boat-check.sh --full`, once, because CI's dry-only benchmark cannot check this change:
+  all 238 `scripts/test_*.mjs` files, the 1,201 Python tests, Ruff, Biome, the offline Jev requests
+  and the fixture check passed. The leaderboard's opening suite and its test were added after that
+  run and checked on their own (below).
+- The benchmark legs above, each with `--check 1` from a clean checkout: Kitsilano bare dry; city dry,
+  fog, rain and snow; city dry with parking; the eleven other maps; the hard city slice
+  (`soak.mjs --mode hard`); all 62 arena drives with Rules and with the cautious agent.
+- Targeted: `tests/test_parity.py`, `tests/test_routing.py`, `tests/test_results.py`,
+  `tests/test_5k_results_*.py`, `tests/test_replay_drift.py`, `tests/test_5k_insights_cli.py`,
+  `tests/test_build_demo.py`, `tests/test_demo_artifact.py`, `tests/test_doc_links.py`;
+  `scripts/test_fog_approach_speed.mjs` (fails without the fog fix), `test_roundabout_joining.mjs`,
+  `test_roundabout_challenge.mjs`, `test_5k_bench_canonical.mjs`, `test_merge_recordings.mjs`,
+  `test_5k_submissions_repeats.mjs`, `test_5k_submissions_bundle.mjs`, `test_5k_submissions_cli.mjs`,
+  `test_5k_results_manifest.mjs`, `test_compound_drive.mjs`, `test_challenge_modules.mjs`,
+  `test_feature_exit.mjs`, `test_feature_registry.mjs`, `test_ci_shard.mjs`, `test_scores.mjs`,
+  `test_open_track.mjs`, `test_5k_routing_geometry.mjs`, `test_replay.mjs`, `test_results_page.mjs`,
+  `test_5k_arena-ui_replay.mjs`, `test_5k_arena-ui_results.mjs`, `test_5k_demo-docs_api.mjs`,
+  `test_demo_bench_runs.mjs`, `test_bench_view.mjs`; `scripts/build_results.py --check`;
+  `scripts/build_demo.py`; `scripts/driver_latitude.mjs --only rush-hour`.
+- The browser suite's `pages` group (`scripts/test_browser_pages.py --group pages`, Playwright
+  1.65.2 with Chromium, which opens the results page and plays a published replay) passed with the
+  leaderboard change. The other three browser groups run in CI.
+- No live model call was made and nothing was installed outside Boat.
