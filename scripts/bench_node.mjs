@@ -285,7 +285,7 @@ const { HELDOUT_SEEDS, heldoutPlan, buildHeldoutSuite } = await import("../stati
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { agentDefinitions } = await import("../static/js/brain/registry.js");
 const recordingModule = await import("../static/js/brain/recording.js");
-const { benchSuiteVersion } = await import("./canonical_suite.mjs");
+const { activeSuite, benchSuiteVersion } = await import("./canonical_suite.mjs");
 const manifestModule = await import("./run_manifest.mjs");
 let replaying = null;
 if (replayJson)
@@ -459,6 +459,7 @@ if (!replaying && (args.json || args.record)) {
         bench: config,
         manifest,
         suite_version: CUSTOM_SUITE,
+        suite_target: activeSuite.version,
       }),
     });
 }

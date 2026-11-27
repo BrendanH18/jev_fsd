@@ -174,7 +174,8 @@ assert.deepEqual(Object.fromEntries(authored), canonical.arena.drives);
 const { seeds, count } = canonical.bench.heldout;
 assert.deepEqual(heldoutPlan("kitsilano"), { seeds, count });
 
-function arenaShard(name, entries, version = "custom") {
+// (a partial run is labelled custom and names the suite its writer was recording for)
+function arenaShard(name, entries, version = "custom", target = version === "custom" ? canonical.version : undefined) {
   const maps = Object.fromEntries(entries.map(([, { map }]) => [map, canonical.maps[map]]));
   const ids = entries.map(([id]) => id);
   const recording = new ModelRecording({
@@ -194,6 +195,7 @@ function arenaShard(name, entries, version = "custom") {
     ),
   });
   setRecordingSuiteVersion(recording, version);
+  if (target) recording.header.suite_target = target;
   const file = path.join(dir, name);
   fs.writeFileSync(file, recording.serialize());
   return file;
@@ -230,6 +232,18 @@ refused(
   [shardA, arenaShard("arena-v1-c.json", authored.slice(division), "v1")],
   /differs from .* in its source/,
   "parts from two suite versions",
+);
+// Custom parts that name no target were written before suite v2, perhaps on a tree that drove
+// differently, so a complete set of them stays custom.
+merge(
+  arenaShard("arena-old-a.json", authored.slice(0, division), "custom", null),
+  arenaShard("arena-old-b.json", authored.slice(division), "custom", null),
+);
+assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "custom");
+refused(
+  [shardA, arenaShard("arena-old-c.json", authored.slice(division), "custom", null)],
+  /differs from .* in its source/,
+  "a part with a target suite and one without",
 );
 merge(shardA, arenaShard("arena-short.json", authored.slice(division, -1)));
 assert.equal(ModelRecording.parse(fs.readFileSync(path.join(dir, "out.json"), "utf8")).header.suite_version, "custom");

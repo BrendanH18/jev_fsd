@@ -25,6 +25,12 @@ export const suiteDefinition = (version) => (Object.hasOwn(SUITES, version) ? SU
 // The definition an artifact is checked against: the one it declares, or the active one when it
 // declares none (legacy, custom, or a run still being written).
 export const definitionFor = (artifact) => suiteDefinition(artifact?.suite_version) ?? activeSuite;
+// The definition a set of shards may be merged into: the numbered suite they declare, or the one
+// their writer was recording for (`suite_target`, written beside the `custom` label of a partial
+// run). Shards with neither predate suite v2 and may have been driven before the change that made
+// it, so their merge stays custom.
+export const mergeDefinition = (header) =>
+  suiteDefinition(header?.suite_version) ?? suiteDefinition(header?.suite_target);
 
 export const authoredDrive = (challenge) => ({
   map: challenge.map,

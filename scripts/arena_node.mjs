@@ -262,7 +262,7 @@ if (replayJson) {
 }
 const localTape = replayJson?.format === LOCAL_RECORDING_FORMAT || Boolean(args.agent && args.record);
 if (localTape && (browserOutput || comparisonOutput)) fail("Replay exports currently require a model recording.");
-const { arenaSuiteVersion, authoredDrive, definitionFor } = await import("./canonical_suite.mjs");
+const { activeSuite, arenaSuiteVersion, authoredDrive, definitionFor } = await import("./canonical_suite.mjs");
 const { driverScores } = await import("../static/js/bench/scores.js");
 const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).captureBrowserReplay() : null;
 
@@ -424,6 +424,7 @@ if (replayJson) {
       maps: shas,
       manifest,
       suite_version: CUSTOM_SUITE,
+      suite_target: activeSuite.version,
     };
     recording = localTape
       ? new LocalRecording({ header: { driver: brain, model: null, engine: manifest.engine, ...context } })
