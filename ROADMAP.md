@@ -1,9 +1,93 @@
 # Roadmap
 
-Last reviewed: 2026-11-20 at `3ca3178` (#99), with an audit and an expansion plan
-([record](docs/validation/roadmap-audit-2026-11-20.md)). This is the one place the plan lives. Update
-it when an item lands, when a priority changes, or when a decision under
+Last reviewed: 2026-11-27 (UI & 3D scene rendering rewrite promoted to top priority; prior audit at
+`3ca3178`, #99, [record](docs/validation/roadmap-audit-2026-11-20.md)). This is the one place the
+plan lives. Update it when an item lands, when a priority changes, or when a decision under
 [Open decisions](#open-decisions) is made.
+
+## Top priority: 3D scene rendering & UI rewrite
+
+**Status: Active · Highest priority (supersedes the expansion order below).** Full-send rewrite of
+the 3D rendering pipeline and driving HUD, grounded in the 27 November UI & rendering audit
+([graphics notes](docs/reference/graphics.md), [performance baseline](docs/render-performance.md)).
+All simulation, routing, benchmark and replay invariants stay untouched; this phase rewrites how
+the world is lit, shaded, batched and presented.
+
+### R1. Materials, lighting & visual leap (shaders and shadows)
+
+- [ ] **R1.1 Procedural PBR micro-surface maps (normal + roughness/AO).** (L) Generate paired
+  procedural normal and roughness maps in `static/js/render/textures.js` for asphalt (aggregate
+  grain, tar seams, subtle tire-track polish), sidewalks (recessed slab joints), curbs, lap siding,
+  brick, apartment facades and roof shingles. Add normal-perturbed wet reflections and animated
+  raindrop ripples in `wetReflective` (`static/js/render/reflection.js`).
+- [ ] **R1.2 Cascaded Shadow Maps (CSM).** (M) Replace the single `±70 m` orthographic directional
+  shadow frustum (`static/js/render/scene.js`) with a 3-cascade CSM (near `0–20 m` crisp around the
+  ego car/curbs/pedestrians, mid `20–75 m`, far `75–220 m`), eliminating near-field shadow blur and
+  distant cut-offs while removing the need for a `4096²` single map on Ultra.
+- [ ] **R1.3 Analytic multi-light night shading & volumetric beams.** (L) Replace the flat additive
+  `PlaneGeometry` headlight and streetlamp decals (`cars.js`, `citylights.js`), which wash out wet
+  night asphalt and lane markings, with analytic evaluation of the nearest 16–24 streetlamps and
+  vehicle headlights in the road/building shaders (smooth distance fade, zero light-popping). Add
+  subtle Fresnel-faded volumetric headlight cones and streetlamp halos in rain, fog and night.
+- [ ] **R1.4 Physical atmospheric sky & aerial perspective.** (M) Upgrade `skyMaterial`
+  (`static/js/render/scene.js`) from a 2-stop gradient + flat 2D FBM plane to physical Rayleigh +
+  Mie scattering with height-based aerial perspective fog so dawn, golden hour, fog and snow have
+  depth instead of uniform grey washout.
+- [ ] **R1.5 Building parallax interior mapping & architectural variety.** (M) Add parallax interior
+  mapping in the facade window shader (`static/js/render/buildings.js`) for 3D room depth at zero
+  geometry cost, seed lit windows in world/building space so neighbouring buildings stop sharing
+  identical lit patterns, and add 2–3 facade styles plus rooftop details/awnings.
+- [ ] **R1.6 Upgraded vehicle silhouettes & cleaner in-world overlays.** (L) Upgrade the chase-view
+  vehicle geometry (`static/js/render/cars.js`) via multi-section lofting or compact Draco glTF
+  models for the 6 garage cars (curved rear glass, trunk recess, diffuser, wheel-well depth).
+  Replace the 24 m green destination laser beam (`overlays.js`) with a grounded pin/ring, and
+  replace the 64 raw cyan `PerceptionView` rays (`perception.js`) with a translucent shaded
+  visibility polygon.
+
+### R2. Renderer architecture, instancing & post-processing rewrite
+
+- [ ] **R2.1 Batch/instance dynamic vehicles, pedestrians and signal lamps.** (L) Collapse moving
+  NPC cars (~18 draw calls each → `< 15` total via `BatchedMesh`/`InstancedMesh`), pedestrians
+  (9 meshes each → single `SkinnedMesh` or GPU-instanced crowd) and traffic signal lamps (~300+
+  draw calls + sprites → 1 `InstancedMesh` driven by a phase `DataTexture`). Target fewer than 300
+  draw calls in the dry High profile. The September first-pass comparison recorded 1,524.
+- [ ] **R2.2 GPU-driven weather particles & tire spray.** (M) Move rain and snow particle wrapping
+  and sway (`static/js/render/weather.js`) 100% into vertex shaders (zero per-frame JS loop and zero
+  buffer uploads). Render rain as soft, velocity-stretched camera-facing quads and add wet-road tire
+  spray behind moving vehicles.
+- [ ] **R2.3 Unified `PostFX` & reflection pipeline.** (M) Fuse tone-mapping, color grade, vignette
+  and dither into a single pass (dropping `ldrRT` and `gradeRT`), resolve Ultra's MSAA-vs-GTAO
+  conflict via a lightweight opaque depth prepass (so Ultra keeps both MSAA + alpha-to-coverage and
+  GTAO), and replace or layer-cull `GroundReflection` (shorter far plane / skip small props, or SSR
+  with env-map fallback) so rain stops doubling draw calls and triangle counts.
+
+### R3. HUD & UI overhaul
+
+- [ ] **R3.1 Unified design system & slimmed default driving HUD.** (M) Merge the clashing palettes
+  in `static/css/app.css` and `static/css/lab.css` into one semantic CSS token system. Reclaim
+  ~75%+ of the viewport for the road by collapsing the default driving chrome to a compact nav card,
+  clean bottom instrument cluster and minimap, moving telemetry, AI eyes, drive coach and inspector
+  JSON into a single collapsible drawer.
+- [ ] **R3.2 Modal/drawer Settings & Garage with live vehicle/paint swap.** (M) Move environment
+  controls, 6-car garage, paint swatches and free-drive feature switches out of the cramped 300 px
+  left column into a tabbed drawer/modal, and hot-swap ego vehicle model and paint in the live 3D
+  scene without triggering a full page reload (`location.assign`).
+- [ ] **R3.3 Heading-up follow minimap & reactive HUD layout.** (M) Add a zoomed, heading-up follow
+  mode to `static/js/render/minimap.js` while driving (with click-to-expand full-map destination
+  picking) and replace brittle `:has()` floating-bar CSS offsets (`lab.css`) with clean docked HUD
+  layout regions backed by a lightweight reactive state store.
+
+Before changing the renderer, record fresh dry and rainy High-preset baselines using the
+[render profiling procedure](docs/render-performance.md). Reuse the same map, route, seed, camera,
+time of day, viewport, browser and hardware for the final comparison. Include shadow, reflection
+and post-processing calls in both measurements.
+
+The rewrite is complete when `render-tests.js` and the browser UI and accessibility suites pass
+with zero WebGL errors across Low, High and Ultra in all four weather conditions. Draw calls must
+drop by more than 60% in each of the two matched profiles, and the default HUD must leave at least
+75% of a 1440×900 viewport for the driving view.
+
+---
 
 ## What this project is for
 
@@ -58,6 +142,7 @@ claimed before the exits it depends on.
 
 | Phase | Aim | Exit test | State |
 |---|---|---|---|
+| [Top priority: Render & UI](#top-priority-3d-scene-rendering--ui-rewrite) | Major 3D scene rendering & HUD rewrite | Render/UI suites pass with zero GL errors, >60% draw-call cut, unified slim HUD | **Active · Top priority** |
 | [0](#phase-0-stop-the-freeze) | No drive freezes | The known crash is fixed and a thrown step can no longer stop the app | Exited 9 Nov |
 | [1](#phase-1-make-the-default-world-pass) | The world people actually drive is measured and passes | A seeded "city" suite with features on runs in CI and Rules passes it | Exited 10 Nov; 1.8 open |
 | [2](#phase-2-put-the-models-on-the-road) | Model results exist and are published | A committed, reproducible comparison of Rules, Jev and at least one LLM, on the challenges **and the city suite** | **Met** on 21 November with the Kitsilano dry city suite (2.5b) |
@@ -563,6 +648,7 @@ one run that replays only on the tree it was made on is weak evidence. Both put 
 
 | Order | Work | Why then | Waits for |
 |---|---|---|---|
+| **0 (now)** | [Top priority: 3D scene rendering & UI rewrite](#top-priority-3d-scene-rendering--ui-rewrite) (`R1`–`R3`) | Full-send visual, rendering performance and HUD overhaul | — |
 | 1 | [7.1](#phase-7-results-that-hold-up), then [2.5b](#phase-2-put-the-models-on-the-road) | Closes Phase 2, the original point of the project | Budget ([D7](#open-decisions)) |
 | 2 | [Phase 7](#phase-7-results-that-hold-up) | Every later comparison stands on it | 2.5b for 7.5 and 7.6 |
 | 3 | [Phase 8](#phase-8-you-against-the-models) | The "take it yourself" half of the one-line statement; cheap, since the replay player, debriefs and scores exist | 7.2, to know which drives can be shown |
@@ -571,8 +657,8 @@ one run that replays only on the tree it was made on is weak evidence. Both put 
 | 5 | [Phase 10](#phase-10-open-to-outside-drivers) | Lets others bring drivers once the format has settled | 7.2, 7.3 |
 | 6 | [Phase 6](#phase-6-grow-the-world-again) | New scenarios and cities, one at a time | Phase 3's exit (met 26 November) |
 
-What makes 1.0 is [D6](#open-decisions). The dates are in the
-[six-month plan](#six-month-plan-23-november-2026-to-21-may-2027).
+What makes 1.0 is [D6](#open-decisions). The original dates are in the
+[six-month plan](#six-month-plan-23-november-2026-to-21-may-2027), which is pending revision.
 
 **Risks**, and where the plan answers them:
 
@@ -586,8 +672,9 @@ What makes 1.0 is [D6](#open-decisions). The dates are in the
 
 ## Six-month plan (23 November 2026 to 21 May 2027)
 
-The expansion plan's order, laid out on a calendar. Each block ends on a Friday with a check: the exit
-tests it names pass, or the block's left-over items are written down and the next block starts anyway.
+This calendar predates the promotion of the [rendering and UI rewrite](#top-priority-3d-scene-rendering--ui-rewrite).
+R1–R3 take priority. The blocks and release dates below are pending revision around that work.
+Each block ends on a Friday. Check its exit tests, record any open items and start the next block.
 Review this plan at each block's end and move dates here, not in the phase sections.
 
 **Capacity.** The listed items in Phases 2, 3 and 7 to 10 add up to about 35 working days at the
