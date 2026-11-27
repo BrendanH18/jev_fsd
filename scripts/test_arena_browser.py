@@ -97,6 +97,14 @@ def check(url, chromium=None, output=None):
         page.evaluate("window.finishArenaImport()")
         expect(page.locator("#arena-status")).to_contain_text(f"Imported {n} attempts")
         expect(page.locator("#comparison-status")).to_contain_text(f"{n}/{n} attempts match")
+        old_clock = json.loads(export.read_text())
+        for r in old_clock["results"]:
+            r["engine_version"] = "drive-lab-3"
+        old_clock_path = Path(directory) / "old-time-limit.json"
+        old_clock_path.write_text(json.dumps(old_clock))
+        page.locator("#arena-import").set_input_files(old_clock_path)
+        expect(page.locator("#comparison-status")).to_contain_text(f"0/{n} attempts match")
+        expect(page.locator("#arena-results .comparison-note").first).to_contain_text("simulation version")
         changed = json.loads(export.read_text())
         for r in changed["results"]:
             r["mode"] = "realtime"

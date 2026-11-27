@@ -161,7 +161,8 @@ export async function evaluateChallenge(
     simulationError = null;
   onStep?.(ctx);
   try {
-    while (world.t < limit && autopilot.enabled && !shouldStop()) {
+    // Authored signal cues can advance world.t before the drive starts.
+    while (metrics.t < limit && autopilot.enabled && !shouldStop()) {
       const road = stepWorld({ world, fleet, autopilot }, 1 / 60, world.t * 1000);
       if (comparison) {
         try {
@@ -183,7 +184,7 @@ export async function evaluateChallenge(
       if (mode === "lockstep" && autopilot.detourRouting) await autopilot.detourRouting;
       onStep?.(ctx);
       if (mode === "realtime") {
-        const ahead = world.t * 1000 - (performance.now() - start);
+        const ahead = metrics.t * 1000 - (performance.now() - start);
         if (ahead > 4) await new Promise((resolve) => setTimeout(resolve, ahead));
       }
       if (world.tick % 120 === 0) await yieldNow();
