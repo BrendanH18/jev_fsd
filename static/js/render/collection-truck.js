@@ -228,3 +228,8 @@ export function syncTruck(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   });
   syncAmberLenses(u.hazards, vehicle, flashPhase(t, HAZARD_S) < 0.5);
 }
+
+export const view = {
+  vehicles: { collection_truck: { create: createTruckMesh, sync: syncTruck } },
+  transientPeople: ["crew_"],
+};

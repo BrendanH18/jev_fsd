@@ -1,7 +1,8 @@
 // 2D overview: roads, route, cars, destination. Click to set a destination.
 
-const EMERGENCY_KINDS = new Set(["ambulance", "fire_truck"]);
-const TRANSIT_KINDS = new Set(["bus", "school_bus", "streetcar", "train"]);
+// (`marks`: how a kind of vehicle is marked, "emergency" or "transit"; the features that draw those kinds
+// say so in their views, render/feature-views.js)
+const NO_MARKS = new Map();
 
 export class Minimap {
   constructor(canvas, map, onClick, { onClearRoute = null, clearButton = null } = {}) {
@@ -193,7 +194,7 @@ export class Minimap {
     c.restore();
   }
 
-  draw({ ego, npcs = [], route = null, destination = null }) {
+  draw({ ego, npcs = [], route = null, destination = null, marks = NO_MARKS }) {
     if (this._events.signal.aborted) return;
     this.syncSize();
     const c = this.ctx;
@@ -231,7 +232,8 @@ export class Minimap {
     for (const n of npcs) {
       const [px, py] = this.toPx(n.x, n.y);
       if (!(px >= left && px <= right && py >= top && py <= bottom)) continue;
-      if (EMERGENCY_KINDS.has(n.kind)) {
+      const mark = marks.get(n.kind);
+      if (mark === "emergency") {
         if (n.siren) {
           c.strokeStyle = "rgba(255, 79, 216, 0.65)";
           c.lineWidth = 1.2;
@@ -243,7 +245,7 @@ export class Minimap {
         c.beginPath();
         c.arc(px, py, 2.5, 0, Math.PI * 2);
         c.fill();
-      } else if (TRANSIT_KINDS.has(n.kind)) {
+      } else if (mark === "transit") {
         c.fillStyle = "#38d9f5";
         c.fillRect(px - 2, py - 2, 4, 4);
       } else if (n.kind === "bike") {

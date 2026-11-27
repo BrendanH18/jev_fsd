@@ -114,3 +114,21 @@ export class OfficerView {
         }
   }
 }
+
+export const view = {
+  mount: {
+    order: 13,
+    run({ scene, world }) {
+      return world.officers?.enabled ? new OfficerView(scene) : null;
+    },
+    frame: (officers, { world, camera, dt, lightsOn }) => officers.sync(world, dt, camera, lightsOn),
+  },
+  // (an officer's cruiser parked in a bay at the corner, its lights on: sim/traffic-officer.js)
+  parked: {
+    order: 2,
+    sync(world, meshOf, { dt, t, lightsOn }) {
+      for (const o of world.officers?.list || [])
+        if (o.cruiser?.parked) syncRoadside(meshOf(o.cruiser), o.cruiser.vehicle, dt, t, lightsOn);
+    },
+  },
+};

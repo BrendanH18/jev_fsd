@@ -317,3 +317,10 @@ export function buildRail(map) {
   root.userData.crossings = index.crossings.length;
   return root;
 }
+
+export const view = {
+  scenery: { order: 3, build: buildRail },
+  vehicles: {
+    train: { create: (v) => createTrainMesh(v.id), sync: syncTrain, roadEffects: false, minimap: "transit" },
+  },
+};

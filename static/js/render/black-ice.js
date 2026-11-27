@@ -131,3 +131,13 @@ export class IceView {
     this.group.visible = ice.list.length > 0;
   }
 }
+
+export const view = {
+  mount: {
+    order: 11,
+    run({ scene, world }) {
+      return world.ice?.enabled ? new IceView(scene) : null;
+    },
+    frame: (ice, { world }) => ice.sync(world),
+  },
+};

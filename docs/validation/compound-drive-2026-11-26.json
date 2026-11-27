@@ -1,0 +1,532 @@
+{
+ "drive": "rush-hour",
+ "script": "scripts/driver_latitude.mjs",
+ "runs": {
+  "guarded": {
+   "every_s": 1,
+   "force_s": 3,
+   "horizon_s": 6,
+   "engine": "node v22.23.5",
+   "results": [
+    {
+     "challenge": "rush-hour",
+     "arrived": true,
+     "pass": true,
+     "decisions": 576,
+     "points": 167,
+     "with_alternatives": 167,
+     "room_to_fail": 10,
+     "ordinary_room_to_fail": 3,
+     "branches": 973,
+     "failing_branches": 14,
+     "diverged_branches": 600,
+     "failure_kinds": [
+      "collision",
+      "braked hard with a tailgater close behind",
+      "red light"
+     ],
+     "exact_replay": true,
+     "room": [
+      {
+       "t": 24.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 25.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 26.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 27.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 28.1,
+       "failing": [
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 29.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 30.1,
+       "failing": [
+        {
+         "id": "stop_at_line",
+         "failures": [
+          "red light"
+         ]
+        },
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 31.1,
+       "failing": [
+        {
+         "id": "right_1_target",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 32.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 33.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "open": {
+   "every_s": 1,
+   "force_s": 3,
+   "horizon_s": 6,
+   "track": "open",
+   "engine": "node v22.23.5",
+   "results": [
+    {
+     "challenge": "rush-hour",
+     "arrived": true,
+     "pass": true,
+     "decisions": 576,
+     "points": 167,
+     "with_alternatives": 167,
+     "room_to_fail": 10,
+     "ordinary_room_to_fail": 3,
+     "branches": 973,
+     "failing_branches": 14,
+     "diverged_branches": 600,
+     "failure_kinds": [
+      "collision",
+      "braked hard with a tailgater close behind",
+      "red light"
+     ],
+     "exact_replay": true,
+     "room": [
+      {
+       "t": 24.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 25.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 26.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 27.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 28.1,
+       "failing": [
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 29.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 30.1,
+       "failing": [
+        {
+         "id": "stop_at_line",
+         "failures": [
+          "red light"
+         ]
+        },
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 31.1,
+       "failing": [
+        {
+         "id": "right_1_target",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 32.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 33.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "guarded_force_6_horizon_9": {
+   "every_s": 1,
+   "force_s": 6,
+   "horizon_s": 9,
+   "engine": "node v22.23.5",
+   "results": [
+    {
+     "challenge": "rush-hour",
+     "arrived": true,
+     "pass": true,
+     "decisions": 576,
+     "points": 167,
+     "with_alternatives": 167,
+     "room_to_fail": 10,
+     "ordinary_room_to_fail": 6,
+     "branches": 973,
+     "failing_branches": 17,
+     "diverged_branches": 614,
+     "failure_kinds": [
+      "collision",
+      "braked hard with a tailgater close behind",
+      "red light"
+     ],
+     "exact_replay": true,
+     "room": [
+      {
+       "t": 24.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 25.1,
+       "failing": [
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 26.1,
+       "failing": [
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 27.1,
+       "failing": [
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 28.1,
+       "failing": [
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 29.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "collision",
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 30.1,
+       "failing": [
+        {
+         "id": "stop_at_line",
+         "failures": [
+          "red light"
+         ]
+        },
+        {
+         "id": "right_1_hold",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 31.1,
+       "failing": [
+        {
+         "id": "right_1_target",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        },
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 32.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      },
+      {
+       "t": 33.1,
+       "failing": [
+        {
+         "id": "hard_brake",
+         "failures": [
+          "braked hard with a tailgater close behind"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

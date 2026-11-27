@@ -226,6 +226,30 @@ function streetcarStop(world, route, frontS, visibleNpcs) {
 
 export default {
   key: "streetcars",
+  view: () => import("../../render/streetcar.js"),
+  // a streetcar ahead with its doors open, that the car must stop behind: say so once
+  notice: {
+    at: "afterCrosswalk",
+    order: 1,
+    duration: 2500,
+    style: "safety",
+    read(world, _autopilot, _views, _previous, fleet) {
+      const tram = fleet?.streetcars?.list.find((c) => {
+        const r = doorsOpen(c) && streetcarRelation(world.ego, c);
+        return (
+          r &&
+          r.ahead_m > 0 &&
+          r.ahead_m < 70 &&
+          r.right_m > -IN_LANE_M &&
+          r.right_m < SIDE_M &&
+          world.visibility.sees(world.ego, c)
+        );
+      });
+      return tram
+        ? { key: `${tram.id}:${tram.transit.departures}`, text: "STREETCAR · DOORS OPEN · STOP BEHIND THE DOORS" }
+        : null;
+    },
+  },
   // (the fleet places them right after the cyclists, before the school buses, as it always has)
   buildAt: "early",
   property: "streetcarYields",

@@ -199,3 +199,16 @@ export function buildContraflow(map) {
   }
   return group;
 }
+
+export const view = {
+  mount: {
+    order: 5,
+    run({ scene, world, map }) {
+      if (!world.contraflow.enabled) return null;
+      scene.add(buildContraflow(map));
+      return true;
+    },
+  },
+  // (its riders are outside the fleet: sim/contraflow.js)
+  traffic: { order: 1, list: (world) => world.contraflow?.riders, minimap: true },
+};

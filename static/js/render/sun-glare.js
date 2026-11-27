@@ -2,6 +2,7 @@
 // weather, a bright flare over the sky's sun disc, a few faint lens ghosts across the view, and a warm
 // haze over the whole view. Built only where the world has sun glare on (sim/sun-glare.js).
 import * as THREE from "three";
+import { egoGlare } from "../sim/sun-glare.js";
 
 const FLARE_M = 1500; // how far out along the sun's direction the flare sprites sit
 // (the haze veil sits out there too, along the view, scaled to cover it)
@@ -135,3 +136,14 @@ export class SunGlareView {
     });
   }
 }
+
+export const view = {
+  mount: {
+    order: 4,
+    run({ scene, world }) {
+      return world.sunGlare.enabled ? new SunGlareView(scene) : null;
+    },
+    frame: (glare, { view: sceneView, world, camera }) =>
+      glare.update(camera, sceneView.atmosphere, egoGlare(world)?.severity ?? 0),
+  },
+};

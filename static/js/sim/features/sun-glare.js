@@ -10,6 +10,7 @@ import {
 
 export default {
   key: "sunGlare",
+  view: () => import("../../render/sun-glare.js"),
   coach: {
     init: () => ({
       glareSpeeding: 0,

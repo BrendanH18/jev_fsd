@@ -106,6 +106,8 @@ const FIELDS = new Set([
   ...CLOCK_FIELDS,
   "examinerMinors",
   "verdict",
+  "view",
+  "sound",
 ]);
 
 const text = (value) => typeof value === "string" && !!value.trim();
@@ -295,13 +297,16 @@ function hookProblem(name, hook, slots) {
   if (!Object.hasOwn(slots, name)) return `has an unknown hook or field ${name}`;
   const data = Object.hasOwn(dataFields, name);
   if (Array.isArray(hook)) {
-    if (data) return `${name} must be an object`;
-    if (hook.length < 2) return `${name} lists fewer than two slots: use one hook`;
+    // (a feature can show several HUD notices, each with its own place in the order)
+    const several = name === "notice";
+    if (data && !several) return `${name} must be an object`;
+    if (hook.length < 2)
+      return `${name} lists fewer than two ${several ? "notices: use one notice" : "slots: use one hook"}`;
     if (Object.keys(hook).length !== hook.length) return `${name} must be a plain list`;
     const at = new Set();
     for (const entry of hook) {
       if (!object(entry) || entry.at === undefined) return `${name} lists a hook without its slot`;
-      if (at.has(entry.at)) return `${name} lists the slot "${String(entry.at)}" twice`;
+      if (!several && at.has(entry.at)) return `${name} lists the slot "${String(entry.at)}" twice`;
       at.add(entry.at);
       const problem = hookProblem(name, entry, slots);
       if (problem) return problem;
@@ -395,6 +400,15 @@ function recordFieldsProblem(record, slots) {
     const problem = verdictProblem(record.verdict);
     if (problem) return problem;
   }
+  if (!optional(record.view, callback)) return "view must be a function that imports the feature's render module";
+  if (record.sound !== undefined) {
+    const { sound } = record;
+    if (!object(sound)) return "sound must be an object";
+    const shape = declarationProblem("sound", sound, ["name", "distance"]);
+    if (shape) return shape;
+    if (!fieldName(sound.name)) return "sound needs the name of a drive sound";
+    if (!callback(sound.distance)) return "sound needs a distance function";
+  }
   for (const [name, value] of Object.entries(record)) {
     if (FIELDS.has(name)) continue;
     const problem = hookProblem(name, value, slots);
@@ -409,7 +423,7 @@ export function featureRegistryProblem(records, slots) {
   for (const record of records) {
     const problem = featureRecordProblem(record, slots);
     if (problem) return problem;
-    const { key, metric, notice } = record;
+    const { key, metric } = record;
     const reserved = [
       ["option", key],
       ["query flag", record.flag ?? key.toLowerCase()],
@@ -421,7 +435,9 @@ export function featureRegistryProblem(records, slots) {
       if (metric.traceType) reserved.push(["trace marker", metric.traceType]);
       if (metric.eventType || metric.traceType) reserved.push(["replay marker", metric.eventType ?? metric.traceType]);
     }
-    if (notice) reserved.push(["notice order", `${slotOf(notice)}/${notice.order}`]);
+    for (const notice of hookEntries(record.notice))
+      reserved.push(["notice order", `${slotOf(notice)}/${notice.order}`]);
+    if (record.sound) reserved.push(["sound", record.sound.name]);
     if (record.coach?.seen) reserved.push(["coach seen flag", record.coach.seen]);
     for (const name of record.priority || []) reserved.push(["priority candidate", name]);
     for (const [field, entries] of Object.entries(record.coach ?? {})) {

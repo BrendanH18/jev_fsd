@@ -154,3 +154,20 @@ export function rideOver(map, mesh, vehicle) {
   mesh.position.y = (rear + front) / 2;
   mesh.rotation.z = Math.atan2(front - rear, wb);
 }
+
+export const view = {
+  mount: {
+    order: 3,
+    run({ scene, world, map }) {
+      if (!world.calming) return null;
+      scene.add(buildCalming(map));
+      return true;
+    },
+  },
+  roadEffect: {
+    order: 1,
+    run(world, mesh, pose) {
+      if (world.calming) rideOver(world.map, mesh, pose);
+    },
+  },
+};

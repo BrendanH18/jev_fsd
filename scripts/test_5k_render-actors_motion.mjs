@@ -400,7 +400,9 @@ test("a restored mesh releases the previous frame's pitch, roll, and pothole imp
   syncCar(mesh, { ...pose, ax: -4, latAccel: 2 }, 0.1);
   assert.ok(mesh.userData.pivot.rotation.z < 0);
   assert.ok(mesh.userData.pivot.rotation.x > 0);
-  mesh.userData.potholeJolt = { t: 0, inside: true, amp: 0.5 };
+  const hole = { x: pose.x, y: pose.y, a: 5, b: 5, heading: 0, depth: 0.15, shape: 18 };
+  potholeJolt({ potholes: { list: [hole], near: () => [hole] } }, mesh, pose, 0.1, true);
+  assert.equal(mesh.userData.potholeJolt.inside, true);
   mesh.rotation.z = 0.6;
   mesh.position.y = 0.1;
   resetActorMotion(mesh);

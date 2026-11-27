@@ -87,3 +87,16 @@ export function syncReverseLamps(mesh, vehicle, enabled = true) {
   }
   for (const s of u.reverseLamps) s.visible = lit;
 }
+
+export const view = {
+  mount: {
+    order: 6,
+    run({ scene, world, map }) {
+      if (!world.driveways.enabled) return null;
+      scene.add(buildDriveways(map));
+      return true;
+    },
+  },
+  // (the cars backing out are outside the fleet: sim/driveway-reversers.js)
+  traffic: { order: 2, list: (world) => world.driveways?.cars, after: (mesh, car) => syncReverseLamps(mesh, car) },
+};

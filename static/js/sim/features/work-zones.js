@@ -206,6 +206,8 @@ function workZoneClause(snap) {
 
 export default {
   key: "workZones",
+  view: () => import("../../render/work-zone.js"),
+  eventBadge: (event) => (event.type === "stop_sign" && event.flagger ? "WENT PAST THE FLAGGER'S STOP" : null),
   defaultCount: WORK_ZONE_COUNT,
   calls: "flaggerCalls",
   buildAt: "afterSpawn",

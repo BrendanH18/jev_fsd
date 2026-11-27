@@ -1,4 +1,4 @@
-import { animationTime } from "./actor-motion.js";
+import { animationTime, onMotionReset } from "./actor-motion.js";
 // Spring potholes (sim/potholes.js), drawn as broken asphalt: a ragged rim of cracked, crumbled surface
 // round a dark hole. In rain or snow the hole holds water, a puddle that mirrors the sky like the wet
 // road round it, so it is much harder to tell from it. And the cars driving over them: a tyre dropping
@@ -122,8 +122,13 @@ export function buildPotholes(world) {
 const SETTLE_S = 0.16,
   PERIOD_S = 0.32,
   MAX_DROP_M = 0.06;
+const forgetJolt = (mesh) => {
+  delete mesh.userData.potholeJolt;
+};
+
 export function potholeJolt(world, mesh, vehicle, dt, calmed = false) {
   if (!mesh || !vehicle) return;
+  if (!mesh.userData.potholeJolt) onMotionReset(mesh, "potholeJolt", forgetJolt);
   const u = (mesh.userData.potholeJolt ||= { t: Infinity, amp: 0, pitch: 0, inside: false });
   const wheels = wheelPoints(vehicle),
     dips = wheels.map(([x, y]) => dipAt(world.potholes, x, y));
@@ -141,3 +146,22 @@ export function potholeJolt(world, mesh, vehicle, dt, calmed = false) {
   mesh.position.y -= u.amp * k;
   mesh.rotation.z = (calmed ? mesh.rotation.z : 0) - u.pitch * Math.atan2(u.amp * k, wb);
 }
+
+export const view = {
+  mount: {
+    order: 7,
+    run({ scene, world }) {
+      if (!world.potholes.enabled) return null;
+      scene.add(buildPotholes(world));
+      return true;
+    },
+  },
+  // (after a hump's lift, which the jolt adds to; nothing on rails drops into a hole)
+  roadEffect: {
+    order: 2,
+    run(world, mesh, pose, dt, { onRails }) {
+      if (!onRails && world.potholes.enabled) potholeJolt(world, mesh, pose, dt, true);
+      else if (mesh.userData.potholeJolt) delete mesh.userData.potholeJolt;
+    },
+  },
+};
