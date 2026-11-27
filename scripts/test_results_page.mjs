@@ -32,7 +32,9 @@ const data = checkResults(JSON.parse(fs.readFileSync(new URL("../data/results.js
 const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
 // (the legacy tables alone: a suite's own table may follow them, README order as on the leaderboard)
 const legacyAt = readme.indexOf("### Legacy results");
-const legacyEnd = [readme.indexOf("\n### ", legacyAt + 1), readme.indexOf("<!-- results:end -->")].filter((i) => i > legacyAt);
+const legacyEnd = [readme.indexOf("\n### ", legacyAt + 1), readme.indexOf("<!-- results:end -->")].filter(
+  (i) => i > legacyAt,
+);
 const block = readme.slice(legacyAt, Math.min(...legacyEnd));
 // README rows: | Driver | Model | challenges | open track | Kitsilano weathers | other maps | own decisions | cost |
 const readmeRows = block
