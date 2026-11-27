@@ -6,6 +6,7 @@
 //   node --experimental-default-type=module scripts/test_compound_drive.mjs [--write-snapshot]
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { mock } from "node:test";
 globalThis.document = { querySelector: () => null };
 const { load } = await import("./drive_lab_maps.mjs");
 const { CHALLENGES, COMPOUND_DRIVES, challengeById, challengeScenario } = await import(
@@ -32,6 +33,36 @@ async function test(name, fn) {
 const lesson = drive.challenge,
   map = load(lesson.map),
   DT = 1 / 60;
+
+await test("the arena gives the driver the full time limit after cueing the signal", async () => {
+  const limit = 0.1;
+  const result = await evaluateChallenge(map, lesson, { limit });
+  assert.equal(result.report.status, "timeout");
+  assert.equal(result.time_s, limit);
+});
+
+await test("real-time pacing starts after the signal cue", async () => {
+  let tick = 0,
+    longestDelay = 0;
+  const timer = mock.method(globalThis, "setTimeout", (resolve, delay) => {
+    longestDelay = Math.max(longestDelay, delay);
+    resolve();
+  });
+  try {
+    const result = await evaluateChallenge(map, lesson, {
+      mode: "realtime",
+      onStep: ({ world }) => {
+        tick = world.tick;
+      },
+      shouldStop: () => tick > 0,
+    });
+    assert.equal(result.report.status, "stopped");
+    assert.equal(tick, 1);
+    assert.ok(longestDelay <= DT * 1000, String(longestDelay));
+  } finally {
+    timer.mock.restore();
+  }
+});
 
 await test("the compound drive is listed apart, and the numbered suites do not know it", () => {
   assert.equal(COMPOUND_DRIVES.length, 1);

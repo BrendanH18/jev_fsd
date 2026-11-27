@@ -230,10 +230,9 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
     stopped car in a contraflow rider's gap check until its body clears (`sim/contraflow.js`); use the
     achieved, not commanded, deceleration in `ringJoining` (`sim/roundabout.js`). Tried together, the
     first four broke Kitsilano city dry `s1-12`.
-  - From the review of the compound drive: the arena's time limit and real-time pacing read `world.t`
-    (`lab/evaluation.js`), which several drives set ahead to cue a signal (`rush-hour` by about 24 s), so
-    their limit is shorter than stated and a real-time run pauses at the start. Measuring from the
-    start changes those drives' limits, so it needs its own before-and-after record.
+  - Fixed the arena's shortened time limit and opening pause on drives that cue a signal
+    (`rush-hour` advances the simulation clock by about 24 s). Both the limit and real-time pacing
+    now use elapsed driving time. `scripts/test_compound_drive.mjs` checks both in the arena.
 
 ## Phase 2: put the models on the road
 
