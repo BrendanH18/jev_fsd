@@ -162,19 +162,25 @@ export function projectPoint(pts, cum, p, hint = null) {
   return best;
 }
 
-// Join two lane polylines where one street meets the next (mirrors jev/routing.py). Lanes sit
+// Join two lane polylines where one street meets the next (mirrors build_route, _round_corner and
+// _blend in jev/routing.py; tests/test_parity.py holds the two to the same answers). Lanes sit
 // right of each street's centerline, so at a turn the incoming lane runs past the real corner and
 // the outgoing one starts before it; chaining them end to start makes a path that backs up or
-// swings across the road. Turns (>= 20 deg): round the corner where the two lane lines meet.
-// Near-straight joins whose ends do not meet: spread the shift over a few meters.
-export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
+// swings across the road. Turns (>= 20 deg): round the corner where the two lane lines meet,
+// however short either piece is. Near-straight joins whose ends do not meet: spread the shift over
+// a few meters.
+// `turn` is the turn angle between the two edges (MapData.turnAngle, radians), which is what the
+// router decides the 20 degrees on; callers that join lanes of consecutive edges pass it. Without
+// it (lines that are not a pair of edges) the lane lines' own directions over 3 m decide.
+export function joinLanes(before, after, { radius = 6, blend = 4, turn = null } = {}) {
   if (!Number.isFinite(radius) || radius < 0) throw new RangeError("Lane join radius must be finite and nonnegative");
   if (!Number.isFinite(blend) || blend < 0) throw new RangeError("Lane join blend must be finite and nonnegative");
+  if (turn != null && !Number.isFinite(turn)) throw new RangeError("Lane join turn angle must be finite");
   if (!before.length) return after.slice();
   if (!after.length) return before.slice();
   const ca = cumulative(after);
   const La = ca[ca.length - 1];
-  if (after.length < 2 || before.length < 2 || La < 3)
+  if (after.length < 2 || before.length < 2)
     return before.concat(after.slice(dist(before[before.length - 1], after[0]) < 0.05 ? 1 : 0));
   const cb = cumulative(before);
   const Lb = cb[cb.length - 1];
@@ -186,8 +192,13 @@ export function joinLanes(before, after, { radius = 6, blend = 4 } = {}) {
   };
   const din = unit(pointAt(before, cb, Math.max(0, Lb - 3)), e),
     dout = unit(s0, pointAt(after, ca, Math.min(La, 3)));
-  const angle = din && dout ? Math.abs(wrapAngle(Math.atan2(dout[1], dout[0]) - Math.atan2(din[1], din[0]))) : 0;
-  if (angle >= (20 * Math.PI) / 180) {
+  const angle =
+    turn != null
+      ? Math.abs(turn)
+      : din && dout
+        ? Math.abs(wrapAngle(Math.atan2(dout[1], dout[0]) - Math.atan2(din[1], din[0])))
+        : 0;
+  if (din && dout && angle >= (20 * Math.PI) / 180) {
     const denom = din[0] * dout[1] - din[1] * dout[0];
     const w = [s0[0] - e[0], s0[1] - e[1]];
     const t = (w[0] * dout[1] - w[1] * dout[0]) / denom,
