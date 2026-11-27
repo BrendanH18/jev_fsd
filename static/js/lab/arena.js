@@ -23,6 +23,9 @@ import { CUSTOM_SUITE, suiteVersion } from "../bench/suite-version.js";
 import { examine } from "./examiner.js";
 import { arenaDrives, arenaOutcome, filterArenaResults, filterTimeline, timelineTypes } from "./arena-view.js";
 
+// Version saved browser comparisons. The evaluator's version is also part of recording hashes.
+const HISTORY_ENGINE_VERSION = "drive-lab-4"; // Time limits now start when driving begins.
+
 let running = false,
   editingHistory = false,
   stop = false,
@@ -573,7 +576,7 @@ async function run() {
         $("#arena-status").textContent =
           `${challenge.title} · ${agentLabel(brain)} · ${results.length + 1}/${pool.length * selected.length}`;
         const result = await evaluateChallenge(map, challenge, { brain, mode, track, shouldStop: () => stop });
-        results.push({ ...result, suite_version: current.suite_version });
+        results.push({ ...result, engine_version: HISTORY_ENGINE_VERSION, suite_version: current.suite_version });
         progress.value = results.length;
         render();
       }

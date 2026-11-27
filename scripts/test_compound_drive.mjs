@@ -35,17 +35,24 @@ const lesson = drive.challenge,
   DT = 1 / 60;
 
 await test("the arena gives the driver the full time limit after cueing the signal", async () => {
-  const limit = 0.1;
-  const result = await evaluateChallenge(map, lesson, { limit });
+  const limit = 0.09;
+  let tick = 0;
+  const result = await evaluateChallenge(map, lesson, {
+    limit,
+    onStep: ({ world }) => {
+      tick = world.tick;
+    },
+  });
   assert.equal(result.report.status, "timeout");
-  assert.equal(result.time_s, limit);
+  assert.equal(tick, Math.ceil(limit / DT));
 });
 
 await test("real-time pacing starts after the signal cue", async () => {
   let tick = 0,
-    longestDelay = 0;
+    delayMs;
+  const clock = mock.method(performance, "now", () => 0);
   const timer = mock.method(globalThis, "setTimeout", (resolve, delay) => {
-    longestDelay = Math.max(longestDelay, delay);
+    delayMs = delay;
     resolve();
   });
   try {
@@ -58,9 +65,11 @@ await test("real-time pacing starts after the signal cue", async () => {
     });
     assert.equal(result.report.status, "stopped");
     assert.equal(tick, 1);
-    assert.ok(longestDelay <= DT * 1000, String(longestDelay));
+    assert.equal(timer.mock.callCount(), 1);
+    assert.equal(delayMs, DT * 1000);
   } finally {
     timer.mock.restore();
+    clock.mock.restore();
   }
 });
 

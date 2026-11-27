@@ -14,7 +14,8 @@
 - Ease off when approaching stopped traffic with a tailgater behind, and brake firmly when the
   remaining gap requires it.
 - Start the arena's time limit and real-time pacing at the start of the drive, including on
-  challenges that cue a traffic signal.
+  challenges that cue a traffic signal. Saved browser runs flag the timing change when compared
+  with earlier runs.
 
 ## 0.4.0 (26 November 2026)
 
