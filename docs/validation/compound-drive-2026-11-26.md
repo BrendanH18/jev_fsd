@@ -8,6 +8,11 @@ call, `jev-1.14.0` selected `stop_at_line` at 96% and `ease_off_for_tailgater` r
 used 2,772 input tokens, took 259 ms and cost $0.000116. Drive Lab lists **Rush hour on West 4th**
 under **Compound drives**. Model evidence is limited to the saved decision.
 
+On Node 22.23.5 in Boat, the 12 dry bare drives, 12 dry city drives, and 62 Rules arena drives
+all passed and matched a clean `410e2fb9` checkout apart from timings and run provenance. The
+latitude check replayed exactly and found three ordinary choices that could lead to failure.
+Two compound runs in history used 275,094 bytes (2.9% of the fallback budget).
+
 ## Initial validation on 26 November
 
 **Result.** "Rush hour on West 4th" (`rush-hour`) is one drive of about 830 m through five

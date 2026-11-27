@@ -17,7 +17,7 @@
   challenges that cue a traffic signal. Saved browser runs flag the timing change when compared
   with earlier runs.
 - Add Rush hour on West 4th to the Drive Lab's Compound drives. When a safe amber stop is possible
-  with a tailgater behind, Jev's instructions prioritize braking gently for the light.
+  with a tailgater behind, Jev and LLM drivers are told to prioritize stopping for the light.
 
 ## 0.4.0 (26 November 2026)
 

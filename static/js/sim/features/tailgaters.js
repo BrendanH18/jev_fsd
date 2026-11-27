@@ -256,6 +256,6 @@ export default {
   clause: { at: "rearTraffic", run: tailgaterClause },
   prompt: {
     at: "rearTraffic",
-    text: `- A car tailgating close behind (\`tailgater\`) cannot stop if the car brakes suddenly. Never brake-check it: brake no harder than \`tailgater.brake_no_harder_than_mps2\` unless something ahead calls for more, start braking early and gently, and never speed up to please it. Keep twice the usual gap ahead. When \`tailgater.move_right_to_let_it_pass\` is true, choose \`let_tailgater_pass\`; otherwise prefer \`ease_off_for_tailgater\` where it is offered.`,
+    text: `- A car tailgating close behind (\`tailgater\`) cannot stop if the car brakes suddenly. Never brake-check it: brake no harder than \`tailgater.brake_no_harder_than_mps2\` unless something ahead calls for more, start braking early and gently, and never speed up to please it. Keep twice the usual gap ahead. When \`situation\` calls for a safe amber stop, choose \`stop_at_line\` when offered. Otherwise choose \`let_tailgater_pass\` if \`tailgater.move_right_to_let_it_pass\` is true, or prefer \`ease_off_for_tailgater\` where offered.`,
   },
 };
