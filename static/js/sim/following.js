@@ -4,6 +4,7 @@ import { CAR, G, ROAD, comfort } from "./vehicle.js";
 
 export const FOLLOWING_STANDSTILL_M = 3;
 export const FOLLOWING_REACTION_S = 0.4;
+const GAP_RECOVERY_MPS = 2;
 
 // `scale`: how many times the usual gap to leave (twice, tailgated: sim/tailgaters.js).
 export function followingPolicy(vehicle, lead, { scale = 1 } = {}) {
@@ -34,10 +35,14 @@ export function followingPolicy(vehicle, lead, { scale = 1 } = {}) {
   // Rebuild a lost time gap progressively instead of demanding gap/headway as
   // an immediate speed after a cut-in. Close or open at at most 2 m/s relative
   // to the leader; the stopping ceiling can demand firmer braking when needed.
-  let approachSpeed = ahead + Math.max(-2, Math.min(2, (gap - target) / 3));
+  let approachSpeed = ahead + Math.max(-GAP_RECOVERY_MPS, Math.min(GAP_RECOVERY_MPS, (gap - target) / 3));
   if (gap < target) approachSpeed = Math.min(approachSpeed, v);
+  // With a tailgater behind, build the extra gap by easing off from the car's
+  // speed. The stopping ceiling still takes priority when the leader is close.
+  if (scale > 1) approachSpeed = Math.max(approachSpeed, v - GAP_RECOVERY_MPS);
   const safeSpeed = room > 0 ? Math.max(0, Math.min(stopSpeed, approachSpeed)) : 0;
   return {
+    gap_scale: scale,
     target_gap_m: target,
     safe_speed_mps: safeSpeed,
     headway_s: headway,

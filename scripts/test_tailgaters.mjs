@@ -16,13 +16,14 @@ const { StopMemory } = await import("../static/js/sim/signals.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { setWeather } = await import("../static/js/sim/weather.js");
 const { applyLaw } = await import("../static/js/sim/controller.js");
-const { followingPolicy } = await import("../static/js/sim/following.js");
+const { followingPolicy, FOLLOWING_STANDSTILL_M } = await import("../static/js/sim/following.js");
 const T = await import("../static/js/sim/tailgaters.js");
 const { behindInLane } = await import("../static/js/sim/following.js");
 const { DriveMetrics, failures } = await import("../static/js/bench/metrics.js");
 const { buildSnapshot } = await import("../static/js/brain/sensors.js");
 const { sampleCandidates, simulateAll } = await import("../static/js/brain/candidates.js");
 const { RulesBrain } = await import("../static/js/brain/rules.js");
+const { Autopilot } = await import("../static/js/brain/brain.js");
 const { CautiousAgent } = await import("../static/js/agents/cautious.js");
 const { toJevState, situationClauses, buildQuestions } = await import("../static/js/brain/state.js");
 const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
@@ -33,6 +34,7 @@ const { practiceOutcome } = await import("../static/js/lab/practice.js");
 const { Route } = await import("../static/js/map/route.js");
 const { routeFromLanes } = await import("../static/js/demo/routing.js");
 const { DriveScore } = await import("../static/js/sim/drive-score.js");
+const { fixtureWorld } = await import("../static/tests/jev-fixtures.js");
 
 let checks = 0;
 async function test(name, fn) {
@@ -86,9 +88,9 @@ function world({ tailgaters = true, seed = 3, traffic = 0, s = 60, v = 12, lane 
   return { world: w, fleet, autopilot: idle };
 }
 // A traffic car `gap` behind the driven car's rear bumper in its lane, at `v`.
-function behind(ctx, gap, v, { lane = 0, id = "behind" } = {}) {
+function behind(ctx, gap, v, { lane = 0, id = "behind", edge = EDGE, next = [[EXIT, lane]] } = {}) {
   const { world: w, fleet } = ctx,
-    l = WPG.lane(EDGE, lane),
+    l = w.map.lane(edge, lane),
     ego = w.ego;
   const egoS = projectPoint(l.pts, l.cum, [ego.x, ego.y]).s;
   const s = egoS - ego.spec.rearOverhang - gap - (CAR.length - CAR.rearOverhang),
@@ -97,15 +99,15 @@ function behind(ctx, gap, v, { lane = 0, id = "behind" } = {}) {
   Object.assign(car, {
     id,
     color: 0,
-    v0: WPG.edges.get(EDGE).limit,
+    v0: w.map.edges.get(edge).limit,
     driver: { aMax: 1.5, b: 2, s0: 2, T: 1.2, react: 0.5, lcRate: 0 },
     stopMem: new StopMemory(),
-    path: new NpcPath(WPG, fleet.random),
+    path: new NpcPath(w.map, fleet.random),
     frozen: 0,
     waiting: 0,
     lcCooldown: 1e6,
   });
-  car.path.start(EDGE, lane, s, [[EXIT, lane]]);
+  car.path.start(edge, lane, s, next);
   fleet.vehicles.push(car);
   return car;
 }
@@ -261,6 +263,53 @@ await test("braking hard when something ahead calls for it is not a brake check"
   assert.equal(w.violations.brake_checks || 0, 0);
 });
 
+await test("Rules slows gently for a stopped leader with room and brakes promptly when close", async () => {
+  const { map, route } = fixtureWorld();
+  for (const gap of [45, 18]) {
+    const w = new World(map, { parked: 0, pedestrians: 0, tailgaters: true, followingDistance: true });
+    w.route = route;
+    w.destination = route.endPoint();
+    w.placeOnLane(map.lane("street", 0), 50);
+    w.ego.v = 13.4;
+    const fleet = new NpcFleet(w, { count: 0, bikes: 0, seed: 5 });
+    const ctx = { world: w, fleet, autopilot: new Autopilot(w) };
+    const lane = { edge: "street", next: [] };
+    const rear = behind(ctx, 7, 13.4, lane);
+    const leader = behind(ctx, -(gap + 2 * CAR.length), 0, { ...lane, id: "queue" });
+    // Hold the lead car in place, as at the back of a queue.
+    leader.frozen = 10;
+    T.commitTailgater(w, rear);
+    ctx.autopilot.setBrain("rules");
+    ctx.autopilot.setEnabled(true);
+    const snap = buildSnapshot(w);
+    assert.equal(snap.tailgater?.id, rear.id);
+    assert.equal(snap.following?.id, leader.id);
+    const usual = followingPolicy(w.ego, snap.following);
+    let peakTailgatedDecel = 0;
+    for (let k = 0; k < (gap === 45 ? 8 : 1) * 60; k++) {
+      stepWorld(ctx, DT, w.t * 1000);
+      if (ctx.autopilot.firing) await ctx.autopilot.firing;
+      if (ctx.autopilot.snap.tailgater) peakTailgatedDecel = Math.max(peakTailgatedDecel, -w.ego.ax);
+    }
+    ctx.autopilot.setEnabled(false);
+    if (gap === 45) {
+      assert.equal(w.violations.brake_checks || 0, 0);
+      assert.ok(peakTailgatedDecel > 0 && peakTailgatedDecel < T.BRAKE_CHECK_DECEL, `${peakTailgatedDecel} m/s²`);
+      assert.equal(w.violations.collisions, 0);
+      assert.ok(w.ego.v < 0.5, `the car reached the queue at ${w.ego.v} m/s`);
+      assert.equal(
+        snap.following.policy.target_gap_m - FOLLOWING_STANDSTILL_M,
+        T.TAIL_ROOM * (usual.target_gap_m - FOLLOWING_STANDSTILL_M),
+      );
+    } else {
+      assert.ok(peakTailgatedDecel > T.BRAKE_CHECK_DECEL, `the car braked at only ${peakTailgatedDecel} m/s²`);
+    }
+    console.log(
+      `  stopped leader ${gap} m ahead: peak deceleration while tailgated ${peakTailgatedDecel.toFixed(2)} m/s²`,
+    );
+  }
+});
+
 await test("what the situation ahead requires: a green asks nothing, a red light, an amber it can stop for (and not one it cannot)", () => {
   const edge = WPG.edges.get(EDGE),
     inter = WPG.intersections.get(edge.control.id),
@@ -309,6 +358,16 @@ await test("sensing: the tailgater, what the car may brake at, and twice the fol
   assert.equal(rs.tailgater.lane_right, false);
   assert.equal(rs.tailgater.can_move_right, false);
   assert.equal(buildSnapshot(world({ tailgaters: false }).world).tailgater, undefined);
+});
+
+await test("a candidate holding a short gap does not rebuild the doubled following target", () => {
+  const ctx = world({ v: 10 }),
+    w = ctx.world;
+  w.followingDistance = true;
+  behind(ctx, 6, 10);
+  behind(ctx, -(20 + 2 * CAR.length), 10, { id: "lead" });
+  const { candidates } = decide(w);
+  assert.equal(candidates.find((c) => c.id === "keep_lane_hold")?.reject, "following_distance");
 });
 
 await test("candidates: let it pass on the right, or ease off; no brake check; Rules and the cautious agent", () => {

@@ -230,10 +230,6 @@ D3. What the smoke suite and the soak found on other maps is not frozen work:
     stopped car in a contraflow rider's gap check until its body clears (`sim/contraflow.js`); use the
     achieved, not commanded, deceleration in `ringJoining` (`sim/roundabout.js`). Tried together, the
     first four broke Kitsilano city dry `s1-12`.
-  - From the compound drive (26 November): when a standing vehicle becomes the leader of a tailgated
-    car, `followingPolicy` (`sim/following.js`) doubles the gap and drops the speed target to near
-    zero in one decision, so the car brakes at up to 6.5 m/s² with 45 m of room and the audit counts a
-    brake check ([record](docs/validation/compound-drive-2026-11-26.md)).
   - From the review of the compound drive: the arena's time limit and real-time pacing read `world.t`
     (`lab/evaluation.js`), which several drives set ahead to cue a signal (`rush-hour` by about 24 s), so
     their limit is shorter than stated and a real-time run pauses at the start. Measuring from the
@@ -745,8 +741,11 @@ ordinary manoeuvre that fails) and that most open-track flags never became viola
   where a stop at the amber was expected (30%), because the amber and tailgater clauses give opposite
   advice when the two coincide ([record](docs/validation/compound-drive-2026-11-26.md)). Next: decide
   the wording for an amber with a tailgater behind, check it live, then admit the drive and run the
-  models on it. Found on the way and added to 1.8: a tailgated car that comes up on standing traffic
-  brakes hard with room to spare.
+  models on it. The tailgater braking defect found while developing it now has a regression check in
+  `scripts/test_tailgaters.mjs`. It covers both a gentle approach with 45 m of room and firm braking
+  when a stopped leader is only 18 m away. In the 45 m check, the car can still brake abruptly later
+  as the rear car slows out of the tailgater threshold and collision prediction resumes assuming
+  that it holds its speed.
 - [x] **9.4 A hard city slice.** (M) A small fixed set of city routes from the soak's hardest
   conditions (night, unprotected lefts in fog, snow narrowings, parking). Rules' failures there are
   results under 4.5; the slice becomes blocking once Rules passes it.
