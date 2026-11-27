@@ -48,6 +48,7 @@ export default {
         : null,
   },
   key: "puddles",
+  view: () => import("../../render/puddles.js"),
   coach: {
     init: () => ({
       puddles: false,

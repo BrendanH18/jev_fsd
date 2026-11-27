@@ -102,6 +102,7 @@ export default {
   rulesCost: { at: "stops", run: (c) => (c.id === "stop_for_crossing_guard" ? -6 : 0) },
   cautious: { at: "afterPassing", run: (_snap, eligible) => eligible.find((c) => c.id === "stop_for_crossing_guard") },
   key: "guards",
+  view: () => import("../../render/crossing-guard.js"),
   coach: {
     init: () => ({
       guards: false,

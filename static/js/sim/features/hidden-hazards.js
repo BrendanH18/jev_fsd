@@ -5,8 +5,16 @@
 // line (World.sees: buildings, weather, darkness, moving traffic hiding a pedestrian); this record adds
 // what the feature hides and the blind spot's sensing, speed, decision state and wording.
 import { r1 } from "../../common.js";
-import { STEP_OUT_COUNT, STEP_OUT_M, StepOuts, blindApproach, blindSpot, standingNear } from "../hidden-hazards.js";
-import { hiddenVehicle, hideable, laneSight } from "../hidden-traffic.js";
+import {
+  STEP_OUT_COUNT,
+  STEP_OUT_M,
+  StepOuts,
+  blindApproach,
+  blindSpot,
+  hazardNotice,
+  standingNear,
+} from "../hidden-hazards.js";
+import { hiddenVehicle, hideable, laneSight, trafficNotice } from "../hidden-traffic.js";
 
 // What the core's give-way, oncoming and turn-on-red checks use to see along a lane past vehicles.
 const TRAFFIC_SIGHT = Object.freeze({ laneSight });
@@ -20,6 +28,25 @@ function blindClause(b) {
 
 export default {
   key: "hazards",
+  view: () => import("../../render/hidden-hazards.js"),
+  notice: [
+    // cars parked at the kerb that hide the sidewalk ahead, and someone stepping out from between them
+    {
+      at: "parking",
+      order: 1,
+      duration: 2500,
+      read: (world) => hazardNotice(world),
+      style: (line) => (line.wait ? "safety" : ""),
+    },
+    // a vehicle hiding a lane the car must give way to (sim/hidden-traffic.js)
+    {
+      at: "parking",
+      order: 2,
+      duration: 2500,
+      read: (world, autopilot) => trafficNotice(world, autopilot.snap),
+      style: (line) => (line.wait ? "safety" : ""),
+    },
+  ],
   // (set before the rest of the World is built, as the World's own option was; the step-outs draw from
   // their own random stream, so building them here changes no other draw)
   buildAt: "early",

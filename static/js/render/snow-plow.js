@@ -215,3 +215,5 @@ export function syncPlow(mesh, vehicle, dt = 0, t = 0, lightsOn = 0) {
   for (const m of u.amber) m.material.emissiveIntensity = on && phase < 0.5 ? 7 : 0;
   for (const m of u.blue) m.material.emissiveIntensity = on && phase >= 0.5 ? 9 : 0;
 }
+
+export const view = { vehicles: { snow_plow: { create: createPlowMesh, sync: syncPlow } } };

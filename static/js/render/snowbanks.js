@@ -94,3 +94,14 @@ export function buildSnowbanks(world) {
   group.add(mesh);
   return group;
 }
+
+export const view = {
+  mount: {
+    order: 14,
+    run({ scene, world }) {
+      if (!world.snowbanks?.geo.runs.length) return null;
+      scene.add(buildSnowbanks(world));
+      return true;
+    },
+  },
+};

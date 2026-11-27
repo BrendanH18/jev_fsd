@@ -7,7 +7,7 @@ import {
   REFLECT_RED,
   REFLECT_WHITE,
 } from "./actor-details.js";
-import { animationTime, flashPhase } from "./actor-motion.js";
+import { animationTime, flashPhase, onMotionReset } from "./actor-motion.js";
 // A work zone with a flagger at each end (sim/work-zone.js): orange cones angled across the closed lane
 // and lining its edge past the work, a crew's dump truck with an amber light bar and a flashing arrow
 // board pointing traffic left, two workers in hi-vis, an orange "flagger ahead" sign before each end,
@@ -353,6 +353,10 @@ export function createWorkZoneMesh(zone, map) {
     g.add(s);
   }
   g.userData.workZone = { lenses: truck.lenses, arrow: truck.lampMaterial, people, flaggers };
+  // (a rewind shows each flagger's paddle as it is, without turning it round from the last frame's face)
+  onMotionReset(g, "workZone", () => {
+    for (const flagger of Object.values(flaggers)) flagger.turn = null;
+  });
   return g;
 }
 
@@ -381,3 +385,20 @@ export function syncWorkZone(mesh, zone, t = 0, camera = null, dt = 0) {
     }
   }
 }
+
+export const view = {
+  parked: {
+    order: 3,
+    flag: "workzone",
+    create(car, world) {
+      const zone = world.workZones.zones.find((z) => z.closure === car);
+      if (!zone) return null;
+      const mesh = createWorkZoneMesh(zone, world.map);
+      syncWorkZone(mesh, zone);
+      return mesh;
+    },
+    sync(world, meshOf, { dt, t, camera }) {
+      for (const z of world.workZones.zones) syncWorkZone(meshOf(z.closure), z, t, camera, dt);
+    },
+  },
+};

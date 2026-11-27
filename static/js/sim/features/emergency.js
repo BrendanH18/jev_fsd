@@ -9,7 +9,7 @@ import { hooks } from "./index.js";
 import { EmergencyTraffic } from "../emergency-traffic.js";
 import { auditEmergency } from "../emergency-audit.js";
 import { EV_STOP_DECEL, emergencyAhead, emergencyYield } from "../emergency-yield.js";
-import { EMERGENCY_NAMES, FOLLOW_M, isEmergency, isEmergencyVehicle } from "../emergency.js";
+import { EMERGENCY_NAMES, FOLLOW_M, isEmergency, isEmergencyVehicle, nearestCall } from "../emergency.js";
 
 // (stopping before where a registered feature's move in the lane takes the car, a narrowed stretch between
 // snowbanks, say: pull right here, rather than pursuing its upcoming move left into the shared corridor
@@ -38,6 +38,41 @@ function emergencyClause(e) {
 
 export default {
   key: "emergency",
+  view: () => import("../../render/emergency.js"),
+  // an emergency vehicle calling on the car to give way: say so, once a second for as long as it calls
+  notice: {
+    at: "first",
+    order: 0,
+    duration: 2500,
+    style: "safety",
+    read(world, _autopilot, _views, previous, fleet) {
+      const evs = (fleet?.vehicles ?? []).filter(isEmergency);
+      const call = evs.length ? nearestCall(world.ego, evs) : null;
+      if (!call) return null;
+      // (the key carries when it was last said, so the same call is said again a second later)
+      const cut = previous?.lastIndexOf("@") ?? -1;
+      const fresh =
+        cut < 0 || previous.slice(0, cut) !== String(call.ev.id) || world.t - Number(previous.slice(cut + 1)) > 1;
+      const where =
+        call.relation === "behind"
+          ? "BEHIND"
+          : call.relation === "ahead"
+            ? "AHEAD"
+            : `FROM THE ${call.relation.toUpperCase()}`;
+      return {
+        key: fresh ? `${call.ev.id}@${world.t}` : previous,
+        text: `${EMERGENCY_NAMES[call.ev.kind].toUpperCase()} ${where} · PULL OVER AND STOP`,
+      };
+    },
+  },
+  // (the siren of the nearest one)
+  sound: {
+    name: "siren",
+    distance: (world, fleet) =>
+      fleet.vehicles
+        .filter(isEmergency)
+        .reduce((best, n) => Math.min(best, Math.hypot(n.x - world.ego.x, n.y - world.ego.y)), Infinity),
+  },
   // (the World keeps the vehicles a failure to yield was counted for)
   property: "evCounted",
   // (emergency vehicle id -> { since, v0, lead, ... }: since it called on the car, and the drive-on latch)

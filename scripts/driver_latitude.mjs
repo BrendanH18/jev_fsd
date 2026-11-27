@@ -13,20 +13,29 @@
 //     `failures`, on the audit counters; arrival and parking are not judged in so short a branch).
 // A branch from the first checkpoint with no forced choice must repeat the original drive exactly; the
 // report says whether it did.
+// `ordinary_room_to_fail` counts the points where a manoeuvre other than the emergency brake fails.
+// Where the Rules drive itself fails, a branch that hands back to Rules can meet that same failure
+// whatever was forced, so each point also branches with no forced choice: `rules_fails` counts the
+// points where that adds a failure, and such a point lists what it adds (`rules`) and the alternatives
+// that add none (`passing`), the evidence that the failure was avoidable.
+//
+// The sixty challenges are measured unless --only names drives; it may also name a road test or a
+// compound drive (ROADMAP 9.3). --track open measures the open track, where the filter flags road-rule
+// failures instead of removing them (brain/tracks.js).
 //
 // PORT=8404 uv run server.py, then:
 // node --experimental-default-type=module scripts/driver_latitude.mjs --port 8404 [--only door-zone,four-way-stop]
-//   [--every 1] [--force 3] [--horizon 6] [--json out.json]
+//   [--track guarded|open] [--every 1] [--force 3] [--horizon 6] [--json out.json]
 import { benchPage, checkFiles, commaList, parseOptions, wholeNumber } from "./cli_tools.mjs";
 import { writeJsonArtifact } from "./recording_artifacts.mjs";
 
 const usage =
-  "Usage: driver_latitude.mjs [--only ID,ID] [--every SECONDS] [--force SECONDS] [--horizon SECONDS] [--port PORT] [--limit N] [--json FILE.json[.gz]] [--quiet] [--check]";
+  "Usage: driver_latitude.mjs [--only ID,ID] [--track guarded|open] [--every SECONDS] [--force SECONDS] [--horizon SECONDS] [--port PORT] [--limit N] [--json FILE.json[.gz]] [--quiet] [--check]";
 const fail = (message) => {
   console.error(message);
   process.exit(1);
 };
-const options = ["port", "only", "every", "force", "horizon", "json", "limit"];
+const options = ["port", "only", "track", "every", "force", "horizon", "json", "limit"];
 let parsed, only, limit;
 try {
   parsed = parseOptions(process.argv.slice(2), options, ["quiet", "check"]);
@@ -53,6 +62,8 @@ const EVERY = seconds("every", 1);
 const FORCE = seconds("force", 3);
 const HORIZON = seconds("horizon", 6);
 if (FORCE > HORIZON) fail("--force must not exceed --horizon.");
+const TRACK = args.track ?? "guarded";
+if (!["guarded", "open"].includes(TRACK)) fail("--track must be guarded or open.");
 
 const { base, token } = await benchPage(args.port ?? process.env.PORT ?? "8331").catch((error) => fail(error.message));
 globalThis.document = { querySelector: (sel) => (sel.includes("jev-csrf") ? { content: token } : null) };
@@ -62,15 +73,17 @@ globalThis.fetch = (path, opts) =>
 
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
-const { CHALLENGES } = await import("../static/js/lab/challenges.js");
+const { CHALLENGES, COMPOUND_DRIVES } = await import("../static/js/lab/challenges.js");
+const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const { setupChallenge } = await import("../static/js/lab/evaluation.js");
 const { DriveRecorder } = await import("../static/js/lab/recorder.js");
 const { stepWorld } = await import("../static/js/sim/step.js");
 const { failures } = await import("../static/js/bench/metrics.js");
 
-const selected = only ? CHALLENGES.filter((c) => only.includes(c.id)) : CHALLENGES;
+const AUTHORED = [...CHALLENGES, ...ROAD_TESTS, ...COMPOUND_DRIVES];
+const selected = only ? AUTHORED.filter((c) => only.includes(c.id)) : CHALLENGES;
 if (only && selected.length !== only.length)
-  fail(`Unknown challenge in --only: ${only.filter((id) => !CHALLENGES.some((c) => c.id === id)).join(", ")}.`);
+  fail(`Unknown drive in --only: ${only.filter((id) => !AUTHORED.some((c) => c.id === id)).join(", ")}.`);
 const drives = selected.slice(0, limit);
 const maps = {};
 for (const id of new Set(drives.map((c) => c.map))) {
@@ -116,7 +129,7 @@ async function latitude(challenge) {
     limit = challenge.limit_s || 180,
     started = performance.now();
   // 1. the Rules drive, with checkpoints and the decisions' surviving candidates
-  const ctx = setupChallenge(map, challenge, { brain: "rules" });
+  const ctx = setupChallenge(map, challenge, { brain: "rules", track: TRACK });
   const decisions = [],
     recorder = new DriveRecorder({ seconds: limit + 10, interval: EVERY });
   wrapRules(ctx.autopilot, (ids, r) => {
@@ -136,7 +149,7 @@ async function latitude(challenge) {
   }
   const baseFailures = auditFailures(ctx.world.violations);
   // 2. branches into a second world of the same challenge
-  const branchCtx = setupChallenge(map, challenge, { brain: "rules" });
+  const branchCtx = setupChallenge(map, challenge, { brain: "rules", track: TRACK });
   let forced = null,
     forceUntil = -Infinity;
   wrapRules(branchCtx.autopilot, (ids) =>
@@ -189,6 +202,9 @@ async function latitude(challenge) {
     const alternatives = next.ids.filter((id) => id !== next.chosen);
     const failing = [];
     let diverged = 0;
+    // (Rules' own choice from here, judged only where its drive fails at all)
+    const own = baseFailures.length ? await branch(i, null) : null;
+    const rules = own && (own.added.length || own.error) ? (own.added.length ? own.added : ["simulation error"]) : null;
     for (const id of alternatives) {
       const b = await branch(i, id);
       if (b.added.length || b.error) failing.push({ id, failures: b.added, ...(b.error ? { error: b.error } : {}) });
@@ -202,6 +218,9 @@ async function latitude(challenge) {
       alternatives: alternatives.length,
       diverged,
       failing,
+      ...(rules
+        ? { chosen: next.chosen, rules, passing: alternatives.filter((id) => !failing.some((f) => f.id === id)) }
+        : {}),
     });
   }
   return {
@@ -212,6 +231,15 @@ async function latitude(challenge) {
     points: points.length,
     with_alternatives: points.filter((p) => p.alternatives > 0).length,
     room_to_fail: points.filter((p) => p.failing.length).length,
+    ordinary_room_to_fail: points.filter((p) => p.failing.some((f) => f.id !== "hard_brake")).length,
+    ...(baseFailures.length
+      ? {
+          rules_failures: baseFailures,
+          rules_fails: points.filter((p) => p.rules).length,
+          // (points where Rules' choice fails and a manoeuvre other than the emergency brake does not)
+          avoidable: points.filter((p) => p.rules && p.passing.some((id) => id !== "hard_brake")).length,
+        }
+      : {}),
     branches: points.reduce((a, p) => a + p.alternatives, 0),
     failing_branches: points.reduce((a, p) => a + p.failing.length, 0),
     diverged_branches: points.reduce((a, p) => a + p.diverged, 0),
@@ -223,7 +251,13 @@ async function latitude(challenge) {
     exact_replay: exact,
     wall_s: Math.round((performance.now() - started) / 100) / 10,
     // (every decision point that left room to fail, with the candidates that failed)
-    room: points.filter((p) => p.failing.length).map((p) => ({ t: p.t, failing: p.failing })),
+    room: points
+      .filter((p) => p.failing.length || p.rules)
+      .map((p) => ({
+        t: p.t,
+        failing: p.failing,
+        ...(p.rules ? { chosen: p.chosen, rules: p.rules, passing: p.passing } : {}),
+      })),
   };
 }
 
@@ -233,14 +267,21 @@ for (const challenge of drives) {
   out.push(r);
   if (!args.quiet)
     console.log(
-      `${r.challenge} pass=${r.pass} points=${r.points} with_alternatives=${r.with_alternatives} room_to_fail=${r.room_to_fail} branches=${r.branches} diverged=${r.diverged_branches} failing=${r.failing_branches} kinds=${r.failure_kinds.join("|") || "-"} exact=${r.exact_replay} wall=${r.wall_s}s`,
+      `${r.challenge} pass=${r.pass} points=${r.points} with_alternatives=${r.with_alternatives} room_to_fail=${r.room_to_fail} ordinary=${r.ordinary_room_to_fail}${r.rules_fails === undefined ? "" : ` rules_fails=${r.rules_fails} avoidable=${r.avoidable}`} branches=${r.branches} diverged=${r.diverged_branches} failing=${r.failing_branches} kinds=${r.failure_kinds.join("|") || "-"} exact=${r.exact_replay} wall=${r.wall_s}s`,
     );
   if (args.json) {
     try {
       writeJsonArtifact(
         args.json,
         JSON.stringify(
-          { every_s: EVERY, force_s: FORCE, horizon_s: HORIZON, engine: `node ${process.version}`, results: out },
+          {
+            every_s: EVERY,
+            force_s: FORCE,
+            horizon_s: HORIZON,
+            ...(TRACK === "open" ? { track: TRACK } : {}),
+            engine: `node ${process.version}`,
+            results: out,
+          },
           null,
           1,
         ),
@@ -255,6 +296,6 @@ const replayFailures = out.filter((r) => r.exact_replay !== true).map((r) => r.c
 if (args.check && replayFailures.length)
   console.error(`Latitude baseline replay could not be verified for ${replayFailures.join(", ")}.`);
 process.stdout.write(
-  `${JSON.stringify({ challenges: out.length, points: total("points"), room_to_fail: total("room_to_fail"), none_left_to_driver: out.filter((r) => !r.room_to_fail).map((r) => r.challenge) })}\n`,
+  `${JSON.stringify({ challenges: out.length, points: total("points"), room_to_fail: total("room_to_fail"), ordinary_room_to_fail: total("ordinary_room_to_fail"), none_left_to_driver: out.filter((r) => !r.room_to_fail).map((r) => r.challenge) })}\n`,
   () => process.exit(args.check && replayFailures.length ? 1 : 0),
 );

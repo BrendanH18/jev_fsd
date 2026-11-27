@@ -61,7 +61,7 @@ const USAGE = [
   "Usage: node --experimental-default-type=module scripts/arena_node.mjs [options]",
   "  --brain <id>                 driver id: rules, cautious, jev, decision:<name>, llm:<name>",
   "  --agent <path>               load a trusted local driver module",
-  "  --set <name>                 challenges (default), road-tests, or all",
+  "  --set <name>                 challenges (default), road-tests, all (both: suite v1), or compound",
   "  --only <id,id>               run only selected drive ids",
   "  --track <guarded|open>       rule enforcement track (default: guarded)",
   "  --port <port>                local server port (default: PORT or 8331)",
@@ -244,7 +244,7 @@ if (!args.list)
 
 const { api } = await import("../static/js/common.js");
 const { MapData } = await import("../static/js/map/mapdata.js");
-const { CHALLENGES } = await import("../static/js/lab/challenges.js");
+const { CHALLENGES, COMPOUND_DRIVES } = await import("../static/js/lab/challenges.js");
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 const { challengeProvince } = await import("../static/js/lab/practice.js");
 const fieldOf = (drive, name) => (name === "region" ? challengeProvince(drive) : drive[name]);
@@ -267,7 +267,14 @@ const { driverScores } = await import("../static/js/bench/scores.js");
 const capture = args["browser-replay"] ? (await import("./browser_replay.mjs")).captureBrowserReplay() : null;
 
 let brain = String(args.brain || "rules");
-const SETS = { challenges: CHALLENGES, "road-tests": ROAD_TESTS, all: [...CHALLENGES, ...ROAD_TESTS] };
+// (`all` is suite v1's arena member, the challenges and road tests; compound drives, ROADMAP 9.3, are a
+// set of their own, so a run of them is labelled custom and v1 stays as it was)
+const SETS = {
+  challenges: CHALLENGES,
+  "road-tests": ROAD_TESTS,
+  all: [...CHALLENGES, ...ROAD_TESTS],
+  compound: COMPOUND_DRIVES,
+};
 const set = replayJson ? replayJson.header.arena.set : String(args.set || "challenges");
 if (!Object.hasOwn(SETS, set)) fail(`Unknown set "${set}": use ${Object.keys(SETS).join(", ")}.`);
 let drives = SETS[set];

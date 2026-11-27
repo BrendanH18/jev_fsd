@@ -8,7 +8,7 @@ const { load: loadMap, names } = await import("./drive_lab_maps.mjs");
 const { WEATHER } = await import("../static/js/sim/weather.js");
 const { parseHour } = await import("../static/js/sim/world-clock.js");
 const registry = await import("../static/js/lab/challenges.js");
-const { CHALLENGES, CHALLENGE_VERSION, challengeById, challengeScenario, challengeConfig } = registry;
+const { CHALLENGES, COMPOUND_DRIVES, CHALLENGE_VERSION, challengeById, challengeScenario, challengeConfig } = registry;
 const { ROAD_TESTS } = await import("../static/js/lab/road-tests.js");
 
 let passed = 0;
@@ -44,9 +44,21 @@ await test("every challenge module is named for its challenge and exports its de
 });
 
 await test("the registry lists every module once, and nothing else", () => {
-  const ids = CHALLENGES.map((c) => c.id);
+  const ids = CHALLENGES.map((c) => c.id),
+    compound = COMPOUND_DRIVES.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length, "challenge ids are unique");
-  assert.deepEqual([...ids].sort(), Object.keys(modules).sort());
+  assert.deepEqual([...ids, ...compound].sort(), Object.keys(modules).sort());
+  assert.equal(ids.length, 60, "suite v1 pins the sixty challenges: a new drive goes in a list of its own");
+  assert.equal(
+    COMPOUND_DRIVES.every((c) => modules[c.id].challenge === c && challengeById(c.id) === c && c.compound === true),
+    true,
+    "COMPOUND_DRIVES holds the compound modules' own definitions",
+  );
+  assert.equal(
+    compound.some((id) => ids.includes(id)),
+    false,
+    "compound drives stay out of CHALLENGES",
+  );
   assert.equal(
     CHALLENGES.every((c) => modules[c.id].challenge === c),
     true,
@@ -65,6 +77,7 @@ await test("the registry lists every module once, and nothing else", () => {
   assert.deepEqual(Object.keys(registry).sort(), [
     "CHALLENGES",
     "CHALLENGE_VERSION",
+    "COMPOUND_DRIVES",
     "challengeById",
     "challengeConfig",
     "challengeScenario",
@@ -106,7 +119,7 @@ function load(id) {
   if (!cache.has(id)) cache.set(id, loadMap(id));
   return cache.get(id);
 }
-const drives = [...CHALLENGES, ...ROAD_TESTS];
+const drives = [...CHALLENGES, ...ROAD_TESTS, ...COMPOUND_DRIVES];
 const scenarios = new Map();
 const scenarioFor = (c) => {
   if (!scenarios.has(c.id)) scenarios.set(c.id, challengeScenario(load(c.map), c));
@@ -170,7 +183,7 @@ await test("road-test populations are whole nonnegative actor counts", () => {
 });
 
 await test("each challenge builds its own drive through the registry", () => {
-  for (const c of CHALLENGES) {
+  for (const c of [...CHALLENGES, ...COMPOUND_DRIVES]) {
     const sc = scenarioFor(c);
     assert.equal(sc.id, c.id, `${c.id} builds its own drive`);
     assert.equal(sc.traffic_seed, c.seed, `${c.id} keeps its seed`);

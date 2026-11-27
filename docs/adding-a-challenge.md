@@ -154,9 +154,19 @@ owner asks ([checking work](../AGENTS.md#checking-work)).
 
 Saved arena runs share one budget. The figures recorded so far, moved here from `AGENTS.md`:
 
-Saved arena runs live in IndexedDB (20 runs within 200 MB); the 9 MB `MAX_HISTORY_BYTES` cap in `static/js/lab/history.js` now applies only to the localStorage fallback, and the figures below are of that cap. Since compact decisions are folded together (`static/js/lab/trace.js`), two runs of every challenge with Rules and the cautious agent, measured in Node (2026-11-09) by `scripts/test_drive_lab.mjs`, take 78.3% (7,389,066 bytes) with 60 challenges ("Road closed" adds 2.2%, "Room to park" 1.9%, "Follow the officer" 1.4% and "Don't splash" 1.3%, each measured on its own; "On your bumper" 1.7%, "Bridges freeze first" and "One car at a time" 1.8% together, "Chasing the ball" 1.4%, "Goose crossing" 1.3%, "Pothole season" 0.8%, "Into the sun" 2.0%, "Reverse lights" 1.4%, "Fresh green" 0.7%, "Space to react" adds 1.9%, "Left on red" adds 1.3%, "Dip your lights" 1.2%, "Both ways" 0.6%, "After midnight" 1.3%, "No left turn" adds 2.4%, "Stop for the guard" 1.5%, "Wait for the far curb" 1.0%, "Buses only" 0.8%, "Over the humps" 0.9%, "All walk" 1.5%, "Collection day" 1.3%, "Give them room" 0.7%, "Take turns" 1.5%, "Behind the plow" 0.8%, "Blind left" 2.0%; 98.2% with 26 before folding). Road tests are not in that run: the arena includes them only when asked, and two runs of both with the same two drivers add 8.8% (`scripts/test_road_test.mjs`). Measure again after adding a challenge or more to each decision record.
+Saved arena runs live in IndexedDB (20 runs within 200 MB); the 9 MB `MAX_HISTORY_BYTES` cap in `static/js/lab/history.js` now applies only to the localStorage fallback, and the figures below are of that cap. Since compact decisions are folded together (`static/js/lab/trace.js`), two runs of every challenge with Rules and the cautious agent, measured in Node (2026-11-09) by `scripts/test_drive_lab.mjs`, take 78.3% (7,389,066 bytes) with 60 challenges ("Road closed" adds 2.2%, "Room to park" 1.9%, "Follow the officer" 1.4% and "Don't splash" 1.3%, each measured on its own; "On your bumper" 1.7%, "Bridges freeze first" and "One car at a time" 1.8% together, "Chasing the ball" 1.4%, "Goose crossing" 1.3%, "Pothole season" 0.8%, "Into the sun" 2.0%, "Reverse lights" 1.4%, "Fresh green" 0.7%, "Space to react" adds 1.9%, "Left on red" adds 1.3%, "Dip your lights" 1.2%, "Both ways" 0.6%, "After midnight" 1.3%, "No left turn" adds 2.4%, "Stop for the guard" 1.5%, "Wait for the far curb" 1.0%, "Buses only" 0.8%, "Over the humps" 0.9%, "All walk" 1.5%, "Collection day" 1.3%, "Give them room" 0.7%, "Take turns" 1.5%, "Behind the plow" 0.8%, "Blind left" 2.0%; 98.2% with 26 before folding). Road tests are not in that run: the arena includes them only when asked, and two runs of both with the same two drivers add 8.8% (`scripts/test_road_test.mjs`). The compound drive is not in that run either: two runs of "Rush hour on West 4th" with the same two drivers take 2.9% (about 275,100 bytes, `scripts/test_compound_drive.mjs`, 2026-11-26), and the 60 challenges measured again on that day still take 78.3% (7,386,758 bytes). Measure again after adding a challenge or more to each decision record.
 
 Add the new challenge's share to this list when you measure it.
+
+## A drive that strings situations together
+
+A [compound drive](drive-lab.md#compound-drives) is written like a challenge, in
+`lab/challenges/<id>.js` with `compound: true`, and listed in `COMPOUND_MODULES` in
+`lab/challenges.js` instead of `MODULES`. It is admitted under the same rule, and
+`scripts/driver_latitude.mjs --only <id>` must find an ordinary manoeuvre that fails at one
+sampled decision or more: a drive in which none can fail does not separate drivers. Keep it out of
+`CHALLENGES` while [suite v1](reference/benchmarks.md#suite-versions) is the published test;
+putting one in a numbered suite means a new suite definition.
 
 ## Rules for practice, debriefs and road tests
 

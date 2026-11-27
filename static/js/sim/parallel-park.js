@@ -996,6 +996,23 @@ export function parkedPose(vehicle, plan) {
   };
 }
 
+// The space the car has been parked in by hand along its route, as an arrival ({ parked, ...parkedPose }),
+// or null while it stands outside every space or off the kerb.
+export function manualParked(world) {
+  const car = world.ego,
+    spec = car.spec;
+  const space = spacesAlong(world, world.route, spec).find((p) => {
+    const f = frameOf(car, p),
+      side = (spec.width / 2) * Math.abs(Math.sin(f.phi));
+    return (
+      parkedPose(car, p).within_kerb &&
+      f.u - spec.rearOverhang * Math.cos(f.phi) - side >= p.sFrom &&
+      f.u + (spec.length - spec.rearOverhang) * Math.cos(f.phi) + side <= p.sTo
+    );
+  });
+  return space ? { parked: true, ...parkedPose(car, space) } : null;
+}
+
 // The HUD line for the car's parking, or null.
 export function parkNotice(world) {
   const p = world.park;

@@ -146,6 +146,9 @@ test("the core runs every slot, and names no registered feature", () => {
     pullOverDetour: source("sim/features/emergency.js"),
     emergencyHold: source("sim/emergency-traffic.js"),
     parkingObstructed: source("sim/parallel-park.js"),
+    signalLamp: source("sim/features/index.js"),
+    eventBadge: source("sim/features/index.js"),
+    manualArrival: source("sim/features/index.js"),
   };
   for (const [name, slots] of Object.entries(R.SLOTS)) {
     if (["metric", "prompt", "notice"].includes(name)) continue;

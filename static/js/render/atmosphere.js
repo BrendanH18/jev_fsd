@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { sunAngles, nightLevel } from "../sim/speed-zones.js";
-import { solarAngles } from "../sim/sun-glare.js";
+import { solarAngles } from "../sim/solar.js";
 
 export const lighting = {
   night: { value: 0 }, // 0 in daylight, 1 once it is dark enough that street lights are on

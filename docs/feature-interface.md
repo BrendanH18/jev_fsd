@@ -52,6 +52,9 @@ export default {
   rulesTerms, cautiousDrive,                            // named Rules terms; the cautious agent's planned stops
   worldOption, freeDrive, freeDriveExtra,               // a fleet option the World takes too; free-drive values
   day,                                                  // true: the clock keeps the `day` of the year while it is on
+  view: () => import("../../render/geese.js"),          // its render module: what it draws (Views, below)
+  notice, eventBadges, eventBadge, sound,               // HUD badges and the drive sound it makes
+  signalLamp, manualArrival,                            // dark signal lamps; a drive finished by hand that counts
 };
 ```
 
@@ -369,22 +372,80 @@ lane snapping (`jev/routing.py` `snap`) iterated a Python `set` of string-keyed 
 of equally near ones, so a tie depended on the process's hash seed. With `PYTHONHASHSEED=0` both trees
 gave identical city results, the 12.81 km of the committed reference.
 
+## Views: what a feature draws
+
+The registry loads in Node without Three.js, so a record does not import its meshes. It says where its
+render module is, `view: () => import("../../render/geese.js")`, and that module exports a `view`. The
+browser adapter ([`render/feature-views.js`](../static/js/render/feature-views.js)) loads every registered
+view once, before anything is mounted, and refuses one that breaks the contract. The adapter draws
+traffic, parked cars and people itself; `main.js` calls it and neither names a feature.
+
+| Field | What the feature declares |
+|---|---|
+| `scenery: { order, build(map) }` | Scenery of the map alone, added before the World exists (bus stops, tracks). |
+| `mount: { order, run({ view, scene, world, map }), frame?, signals? }` | Its scene objects for this World. `run` returns null while the feature is off, or what it mounted, which is kept under the record's key for its notices to read. `frame(mounted, { view, world, fleet, people, camera, dt, lightsOn })` runs once a frame and `signals(mounted)` as the signal lamps change. |
+| `vehicles: { [kind]: { create, sync, roadEffects?, onRails?, minimap? } }` | The mesh and animator of a kind of traffic, and how the minimap marks it (`"emergency"` or `"transit"`). |
+| `traffic: { order, list(world), after?, minimap? }` | Road users it keeps outside the fleet, drawn and interpolated as traffic, in replays too. |
+| `parked: { order, flag?, create?, sync? }` | A parked car with `car[flag]` set gets a mesh of its own instead of a place in the batch; `sync` animates the feature's own each frame. |
+| `car: { order, pose?, effect? }` | Ordinary cars in traffic: fields added to the pose they are drawn from, and an effect after they are drawn (a tailgater's flash). |
+| `ego: { order, pose }` | Fields added to the pose the driven car is drawn from. |
+| `roadEffect: { order, run(world, mesh, pose, dt, { onRails }) }` | What the road does to a vehicle's mesh (a hump's lift, a pothole's jolt). |
+| `person: { order, mount, sync }` | Something a person carries (a crossing guard's sign). |
+| `transientPeople: [prefix]` | Ids of people who come and go, whose meshes are retired once they leave. |
+
+`order` places a declaration among the other features' and is unique within a field, as a notice's is.
+The orders in use keep every scene as it was drawn before the views moved: the same objects in the
+same order ([record](validation/render-registry-exit-2026-11-26.md)). A renderer that keeps motion
+history of its own on a mesh registers how to clear it with `onMotionReset` (`render/actor-motion.js`),
+so a rewind clears it without the adapter knowing what it is. Render-only parts stay render-only: a
+view reads the World and never writes to it.
+
+Two couplings stay inside the features' own modules. The turn-restrictions view also draws the
+no-turn-on-red signs, which stand on the same posts, and the officers' view animates their cruisers
+with the roadside renderer.
+
 ## How close a new feature is to "its own file, its challenge, its test and one registration line"
 
-A registered feature still has these integration points outside its own files:
+`scripts/test_feature_exit.mjs` checks this mechanically. It registers a throwaway feature, written
+in one file ([`scripts/fixtures/throwaway-feature.js`](../scripts/fixtures/throwaway-feature.js)), with
+one import and one `FEATURES` entry applied to the registry's source as it loads, and checks that the
+World option and state, the free-drive flag, a challenge's option, the step, sensing, the model prompt,
+metrics, HUD notices, event badges and every kind of view pick it up with no other file changed. It
+also checks that `main.js`, the adapter and the shared renderers read no feature's World or fleet state
+and import no feature's own module.
+
+What a new feature still touches outside its own files (its record, its simulation and render
+modules, its challenge module and its test):
 
 | Where | What still needs a change |
-|---|---|---|
-| `lab/challenges.js` | Register the authored challenge module. |
-| `render/feature-views.js` | Mount and update any scene object the feature draws, through the browser adapter. |
-| `main.js`, vehicle renderers | Add a mesh or a per-vehicle effect when existing renderers cannot draw the actor. |
-| `AGENTS.md` | Link any project rule that agents need to preserve. |
+|---|---|
+| `sim/features/index.js` | The registration: its import and its `FEATURES` entry. |
+| `lab/challenges.js` | The challenge's own registration: its import and its `MODULES` entry. The challenge turns the feature's World option on under the feature's key (`geese: true`); `setupChallenge` passes it through. |
+| `scripts/test_feature_registry.mjs` | The list of registered keys it asserts, in registration order. |
+| `scripts/ci_test_times.json` | The measured seconds of its test, for the CI shards (an unlisted file counts as the median). |
+| `AGENTS.md`, `docs/reference/` | Its row in the opt-in table, its reference page, and any rule agents must keep. |
+| `ui/drive-audio.js` | Only for a sound that does not exist yet: the record's `sound` names a drive sound and gives the distance to its nearest source. |
+| Map pipeline and loaders | Only for a feature that needs a new map layer (`jev/osm/`, and each place that loads every layer). |
+
+These still name older features, and a new feature does not touch them:
+
+- **AI Eyes** (`render/perception.js`, shown by `ui/lab.js`) words eleven features that predate its
+  hooks itself: emergency vehicles, buses, school buses, streetcars, level crossings, work zones, lane
+  closures, snow plows, scrambles, passing cyclists and hidden hazards, and it marks their vehicles. New
+  features use `perceptionLine`,
+  `perceptionFocus` and `perceptionRejections`. The exit check lists the three feature modules it still
+  imports, and that list may only shrink.
+- **`setupChallenge`** (`lab/evaluation.js`) still lists the options of the 29 features whose challenges
+  predate the pass-through, under the names those challenges use (`hidden` for hidden hazards).
+- **`brain/brain.js`** keeps the destination-parking planner (`autopilot.parker`), which `main.js`
+  clears when a route is replaced.
 
 Set `coach` on the record for its driving messages, penalties, tips and report fields. Use `notice`
-for live HUD updates, `eventBadges` for audit badges, and the perception fields for AI Eyes
-observations and rejection text. Use `routeOptions` and `requestReroute` to participate in routing.
-Checkpoints call `checkpointShare` for immutable state and `checkpoint` after restoring the
-world and fleet.
+for live HUD updates (a list when the feature has several), `eventBadges` for the badges of its own
+audit events and `eventBadge` for an event the core raises too (a stop missed at a flagger), and the
+perception fields for AI Eyes observations and rejection text. Use `routeOptions` and `requestReroute`
+to participate in routing. Checkpoints call `checkpointShare` for immutable state and `checkpoint`
+after restoring the world and fleet.
 
 Free drives and the city benchmark enable every registered feature by default. Use the record's
 option key with `--without` and its lowercase form in the URL. A record can declare `flag` to preserve
@@ -403,9 +464,6 @@ Rules reads `rulesStop` and `rulesCost` from the feature records. The cautious a
 slots in its candidate precedence, along with `cautiousStop` for its speed target and `cautiousDrive`
 for a manoeuvre whose law already brings the car to a stop. The deadlock detector uses `legitimateStop`
 when the car is waiting for a feature.
-
-A new feature needs its own sim module, record, challenge, test and registration line, plus applicable
-entries in the presentation files above.
 
 ## Running the registry comparison
 
@@ -433,6 +491,27 @@ the complete benchmark configuration, summary and individual results, both arena
 traces and results, and both system prompts. It discards wall time, decision latency, run timestamps
 and benchmark source identifiers. Simulation times, incidents, audit fields, candidate IDs, array
 order, map fingerprints and route fingerprints still have to match.
+
+## Running the render comparison
+
+A change to the adapter, a view or a shared renderer has to leave every scene as it was. On Boat,
+archive the before commit into a temporary directory, copy
+[`render_parity.mjs`](../scripts/render_parity.mjs) into its `scripts/`, and capture from each tree:
+
+```sh
+node --experimental-default-type=module scripts/render_parity.mjs capture "$output.json"
+node --experimental-default-type=module scripts/render_parity.mjs compare "$before.json" "$after.json"
+node --experimental-default-type=module scripts/render_parity.mjs detail <scene id>    # where two trees part
+node --experimental-default-type=module scripts/render_parity.mjs notices             # HUD notices against the app's old wording
+```
+
+A capture drives every challenge and both road tests with Rules for six seconds, drawing ten times a
+second through the adapter as the app's frame loop does, then restores a checkpoint from the recorder
+and draws two replay frames toward the next one. Four free drives with every feature on (Kitsilano dry,
+at night in rain and in snow, and Toronto) are drawn the same way. Each frame is a digest of the whole
+scene graph in order: every object's name, type, transform, visibility, shadow flags and render order,
+its geometry buffers, instance matrices and colours, and its materials' settings. It needs no server and
+takes about 90 seconds a tree.
 
 ## Moving the rest (3.2)
 
@@ -512,8 +591,8 @@ order, map fingerprints and route fingerprints still have to match.
 * **Low sun glare.** The record keeps the clock's `day` and `utc_offset` while enabled and installs
   the glare visibility callback. The ordinary-traffic speed hook excludes cyclists. The driving audit
   still runs before the collision checks and keeps its reaction allowance in the checkpoint.
-* **Presentation hooks.** Records supply feature notices, perception lines and rejection labels.
-  Renderer integration points are listed in the table above.
+* **Presentation hooks.** Records supply feature notices, perception lines and rejection labels, and
+  each feature's view declares what it draws ([Views](#views-what-a-feature-draws)).
 * **The last seven (26 November).** Transit buses, school buses, streetcars and trains moved in that order
   (each step's new slots landing where the code was, with no temporary slots); the fleet keeps them under
   `fleet.buses`, `fleet.schoolBuses`, `fleet.streetcars` and `fleet.trains`, and buses and streetcars share

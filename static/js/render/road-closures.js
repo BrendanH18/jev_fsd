@@ -215,3 +215,13 @@ export class RoadClosureView {
     lampMaterial.emissiveIntensity = t % 1 < 0.5 ? 3.5 : 0;
   }
 }
+
+export const view = {
+  mount: {
+    order: 10,
+    run({ scene, world }) {
+      return world.roadClosures?.enabled ? new RoadClosureView(scene) : null;
+    },
+    frame: (closures, { world }) => closures.sync(world, world.t),
+  },
+};

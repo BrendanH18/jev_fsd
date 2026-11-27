@@ -397,6 +397,23 @@ function schoolBusStop(world, route, frontS, visibleNpcs) {
 
 export default {
   key: "schoolBuses",
+  view: () => import("../../render/school-bus.js"),
+  // a school bus ahead with its reds flashing, either way, that the car must stop for: say so once
+  notice: {
+    at: "afterCrosswalk",
+    order: 0,
+    duration: 2500,
+    style: "safety",
+    read(world, _autopilot, _views, _previous, fleet) {
+      const bus = fleet?.schoolBuses?.list.find((b) => {
+        const r = redsOn(b) && schoolBusRelation(world.ego, b);
+        return (
+          r && r.ahead_m > 0 && r.ahead_m < 70 && Math.abs(r.right_m) < SIDE_M && world.visibility.sees(world.ego, b)
+        );
+      });
+      return bus ? { key: `${bus.id}:${bus.school.stops}`, text: "SCHOOL BUS · RED LIGHTS FLASHING · STOP" } : null;
+    },
+  },
   defaultCount: SCHOOL_COUNT,
   // (two on the school run, from 07:00 to before 17:00)
   freeDrive: (on, { hour }) => (on && hour >= SCHOOL_HOURS[0] && hour < SCHOOL_HOURS[1] ? SCHOOL_COUNT : 0),

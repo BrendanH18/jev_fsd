@@ -4,6 +4,7 @@ import { PED } from "../pedestrians.js";
 
 export default {
   key: "collection",
+  view: () => import("../../render/collection-truck.js"),
   coach: {
     init: () => ({
       crewPasses: 0,

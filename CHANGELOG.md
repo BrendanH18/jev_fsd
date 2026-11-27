@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.4.0 (26 November 2026)
+
+- Declare each feature's meshes, scenery, frame effects, HUD notices, event badges and sounds in its
+  own record and render module, so the app and the shared renderers name no registered feature, and
+  check mechanically that a new feature needs only its own files and its registration
+  ([record](docs/validation/render-registry-exit-2026-11-26.md)).
+- Add the first compound drive, **Rush hour on West 4th**, which strings a tailgater, an amber light,
+  a bus pulling out, an unprotected left and a stop sign into one drive outside the sixty challenges
+  and suite `v1`, and measure how many of its decisions leave a driver room to fail
+  ([record](docs/validation/compound-drive-2026-11-26.md)).
+- Measure road tests and compound drives, and the open track, with the driver latitude script.
+- Stop losing saved runs in the demo, and merge Arena histories
+  ([#131](https://github.com/BrendanH18/jev_fsd/pull/131)).
+- Run all agent compute in Boat sandboxes ([#132](https://github.com/BrendanH18/jev_fsd/pull/132)).
 - Run agent builds and tests in Boat sandboxes ([#96](https://github.com/BrendanH18/jev_fsd/pull/96)).
 - Inspect saved benchmarks with 100 offline reports and compare matched routes across two runs
   ([#97](https://github.com/BrendanH18/jev_fsd/pull/97), [#98](https://github.com/BrendanH18/jev_fsd/pull/98)).

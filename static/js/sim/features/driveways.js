@@ -35,6 +35,7 @@ export default {
   cautious: (snap, eligible) =>
     snap.reversing_vehicle?.wait ? eligible.find((c) => c.id === "yield_to_reversing") : null,
   key: "driveways",
+  view: () => import("../../render/driveway-reversers.js"),
   coach: {
     init: () => ({
       driveways: false,

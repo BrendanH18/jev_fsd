@@ -44,6 +44,7 @@ function auditCalming(world) {
 
 export default {
   key: "calming",
+  view: () => import("../../render/traffic-calming.js"),
   coach: {
     init: () => ({
       humpHits: 0,
