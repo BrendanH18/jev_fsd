@@ -182,6 +182,30 @@ measures rendering work independently; check actual FPS in a visible browser whi
 Smaller parked-car batches were also evaluated. They culled more geometry but increased draw
 calls and CPU submission time, so parked cars retain their existing 360 m batches.
 
+## Traffic signal batching
+
+Vehicle lenses, turn arrows, walk figures and hands each share one instanced mesh for the map.
+Camera-facing glows share one mesh per mast so they sort near the mast's depth alongside weather
+and glass. They use the same phase as their lenses. Steady phases leave the instance buffers
+alone. The pedestrian face shows the walk figure and hand in turn so the opaque symbols cannot
+cover each other.
+
+Matched profiles used Boat's headless Chromium 151 with SwiftShader at 1440 × 900, High, on
+Kitsilano at a frozen afternoon chase pose. Set the drive seed to 1, pause at simulation time
+zero, and place the ego 28 m back from the first signal approach's far-side mast
+(`sig0`, edge `e354`), centered on that approach and facing the signal. Snap the camera and
+use `profileRendering` with one warm-up and two sampled frames. The counts cover the full
+frame, including shadows, reflections and post-processing.
+
+| Weather | Draw calls before → after | Triangles before → after |
+|---|---:|---:|
+| Dry | 1,426 → 1,350 (−5.3%) | 2,980,675 → 2,992,841 |
+| Rain | 2,646 → 2,494 (−5.7%) | 5,006,699 → 5,031,031 |
+
+Map-wide face batches submit some off-screen lamp geometry, adding less than 0.5% to the frame's
+triangle count in each profile. These measurements cover draw submission in a single view with
+software WebGL. Use hardware timings to evaluate GPU performance.
+
 ## Reproduce and test
 
 Start `uv run server.py`, open `/?quality=high&weather=dry&time=afternoon`, and pause with `P`.

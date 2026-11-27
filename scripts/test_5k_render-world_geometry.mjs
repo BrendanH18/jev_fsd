@@ -354,58 +354,106 @@ assert.equal(
 const signalsMap = { edges: new Map() };
 const fixtures = sceneryFor(signalsMap);
 const signal = { id: "alpha", plan: { advance: { style: "arrow", edge: "west" } } };
-fixtures.signals.push({
-  inter: signal,
-  a: { edge: "west", group: "A" },
-  e: { lane_offsets: [1.8, 5.4] },
-  heading: 0,
-  x: 0,
-  y: 0,
-  poleLat: 8.2,
-});
+fixtures.signals.push(
+  {
+    inter: signal,
+    a: { edge: "west", group: "A" },
+    e: { lane_offsets: [1.8, 5.4] },
+    heading: 0,
+    x: 0,
+    y: 0,
+    poleLat: 8.2,
+  },
+  {
+    inter: signal,
+    a: { edge: "east", group: "B" },
+    e: { lane_offsets: [1.8] },
+    heading: Math.PI,
+    x: 40,
+    y: 0,
+    poleLat: 4,
+  },
+);
 const signalRoads = buildRoads(signalsMap);
 const renderGroup = signalRoads.group;
 const signalViews = signalRoads.signals;
-const lamp = (hex, arrow = false) =>
-  renderGroup.children.find(
-    (mesh) => mesh.isMesh && mesh.material?.emissive?.getHex() === hex && Boolean(mesh.material.emissiveMap) === arrow,
-  )?.material;
-const red = lamp(0xff2a1a);
-const amber = lamp(0xffb21a);
-const green = lamp(0x1aff8c);
-const amberArrow = lamp(0xffb21a, true);
-const greenArrow = lamp(0x1aff8c, true);
-const walk = lamp(0xf4f6ff, true);
-const hand = lamp(0xff8a1e, true);
-const glows = renderGroup.children.filter((mesh) => mesh.isSprite);
-assert.equal(glows.filter((mesh) => mesh.visible).length, 0, "new signal sprites start unlit");
+const batches = renderGroup.children.filter((mesh) => mesh.geometry?.hasAttribute("signalStrength"));
+assert.equal(batches.length, 6, "four map-wide face batches and two separately sorted mast glows");
+assert.equal(
+  batches.every((mesh) => mesh.isInstancedMesh && !mesh.castShadow),
+  true,
+);
+assert.equal(
+  renderGroup.children.some((object) => object.isSprite),
+  false,
+);
+const active = (mesh) => {
+  const { signalColor, signalStrength } = mesh.geometry.attributes;
+  const colors = [];
+  for (let i = 0; i < signalStrength.count; i++) {
+    if (signalStrength.getX(i) > 0.04) {
+      colors.push(new THREE.Color(signalColor.getX(i), signalColor.getY(i), signalColor.getZ(i)).getHex());
+    }
+  }
+  return colors;
+};
+const namedActive = (name) => active(renderGroup.getObjectByName(name));
+const balls = () => namedActive("Traffic signal lenses");
+const arrows = () => namedActive("Traffic signal arrows");
+const glows = () => namedActive("Traffic signal glows");
+const walk = () => namedActive("Pedestrian walk signals").length;
+const hand = () => namedActive("Pedestrian hand signals").length;
+const face = (name) => renderGroup.getObjectByName(name).geometry.attributes.signalStrength.getX(0);
+const red = 0xff2a1a,
+  amber = 0xffb21a,
+  green = 0x1aff8c;
+assert.deepEqual(glows(), [], "new signal glows start unlit");
 signalViews.set("alpha", { "@west": "arrow" }, 0.1);
-assert.equal(red.emissiveIntensity, 5, "protected left retains the through red ball");
-assert.equal(greenArrow.emissiveIntensity, 5, "protected left lights the arrow mask");
-assert.equal(green.emissiveIntensity, 0.04, "protected left leaves the through green off");
-assert.equal(greenArrow.color.getHex(), 0x1a1a1a, "the arrow housing stays dark while its face is lit");
-assert.equal(glows.filter((mesh) => mesh.visible).length, 4, "each red ball and the arrow share the active aspect");
+assert.deepEqual(balls(), [red, red, red], "protected left retains the through red balls");
+assert.deepEqual(arrows(), [green], "protected left lights only the green arrow");
+assert.deepEqual(glows().sort(), [red, red, red, green].sort(), "each active lens gets a matching glow");
+const versions = () => batches.map((mesh) => mesh.geometry.attributes.signalStrength.version);
+const unchanged = versions();
+signalViews.set("alpha", { "@west": "arrow" }, 0.2);
+assert.deepEqual(versions(), unchanged, "steady phases leave instance buffers alone");
 signalViews.set("alpha", { "@west": "arrow_yellow" });
-assert.equal(amberArrow.emissiveIntensity, 5);
-assert.equal(amber.emissiveIntensity, 0.04);
+assert.deepEqual(arrows(), [amber]);
+assert.deepEqual(balls(), [red, red, red]);
 signalViews.set("alpha", { "@west": "advance" }, 0.1);
-assert.equal(green.emissiveIntensity, 5);
+assert.deepEqual(balls(), [green, green, green]);
+assert.deepEqual(arrows(), []);
 signalViews.set("alpha", { "@west": "advance" }, 0.6);
-assert.equal(green.emissiveIntensity, 0.04);
+assert.deepEqual(balls(), []);
 signalViews.set("alpha", { "@west": "flashing_amber" }, 0.1);
-assert.equal(amber.emissiveIntensity, 5);
+assert.deepEqual(balls(), [amber, amber, amber]);
 signalViews.set("alpha", { "@west": "flashing_red" }, 0.1);
-assert.equal(red.emissiveIntensity, 5);
+assert.deepEqual(balls(), [red, red, red]);
 signalViews.set("alpha", { "@west": "dark", u: "green" }, 0.1);
-assert.equal(glows.filter((mesh) => mesh.visible).length, 0);
+assert.deepEqual(balls(), []);
+assert.deepEqual(glows(), []);
+assert.equal(renderGroup.getObjectByName("Traffic signal glows").visible, false, "dark masts submit no glow draw");
+signalViews.set("alpha", { "@east": "green" });
+assert.deepEqual(balls(), [green, green]);
+const mastGlows = batches.filter((mesh) => mesh.name === "Traffic signal glows");
+assert.deepEqual(
+  mastGlows.map((mesh) => mesh.visible),
+  [false, true],
+  "skip the dark mast",
+);
+assert.deepEqual(mastGlows.map(active), [[], [green, green]], "one approach does not light the other mast");
 signalViews.setPed("alpha", { A: "walk" }, 0.4);
-assert.equal(walk.emissiveIntensity === 3 && hand.emissiveIntensity === 0, true);
+assert.deepEqual([walk(), hand()], [1, 0]);
+assert.equal(face("Pedestrian hand signals"), -1, "the opaque hand face cannot cover the walk symbol");
 signalViews.setPed("alpha", { A: "flash" }, 0.3);
-assert.equal(walk.emissiveIntensity === 0 && hand.emissiveIntensity === 3, true);
+assert.deepEqual([walk(), hand()], [0, 1]);
 signalViews.setPed("alpha", { A: "flash" }, 0.7);
-assert.equal(hand.emissiveIntensity, 0);
+assert.equal(hand(), 0);
 signalViews.setPed("alpha", { A: "dont" }, 0.7);
-assert.equal(hand.emissiveIntensity, 3);
+assert.equal(hand(), 1);
+signalViews.setPed("alpha", { A: "dark" }, 0.7);
+assert.deepEqual([walk(), hand()], [0, 0]);
+assert.equal(face("Pedestrian walk signals"), -1);
+assert.equal(face("Pedestrian hand signals"), 0, "a dark head still shows an unlit face");
 
 const crossings = [
   [0, 0],

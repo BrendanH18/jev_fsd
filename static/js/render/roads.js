@@ -16,7 +16,6 @@ import {
   crosswalkSignTexture,
   zoneSignTexture,
   curbTexture,
-  glowTexture,
   grassTexture,
   stopSignTexture,
   withMacroVariation,
@@ -27,13 +26,13 @@ import {
 import { snowable } from "./weather.js";
 import { buildStreetLights } from "./citylights.js";
 import { wetReflective } from "./reflection.js";
+import { SignalBatch, signalGlowMaterial, signalLensMaterial } from "./signal-lamps.js";
 
 import { GUTTER, CURB, streetOf } from "../map/streets.js";
 import { sceneryFor, analyzeStreets, trimAt } from "../map/scenery.js";
 import { junctionFills } from "../map/junctions.js";
 const ARTERIAL = new Set(["primary", "secondary", "tertiary", "primary_link", "secondary_link", "tertiary_link"]);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
-const LAMPS = ["red", "yellow", "green", "arrow_yellow", "arrow_green"];
 const SIGNAL_MASKS = { dark: 0, red: 1, yellow: 2, green: 4, arrow_yellow: 9, arrow_green: 16, arrow: 17 };
 const FLASH_MASKS = { flashing_red: 1, flashing_amber: 2, advance: 4 };
 
@@ -357,43 +356,54 @@ function buildSignals(map, group) {
   const backplate = new THREE.BoxGeometry(0.03, 1.42, 0.78);
   const hanger = new THREE.BoxGeometry(0.06, 0.4, 0.06);
   const hood = new THREE.BoxGeometry(0.22, 0.03, 0.34);
-  const lens = new THREE.CircleGeometry(0.135, 20).rotateY(-Math.PI / 2);
   const poles = [],
     housings = [],
     plates = [];
   // pedestrian heads: on each far-corner pole, facing back across the cross street, for people
   // walking alongside this approach's traffic
   const pedHousing = new THREE.BoxGeometry(0.22, 0.42, 0.36);
-  const pedLens = new THREE.PlaneGeometry(0.3, 0.3).rotateY(-Math.PI / 2);
-  const pedGeos = new Map(); // "inter|group|walk" and "inter|group|hand" -> geometries
-  const lampGeos = new Map(); // "inter|head|color" -> geometries (head: the group, or "@edge")
-  const sprites = new Map(); // "inter|head|color" -> sprites
-  const colors = { red: 0xff2a1a, yellow: 0xffb21a, green: 0x1aff8c, arrow_yellow: 0xffb21a, arrow_green: 0x1aff8c };
+  const pedestrianHeads = new Map(); // "inter|group" -> pedestrian head instances
+  const vehicleHeads = new Map(); // "inter|head" -> mast approaches (head: the group, or "@edge")
+  const colors = [0xff2a1a, 0xffb21a, 0x1aff8c, 0xffb21a, 0x1aff8c];
   const arrowHousing = new THREE.BoxGeometry(0.36, 0.72, 0.4);
   const arrowPlate = new THREE.BoxGeometry(0.03, 0.72, 0.78);
-  const glowMats = Object.fromEntries(
-    Object.entries(colors).map(([k, c]) => [
-      k,
-      new THREE.SpriteMaterial({
-        map: glowTexture(),
-        color: c,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        transparent: true,
-        opacity: 0.9,
-      }),
-    ]),
+  const lens = new THREE.CircleGeometry(0.135, 20).rotateY(-Math.PI / 2);
+  const balls = new SignalBatch(
+    "Traffic signal lenses",
+    lens,
+    signalLensMaterial({ color: 0x1a1a1a, roughness: 0.3, colorLens: true }),
   );
+  const arrows = new SignalBatch(
+    "Traffic signal arrows",
+    lens.clone(),
+    signalLensMaterial({ color: 0x1a1a1a, roughness: 0.3, texture: leftArrowTexture() }),
+  );
+  const pedLens = new THREE.PlaneGeometry(0.3, 0.3).rotateY(-Math.PI / 2);
+  const walks = new SignalBatch(
+    "Pedestrian walk signals",
+    pedLens,
+    signalLensMaterial({ color: 0x111111, roughness: 0.4, texturedFace: true, texture: walkSignalTexture() }),
+  );
+  const hands = new SignalBatch(
+    "Pedestrian hand signals",
+    pedLens.clone(),
+    signalLensMaterial({ color: 0x111111, roughness: 0.4, texturedFace: true, texture: handSignalTexture() }),
+  );
+  const glowMaterial = signalGlowMaterial();
+  function at(matrix, x, y, z) {
+    return matrix.clone().multiply(T(x, y, z));
+  }
   for (const { inter, a, e, heading: h, poleLat, x: px, y: py } of approaches) {
     const matrix = placement(px, py, 0, h);
     const adv = inter.plan?.advance,
       head = adv ? `@${a.edge}` : a.group;
-    const arrows = adv?.style === "arrow" && adv.edge === a.edge;
-    for (const kind of ["walk", "hand"]) {
-      const k = `${inter.id}|${a.group}|${kind}`;
-      if (!pedGeos.has(k)) pedGeos.set(k, []);
-      pedGeos.get(k).push(placed(pedLens, matrix, T(-0.3, 2.75, 0.3)));
-    }
+    const hasArrow = adv?.style === "arrow" && adv.edge === a.edge;
+    const pedKey = `${inter.id}|${a.group}`;
+    if (!pedestrianHeads.has(pedKey)) pedestrianHeads.set(pedKey, []);
+    const position = at(matrix, -0.305, 2.75, 0.3);
+    const walk = walks.add(position, 0xf4f6ff, -1);
+    const hand = hands.add(position, 0xff8a1e, 0);
+    pedestrianHeads.get(pedKey).push({ walk, hand });
     housings.push(placed(pedHousing, matrix, T(-0.19, 2.75, 0.3)));
     const lanes = e.lane_offsets.slice(0, 3);
     poles.push(placed(pole, matrix));
@@ -405,6 +415,12 @@ function buildSignals(map, group) {
     }
     const heads = lanes.map((off) => poleLat - off);
     heads.push(0.35); // a second head on the pole, at eye level
+    const key = `${inter.id}|${head}`;
+    if (!vehicleHeads.has(key)) vehicleHeads.set(key, []);
+    const lamps = [];
+    // Additive glows can share draws along a mast, but must sort at that mast's depth
+    // relative to glass and weather, even when other signals are much closer or farther away.
+    const glows = new SignalBatch("Traffic signal glows", new THREE.PlaneGeometry(1, 1), glowMaterial);
     heads.forEach((dz, i) => {
       const onPole = i === heads.length - 1;
       const y = onPole ? 3.4 : 5.25,
@@ -414,60 +430,31 @@ function buildSignals(map, group) {
       plates.push(placed(backplate, matrix, T(x + 0.2, y, z)));
       if (!onPole) poles.push(placed(hanger, matrix, T(x, 5.9, z)));
       // (the left arrow: under the head over the left lane)
-      const withArrow = arrows && i === 0;
+      const withArrow = hasArrow && i === 0;
       if (withArrow) {
         housings.push(placed(arrowHousing, matrix, T(x, y - 0.9, z)));
         plates.push(placed(arrowPlate, matrix, T(x + 0.2, y - 0.9, z)));
       }
-      LAMPS.slice(0, withArrow ? 5 : 3).forEach((name, k) => {
+      for (let k = 0; k < (withArrow ? 5 : 3); k++) {
         const ly = y + 0.34 - k * 0.34;
         housings.push(placed(hood, matrix, T(x - 0.28, ly + 0.15, z)));
-        const key = `${inter.id}|${head}|${name}`;
-        if (!lampGeos.has(key)) {
-          lampGeos.set(key, []);
-          sprites.set(key, []);
-        }
-        lampGeos.get(key).push(placed(lens, matrix, T(x - 0.185, ly, z)));
-        const sp = new THREE.Sprite(glowMats[name]);
-        sp.position.set(x - 0.3, ly, z).applyMatrix4(matrix);
-        sp.scale.setScalar(name.startsWith("arrow_") ? 0.7 : 1.1);
-        sp.visible = false;
-        group.add(sp);
-        sprites.get(key).push(sp);
-      });
+        const arrow = k >= 3;
+        const batch = arrow ? arrows : balls;
+        const index = batch.add(at(matrix, x - 0.185, ly, z), colors[k], 0.04);
+        const position = new THREE.Vector3(x - 0.3, ly, z).applyMatrix4(matrix);
+        const size = arrow ? 0.7 : 1.1;
+        const glow = glows.add(new THREE.Matrix4().makeScale(size, size, size).setPosition(position), colors[k], 0);
+        lamps.push({ bit: 1 << k, batch, index, glow });
+      }
     });
+    const glowMesh = glows.mount(group, false);
+    glowMesh.visible = false;
+    vehicleHeads.get(key).push({ lamps, glows, glowMesh, mask: hasArrow ? 0b11111 : 0b00111 });
   }
   addMerged(group, poles, metal());
   addMerged(group, housings, new THREE.MeshStandardMaterial({ color: 0xd7a91e, roughness: 0.55, metalness: 0.1 }));
   addMerged(group, plates, new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.7 }));
-  const lampMats = new Map();
-  for (const [key, geos] of lampGeos) {
-    const name = key.split("|")[2],
-      arrow = name.startsWith("arrow_");
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a1a,
-      emissive: colors[name],
-      emissiveIntensity: 0.04,
-      roughness: 0.3,
-      ...(arrow ? { emissiveMap: leftArrowTexture() } : {}),
-    });
-    lampMats.set(key, mat);
-    addMerged(group, geos, mat, false);
-  }
-  const pedMats = new Map();
-  for (const [key, geos] of pedGeos) {
-    const walk = key.endsWith("|walk");
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x111111,
-      map: walk ? walkSignalTexture() : handSignalTexture(),
-      emissive: walk ? 0xf4f6ff : 0xff8a1e,
-      emissiveMap: walk ? walkSignalTexture() : handSignalTexture(),
-      emissiveIntensity: 0,
-      roughness: 0.4,
-    });
-    pedMats.set(key, mat);
-    addMerged(group, geos, mat, false);
-  }
+  for (const batch of [balls, arrows, walks, hands]) batch.mount(group);
   const last = new Map();
   const pedestrians = new Map();
   return {
@@ -478,13 +465,15 @@ function buildSignals(map, group) {
         const state = pedByGroup[g];
         const key = `${intersectionId}|${g}`;
         const shown = state === "walk" ? 1 : state === "dont" || (state === "flash" && blink) ? 2 : 0;
-        if (pedestrians.get(key) === shown) continue;
-        const walk = pedMats.get(`${key}|walk`),
-          hand = pedMats.get(`${key}|hand`);
-        if (!walk || !hand) continue;
+        if ((pedestrians.get(key) ?? 0) === shown) continue;
+        const heads = pedestrianHeads.get(key);
+        if (!heads) continue;
         pedestrians.set(key, shown);
-        walk.emissiveIntensity = shown === 1 ? 3 : 0;
-        hand.emissiveIntensity = shown === 2 ? 3 : 0;
+        for (const { walk, hand } of heads) {
+          // The faces share a plane. Hide the other face and retain the unlit hand face in the dark.
+          walks.setStrength(walk, shown === 1 ? 3 : -1);
+          hands.setStrength(hand, shown === 1 ? -1 : shown === 2 ? 3 : 0);
+        }
       }
     },
     // `phases`: what each group shows ({ A, B }), or at a junction with an advance green, each
@@ -504,16 +493,18 @@ function buildSignals(map, group) {
             : state
               ? 0
               : SIGNAL_MASKS.red;
-        if (last.get(key) === shown) continue;
+        const previous = last.get(key) ?? 0;
+        if (previous === shown) continue;
         last.set(key, shown);
-        for (const [index, name] of LAMPS.entries()) {
-          const mat = lampMats.get(`${key}|${name}`);
-          if (!mat) continue;
-          const on = (shown & (1 << index)) !== 0;
-          mat.emissiveIntensity = on ? 5 : 0.04;
-          // (an arrow lights only its arrow, not the whole lens)
-          mat.color.setHex(on && !name.startsWith("arrow_") ? colors[name] : 0x1a1a1a);
-          for (const sp of sprites.get(`${key}|${name}`)) sp.visible = on;
+        for (const { lamps, glows, glowMesh, mask } of vehicleHeads.get(key) ?? []) {
+          if ((previous & mask) === (shown & mask)) continue;
+          glowMesh.visible = (shown & mask) !== 0;
+          for (const { bit, batch, index, glow } of lamps) {
+            if ((previous & bit) === (shown & bit)) continue;
+            const on = (shown & bit) !== 0;
+            batch.setStrength(index, on ? 5 : 0.04);
+            glows.setStrength(glow, on ? 1 : 0);
+          }
         }
       }
     },
