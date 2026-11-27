@@ -26,7 +26,7 @@ const { RulesBrain } = await import("../static/js/brain/rules.js");
 const { Autopilot } = await import("../static/js/brain/brain.js");
 const { CautiousAgent } = await import("../static/js/agents/cautious.js");
 const { toJevState, situationClauses, buildQuestions } = await import("../static/js/brain/state.js");
-const { SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
+const { buildLlmPrompt, SYSTEM_PROMPT } = await import("../static/js/brain/llm-prompt.js");
 const { CHALLENGES, challengeScenario } = await import("../static/js/lab/challenges.js");
 const { setupChallenge, evaluateChallenge } = await import("../static/js/lab/evaluation.js");
 const { DriveRecorder } = await import("../static/js/lab/recorder.js");
@@ -73,9 +73,18 @@ const idle = { enabled: false, step() {} };
 
 // A world on William Avenue with the driven car in lane `lane`, `s` along it at `v`, on a route along that
 // lane, and no traffic but what a test puts there.
-function world({ tailgaters = true, seed = 3, traffic = 0, s = 60, v = 12, lane = 0, weather = "dry" } = {}) {
+function world({
+  tailgaters = true,
+  seed = 3,
+  traffic = 0,
+  s = 60,
+  v = 12,
+  lane = 0,
+  weather = "dry",
+  amberLights = false,
+} = {}) {
   setWeather(weather);
-  const w = new World(WPG, { seed, parked: 0, pedestrians: 0, weather, tailgaters });
+  const w = new World(WPG, { seed, parked: 0, pedestrians: 0, weather, tailgaters, amberLights });
   const fleet = new NpcFleet(w, { count: traffic, bikes: 0, seed: 5 });
   w.parked.nextDoor = 1e9;
   fleet.nextPark = 1e9;
@@ -449,6 +458,32 @@ await test("what models are told", () => {
   assert.equal(Object.keys(questions.vector.criteria).includes("let_tailgater_pass"), true);
   assert.equal(T.tailgaterNotice(w, d.snap).text, "TAILGATER · MOVE RIGHT AND LET THEM BY");
   assert.equal(T.tailgaterNotice(w, null).text, "TAILGATER · LEAVE MORE ROOM AHEAD");
+});
+
+await test("the LLM prompt prioritizes a safe amber stop even with a clear right lane", () => {
+  const edge = WPG.edges.get(EDGE),
+    inter = WPG.intersections.get(edge.control.id),
+    phase = inter.plan[edge.control.group],
+    ctx = world({ s: edge.control.s_line - 62, v: 13, amberLights: true }),
+    w = ctx.world;
+  w.t = ((phase.start + phase.green - (inter.offset_s || 0) + inter.plan.cycle) % inter.plan.cycle) + 0.5;
+  T.commitTailgater(w, behind(ctx, 6, 13));
+  const { snap, candidates, eligible, rejected } = decide(w);
+  const state = toJevState(snap, candidates, { rejected });
+  const { questions } = buildQuestions(snap, eligible);
+  const { messages, expect } = buildLlmPrompt(snap, { state, questions });
+  assert.equal(state.intersection.amber.stop, true);
+  assert.equal(state.tailgater.move_right_to_let_it_pass, true);
+  assert.ok(expect.candidate.includes("stop_at_line"));
+  assert.ok(expect.candidate.includes("let_tailgater_pass"));
+  const tailgaterRule = messages[0].content.split("\n").find((line) => line.startsWith("- A car tailgating"));
+  assert.match(
+    tailgaterRule,
+    /safe amber stop, choose `stop_at_line` when offered\. Otherwise choose `let_tailgater_pass`/,
+  );
+  const clause = JSON.parse(messages[1].content).situation.find((line) => line.includes("is tailgating"));
+  assert.match(clause, /choose `stop_at_line` when offered/);
+  assert.doesNotMatch(clause, /`let_tailgater_pass`/);
 });
 
 await test("brake_checks reaches the metrics, the drive score and the practice verdict only once a tailgater has followed the car", () => {

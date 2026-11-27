@@ -452,8 +452,9 @@ longer drive, so that a decision at one bears on the next
 |---|---|---|
 | Rush hour on West 4th (`rush-hour`, seed 63042) | Kitsilano, 17:00, dry | West 4th Avenue east from before Vine Street, left at the Maple Street lights, and up Maple Street past its stop sign at West 3rd Avenue. About 830 m, 300 s allowed. A driver closes up behind in the curb lane; the Vine Street light turns amber seven seconds in, with that driver still behind; a bus at the stop past Yew Street signals to pull out; the left turn at Maple crosses two oncoming cars; West 3rd Avenue's traffic does not stop for Maple's stop sign. |
 
-It opens like a challenge (`?challenge=rush-hour`, `&drive=rules` to watch Rules) and is judged like
-one: a pass is arriving with nothing in `challengeFailures`. The library does not list it yet.
+Choose **Rush hour on West 4th** under **Compound drives** in Drive Lab. It also opens directly
+with `?challenge=rush-hour` (`&drive=rules` to watch Rules). A pass means arriving with nothing in
+`challengeFailures`.
 
 Compound drives are modules in `lab/challenges/` like the challenges, but the registry lists them
 apart, in `COMPOUND_DRIVES` (`lab/challenges.js`). They stay out of `CHALLENGES` and `ROAD_TESTS`,

@@ -1,5 +1,20 @@
 # The compound drive — 2026-11-26 (ROADMAP 9.3)
 
+## Admission on 27 November
+
+At the Vine Street amber, the tailgater instructions now give a safe stop at the light priority
+over letting the driver behind pass. The saved request has 2,354 question characters. In one live
+call, `jev-1.14.0` selected `stop_at_line` at 96% and `ease_off_for_tailgater` received 3%. The call
+used 2,772 input tokens, took 259 ms and cost $0.000116. Drive Lab lists **Rush hour on West 4th**
+under **Compound drives**. Model evidence is limited to the saved decision.
+
+On Node 22.23.5 in Boat, the 12 dry bare drives, 12 dry city drives, and 62 Rules arena drives
+all passed and matched a clean `410e2fb9` checkout apart from timings and run provenance. The
+latitude check replayed exactly and found three ordinary choices that could lead to failure.
+Two compound runs in history used 275,094 bytes (2.9% of the fallback budget).
+
+## Initial validation on 26 November
+
 **Result.** "Rush hour on West 4th" (`rush-hour`) is one drive of about 830 m through five
 existing situations on West 4th Avenue in Kitsilano. The latitude script of 4.1 samples 167 of
 Rules' decisions on it. At 3 of them a manoeuvre other than the emergency brake, which the safety
@@ -161,4 +176,4 @@ Open-track drives match the guarded ones in every field but the track's own, as
 - The drive's timing rests on traffic paths: the tailgater's turn at Vine Street, the oncoming
   cars at Maple Street and West 3rd Avenue's through traffic. A change to lane joins or NPC paths
   can move its results, and its check pins them.
-- The library does not list the drive; it opens by link.
+- At this point, the drive opened by link. The Drive Lab listing was added at admission.

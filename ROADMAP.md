@@ -113,7 +113,7 @@ Release rows were brought up to date on 26 November. How each figure was counted
 
 | Area | State |
 |---|---|
-| World | 12 neighbourhoods in 11 cities, 60 challenges, 2 road tests, 1 compound drive (built, not yet admitted: 9.3), 41 opt-in world features (42 free-drive switches), all 41 on the feature registry with their rendering |
+| World | 12 neighbourhoods in 11 cities, 60 challenges, 2 road tests, 1 compound drive (9.3), 41 opt-in world features (42 free-drive switches), all 41 on the feature registry with their rendering |
 | Drivers | Rules, the cautious agent, decision models (Jev and others), LLMs through any OpenAI-compatible endpoint or a major lab's own API (Claude through the Claude Platform), your own module |
 | Public demo | Live on GitHub Pages: Rules and the browser agents drive; the results leaderboard; a gallery of four keyless model replays; a manual drive set beside Rules, Jev and Claude Haiku |
 | Checks | About 1,200 Python tests, 238 Node checks in six shards, four browser jobs, blocking Ruff and Biome lint; the hard city slice on every change; the city matrix weekly; the interaction soak weekly, report-only |
@@ -813,21 +813,20 @@ ordinary manoeuvre that fails) and that most open-track flags never became viola
   `on-your-bumper` brake check replay exactly. The
   [review](docs/validation/haiku-two-losses-2026-11-21.md) records what the model saw,
   the choices it made and which audit or timeout determined each verdict.
-- [ ] **9.3 Compound drives.** (L) One or two longer drives on existing maps that string several
+- [x] **9.3 Compound drives.** (L) One or two longer drives on existing maps that string several
   situations together, like the road tests, each passing the admission rule. Run the latitude script of
   4.1 on each before admitting it: a drive in which no ordinary manoeuvre can fail does not separate
   drivers.
-  *26 November: one built, not yet admitted.* "Rush hour on West 4th" (`rush-hour`, Kitsilano, about
+  *27 November: one admitted.* "Rush hour on West 4th" (`rush-hour`, Kitsilano, about
   830 m): a tailgater, an amber with the tailgater behind, a bus pulling out, an unprotected left and
   a stop sign with through traffic. It is listed apart (`COMPOUND_DRIVES`, `arena_node.mjs --set
   compound`, labelled `custom`), so the numbered suites and their 62 drives are untouched. Latitude: 3 of 167
   sampled decisions offer an ordinary manoeuvre that fails (the sixty challenges: 4 of 3,042). Rules
-  and the cautious agent both pass on both tracks, so it does not separate them. Admission checks 1
-  to 4 and 6 pass; check 5 does not: on the saved case, live, Jev eased off for the tailgater (67%)
-  where a stop at the amber was expected (30%), because the amber and tailgater clauses give opposite
-  advice when the two coincide ([record](docs/validation/compound-drive-2026-11-26.md)). Next: decide
-  the wording for an amber with a tailgater behind, check it live, then admit the drive and run the
-  models on it. The tailgater braking defect found while developing it now has a regression check in
+  and the cautious agent both pass on both tracks. In the saved case Jev initially eased off for the
+  tailgater (67%). With the amber stop given priority in the instructions, it chose `stop_at_line`
+  (96%, 2,772 input tokens). All six admission checks pass and the drive is in Drive Lab
+  ([record](docs/validation/compound-drive-2026-11-26.md)). Full-length model drives are still due.
+  The tailgater braking defect found while developing it now has a regression check in
   `scripts/test_tailgaters.mjs`. It covers both a gentle approach with 45 m of room and firm braking
   when a stopped leader is only 18 m away. In the 45 m check, the car can still brake abruptly later
   as the rear car slows out of the tailgater threshold and collision prediction resumes assuming

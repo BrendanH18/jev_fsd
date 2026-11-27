@@ -18,9 +18,19 @@ import {
 } from "../tailgaters.js";
 
 // A car tailgating the driven car, close behind it in its lane (sim/tailgaters.js).
-function tailgaterClause(t) {
+function tailgaterClause({ tailgater: t, intersection }) {
+  if (!t) return null;
   const lead = `Car \`${t.id}\` is tailgating the car, ${Math.max(0, Math.round(t.gap_m))} m behind (${r1(t.headway_s)} s)${t.flashing ? ", flashing its headlights" : ""}: far too close to stop if the car brakes suddenly.`;
   const brake = `Never brake-check it, and never brake harder than ${r1(t.gentle_mps2)} m/s^2 unless something ahead calls for more${t.need_for ? ` (the ${t.need_for} ahead needs ${r1(t.need_mps2)} m/s^2)` : ""}; never speed up to please it either. Leave twice the usual gap to whatever is ahead (\`car.target_speed\` already does), so the car can brake early and gently.`;
+  if (
+    intersection?.signal === "yellow" &&
+    intersection.amber?.stop &&
+    !intersection.entered &&
+    !intersection.clear_entered
+  ) {
+    const braking = intersection.amber.firm ? "Brake as firmly as needed" : "Brake gently";
+    return `${lead} ${brake} Stopping for the yellow light takes priority over letting the tailgater pass. ${braking} and choose \`stop_at_line\` when offered. Wait for green.`;
+  }
   const by = t.can_move_right
     ? "Another lane goes the car's way on the right and it is clear: choose `let_tailgater_pass` to move over at the car's speed and let it by."
     : "There is no lane to move right into: ease off a little, gently (`ease_off_for_tailgater`, where it is offered), so it can pass when it is safe.";
@@ -243,9 +253,9 @@ export default {
       return null;
     },
   },
-  clause: { at: "rearTraffic", run: (snap) => (snap.tailgater ? tailgaterClause(snap.tailgater) : null) },
+  clause: { at: "rearTraffic", run: tailgaterClause },
   prompt: {
     at: "rearTraffic",
-    text: `- A car tailgating close behind (\`tailgater\`) cannot stop if the car brakes suddenly. Never brake-check it: brake no harder than \`tailgater.brake_no_harder_than_mps2\` unless something ahead calls for more, start braking early and gently, and never speed up to please it. Keep twice the usual gap ahead. When \`tailgater.move_right_to_let_it_pass\` is true, choose \`let_tailgater_pass\`; otherwise prefer \`ease_off_for_tailgater\` where it is offered.`,
+    text: `- A car tailgating close behind (\`tailgater\`) cannot stop if the car brakes suddenly. Never brake-check it: brake no harder than \`tailgater.brake_no_harder_than_mps2\` unless something ahead calls for more, start braking early and gently, and never speed up to please it. Keep twice the usual gap ahead. When \`situation\` calls for a safe amber stop, choose \`stop_at_line\` when offered. Otherwise choose \`let_tailgater_pass\` if \`tailgater.move_right_to_let_it_pass\` is true, or prefer \`ease_off_for_tailgater\` where offered.`,
   },
 };

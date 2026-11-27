@@ -635,6 +635,16 @@ def check_library_progress(page):
     cards = page.locator(".challenge-grid [data-challenge]")
     assert cards.nth(0).get_attribute("data-challenge") == "door-zone"
     assert cards.nth(1).get_attribute("data-challenge") == "pothole-season"
+    assert cards.count() == 60
+
+    compound = page.get_by_role("region", name="Compound drives")
+    rush_hour = compound.get_by_role("link", name="Rush hour on West 4th", exact=False)
+    assert rush_hour.is_visible()
+    assert "drive=manual" in rush_hour.get_attribute("href")
+    page.get_by_role("combobox", name="Challenge driver").select_option("rules")
+    rush_hour.click()
+    page.wait_for_function("window.__jev?.world.challenge?.id === 'rush-hour'", timeout=TIMEOUT_MS)
+    assert "drive=rules" in page.url
 
 
 GROUPS = ["pages", "practice", "parking"]
