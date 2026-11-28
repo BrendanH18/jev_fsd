@@ -450,6 +450,7 @@ const shared = {
   }),
 };
 shareActorResources(Object.values(shared));
+const wheelMaterials = [shared.tire, shared.rim];
 const paints = new Map();
 function paint(hex = 0x2f7cff) {
   if (!paints.has(hex)) {
@@ -608,7 +609,7 @@ export function createCarMesh(color = 0x2f7cff, id = "ego", styleIndex = null) {
   for (const [lx, lz] of wheelsAt(spec)) {
     const axle = new THREE.Group();
     axle.position.set(lx, st.tire, lz);
-    const wheel = new THREE.Mesh(wg, [shared.tire, shared.rim]);
+    const wheel = new THREE.Mesh(wg, wheelMaterials);
     wheel.castShadow = true;
     axle.add(wheel);
     g.add(axle);
