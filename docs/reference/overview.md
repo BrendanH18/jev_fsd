@@ -40,8 +40,8 @@ so driving with Rules needs no external network after installing the Python depe
 
 Try **Explore cities → Victoria → Neighbourhood cruise**. A suggested drive starts the selected
 autopilot; `W A S D`, touch controls or a gamepad takes over manually
-([controls](drive-coach-and-hud.md#controls-and-driving-feel)). You can also click a destination on
-the minimap or start a free drive directly. Cycle **View** to hood view and enable **Sound** for
+([controls](drive-coach-and-hud.md#controls-and-driving-feel)). You can also open the minimap and
+pick a destination or start a free drive directly. Cycle **View** to hood view and enable **Sound** for
 driving ambience. Open **Settings** to change weather, time, traffic, garage vehicle and graphics,
 or press `?` for keyboard help.
 
