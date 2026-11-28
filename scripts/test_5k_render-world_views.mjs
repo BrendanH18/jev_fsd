@@ -20,6 +20,9 @@ const { CinematicCamera, CINEMATIC_SHOTS } = await import("../static/js/render/c
 const { Minimap } = await import("../static/js/render/minimap.js");
 const { OrbitCamera } = await import("../static/js/render/orbit-camera.js");
 const { Overlays } = await import("../static/js/render/overlays.js");
+const { PerceptionView } = await import("../static/js/render/perception.js");
+const { World } = await import("../static/js/sim/world.js");
+const { load } = await import("./drive_lab_maps.mjs");
 const { PostFX } = await import("../static/js/render/post.js");
 const { GroundReflection, reflection, wetReflective } = await import("../static/js/render/reflection.js");
 const { SceneView } = await import("../static/js/render/scene.js");
@@ -240,9 +243,30 @@ marker.setRoute({
   endPoint: () => [5, 0],
 });
 marker.tick(1);
+const pin = marker.marker.children.find((part) => part.isSprite);
+assert.deepEqual(pin.center.toArray(), [0.5, 0], "the pin tip stays at the route endpoint");
+assert.equal(pin.scale.y <= 2 && pin.material.depthTest && !pin.material.depthWrite, true);
 const pulse = marker.ring.scale.x;
 marker.tick(Infinity);
 assert.equal(marker.ring.scale.x, pulse);
+
+const eyes = new PerceptionView(scene);
+const sightWorld = new World(load("kitsilano"), { parked: 0, pedestrians: 0 });
+Object.assign(sightWorld.ego, { x: 12, y: 18, psi: 0 });
+sightWorld.visibility.rangeAt = () => 20;
+sightWorld.visibility.canSee = (observer, x) => x <= observer.x + 4;
+eyes.setEnabled(true);
+eyes.update(sightWorld, 0, null);
+const fan = eyes.footprint.geometry;
+const vertices = fan.attributes.position;
+assert.equal(fan.index.count, (vertices.count - 1) * 3, "each adjacent pair of bearings encloses one triangle");
+assert.deepEqual(Array.from(fan.index.array.slice(-3)), [0, vertices.count - 1, 1], "close the last sector");
+assert.equal(vertices.getX(1) > 3.8 && vertices.getX(1) <= 4, true, "the forward edge respects the obstruction");
+assert.equal(vertices.getX(1 + (vertices.count - 1) / 2), -20, "the opposite edge reaches the weather limit");
+assert.deepEqual([eyes.footprint.position.x, eyes.footprint.position.z], [12, -18]);
+assert.equal(eyes.update(sightWorld, 240, null), null);
+eyes.update(sightWorld, 250, null);
+assert.equal(eyes.footprint.geometry.attributes.position, vertices, "the footprint reuses its GPU buffer");
 const candidates = [
   {
     id: "a",
@@ -444,7 +468,7 @@ assert.equal(wet.rt.width, 28);
 
 const post = new PostFX(gl, scene, camera);
 assert.equal(post.sceneRT.samples, 2);
-assert.equal(post.ldrRT.depthBuffer || post.gradeRT.depthBuffer, false);
+assert.equal(post.displayRT.depthBuffer, false);
 assert.equal(post.smaa._edgesRT.depthBuffer || post.smaa._weightsRT.depthBuffer, false);
 post.setAO(true);
 assert.equal(post.sceneRT.stencilBuffer, true);
@@ -464,6 +488,8 @@ assert.equal(post.sceneRT.width, 1);
 post.setSize(103.5, 83.5);
 assert.equal(post.sceneRT.width, 103);
 assert.equal(post.sceneRT.height, 83);
+assert.equal(post.displayRT.width, 103);
+assert.equal(post.displayRT.height, 83);
 post.renderPasses = () => {
   gl.setRenderTarget(null);
   gl.setClearColor(new THREE.Color(0xffffff), 0);
@@ -477,10 +503,11 @@ assert.equal(gl.autoClear, true);
 assert.equal(active === oldTarget && face === 4 && mip === 2, true);
 let postReleases = 0;
 post.sceneRT.addEventListener("dispose", () => postReleases++);
+post.displayRT.addEventListener("dispose", () => postReleases++);
 post.dispose();
 post.dispose();
 post.render();
-assert.equal(postReleases, 1);
+assert.equal(postReleases, 2);
 
 // Check quality and resource ownership with the real Three scene graph and a recording renderer.
 globalThis.window = { devicePixelRatio: 2.5, innerWidth: 101, innerHeight: 81 };
@@ -522,7 +549,7 @@ assert.equal(view.setQuality("constructor"), "high", "an unrecognised preset use
 assert.equal(dpr, 1);
 assert.equal(resizeCalls, 1);
 assert.equal(view.post.bloom.strength, atmosphere.bloom.strength);
-assert.equal(view.post.grade.uniforms.tint.value.equals(atmosphere.grade.tint), true);
+assert.equal(view.post.display.uniforms.tint.value.equals(atmosphere.grade.tint), true);
 assert.equal(cover.alphaToCoverage, true);
 assert.equal(view.reflection.rt.samples, 2);
 const shadowRT = new THREE.WebGLRenderTarget(2, 2);
@@ -553,9 +580,9 @@ view.setLook({ exposure: 10000, vignette: 10 });
 assert.equal(Number.isFinite(gl.toneMappingExposure), true);
 view.setLook({ contrast: -100, saturation: -100 });
 view.setQuality("high");
-assert.equal(view.post.grade.uniforms.vignette.value, 1);
-assert.equal(view.post.grade.uniforms.saturation.value, 0);
-assert.equal(view.post.grade.uniforms.contrast.value, 0.5);
+assert.equal(view.post.display.uniforms.vignette.value, 1);
+assert.equal(view.post.display.uniforms.saturation.value, 0);
+assert.equal(view.post.display.uniforms.contrast.value, 0.5);
 
 const lod = new THREE.LOD();
 const scenery = new THREE.Group();
@@ -601,15 +628,28 @@ const high = view.post;
 high.render = PostFX.prototype.render;
 const order = [];
 gl.render = () => order.push("scene");
+gl.toneMappingExposure = 0.84;
 high.bloom.render = () => order.push("bloom");
-high.output.render = () => order.push("output");
-high.gradeQuad.render = () => order.push("grade");
-high.smaa.render = () => order.push("smaa");
-high.grade.uniforms.seed.value = 63;
+high.displayQuad.render = () => {
+  assert.equal(gl.getRenderTarget(), high.displayRT);
+  order.push("display");
+};
+high.smaa.render = (_renderer, _write, read) => {
+  assert.equal(read, high.displayRT);
+  order.push("smaa");
+};
+high.display.uniforms.seed.value = 63;
 high.render();
-assert.equal(high.grade.uniforms.seed.value, 0);
-assert.equal(order.join(","), "scene,bloom,output,grade,smaa");
-assert.equal(high.grade.uniforms.tDiffuse.value === high.ldrRT.texture, true);
+assert.equal(high.display.uniforms.seed.value, 0);
+assert.equal(order.join(","), "scene,bloom,display,smaa");
+assert.equal(high.display.uniforms.tDiffuse.value, high.sceneRT.texture);
+assert.equal(high.display.uniforms.toneMappingExposure.value, 0.84);
+high.setAO(true);
+high.ao.render = () => order.push("ao");
+order.length = 0;
+high.render();
+assert.equal(order.join(","), "scene,ao,bloom,display,smaa");
+assert.equal(high.display.uniforms.tDiffuse.value, high.blendRT.texture);
 high.dispose();
 
 // Probe refreshes are keyed by weather and meaningful motion of the sun.

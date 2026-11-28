@@ -775,16 +775,24 @@ export const lampPoolTexture = () =>
     return toTexture(c, { repeat: false, srgb: false });
   });
 
-// Vertical fade for the destination beam: opaque at the bottom, clear at the top.
-export const beamTexture = () =>
-  once("beam", () => {
-    const c = canvas(64),
+export const destinationPinTexture = () =>
+  once("destinationPin", () => {
+    const c = canvas(128),
       ctx = c.getContext("2d");
-    const g = ctx.createLinearGradient(0, 64, 0, 0);
-    g.addColorStop(0, "rgba(255,255,255,0.9)");
-    g.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 64, 64);
+    ctx.beginPath();
+    ctx.arc(64, 43, 36, (5 * Math.PI) / 6, Math.PI / 6);
+    ctx.lineTo(64, 124);
+    ctx.closePath();
+    ctx.fillStyle = "#57d27f";
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#173e32";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(64, 43, 13, 0, Math.PI * 2);
+    ctx.fillStyle = "#ecfff2";
+    ctx.fill();
     return toTexture(c, { repeat: false });
   });
 

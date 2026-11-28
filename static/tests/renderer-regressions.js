@@ -492,6 +492,40 @@ function minimapChecks(check) {
     "Drop the cached minimap path when clearing the route",
     minimap.routePath === null && pixel(95, 60) !== "76,194,255,255",
   );
+  minimap.dispose();
+
+  const panel = document.createElement("section");
+  panel.dataset.mapView = "follow";
+  const modeButton = document.createElement("button");
+  panel.append(canvas, modeButton);
+  canvas.width = canvas.height = 175;
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 200 });
+  const drive = new Minimap(canvas, { ...map, extent: [0, 0, 350, 350] }, (p) => clicks.push(p), { modeButton });
+  const ego = { x: 150, y: 100, psi: 0 };
+  const frame = { ego, npcs: [{ x: 186, y: 100 }], destination: [150, 130] };
+  drive.draw(frame);
+  check(
+    "Heading east puts traffic ahead above the car and a destination to the north on its left",
+    pixel(87, 76) === "255,209,102,255" && pixel(57, 112) === "87,210,127,255",
+  );
+  ego.psi = Math.PI;
+  drive.draw(frame);
+  check(
+    "Turning west keeps the car centred and rotates the traffic and destination around it",
+    pixel(87, 112) === "76,194,255,255" && pixel(87, 148) === "255,209,102,255" && pixel(117, 112) === "87,210,127,255",
+  );
+  const previousPicks = clicks.length;
+  click(100, 100);
+  check("A first tap expands the destination map without routing", drive.expanded && clicks.length === previousPicks);
+  click(50, 150);
+  check(
+    "A second tap selects a full-map coordinate and resumes following the car",
+    !drive.expanded && clicks.at(-1).every((v) => close(v, 87.5)) && clicks.length === previousPicks + 1,
+  );
+  modeButton.click();
+  canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  check("Escape closes the overview without rerouting", !drive.expanded && clicks.length === previousPicks + 1);
+  drive.dispose();
 }
 
 function overlayChecks(check) {

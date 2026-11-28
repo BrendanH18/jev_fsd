@@ -257,7 +257,7 @@ Connect a model from the driving screen. You don't edit any files.
 2. Pick a provider: **TypeSafe** for Jev, OpenRouter, Claude Platform, OpenAI, Google Gemini, xAI,
    Mistral, Groq, Ollama, LM Studio, or any OpenAI-compatible server. Paste a key if it needs one and pick or
    type the model. For Jev, keep the preselected model.
-3. Click **Save and drive**. Then set a destination (click the minimap, or choose a drive in
+3. Click **Save and drive**. Then set a destination (open the minimap and pick a point, or choose a drive in
    **Explore cities**) and the model drives. On a route you already have, press `J` to switch
    the autopilot on.
 
@@ -280,8 +280,8 @@ of TypeSafe AI.
 | `1` / `2` / `3` | Decision / Rules / LLM driver | | `?` | Show every shortcut |
 
 A gamepad works too, and on touch screens the controls appear on screen
-([details](docs/drive-experience.md#gamepad-and-touch)). Click the minimap to set a destination, or open
-**Explore cities** for suggested drives.
+([details](docs/drive-experience.md#gamepad-and-touch)). Open the minimap and pick a destination, or
+open **Explore cities** for suggested drives.
 
 ## Contributing
 

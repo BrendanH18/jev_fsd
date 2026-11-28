@@ -41,7 +41,7 @@
           <span id="nav-arrow" class="nav-arrow" aria-hidden="true">◎</span>
           <div class="nav-text">
             <strong><span id="nav-distance">No destination</span><small id="nav-remaining"></small></strong>
-            <span id="nav">Click the minimap or explore drives</span>
+            <span id="nav">Open the map or explore drives</span>
           </div>
         </div>
         <div class="street-line"><span class="label">on</span><span id="street">–</span></div>
@@ -230,14 +230,15 @@
     </div>
 
     <div id="hud-right" class="hud-column hud-right">
-      <section class="hud-top-right panel" aria-label="Map">
+      <section class="hud-top-right panel" aria-label="Map" data-map-view="follow">
         <div class="minimap-picker">
-          <canvas id="minimap" width="220" height="220" tabindex="0" aria-keyshortcuts="Enter Home ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight" aria-label="Route minimap" aria-describedby="minimap-help">This browser cannot display the route minimap.</canvas>
+          <canvas id="minimap" width="220" height="220" tabindex="0" aria-keyshortcuts="Enter Home ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight Escape" aria-label="Route minimap, heading up" aria-describedby="minimap-help">This browser cannot display the route minimap.</canvas>
           <span id="minimap-cursor" hidden aria-hidden="true"></span>
         </div>
         <span id="route-status" role="status" hidden></span>
-        <span id="minimap-help" hidden>Click or move the marker with the arrow keys and press Enter to set a destination. Use Shift with an arrow key to move more precisely. Home returns the marker to your car.</span>
+        <span id="minimap-help" hidden>Click or press Enter to open the full map. Click a destination, or move the marker with the arrow keys and press Enter to select it. Hold Shift for finer movement. Home returns the marker to your car. Escape returns to the driving map.</span>
         <div class="minimap-footer">
+          <button id="map-view-toggle" type="button" class="chip-button" aria-controls="minimap" aria-expanded="false">Full map</button>
           <div id="map-note" class="note"></div>
           <button id="clear-route" type="button" class="chip-button" hidden aria-description="Removes the current destination and route guidance.">Clear route</button>
         </div>

@@ -1,4 +1,4 @@
-// Pedestrians. Each person is a shaped torso and head (one mesh, vertex-colored) with jointed arms
+// Pedestrians. Each person is one vertex-colored skinned mesh with a shaped torso, head, jointed arms
 // and legs: hips and knees, shoulders and elbows swing through a walk cycle driven by the distance
 // walked, so feet do not slide. Clothes, skin, hair, height, and build vary; some carry a backpack,
 // and in the rain most walk under an umbrella. Children (off a school bus) are smaller, and carry a
@@ -59,10 +59,6 @@ export function createPersonMesh(look = 0, { child = false, worker = false } = {
     backpack = child || k(9) < 0.25,
     coat = k(10) < 0.4;
 
-  const g = new THREE.Group();
-  const body = new THREE.Group(); // origin at the hips: bobs with each step, leans on a bike
-  body.position.y = HIP;
-  g.add(body);
   // the rigid body: pelvis, torso, neck, head, hair, backpack (local +x is forward)
   const parts = [
     tint(new THREE.CylinderGeometry(0.155, 0.15, 0.16, 10).scale(0.7, 1, 1).translate(0, 0.94, 0), bottom),
@@ -100,20 +96,24 @@ export function createPersonMesh(look = 0, { child = false, worker = false } = {
       ),
     );
   const torso = mergeGeometries(parts, false).translate(0, -HIP, 0);
-  body.add(new THREE.Mesh(torso, material));
-
-  const limb = (parent, x, y, z, geo) => {
-    const pivot = new THREE.Group();
+  const bones = [],
+    sections = [];
+  const joint = (parent, x, y, z, geo) => {
+    const pivot = new THREE.Bone();
     pivot.position.set(x, y, z);
-    pivot.add(new THREE.Mesh(geo, material));
-    parent.add(pivot);
+    parent?.add(pivot);
+    pivot.updateWorldMatrix(true, false);
+    // Each section moves rigidly with this joint. Store its vertices in the common bind pose.
+    sections.push(geo.applyMatrix4(pivot.matrixWorld));
+    bones.push(pivot);
     return pivot;
   };
+  const body = joint(null, 0, HIP, 0, torso); // bobs with each step, leans on a bike
   const legs = [],
     arms = [];
   for (const side of [-1, 1]) {
-    const hip = limb(body, 0, 0, side * 0.085, tint(segment(0.075 * build, 0.058, 0.43), bottom));
-    const knee = limb(
+    const hip = joint(body, 0, 0, side * 0.085, tint(segment(0.075 * build, 0.058, 0.43), bottom));
+    const knee = joint(
       hip,
       0,
       -0.43,
@@ -127,14 +127,14 @@ export function createPersonMesh(look = 0, { child = false, worker = false } = {
       ),
     );
     legs.push({ hip, knee, side });
-    const shoulder = limb(
+    const shoulder = joint(
       body,
       0,
       1.48 - HIP,
       side * 0.2 * build,
       tint(segment(0.047, 0.04, 0.29), coat ? top : pick([top, skin], 12)),
     );
-    const elbow = limb(
+    const elbow = joint(
       shoulder,
       0,
       -0.29,
@@ -146,33 +146,38 @@ export function createPersonMesh(look = 0, { child = false, worker = false } = {
     );
     arms.push({ shoulder, elbow, side });
   }
-  // an umbrella, held in the right hand, shown in the rain
-  const umbrella = new THREE.Group();
+  // Append the umbrella at its bind position. Closing it shortens the same draw.
   const canopy = new THREE.ConeGeometry(0.55, 0.22, 10, 1, true).translate(0, 0.11, 0);
-  umbrella.add(
-    new THREE.Mesh(
-      mergeGeometries(
-        [
-          tint(canopy, pick(UMBRELLAS, 13)),
-          tint(new THREE.CylinderGeometry(0.01, 0.01, 0.8, 5).translate(0, -0.3, 0), 0x333333),
-        ],
-        false,
-      ),
-      material,
-    ),
-  );
-  umbrella.position.set(0.12, 1.98 - HIP, 0.16);
-  umbrella.visible = false;
-  body.add(umbrella);
-  for (const m of [...body.children])
-    m.traverse((o) => {
-      if (o.isMesh) {
-        o.castShadow = true;
-        o.receiveShadow = true;
-      }
-    });
+  const umbrella = mergeGeometries(
+    [
+      tint(canopy, pick(UMBRELLAS, 13)),
+      tint(new THREE.CylinderGeometry(0.01, 0.01, 0.8, 5).translate(0, -0.3, 0), 0x333333),
+    ],
+    false,
+  ).translate(0.12, 1.98, 0.16);
+  const geometry = mergeGeometries([...sections, umbrella], false);
+  const count = geometry.attributes.position.count;
+  const indices = new Uint8Array(count * 4),
+    weights = new Uint8Array(count * 4);
+  let vertex = 0;
+  for (const [index, section] of sections.entries()) {
+    const end = vertex + section.attributes.position.count;
+    for (; vertex < end; vertex++) indices[4 * vertex] = index;
+  }
+  // The umbrella's remaining indices already point to the body (bone zero).
+  for (let i = 0; i < count; i++) weights[4 * i] = 1;
+  geometry.setAttribute("skinIndex", new THREE.BufferAttribute(indices, 4));
+  geometry.setAttribute("skinWeight", new THREE.BufferAttribute(weights, 4));
+  geometry.setDrawRange(0, vertex);
+  const g = new THREE.SkinnedMesh(geometry, material);
+  g.add(body);
+  g.bind(new THREE.Skeleton(bones));
+  // Bounds in person space enclose the longest arm reach, stride and open umbrella in every pose.
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, HIP, 0), 1.5);
+  g.castShadow = true;
+  g.receiveShadow = true;
   g.scale.setScalar(height);
-  g.userData = { legs, arms, body, umbrella, carries: k(14) < 0.75 };
+  g.userData = { legs, arms, body, umbrellaStart: vertex, carries: k(14) < 0.75 };
   return g;
 }
 
@@ -191,7 +196,7 @@ export function syncPerson(mesh, ped, camera, rain = false) {
   const phi = Number.isFinite(ped.phase) ? ped.phase * 4.2 : 0;
   const stride = moving ? Math.min(1, ped.v / 1.3) : 0;
   const umbrellaUp = rain && u.carries && !(ped.frozen > 0);
-  u.umbrella.visible = umbrellaUp;
+  mesh.geometry.setDrawRange(0, umbrellaUp ? Infinity : u.umbrellaStart);
   for (const { hip, knee, side } of u.legs) {
     const p = phi + (side > 0 ? Math.PI : 0);
     hip.rotation.z = 0.42 * stride * Math.sin(p);
@@ -228,5 +233,5 @@ export function poseRider(mesh, crank) {
     shoulder.rotation.x = side * 0.1;
     elbow.rotation.z = 0.35;
   }
-  u.umbrella.visible = false;
+  mesh.geometry.setDrawRange(0, u.umbrellaStart);
 }

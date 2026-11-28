@@ -479,7 +479,7 @@ export class Hud {
           { class: "muted" },
           autopilot
             ? "Waiting for the first decision."
-            : "Choose a drive or click the minimap; the pilot's options and their probabilities appear here.",
+            : "Choose a drive or set a destination on the map to see the pilot's options and their probabilities.",
         ),
       );
       source.textContent = "–";

@@ -6,7 +6,7 @@ const steps = {
 };
 
 // Keep the keyboard marker in canvas coordinates so it scales with the map on phones.
-export function bindMapPicker(canvas, cursor, { fromCar, onSelect, bounds = null }) {
+export function bindMapPicker(canvas, cursor, { fromCar, onSelect, bounds = null, openOverview = null }) {
   let x, y;
   const keepInside = (value, min, max) => Math.min(max, Math.max(min, value));
   function move(nextX, nextY) {
@@ -19,17 +19,24 @@ export function bindMapPicker(canvas, cursor, { fromCar, onSelect, bounds = null
     cursor.hidden = false;
   }
   canvas.addEventListener("blur", () => (cursor.hidden = true));
+  canvas.addEventListener("pointerdown", () => (cursor.hidden = true));
   canvas.addEventListener("keydown", (event) => {
     if (event.altKey || event.metaKey || event.ctrlKey) return;
+    if (event.key === "Escape") cursor.hidden = true;
     const step = Object.hasOwn(steps, event.key) ? steps[event.key] : null;
     if (!step && event.key !== "Enter" && event.key !== "Home") return;
     event.preventDefault();
     event.stopPropagation();
-    if (cursor.hidden || event.key === "Home") move(...fromCar());
+    if (event.key === "Enter" && event.repeat) return;
+    const opened = openOverview?.();
+    if (opened || cursor.hidden || event.key === "Home") move(...fromCar());
     if (step) {
       const distance = event.shiftKey ? 1 : 6;
       move(x + step[0] * distance, y + step[1] * distance);
     }
-    if (event.key === "Enter" && !event.repeat) onSelect(x, y);
+    if (event.key === "Enter" && !opened) {
+      const picked = onSelect(x, y);
+      if (picked && openOverview) cursor.hidden = true;
+    }
   });
 }

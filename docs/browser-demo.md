@@ -42,7 +42,7 @@ server uses the extensionless paths `/bench`, `/arena` and `/results`.
 
 - **Start on a specific map.** Add `?map=victoria` at the simulator root for Old Town. Use the map
   IDs from [Canadian city maps](maps.md). For destinations within a map, use **Explore cities** or
-  click the minimap. The same URL can open the wheel directly with `&drive=manual`.
+  open the minimap and pick a point. The same URL can open the wheel directly with `&drive=manual`.
 - **Try an authored drive.** Open a challenge on the results page or use `?challenge=flagger`.
   The challenge selects the map and conditions from its definition. Complete the original manual
   attempt to record practice and open the comparison in its drive report.

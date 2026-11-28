@@ -274,13 +274,43 @@ test("reversing lamps are lazy and hide cleanly when a feature is disabled", () 
 test("pedestrian pose remains finite on a missing walk phase and fallen pedestrians drop umbrellas", () => {
   const mesh = Array.from({ length: 8 }, (_, i) => createPersonMesh(i)).find((m) => m.userData.carries);
   syncPerson(mesh, { ...pose, v: 1.2, phase: 1 }, camera, true);
-  assert.equal(mesh.userData.umbrella.visible, true);
+  assert.ok(mesh.geometry.drawRange.count >= mesh.geometry.attributes.position.count);
   syncPerson(mesh, { ...pose, v: 1.2 }, camera, true);
   assert.equal(Number.isFinite(mesh.userData.legs[0].hip.rotation.z), true);
   syncPerson(mesh, { ...pose, v: 1.2, phase: 2, frozen: 1 }, camera, true);
-  assert.equal(mesh.userData.umbrella.visible, false);
+  assert.equal(mesh.geometry.drawRange.count, mesh.userData.umbrellaStart);
   assert.equal(mesh.rotation.x, Math.PI / 2);
   assert.equal(Math.abs(mesh.userData.legs[0].hip.rotation.z), 0);
+});
+
+test("a pedestrian's one shadow-casting skin follows its joints and releases its bone texture", () => {
+  const mesh = createPersonMesh("walk");
+  assert.ok(mesh.isSkinnedMesh && mesh.castShadow && mesh.receiveShadow);
+  let draws = 0;
+  mesh.traverse((node) => {
+    if (node.isMesh) draws++;
+  });
+  assert.equal(draws, 1);
+  const elbow = mesh.userData.arms[1].elbow;
+  const { skinIndex, position } = mesh.geometry.attributes;
+  const bone = mesh.skeleton.bones.indexOf(elbow);
+  const vertex = skinIndex.array.findIndex((index, i) => i % 4 === 0 && index === bone) / 4;
+  assert.ok(vertex >= 0);
+  const local = new THREE.Vector3().fromBufferAttribute(position, vertex);
+  local.applyMatrix4(mesh.skeleton.boneInverses[bone]);
+  syncPerson(mesh, { ...pose, v: 1.3, phase: 0.5 }, camera, true);
+  elbow.rotation.z = 1.1; // a feature can pose a hand after the walk cycle
+  mesh.updateMatrixWorld(true);
+  const actual = mesh.getVertexPosition(vertex, new THREE.Vector3());
+  assert.ok(mesh.boundingSphere.containsPoint(actual));
+  approx(actual.applyMatrix4(mesh.matrixWorld).distanceTo(local.applyMatrix4(elbow.matrixWorld)), 0);
+  mesh.skeleton.computeBoneTexture();
+  let disposed = false;
+  mesh.skeleton.boneTexture.addEventListener("dispose", () => {
+    disposed = true;
+  });
+  retireActor(mesh);
+  assert.ok(disposed);
 });
 
 test("officer all-stop holds the beckoning arm and rewind removes the future heading", () => {
@@ -485,7 +515,7 @@ test("pedestrian scale, stride and culling follow the person rather than the par
   syncPerson(adult, { ...pose, v: 1.5, phase: 0.52 }, camera, false);
   assert.ok(adult.userData.legs[0].hip.rotation.z * adult.userData.legs[1].hip.rotation.z < 0);
   assert.ok(adult.userData.body.position.y > 0.92);
-  assert.equal(adult.userData.umbrella.visible, false);
+  assert.equal(adult.geometry.drawRange.count, adult.userData.umbrellaStart);
   syncPerson(adult, { ...pose, x: 500 }, camera);
   assert.equal(adult.visible, false);
   syncPerson(adult, { ...pose, v: 0, phase: 0.5 }, camera);
