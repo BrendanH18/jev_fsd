@@ -30,7 +30,10 @@ export class TrafficCarBatches {
       this.buckets.set(key, bucket);
     }
     bucket.present = true;
-    if (part.visible) bucket.parts.push(part);
+    for (let object = part; object; object = object.parent) {
+      if (!object.visible) return;
+    }
+    bucket.parts.push(part);
   }
 
   flush() {

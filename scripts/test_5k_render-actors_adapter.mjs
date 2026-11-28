@@ -314,6 +314,15 @@ test("moving car batches follow the animated parts and release draws as cars lea
   draw();
   assert.equal(indicators.count, 2);
 
+  car.visible = false;
+  draw();
+  assert.equal(wheels.count, 4);
+  assert.equal(bodies.count, 0);
+  car.visible = true;
+  draw();
+  assert.equal(wheels.count, 8);
+  assert.equal(bodies.count, 2);
+
   first.x = 30;
   first.delta = 0.4;
   second.signal = null;
