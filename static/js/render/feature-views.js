@@ -378,8 +378,12 @@ export function mountActorViews(view, world, fleet) {
         adapter.sync(mesh, pose, dt, t, lightsOn);
         if (adapter.roadEffects !== false) updateRoadEffects(world, mesh, pose, dt, adapter);
         if (car) for (const drawn of VIEWS.car) drawn.effect?.(world, mesh, n);
-        if (car && (n.kind == null || n.kind === "car")) trafficBatches.add(mesh);
         if (visitRoadVehicle && adapter.roadEffects !== false && !adapter.onRails) visitRoadVehicle(pose);
+      }
+      // Collect only after all fleet callbacks succeed, so an interrupted update leaves no pending parts.
+      for (const n of fleet.vehicles) {
+        const { mesh, adapter } = npcMeshes.get(n.id);
+        if (adapter === carView && (n.kind == null || n.kind === "car")) trafficBatches.add(mesh);
       }
       trafficBatches.flush();
       for (const { list, after } of VIEWS.traffic) {

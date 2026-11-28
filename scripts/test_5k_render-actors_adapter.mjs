@@ -298,6 +298,14 @@ test("moving car batches follow the animated parts and release draws as cars lea
   wheels.getMatrixAt(wheelIndex, matrix);
   assert.deepEqual(matrix.elements, wheel.matrixWorld.elements.map(Math.fround));
 
+  assert.throws(() => {
+    actors.updateVehicles(0, 0.6, 1, null, 0, () => {
+      throw new Error("interrupted road effects");
+    });
+  }, /interrupted road effects/);
+  draw();
+  assert.deepEqual([bodies.count, indicators.count, wheels.count], [2, 2, 8]);
+
   world.t = 0.6; // Both indicators blink off but will reuse the same batch.
   draw();
   assert.equal(indicators.count, 0);
