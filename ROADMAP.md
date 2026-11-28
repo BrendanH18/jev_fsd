@@ -53,7 +53,9 @@ the world is lit, shaded, batched and presented.
   first-pass comparison recorded 1,524. Signal faces now share up to four instanced meshes, and the
   glows share one per mast. The matched measurements are in
   [rendering performance](docs/render-performance.md#traffic-signal-batching).
-  Moving vehicles and pedestrians are still open.
+  Ordinary moving cars now batch wheels and compatible opaque parts by geometry and material in
+  local cells. See the [matched traffic profiles](docs/render-performance.md#moving-traffic-car-batching).
+  Pedestrian batching is still open.
 - [x] **R2.2 GPU-driven weather particles & tire spray.** Rain and snow wrap and move in vertex
   shaders with static seed buffers. Rain uses soft, velocity-stretched quads, and moving road
   vehicles kick up spray from their tires in rain. See the

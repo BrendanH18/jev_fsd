@@ -231,6 +231,29 @@ The rain quads add 20,000 triangles across the main and reflection passes, about
 matched frame. The frozen pose had no vehicle moving fast enough to spray. With spray active, the
 batch adds one draw per scene pass. These profiles measure submitted geometry and calls.
 
+## Moving traffic car batching
+
+Ordinary fleet cars share instanced draws for repeated opaque parts with matching geometry and
+material in the same 120 m cell. All four wheels share a batch even when a car is alone in its
+cell. The individual parts still supply the suspension, steering, wheel spin and turn signal state.
+Rear lamps with per-car emissive intensity and transparent effects keep their individual draws.
+The sun shadow, wet reflection and main camera cull the batches independently.
+
+Matched High-preset profiles used Boat Chromium 151 (ANGLE, Intel UHD 620) at 1440 × 900
+on Kitsilano with seed 1 and afternoon light. Advance free drive by one second, then pause
+with the ego 12 m behind the first ordinary car moving above 0.2 m/s (`car_3`), facing the same way.
+Snap the chase camera and run `profileRendering` with one warm-up and two sampled frames.
+Counts include the shadow, reflection and post-processing passes.
+
+| Weather | Draw calls before → after | Triangles in both profiles |
+|---|---:|---:|
+| Dry | 1,958 → 1,862 (−4.9%) | 4,641,667 |
+| Rain | 3,666 → 3,492 (−4.7%) | 7,783,613 |
+
+The scene graph comparison matched all 4,158 frames across 66 drives after filtering the
+new batch nodes from the capture. The actor adapter check compares the instance transforms
+against the animated parts and covers light changes and cars leaving the fleet.
+
 ## Reproduce and test
 
 Start `uv run server.py`, open `/?quality=high&weather=dry&time=afternoon`, and pause with `P`.

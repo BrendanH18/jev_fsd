@@ -34,6 +34,7 @@
 import { actorTime, resetActorMotion } from "./actor-motion.js";
 import { retireActor } from "./actor-resources.js";
 import { createPersonMesh, syncPerson } from "./people.js";
+import { TrafficCarBatches } from "./traffic-cars.js";
 import {
   createCarMesh,
   syncCar,
@@ -249,6 +250,7 @@ export function mountActorViews(view, world, fleet) {
   };
   world.crowd.list.forEach(pedMesh);
   const npcMeshes = new Map();
+  const trafficBatches = new TrafficCarBatches(view.scene);
   const parkedMeshes = new Map();
   const parkedMesh = (car) => parkedMeshes.get(car.id)?.mesh;
   let lastVehicleTime = world.t;
@@ -378,6 +380,12 @@ export function mountActorViews(view, world, fleet) {
         if (car) for (const drawn of VIEWS.car) drawn.effect?.(world, mesh, n);
         if (visitRoadVehicle && adapter.roadEffects !== false && !adapter.onRails) visitRoadVehicle(pose);
       }
+      // Collect only after all fleet callbacks succeed, so an interrupted update leaves no pending parts.
+      for (const n of fleet.vehicles) {
+        const { mesh, adapter } = npcMeshes.get(n.id);
+        if (adapter === carView && (n.kind == null || n.kind === "car")) trafficBatches.add(mesh);
+      }
+      trafficBatches.flush();
       for (const { list, after } of VIEWS.traffic) {
         const next = indexReplay(replayNext && list(replayNext.world));
         for (const n of list(world) ?? []) {

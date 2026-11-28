@@ -268,6 +268,83 @@ test("checkpoint motion preserves lights, door latches, and other discrete state
   assert.equal(replayActorPose(old, null, 0.5) === old, true);
 });
 
+test("moving car batches follow the animated parts and release draws as cars leave", () => {
+  const { view, world } = sample();
+  const first = pose("first", { x: 29, style: 0, signal: "left" });
+  const second = pose("second", { x: 38, style: 0, psi: 0.45, signal: "left" });
+  const fleet = { vehicles: [first, second] };
+  const actors = mountActorViews(view, world, fleet);
+  const draw = () => {
+    actors.sync();
+    actors.updateVehicles(0.1, 0.6, 1, null, 0);
+  };
+  draw();
+  const car = view.scene.children.find((node) => node.name === "car-sedan" && node.position.x === first.x);
+  const batchFor = (mesh) =>
+    view.scene.children.find((node) => node.name === "moving-traffic-batch" && node.geometry === mesh.geometry);
+  const bodywork = car.getObjectByName("bodywork");
+  const bodies = batchFor(bodywork);
+  const lens = car.userData.blinkers.left;
+  const indicators = batchFor(lens);
+  const wheel = car.userData.wheels.find(({ steer }) => steer).wheel;
+  const wheels = batchFor(wheel);
+  assert.deepEqual([bodies.count, indicators.count, wheels.count], [2, 2, 8]);
+  assert.equal(bodywork.layers.mask, 0);
+  assert.equal(lens.visible, true);
+  assert.equal(car.getObjectByName("rear-lamps").layers.mask, 1);
+  assert.equal(wheels.castShadow, wheel.castShadow);
+  const matrix = new THREE.Matrix4();
+  const wheelIndex = car.userData.wheels.findIndex((entry) => entry.wheel === wheel);
+  wheels.getMatrixAt(wheelIndex, matrix);
+  assert.deepEqual(matrix.elements, wheel.matrixWorld.elements.map(Math.fround));
+
+  assert.throws(() => {
+    actors.updateVehicles(0, 0.6, 1, null, 0, () => {
+      throw new Error("interrupted road effects");
+    });
+  }, /interrupted road effects/);
+  draw();
+  assert.deepEqual([bodies.count, indicators.count, wheels.count], [2, 2, 8]);
+
+  world.t = 0.6; // Both indicators blink off but will reuse the same batch.
+  draw();
+  assert.equal(indicators.count, 0);
+  assert.equal(indicators.parent, view.scene);
+  world.t = 0.9;
+  draw();
+  assert.equal(indicators.count, 2);
+
+  car.visible = false;
+  draw();
+  assert.equal(wheels.count, 4);
+  assert.equal(bodies.count, 0);
+  car.visible = true;
+  draw();
+  assert.equal(wheels.count, 8);
+  assert.equal(bodies.count, 2);
+
+  first.x = 30;
+  first.delta = 0.4;
+  second.signal = null;
+  draw();
+  wheels.getMatrixAt(wheelIndex, matrix);
+  assert.deepEqual(matrix.elements, wheel.matrixWorld.elements.map(Math.fround));
+  assert.equal(lens.layers.mask, 1);
+  assert.equal(indicators.visible, false);
+
+  fleet.vehicles.pop();
+  draw();
+  assert.equal(bodywork.layers.mask, 1);
+  assert.equal(bodies.count, 0);
+  assert.equal(wheels.count, 4);
+  let disposed = 0;
+  wheels.addEventListener("dispose", () => disposed++);
+  fleet.vehicles.pop();
+  draw();
+  assert.equal(disposed, 1);
+  assert.equal(batchFor(wheel), undefined);
+});
+
 test("moving, parking again and reinstating an earlier bay preserve one drawing", () => {
   const { view, world, fleet } = sample();
   const original = world.parked.list[0];

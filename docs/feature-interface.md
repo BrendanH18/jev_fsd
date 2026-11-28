@@ -494,8 +494,9 @@ order, map fingerprints and route fingerprints still have to match.
 
 ## Running the render comparison
 
-A change to the adapter, a view or a shared renderer has to leave every scene as it was. On Boat,
-archive the before commit into a temporary directory, copy
+Feature migrations and other refactors that preserve scene structure should match every scene.
+For intentional structural changes such as instancing, explain the expected graph differences
+and check the rendered result as well. On Boat, archive the before commit into a temporary directory, copy
 [`render_parity.mjs`](../scripts/render_parity.mjs) into its `scripts/`, and capture from each tree:
 
 ```sh
