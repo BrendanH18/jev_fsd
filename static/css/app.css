@@ -510,6 +510,12 @@ body.touch-driving .replay-deck { bottom: calc(var(--touch-h) + 4px); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #view:focus-visible { outline-offset: -4px; }
 .minimap-picker { position: relative; width: fit-content; margin-inline: auto; }
+[data-map-view="follow"] #minimap { cursor: zoom-in; }
+[data-map-view="follow"] #minimap-cursor { display: none; }
+[data-map-view="overview"] { position: fixed; z-index: 12; top: var(--gap); right: var(--gap); width: min-content; max-height: calc(100dvh - 2 * var(--gap)); overflow-y: auto; background: var(--panel-solid); }
+[data-map-view="overview"] #minimap { width: min(480px, calc(100vw - 2 * var(--gap) - 18px), calc(100dvh - 2 * var(--gap) - 88px)); height: auto; aspect-ratio: 1; }
+.minimap-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.minimap-footer .note { order: 1; flex-basis: 100%; margin: 0; }
 #minimap-cursor { position: absolute; width: 13px; height: 13px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 2px #111; translate: -50% -50%; pointer-events: none; }
 #start-free-drive { display: inline-block; margin-inline-start: 6px; }
 body.left-handed-touch .touch-controls { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "pedals buttons steer"; }

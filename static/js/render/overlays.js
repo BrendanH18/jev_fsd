@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import { GeoBuilder } from "./geo.js";
-import { beamTexture } from "./textures.js";
+import { destinationPinTexture } from "./textures.js";
 
 const COLORS = { eligible: 0x57d27f, flagged: 0xffa53d, rejected: 0xff6b6b, chosen: 0xffe066, route: 0x4cc2ff };
 
@@ -47,20 +47,19 @@ export class Overlays {
       overlayMat(COLORS.eligible, 0.9),
     );
     ring.position.y = 0.05;
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.9, 0.9, 24, 32, 1, true).translate(0, 12, 0),
-      new THREE.MeshBasicMaterial({
-        map: beamTexture(),
-        color: COLORS.eligible,
-        transparent: true,
-        opacity: 0.55,
+    ring.renderOrder = 4;
+    const pin = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: destinationPinTexture(),
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
         toneMapped: false,
       }),
     );
-    this.marker.add(ring, beam);
+    pin.center.set(0.5, 0);
+    pin.scale.set(1.5, 1.5, 1);
+    pin.position.y = ring.position.y;
+    pin.renderOrder = 5;
+    this.marker.add(ring, pin);
     this.ring = ring;
     this.marker.visible = false;
     scene.add(this.marker);

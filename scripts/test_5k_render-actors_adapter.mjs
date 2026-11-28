@@ -465,5 +465,6 @@ test("unbatched feature poses follow their own scenario records", () => {
   const { world: state } = sample();
   const frozen = mountActorViews(view, state, { vehicles: [] });
   frozen.updatePeople(1, null, 0, "dry");
-  assert.equal(frozen.people.get("adult").userData.umbrella.visible, false);
+  const person = frozen.people.get("adult");
+  assert.equal(person.geometry.drawRange.count, person.userData.umbrellaStart);
 });

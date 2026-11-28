@@ -36,10 +36,10 @@ The brain buttons also support arrow keys, Home and End, with one tab stop in th
 controls remain available. Camera motion follows the system's reduced-motion setting until you
 choose a value in Settings. Volume, wipers and these control preferences are saved for this browser.
 
-Tab to the minimap to plan a route without a mouse. Arrow keys move the destination marker, Shift
-with an arrow makes a finer adjustment, and Home returns the marker to your present position.
-Press Enter to request the route. The map shows when routing is in progress and explains when a
-destination is unreachable.
+Tab to the driving minimap and press Enter to open the full map. Arrow keys move the destination
+marker, Shift with an arrow makes a finer adjustment, and Home returns the marker to your present
+position. Press Enter again to request the route or Escape to close the full map. The map shows
+when routing is in progress and explains when a destination is unreachable.
 Space and arrows retain their normal behaviour while a button is focused. Browser shortcuts
 with Ctrl, Cmd or Alt do not trigger driving actions.
 

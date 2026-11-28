@@ -99,11 +99,12 @@ ELEMENTS = {
             "minimap",
             "canvas",
             {
-                "aria-keyshortcuts": "Enter Home ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"
+                "aria-keyshortcuts": "Enter Home ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight Escape"
             },
             None,
         ),
         ("minimap", "canvas", {}, "This browser cannot display the route minimap."),
+        ("map-view-toggle", "button", {"aria-controls": "minimap", "aria-expanded": "false"}, "Full map"),
         ("clear-route", "button", {"aria-description": "Removes the current destination and route guidance."}, None),
         ("nav-card", "div", {"role": "group", "aria-label": "Route guidance"}, None),
         ("decision-options", "div", {"role": "group", "aria-label": "Manoeuvre options"}, None),

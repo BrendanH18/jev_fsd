@@ -42,7 +42,8 @@ the world is lit, shaded, batched and presented.
   models for the 6 garage cars (curved rear glass, trunk recess, diffuser, wheel-well depth).
   Replace the 24 m green destination laser beam (`overlays.js`) with a grounded pin/ring, and
   replace the 64 raw cyan `PerceptionView` rays (`perception.js`) with a translucent shaded
-  visibility polygon.
+  visibility polygon. The pin and perception footprint are implemented. The vehicle silhouettes
+  remain open.
 
 ### R2. Renderer architecture, instancing & post-processing rewrite
 
@@ -55,7 +56,9 @@ the world is lit, shaded, batched and presented.
   [rendering performance](docs/render-performance.md#traffic-signal-batching).
   Ordinary moving cars now batch wheels and compatible opaque parts by geometry and material in
   local cells. See the [matched traffic profiles](docs/render-performance.md#moving-traffic-car-batching).
-  Pedestrian batching is still open.
+  Each pedestrian's body, limbs and umbrella now share one skinned draw while preserving
+  independent animation. See the [matched profiles](docs/render-performance.md#pedestrian-draws-and-the-display-pass).
+  The dry High draw-call target remains open.
 - [x] **R2.2 GPU-driven weather particles & tire spray.** Rain and snow wrap and move in vertex
   shaders with static seed buffers. Rain uses soft, velocity-stretched quads, and moving road
   vehicles kick up spray from their tires in rain. See the
@@ -65,6 +68,8 @@ the world is lit, shaded, batched and presented.
   conflict via a lightweight opaque depth prepass (so Ultra keeps both MSAA + alpha-to-coverage and
   GTAO), and replace or layer-cull `GroundReflection` (shorter far plane / skip small props, or SSR
   with env-map fallback) so rain stops doubling draw calls and triangle counts.
+  Tone mapping, display-space grading, vignette and dither now run together. SMAA reads one
+  full-resolution display target. The depth prepass and reflection work remain open.
 
 ### R3. HUD & UI overhaul
 
@@ -80,7 +85,9 @@ the world is lit, shaded, batched and presented.
 - [ ] **R3.3 Heading-up follow minimap & reactive HUD layout.** (M) Add a zoomed, heading-up follow
   mode to `static/js/render/minimap.js` while driving (with click-to-expand full-map destination
   picking) and replace brittle `:has()` floating-bar CSS offsets (`lab.css`) with clean docked HUD
-  layout regions backed by a lightweight reactive state store.
+  layout regions backed by a lightweight reactive state store. The minimap follows the car's
+  heading and opens a north-up destination picker by pointer or keyboard. The HUD layout work
+  remains open.
 
 Before changing the renderer, record fresh dry and rainy High-preset baselines using the
 [render profiling procedure](docs/render-performance.md). Reuse the same map, route, seed, camera,

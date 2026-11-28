@@ -1,7 +1,7 @@
 // Post-processing. The scene renders into an HDR target that keeps its depth buffer; ambient
 // occlusion is reconstructed from that depth (no second pass over the geometry), bloom picks out
-// whatever is brighter than white (lamps, signals, headlights), the output pass tone-maps, a grade
-// pass sets contrast, colour and vignette and dithers away sky banding, and SMAA smooths the edges.
+// whatever is brighter than white (lamps, signals, headlights). One pass tone-maps, grades and
+// dithers the image before SMAA smooths the edges.
 // Without occlusion (High) the scene target is 4x multisampled. With it (Ultra) it is not: a
 // multisampled depth buffer does not reliably resolve into a texture on every browser, and the
 // occlusion needs one; Ultra's 2x pixel ratio supersamples instead.
@@ -14,26 +14,23 @@
 import * as THREE from "three";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
 // Display-referred grade. Contrast pivots around mid-grey, saturation is measured against Rec. 709
 // luma, and a half-step of blue-noise-like dither hides 8-bit banding in smooth sky gradients.
-export const GradeShader = {
-  uniforms: {
-    tDiffuse: { value: null },
-    contrast: { value: 1 },
-    saturation: { value: 1 },
-    tint: { value: new THREE.Color(1, 1, 1) },
-    vignette: { value: 0 },
-    aspect: { value: 1 },
-    seed: { value: 0 },
-  },
+const displayShader = {
   vertexShader: `
+    precision highp float;
+    uniform mat4 projectionMatrix, modelViewMatrix;
+    attribute vec3 position;
+    attribute vec2 uv;
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `
+    precision highp float;
+    #include <tonemapping_pars_fragment>
+    #include <colorspace_pars_fragment>
     uniform sampler2D tDiffuse;
     uniform float contrast, saturation, vignette, aspect, seed;
     uniform vec3 tint;
@@ -41,7 +38,8 @@ export const GradeShader = {
     float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
     void main() {
       vec4 texel = texture2D(tDiffuse, vUv);
-      vec3 c = texel.rgb;
+      texel.rgb = ACESFilmicToneMapping(texel.rgb);
+      vec3 c = sRGBTransferOETF(texel).rgb;
       c = (c - 0.5) * contrast + 0.5;
       float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(luma), c, saturation) * tint;
@@ -69,19 +67,26 @@ export class PostFX {
     this.clearColor = new THREE.Color();
     this.sceneRT = this.sceneTarget(w, h, ao);
     this.blendRT = null;
-    this.ldrRT = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
     this.ao = null;
     this.setAO(ao);
 
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.45, 1.0);
-    this.output = new OutputPass();
-    this.gradeRT = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
-    this.grade = new THREE.ShaderMaterial({
-      ...GradeShader,
-      uniforms: THREE.UniformsUtils.clone(GradeShader.uniforms),
+    // SMAA detects edges in display space. Keep one RGBA8 input for all three SMAA passes.
+    this.displayRT = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
+    this.display = new THREE.RawShaderMaterial({
+      ...displayShader,
+      uniforms: {
+        tDiffuse: { value: null },
+        toneMappingExposure: { value: 1 },
+        contrast: { value: 1 },
+        saturation: { value: 1 },
+        tint: { value: new THREE.Color(1, 1, 1) },
+        vignette: { value: 0 },
+        aspect: { value: w / Math.max(1, h) },
+        seed: { value: 0 },
+      },
     });
-    this.grade.uniforms.aspect.value = w / Math.max(1, h);
-    this.gradeQuad = new FullScreenQuad(this.grade);
+    this.displayQuad = new FullScreenQuad(this.display);
     this.smaa = new SMAAPass();
     this.smaa._edgesRT.depthBuffer = false;
     this.smaa._weightsRT.depthBuffer = false;
@@ -149,9 +154,8 @@ export class PostFX {
     if (w === this.sceneRT.width && h === this.sceneRT.height) return;
     this.sceneRT.setSize(w, h);
     this.blendRT?.setSize(w, h);
-    this.ldrRT.setSize(w, h);
-    this.gradeRT.setSize(w, h);
-    this.grade.uniforms.aspect.value = w / Math.max(1, h);
+    this.displayRT.setSize(w, h);
+    this.display.uniforms.aspect.value = w / Math.max(1, h);
     this.smaa.setSize(w, h);
     this.ao?.setSize(Math.ceil(w / 2), Math.ceil(h / 2));
     this.bloom.setSize(w, h);
@@ -164,7 +168,7 @@ export class PostFX {
   }
 
   setGrade({ contrast, saturation, tint, vignette }) {
-    const u = this.grade.uniforms;
+    const u = this.display.uniforms;
     u.contrast.value = contrast;
     u.saturation.value = saturation;
     u.tint.value.copy(tint);
@@ -200,12 +204,13 @@ export class PostFX {
       source = this.blendRT;
     }
     this.bloom.render(r, null, source); // adds the glow in place
-    this.output.render(r, this.ldrRT, source); // tone map
-    this.grade.uniforms.tDiffuse.value = this.ldrRT.texture;
-    this.grade.uniforms.seed.value = (this.grade.uniforms.seed.value + 1) % 64;
-    r.setRenderTarget(this.gradeRT);
-    this.gradeQuad.render(r); // colour grade, vignette, dither
-    this.smaa.render(r, null, this.gradeRT); // antialias to the screen
+    const u = this.display.uniforms;
+    u.tDiffuse.value = source.texture;
+    u.toneMappingExposure.value = r.toneMappingExposure;
+    u.seed.value = (u.seed.value + 1) % 64;
+    r.setRenderTarget(this.displayRT);
+    this.displayQuad.render(r);
+    this.smaa.render(r, null, this.displayRT);
   }
 
   disposeAO() {
@@ -222,13 +227,11 @@ export class PostFX {
     this.disposed = true;
     this.sceneRT.dispose();
     this.blendRT?.dispose();
-    this.ldrRT.dispose();
-    this.gradeRT.dispose();
-    this.grade.dispose();
-    this.gradeQuad.dispose();
+    this.displayRT.dispose();
+    this.display.dispose();
+    this.displayQuad.dispose();
     this.smaa.dispose();
     this.disposeAO();
     this.bloom.dispose();
-    this.output.dispose();
   }
 }

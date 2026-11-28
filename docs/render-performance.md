@@ -254,6 +254,32 @@ The scene graph comparison matched all 4,158 frames across 66 drives after filte
 new batch nodes from the capture. The actor adapter check compares the instance transforms
 against the animated parts and covers light changes and cars leaving the fleet.
 
+## Pedestrian draws and the display pass
+
+Each person submits one skinned mesh for their body, limbs and open umbrella. The existing joints
+still drive walking, cycling and carried props. The merged mesh casts and receives shadows.
+Tone mapping, display-space grading, vignette and dither now share one full-screen draw. This saves
+one full-resolution RGBA8 target and one draw per High or Ultra frame. SMAA reads the combined
+output.
+
+The matched High profiles used Boat Chromium 151 with ANGLE on Intel UHD 620 at 1440 × 900.
+On Kitsilano with seed 1 and afternoon light, pause at simulation time zero and place the ego car
+12 m behind the first pedestrian (`ped_1`), facing the same way. Snap the chase camera and use
+`profileRendering` with one warm-up and two sampled frames. The counts include shadows,
+reflections and post-processing.
+
+| Weather | Draw calls before → after | Triangles before → after |
+|---|---:|---:|
+| Dry | 1,149 → 1,100 (−4.3%) | 3,004,084 → 3,004,083 |
+| Rain | 2,024 → 1,951 (−3.6%) | 4,873,242 → 4,873,241 |
+
+The pedestrian scene comparison matched 4,158 frames across 66 drives after accounting for the
+change from rigid parts to a skinned mesh. It covers person and joint transforms, umbrella state,
+attached props and the rest of the scene graph. The animated vertices and normals were also
+compared across 72 poses, including walking, falling, cycling and carrying a guard sign.
+Chromium also rendered all twelve combinations of Low, High and Ultra with dry weather, rain,
+fog and snow without WebGL errors.
+
 ## Reproduce and test
 
 Start `uv run server.py`, open `/?quality=high&weather=dry&time=afternoon`, and pause with `P`.

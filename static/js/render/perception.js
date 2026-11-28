@@ -10,6 +10,29 @@ import { featurePerceptionRejection, hooks } from "../sim/features/index.js";
 
 const PERCEPTION_LINES = hooks("perceptionLine");
 const PERCEPTION_FOCUS = hooks("perceptionFocus");
+const SIGHT_SAMPLES = 64;
+
+function visibilityFootprint() {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.BufferAttribute(new Float32Array(3 * (SIGHT_SAMPLES + 1)), 3).setUsage(THREE.DynamicDrawUsage),
+  );
+  const indices = [],
+    colors = [1, 1, 1, 0.07];
+  for (let i = 0; i < SIGHT_SAMPLES; i++) {
+    indices.push(0, i + 1, ((i + 1) % SIGHT_SAMPLES) + 1);
+    colors.push(1, 1, 1, 0.27);
+  }
+  geometry.setIndex(indices);
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({ color: 0x64d9ce, vertexColors: true, transparent: true, depthWrite: false }),
+  );
+  mesh.renderOrder = -1; // below route ribbons and road-user outlines
+  return mesh;
+}
 
 // A debug view of geometric sensing, not a claim about a camera or learned perception model.
 export class PerceptionView {
@@ -18,14 +41,11 @@ export class PerceptionView {
     scene.add(this.group);
     this.group.visible = false;
     this.last = -Infinity;
-    this.lines = new THREE.LineSegments(
-      new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.75, depthWrite: false }),
-    );
-    this.group.add(this.lines);
+    this.footprint = visibilityFootprint();
+    this.group.add(this.footprint);
     this.bounds = new THREE.LineSegments(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false }),
+      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }),
     );
     this.group.add(this.bounds);
   }
@@ -40,29 +60,32 @@ export class PerceptionView {
     this.last = now;
     const snap = buildSnapshot(world, executing),
       ego = world.ego,
-      rays = [],
-      rayColors = [],
       boxes = [],
       boxColors = [];
-    const add = (target, colors, from, to, color) => {
-      target.push(from[0], 0.14, -from[1], to[0], 0.14, -to[1]);
-      colors.push(...color, ...color);
+    const addOutline = (from, to, color) => {
+      boxes.push(from[0], 0.14, -from[1], to[0], 0.14, -to[1]);
+      boxColors.push(...color, ...color);
     };
-    for (let i = 0; i < 64; i++) {
-      const angle = ego.psi + (i / 64) * Math.PI * 2;
-      const range = world.visibility.rangeAt(ego, ego.x + Math.cos(angle) * 100, ego.y + Math.sin(angle) * 100);
+    const positions = this.footprint.geometry.attributes.position;
+    this.footprint.position.set(ego.x, 0.08, -ego.y);
+    for (let i = 0; i < SIGHT_SAMPLES; i++) {
+      const angle = ego.psi + (i / SIGHT_SAMPLES) * Math.PI * 2,
+        dx = Math.cos(angle),
+        dy = Math.sin(angle);
+      const range = world.visibility.rangeAt(ego, ego.x + dx * 100, ego.y + dy * 100);
       let lo = 0,
         hi = range;
-      if (!world.visibility.canSee(ego, ego.x + Math.cos(angle) * range, ego.y + Math.sin(angle) * range)) {
+      if (!world.visibility.canSee(ego, ego.x + dx * range, ego.y + dy * range)) {
         for (let n = 0; n < 7; n++) {
           const mid = (lo + hi) / 2;
-          if (world.visibility.canSee(ego, ego.x + Math.cos(angle) * mid, ego.y + Math.sin(angle) * mid)) lo = mid;
+          if (world.visibility.canSee(ego, ego.x + dx * mid, ego.y + dy * mid)) lo = mid;
           else hi = mid;
         }
       } else lo = range;
-      const p = [ego.x + Math.cos(angle) * lo, ego.y + Math.sin(angle) * lo];
-      add(rays, rayColors, [ego.x, ego.y], p, [0.18, 0.65, 0.64]);
+      positions.setXYZ(i + 1, dx * lo, 0, -dy * lo);
     }
+    positions.needsUpdate = true;
+    this.footprint.geometry.computeBoundingSphere();
     const nearby = world.obstaclesNear(ego.x, ego.y, 80);
     let seen = 0,
       hidden = 0;
@@ -102,7 +125,7 @@ export class PerceptionView {
           : visible
             ? [0.34, 0.9, 0.66]
             : [0.96, 0.39, 0.42];
-      for (let i = 0; i < 4; i++) add(boxes, boxColors, corners[i], corners[(i + 1) % 4], color);
+      for (let i = 0; i < 4; i++) addOutline(corners[i], corners[(i + 1) % 4], color);
     }
     // school and playground zones in effect nearby: their side of the street outlined in yellow-green
     for (const [edgeId, spans] of world.map.zoneSpans) {
@@ -119,20 +142,15 @@ export class PerceptionView {
         if (Math.hypot(mid[0] - ego.x, mid[1] - ego.y) > 90 + (span.to - span.from) / 2) continue;
         for (const d of [0.4, e.asphalt[1] - 0.4]) {
           for (let s = span.from; s < span.to; s += 3)
-            add(boxes, boxColors, at(s, d), at(Math.min(span.to, s + 3), d), [0.83, 0.93, 0.17]);
+            addOutline(at(s, d), at(Math.min(span.to, s + 3), d), [0.83, 0.93, 0.17]);
         }
       }
     }
-    for (const [mesh, vertices, colors] of [
-      [this.lines, rays, rayColors],
-      [this.bounds, boxes, boxColors],
-    ]) {
-      mesh.geometry.dispose();
-      mesh.geometry = new THREE.BufferGeometry();
-      mesh.geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-      mesh.geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-      mesh.geometry.computeBoundingSphere();
-    }
+    this.bounds.geometry.dispose();
+    this.bounds.geometry = new THREE.BufferGeometry();
+    this.bounds.geometry.setAttribute("position", new THREE.Float32BufferAttribute(boxes, 3));
+    this.bounds.geometry.setAttribute("color", new THREE.Float32BufferAttribute(boxColors, 3));
+    this.bounds.geometry.computeBoundingSphere();
     const reasons = {
       collision: "Predicted collision",
       visibility_stopping_distance: "Beyond stopping sight",

@@ -64,7 +64,7 @@ for full control tables and validation notes.
 
 | Key or control | Action |
 |---|---|
-| Click the minimap | Set a destination and start autopilot |
+| Open the minimap and pick a point | Set a destination and start autopilot |
 | `W A S D` or arrows | Drive manually and take over from autopilot |
 | `Space` | Brake hard |
 | `J` | Toggle autopilot |

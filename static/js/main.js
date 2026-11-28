@@ -395,9 +395,11 @@ export async function boot() {
   });
   const minimap = new Minimap($("#minimap"), map, (pt) => setDestination(pt), {
     clearButton: $("#clear-route"),
+    modeButton: $("#map-view-toggle"),
     onClearRoute: challenge || replay ? null : () => clearDestination(),
   });
   bindMapPicker($("#minimap"), $("#minimap-cursor"), {
+    openOverview: () => minimap.setExpanded(true),
     fromCar: () => minimap.toPx(world.ego.x, world.ego.y),
     bounds: () => minimap.pxBounds(),
     onSelect: (x, y) => minimap.pickKeyboard(x, y),

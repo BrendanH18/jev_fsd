@@ -29,6 +29,7 @@ export function retireActor(root) {
     }
     // Instanced meshes allocate instance attributes separately from their geometry.
     if (object.isInstancedMesh) object.dispose();
+    if (object.isSkinnedMesh) object.skeleton.dispose();
   });
   for (const resource of geometry) resource.dispose();
   for (const material of materials) material.dispose();
